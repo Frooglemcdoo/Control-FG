@@ -24,7 +24,8 @@ inline Status SelectIdentifier(const unsigned char* source,std::size_t bytes,con
     return Status::ready;
 }
 inline Status Convert(const unsigned char* source,std::size_t bytes,const Exports& exports,
-                      const PTSceneAdmission::Geometry* mapping,Bytes& output){
+                      const PTSceneAdmission::Geometry* mapping,Bytes& output,
+                      PTSceneAdmission::IndexAccess access=PTSceneAdmission::IndexAccess::RawDWORD){
     output.fill(0);const Identifier* identifier=nullptr;
     const auto identified=SelectIdentifier(source,bytes,exports,identifier);
     if(identified!=Status::ready)return identified;
@@ -32,7 +33,7 @@ inline Status Convert(const unsigned char* source,std::size_t bytes,const Export
     std::uint64_t indexBase=0,attributeBase=0;std::uint32_t constants[10]{};
     std::memcpy(&indexBase,source+32,8);std::memcpy(&attributeBase,source+40,8);std::memcpy(constants,source+48,40);
     PTSceneAdmission::Record admitted;
-    if(PTSceneAdmission::Admit(*mapping,admitted)!=PTSceneAdmission::Error::none)return Status::invalid_geometry;
+    if(PTSceneAdmission::Admit(*mapping,admitted,access)!=PTSceneAdmission::Error::none)return Status::invalid_geometry;
     // Check the full native bounds and material contract, not just two addresses.
     if(indexBase!=admitted.indices||attributeBase!=admitted.attributes)return Status::native_mismatch;
     for(unsigned i=0;i<10;++i){
@@ -44,7 +45,8 @@ inline Status Convert(const unsigned char* source,std::size_t bytes,const Export
         if(i==8){
             const auto logical=std::uint64_t(constants[i]);
             const auto required=std::uint64_t(admitted.constants[0])+std::uint64_t(mapping->indexCount)*mapping->indexStride;
-            if(logical<required||((logical+3)&~std::uint64_t(3))!=admitted.constants[i])return Status::native_mismatch;
+            const auto bound=access==PTSceneAdmission::IndexAccess::NativeTyped?logical:(logical+3)&~std::uint64_t(3);
+            if(logical<required||bound!=admitted.constants[i])return Status::native_mismatch;
             continue;
         }
         // Native attribute views may contain vertices unused by this BLAS.

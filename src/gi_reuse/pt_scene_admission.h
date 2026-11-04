@@ -25,7 +25,10 @@ inline bool Contains(View v,std::uint64_t bytes){
         v.address>=v.allocation.address&&v.address-v.allocation.address<=v.allocation.bytes&&
         bytes<=v.allocation.bytes-(v.address-v.allocation.address);
 }
-inline Error Admit(const Geometry& g,Record& out){
+// Native typed index views need only their logical bytes. Private raw shaders
+// retain DWORD-tail validation; callers must never publish a typed-only record.
+enum class IndexAccess {RawDWORD,NativeTyped};
+inline Error Admit(const Geometry& g,Record& out,IndexAccess access=IndexAccess::RawDWORD){
     out={};
     if(!g.float3Positions||!g.sharedVertexIndexing||!g.noGeometryTransform||
        (g.indexStride!=2&&g.indexStride!=4)||!g.indexCount||g.indexCount%3||!g.vertexCount||
@@ -43,7 +46,7 @@ inline Error Admit(const Geometry& g,Record& out){
     const auto indexOffset=g.indices.address-g.indices.allocation.address;
     const auto end=indexOffset+indexBytes;
     // Raw 16-bit fetches read aligned 32-bit words, including the last index.
-    if(end>UINT32_MAX-3u||((end+3u)&~std::uint64_t(3))>g.indices.allocation.bytes||
+    if((access==IndexAccess::RawDWORD&&(end>UINT32_MAX-3u||((end+3u)&~std::uint64_t(3))>g.indices.allocation.bytes))||
        g.indices.allocation.bytes>UINT32_MAX||positionBytes>UINT32_MAX||attributeBytes>UINT32_MAX)return Error::range;
     out.indices=g.indices.allocation.address;out.attributes=g.attributes.address;out.positions=g.positions.address;
     const std::uint32_t c[12]={static_cast<std::uint32_t>(indexOffset),g.indexStride,g.attributeStride,g.material,

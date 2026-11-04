@@ -93,11 +93,11 @@ public:
     // Resolve the exact BLAS geometry selected by a frozen TLAS/SBT relation.
     // Unlike diagnostic Resolve, another geometry sharing the index range is
     // not ambiguous. The original observed allocation tokens must still exist.
-    Status ResolveExact(const PTNativeBinding::Binding& b,const Triangle& expected,U64 epoch,Resolved& out,ExactDiagnostic* diagnostic=nullptr)const {
+    Status ResolveExact(const PTNativeBinding::Binding& b,const Triangle& expected,U64 epoch,Resolved& out,ExactDiagnostic* diagnostic=nullptr,PTSceneAdmission::IndexAccess access=PTSceneAdmission::IndexAccess::RawDWORD)const {
         if(diagnostic)*diagnostic={};
         out={};U64 address=0;
         if(!epoch||!expected.indexToken||!expected.positionToken||!PTNativeBinding::IndexAddress(b,address)||b.constants[0]>=b.constants[8])return Status::invalidBinding;
-        const auto& c=b.constants;const U64 padded=(U64(c[8])+3)&~U64(3);
+        const auto& c=b.constants;const U64 padded=access==PTSceneAdmission::IndexAccess::NativeTyped?U64(c[8]):(U64(c[8])+3)&~U64(3);
         const U64 indexToken=Find(b.indices,padded),attributeToken=Find(b.attributes,c[9]);
         if(diagnostic){diagnostic->indexToken=indexToken;diagnostic->attributeToken=attributeToken;diagnostic->positionToken=Find(expected.positions,U64(expected.vertexCount?expected.vertexCount-1:0)*expected.positionStride+12);
             for(auto entry:{std::make_pair(indexToken,&diagnostic->indexAllocation),std::make_pair(diagnostic->positionToken,&diagnostic->positionAllocation),std::make_pair(attributeToken,&diagnostic->attributeAllocation)})
@@ -119,7 +119,7 @@ public:
                 {{b.attributes,c[9],epoch},b.attributes},t.indexStride,t.indexCount,t.vertexCount,
                 static_cast<std::uint32_t>(t.positionStride),c[2],c[5],c[6],c[3],244000u/35u,epoch,true,true,true};
             PTSceneAdmission::Record record{};
-            const auto admitted=PTSceneAdmission::Admit(g,record);
+            const auto admitted=PTSceneAdmission::Admit(g,record,access);
             if(diagnostic)diagnostic->admission=admitted;
             if(admitted!=PTSceneAdmission::Error::none)return Status::invalidGeometry;
             out.geometry=g;out.tokens[0]=indexToken;out.tokens[1]=t.positionToken;out.tokens[2]=attributeToken;

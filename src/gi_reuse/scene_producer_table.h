@@ -109,11 +109,14 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                    witness.indexCount!=triangle->indexCount||witness.vertexCount!=triangle->vertexCount)
                     {sample.stage=GISceneGeometryStage::Metadata;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
                 const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
-                sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,diagnostic?&sample.exact:nullptr);
+                // Typed source bounds are permitted only when a frozen copy
+                // will be rebased and re-admitted for raw DWORD reads below.
+                const auto access=found->second->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
+                sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,diagnostic?&sample.exact:nullptr,access);
                 if(sample.status!=PTOwnedScene::Status::candidate){sample.stage=GISceneGeometryStage::Resolve;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
                 sample.resolved=resolved.geometry;
                 PTShaderTableAdapter::Bytes converted;
-                sample.convertError=unsigned(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted));
+                sample.convertError=unsigned(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted,access));
                 if(sample.convertError!=unsigned(Status::ready))
                     {sample.stage=GISceneGeometryStage::Convert;if(!diagnostic)return GISceneProducerError::Table;reject(sample,GISceneProducerError::Table);continue;}
                 if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted,&sample.rebase))

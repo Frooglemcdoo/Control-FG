@@ -53,6 +53,16 @@ static void CheckBothWidths(unsigned width){
  frozen->indices={4096,width==2?8u:12u,65536,width==2?8u:12u};frozen->positions={8192,44,73728,44};
  witnesses[0].frozen=frozen;assert(prepare()==GISceneProducerError::None);
  assert(producer.table.geometry[2].indices.address==65536&&producer.table.geometry[2].positions.address==73728);
+ if(width==2){
+  const auto savedTable=table;const auto savedBindings=nativeBindings;
+  owners.Insert({20,4096,6});for(auto& binding:nativeBindings)binding.constants[8]=6;
+  assert(BuildNativeGITable(44,1,1,nativeBindings,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,table));
+  frozen->indices.bytes=6;
+  assert(prepare()==GISceneProducerError::None&&producer.table.geometry[2].indices.allocation.bytes==8);
+  witnesses[0].frozen.reset();assert(prepare()==GISceneProducerError::Geometry);
+  witnesses[0].frozen=frozen;frozen->indices.bytes=8;owners.Insert({20,4096,8});table=savedTable;nativeBindings=savedBindings;
+  assert(prepare()==GISceneProducerError::None);
+ }
  auto wrong=frozen->indices;frozen->indices.bytes=2;assert(prepare()==GISceneProducerError::Geometry);assert(diagnostic.samples.size()==1&&diagnostic.samples[0].rebase.stage==GIRebaseError::Indices);frozen->indices=wrong;
  auto oldOwner=frozen->owner;frozen->owner.reset();assert(prepare()==GISceneProducerError::Geometry);frozen->owner=oldOwner;
  auto originalTable=table;table.bytes[4*96+32]^=4;assert(prepare()==GISceneProducerError::Table);table=originalTable;
@@ -200,4 +210,47 @@ static void CheckJobHandoff(){
  t.writer.rays=1;t.writer.count=65537;assert(!route.Schedule(0,t));
  t.writer.count=3;assert(!route.Schedule(16,t));
 }
-int main(){CheckJobHandoff();CheckRouteAndTable();CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}
+static void CheckCapturedNativeBounds(){
+ // R320 writer 1, row 2: c8=5658 but BLAS uses 1887 uint16 indices.
+ // The native logical buffer is not entitled to two additional source bytes.
+ PTOwnedScene::Index owners;owners.Insert({4287,0x1b305f0000,5658});
+ owners.Insert({4286,0x1b305ec000,15588});owners.Insert({4285,0x1b305e6000,20784});
+ PTOwnedScene::Triangle witness{0x1b305f0000,0x1b305ec000,12,4287,4286,2,1887,828};
+ assert(owners.Observe(witness));PTNativeBinding::Binding binding{};
+ binding.indices=witness.indices;binding.attributes=0x1b305e6000;
+ const unsigned constants[10]={0,2,16,1905,0,4,12,UINT32_MAX,5658,20784};
+ std::memcpy(binding.constants,constants,sizeof(constants));
+ PTOwnedScene::Index::Resolved resolved;PTOwnedScene::Index::ExactDiagnostic detail;
+ assert(owners.ResolveExact(binding,witness,1,resolved,&detail)==PTOwnedScene::Status::missingAllocation);
+ assert(detail.indexToken==0&&detail.attributeToken==4285);
+ const auto typed=PTSceneAdmission::IndexAccess::NativeTyped;
+ assert(owners.ResolveExact(binding,witness,1,resolved,&detail,typed)==PTOwnedScene::Status::candidate);
+ assert(resolved.geometry.indices.allocation.bytes==5658&&detail.indexToken==4287);
+ PTShaderTableAdapter::Exports exports{};exports.nativeOpaque[0]=1;exports.nativeAlpha[0]=2;exports.privateOpaque[0]=3;exports.privateAlpha[0]=4;
+ NativeGITable native;assert(BuildNativeGITable(1,1,1,{binding},exports.nativeOpaque,exports.nativeAlpha,native));
+ PTShaderTableAdapter::Bytes row;
+ assert(PTShaderTableAdapter::Convert(native.bytes.data(),96,exports,&resolved.geometry,row,typed)==PTShaderTableAdapter::Status::ready);
+ GIFrozenGeometry frozen{{witness.indices,3776,0x1ba9acd000,3776},{witness.positions,9936,0x1ba9aca000,9936},std::make_shared<int>(1)};
+ assert(RebaseConvertedGeometry(frozen,resolved.geometry,row));PTSceneAdmission::Record record;
+ assert(PTSceneAdmission::Admit(resolved.geometry,record)==PTSceneAdmission::Error::none);
+ assert(record.constants[8]==3776&&record.indices==frozen.indices.address);
+ // Also exercise the final halfword at the actual source tail. The copied
+ // allocation has padding; the source allocation remains exactly six bytes.
+ owners.Clear();owners.Insert({1,4096,6});owners.Insert({2,8192,36});owners.Insert({3,12288,48});
+ witness={4096,8192,12,1,2,2,3,3};assert(owners.Observe(witness));
+ binding.indices=4096;binding.attributes=12288;binding.constants[3]=1;binding.constants[8]=6;binding.constants[9]=48;
+ assert(owners.ResolveExact(binding,witness,1,resolved,nullptr,typed)==PTOwnedScene::Status::candidate);
+ assert(PTSceneAdmission::Admit(resolved.geometry,record)==PTSceneAdmission::Error::range);
+ assert(BuildNativeGITable(1,2,1,{binding},exports.nativeOpaque,exports.nativeAlpha,native));
+ assert(PTShaderTableAdapter::Convert(native.bytes.data(),96,exports,&resolved.geometry,row,typed)==PTShaderTableAdapter::Status::ready);
+ frozen={{4096,6,16384,8},{8192,36,20480,36},std::make_shared<int>(1)};
+ auto originalRow=row;frozen.indices.capacity=6;
+ assert(!RebaseConvertedGeometry(frozen,resolved.geometry,row)&&row==originalRow&&resolved.geometry.indices.address==4096);
+ frozen.indices.capacity=8;assert(RebaseConvertedGeometry(frozen,resolved.geometry,row));
+ assert(PTSceneAdmission::Admit(resolved.geometry,record)==PTSceneAdmission::Error::none&&record.constants[8]==8);
+ auto stale=witness;stale.indexToken=99;assert(owners.ResolveExact(binding,stale,1,resolved,nullptr,typed)!=PTOwnedScene::Status::candidate);
+ binding.constants[8]=4;assert(owners.ResolveExact(binding,witness,1,resolved,nullptr,typed)!=PTOwnedScene::Status::candidate);
+ binding.constants[8]=6;owners.Insert({4,4096,6});assert(owners.ResolveExact(binding,witness,1,resolved,nullptr,typed)==PTOwnedScene::Status::missingAllocation);
+}
+
+int main(){CheckCapturedNativeBounds();CheckJobHandoff();CheckRouteAndTable();CheckBothWidths(2);CheckBothWidths(4);std::puts("PASS complete traversal closure (masked/duplicate/null/partial/identity/epoch) and combined scene packet: ordered clone, owner/version, instance index, 16/32-bit geometry, padded vertices, mirrored transform, normal, material/SBT, stale/bounds/degenerate/competing-writer rejection");}

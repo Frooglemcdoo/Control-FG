@@ -29,7 +29,7 @@ inline bool RebaseConvertedGeometry(const GIFrozenGeometry& frozen,
  const auto fail=[&](GIRebaseError stage,PTSceneAdmission::Error admission=PTSceneAdmission::Error::none){if(diagnostic)*diagnostic={stage,admission};return false;};
  if(!frozen.owner)return fail(GIRebaseError::Owner);
  auto next=geometry;PTSceneAdmission::Record original;
- const auto originalError=PTSceneAdmission::Admit(geometry,original);
+ const auto originalError=PTSceneAdmission::Admit(geometry,original,PTSceneAdmission::IndexAccess::NativeTyped);
  if(originalError!=PTSceneAdmission::Error::none)return fail(GIRebaseError::Original,originalError);
  std::uint64_t index=0,position=0;std::uint32_t offset=0;
  std::memcpy(&index,record.data()+32,8);std::memcpy(&position,record.data()+48,8);std::memcpy(&offset,record.data()+56,4);

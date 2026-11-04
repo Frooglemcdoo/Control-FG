@@ -22,7 +22,7 @@ public:
   return false;
  }
  static void ReportGeometry(const gi_reuse::GISceneProducerDiagnostic& d,UINT64 writer,unsigned result) noexcept {
-  Log("GI_OWNED_GEOMETRY revision=R320 writer=%llu result=%u checked=%llu valid=%llu samples=%llu",writer,result,d.checked,d.valid,UINT64(d.samples.size()));
+  Log("GI_OWNED_GEOMETRY revision=R321 writer=%llu result=%u checked=%llu valid=%llu samples=%llu",writer,result,d.checked,d.valid,UINT64(d.samples.size()));
   const char* names[]={"witness_identity","transform","witness_missing","metadata","resolve","convert","rebase","conflict"};
   for(unsigned i=0;i<unsigned(gi_reuse::GISceneGeometryStage::Count);++i)
    Log("GI_OWNED_GEOMETRY_COUNT writer=%llu stage=%s count=%llu",writer,names[i],d.counts[i]);
