@@ -3,6 +3,7 @@
 #include "scene_producer_table.h"
 #include <mutex>
 #include <memory>
+#include <chrono>
 namespace gi_reuse {
 // Native wrapper lifetime registry, separate from the bounded diagnostic cache.
 // Entries are observed at verified native creation/release boundaries. COM
@@ -18,6 +19,7 @@ class D3D12LiveSceneOwners {
     };
     std::mutex mutex_;
     PTOwnedScene::Index index_;
+    GIValidatedMappingCache mappingCache_;
     std::map<U64,std::shared_ptr<Entry>> wrappers_,tokens_;
     std::map<IUnknown*,U64> identities_;
     U64 serial_=0,bytes_=0;
@@ -31,6 +33,7 @@ class D3D12LiveSceneOwners {
     }
 public:
     explicit D3D12LiveSceneOwners(U64 budget=2ull*1024*1024*1024):budget_(budget){}
+    struct PrepareTimings {double lockMS=0,mappingMS=0,leasesMS=0;};
     struct LookupDiagnostic {U64 owners=0,bytes=0,budget=0,covering=0;const char* reason="none";};
     struct Identity {U64 token=0,address=0,bytes=0;};
     struct Lease {
@@ -105,11 +108,17 @@ public:
         const SceneByteView& instances,const std::vector<SceneASReference>& perInstance,
         const std::vector<GISceneGeometry>& geometry,const NativeGITable& native,
         const std::vector<PTNativeBinding::Binding>& bindings,U64 pipeline,
-        const PTShaderTableAdapter::Exports& exports,Lease& output,GISceneProducerDiagnostic* diagnostic=nullptr) noexcept {
+        const PTShaderTableAdapter::Exports& exports,Lease& output,GISceneProducerDiagnostic* diagnostic=nullptr,PrepareTimings* timings=nullptr) noexcept {
         Lease next;
+        using Clock=std::chrono::steady_clock;
+        const auto started=Clock::now();if(timings)*timings={};
         try {std::lock_guard<std::mutex> guard(mutex_);
+            const auto locked=Clock::now();
+            if(timings)timings->lockMS=std::chrono::duration<double,std::milli>(locked-started).count();
             if(!healthy_)return GISceneProducerError::Identity;
-            const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan,diagnostic);
+            const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan,diagnostic,&mappingCache_);
+            const auto mapped=Clock::now();
+            if(timings)timings->mappingMS=std::chrono::duration<double,std::milli>(mapped-locked).count();
             if(result!=GISceneProducerError::None)return result;
             for(const auto& g:geometry)if(g.frozen)next.frozen.push_back(g.frozen);
             auto tokens=next.plan.allocationTokens;tokens.push_back(top.token);
@@ -121,6 +130,7 @@ public:
             const auto matches=[&](const SceneASReference& ref){return index_.Find(ref.address,256)==ref.token;};
             if(!matches(top))return GISceneProducerError::Identity;
             for(const auto& bottom:next.plan.closure.bottoms)if(!matches(bottom))return GISceneProducerError::Identity;
+            if(timings)timings->leasesMS=std::chrono::duration<double,std::milli>(Clock::now()-mapped).count();
         }catch(...){return GISceneProducerError::Allocation;}
         output=std::move(next);return GISceneProducerError::None;
     }

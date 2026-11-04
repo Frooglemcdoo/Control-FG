@@ -22,7 +22,7 @@ public:
   return false;
  }
  static void ReportGeometry(const gi_reuse::GISceneProducerDiagnostic& d,UINT64 writer,unsigned result) noexcept {
-  Log("GI_OWNED_GEOMETRY revision=R323 writer=%llu result=%u checked=%llu valid=%llu reused=%llu samples=%llu",writer,result,d.checked,d.valid,d.reused,UINT64(d.samples.size()));
+  Log("GI_OWNED_GEOMETRY revision=R323 writer=%llu result=%u checked=%llu valid=%llu reused=%llu persistent=%llu samples=%llu",writer,result,d.checked,d.valid,d.reused,d.persistent,UINT64(d.samples.size()));
   const char* names[]={"witness_identity","transform","witness_missing","metadata","resolve","convert","rebase","conflict"};
   for(unsigned i=0;i<unsigned(gi_reuse::GISceneGeometryStage::Count);++i)
    Log("GI_OWNED_GEOMETRY_COUNT writer=%llu stage=%s count=%llu",writer,names[i],d.counts[i]);
@@ -57,14 +57,18 @@ public:
    if(selected.geometry.empty())return Reject("empty_scene");
    for(const auto& geometry:selected.geometry)if(!geometry.frozen||!geometry.frozen->owner)return Reject("unpreserved_geometry");
    PTShaderTableAdapter::Exports exports{writer.opaque,writer.alpha,pipeline->pipeline.Producer().Opaque(),pipeline->pipeline.Producer().Alpha()};
-   // Full census only three times per process. Later attempts retain fast rejection.
+   // Sample counters periodically so persistent reuse is visible after warmup.
    static std::atomic<unsigned> censusAttempts{0};
    gi_reuse::GISceneProducerDiagnostic census;
-   auto* censusOutput=censusAttempts.fetch_add(1)<3?&census:nullptr;
-   gi_reuse::GISceneProducerError prepared;
+   const auto censusAttempt=censusAttempts.fetch_add(1);
+   auto* censusOutput=(censusAttempt<3||censusAttempt%120==0)?&census:nullptr;
+   gi_reuse::GISceneProducerError prepared;gi_reuse::D3D12LiveSceneOwners::PrepareTimings timings;
    {GIOwnedMetrics::Scope detail(GIOwnedMetrics::Mapping);
     prepared=GINativeSceneOwners::owners.Prepare(catalog.History(),cut,native->generation,selected.top,selected.instances,selected.perInstance,
-      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene,censusOutput);}
+      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene,censusOutput,&timings);}
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::OwnerLock,timings.lockMS);
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::MappingWork,timings.mappingMS);
+   GIOwnedMetrics::RecordMS(GIOwnedMetrics::OwnerLeases,timings.leasesMS);
    if(censusOutput)ReportGeometry(census,writer.ticket.serial,unsigned(prepared));
    if(prepared!=gi_reuse::GISceneProducerError::None)return Reject("private_scene_table",unsigned(prepared));
    std::vector<ID3D12Resource*> resources;resources.reserve(scene.buffers.size()+scene.frozen.size()*2);

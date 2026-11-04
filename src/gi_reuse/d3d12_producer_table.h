@@ -2,6 +2,7 @@
 #include "producer_table.h"
 #include "d3d12_storage_lease.h"
 #include "producer_backing_ranges.h"
+#include "d3d12_gi_scratch_pool.h"
 #include <cstring>
 #include <unordered_set>
 namespace gi_reuse {
@@ -15,9 +16,12 @@ class D3D12ProducerTable {
     std::vector<BufferStorageLease> backing_;
     std::uint64_t epoch_=0,version_=0,retainedBytes_=0;
     UINT64 size_=0;
-    bool deferred_=false;
+    bool deferred_=false,pooled_=false;
 public:
     D3D12ProducerTable()=default;
+    // The enclosing pass remains retained by recordings/flights through GPU
+    // completion. Return storage only when that final owner is destroyed.
+    ~D3D12ProducerTable(){if(pooled_)SharedGIScratchPool().Return(std::move(upload_),D3D12_HEAP_TYPE_UPLOAD);}
     D3D12ProducerTable(const D3D12ProducerTable&)=delete;
     D3D12ProducerTable& operator=(const D3D12ProducerTable&)=delete;
 private:
@@ -96,12 +100,15 @@ public:
         D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
         D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=bytes;desc.Height=1;
         desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-        Ptr<ID3D12Resource> upload;auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&upload));
+        Ptr<ID3D12Resource> upload;
+        try {upload=SharedGIScratchPool().Take(device,bytes,D3D12_HEAP_TYPE_UPLOAD);}catch(...){}
+        HRESULT hr=S_OK;
+        if(!upload)hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&upload));
         if(FAILED(hr))return hr;
         void* mapped=nullptr;const D3D12_RANGE empty{};hr=upload->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
         if(!mapped){upload->Unmap(0,&empty);return E_UNEXPECTED;}
         std::memset(mapped,0,static_cast<SIZE_T>(bytes));const D3D12_RANGE written{0,static_cast<SIZE_T>(bytes)};upload->Unmap(0,&written);
-        pipeline_=pipeline;upload_=std::move(upload);epoch_=epoch;version_=version;size_=retainedBytes_=bytes;deferred_=true;return S_OK;
+        pipeline_=pipeline;upload_=std::move(upload);epoch_=epoch;version_=version;size_=retainedBytes_=bytes;deferred_=true;pooled_=true;return S_OK;
     }
     // Host calls once at the serialized first Execute boundary, after selecting
     // the strict scene cut and before arming the recorded constant upload. Never

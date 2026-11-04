@@ -49,6 +49,20 @@ public:
     struct Resolved {PTSceneAdmission::Geometry geometry{};U64 tokens[3]{};};
     static constexpr std::size_t MaximumTriangles=65536;
     U64 Revision()const{return revision;} // Zero permanently disables reuse after overflow.
+    // Revalidate a previously admitted conversion against this live inventory.
+    // Unique lookup detects overlapping/new allocations, not just token survival.
+    // Position extent is compared exactly because the resolved view stores the
+    // entire original allocation. No GPU content or scene-order claim is made.
+    bool StillOwns(const Resolved& resolved)const {
+        const auto& g=resolved.geometry;
+        if(!resolved.tokens[0]||!resolved.tokens[1]||!resolved.tokens[2]||!g.vertexCount)return false;
+        const auto position=allocations.find(resolved.tokens[1]);
+        if(position==allocations.end()||position->second.address!=g.positions.allocation.address||
+           position->second.bytes!=g.positions.allocation.bytes)return false;
+        return Find(g.indices.allocation.address,g.indices.allocation.bytes)==resolved.tokens[0]&&
+            Find(g.positions.address,U64(g.vertexCount-1)*g.positionStride+12)==resolved.tokens[1]&&
+            Find(g.attributes.allocation.address,g.attributes.allocation.bytes)==resolved.tokens[2];
+    }
     void Clear(){Changed();allocations.clear();triangles.clear();triangleCount=0;InvalidateLookup();lookup.clear();byAddress.clear();prefixLast.clear();addressDirty=true;}
     void Insert(Allocation a){Changed();InvalidateLookup();addressDirty=true;allocations[a.token]=a;}
     void Remove(U64 token){Changed();InvalidateLookup();addressDirty=true;allocations.erase(token);}

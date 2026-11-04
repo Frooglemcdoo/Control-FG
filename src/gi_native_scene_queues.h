@@ -158,6 +158,7 @@ static void ResolveDeferred() noexcept {
    if(catalog.Healthy()&&GetTickCount64()-flight.holdStarted<250)
     for(const auto& item:flight.deferred)if(catalog.PendingWait(item.second).fence){waiting=true;break;}
    if(waiting)continue;
+   GIOwnedMetrics::Scope resolveTiming(GIOwnedMetrics::DeferredResolve);
    for(const auto& item:flight.deferred){
     if(!catalog.Healthy()||catalog.PendingWait(item.second).fence||!item.first->Admit(catalog,item.second))item.first->Cancel();
    }

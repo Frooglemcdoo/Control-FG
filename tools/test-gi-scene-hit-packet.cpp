@@ -41,17 +41,43 @@ static void CheckBothWidths(unsigned width){
  owners.Insert({20,4096,width==2?8u:12u});owners.Insert({21,8192,44});owners.Insert({22,12288,48});
  PTOwnedScene::Triangle witness{4096,8192,16,20,21,width,3,3};assert(owners.Observe(witness));
  std::vector<GISceneGeometry> witnesses={{{512,11,2},0,witness}};
- GISceneProducerPlan producer;GISceneProducerDiagnostic diagnostic;
+ GISceneProducerPlan producer;GISceneProducerDiagnostic diagnostic;GIValidatedMappingCache persistent;
  auto prepare=[&](){return PrepareGISceneProducer(history,p.cut,1,{768,12,3},p.instances,
-     {{512,11,2}},witnesses,owners,table,nativeBindings,45,p.identifiers,producer,&diagnostic);};
+     {{512,11,2}},witnesses,owners,table,nativeBindings,45,p.identifiers,producer,&diagnostic,&persistent);};
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==0);
+ const auto coldRecords=producer.table.records;
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==1&&producer.table.records==coldRecords);
+ // An overlapping live owner invalidates a cached conversion immediately.
+ owners.Insert({99,8192,44});assert(prepare()==GISceneProducerError::Geometry&&diagnostic.persistent==0);owners.Remove(99);
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==1);
+ // New submission epochs must be rebound without retaining the previous cut.
+ auto currentInstances=p.instances;currentInstances.epoch=2;
+ assert(PrepareGISceneProducer(history,p.cut,2,{768,12,3},currentInstances,{{512,11,2}},witnesses,owners,
+  table,nativeBindings,45,p.identifiers,producer,&diagnostic,&persistent)==GISceneProducerError::None);
+ assert(diagnostic.persistent==1&&producer.table.geometry[2].epoch==2&&producer.table.geometry[2].positions.allocation.epoch==2);
  assert(prepare()==GISceneProducerError::None);
+ const auto originalBindings=nativeBindings;const auto originalNativeTable=table;
+ nativeBindings[2].constants[3]=1;
+ assert(BuildNativeGITable(44,2,1,nativeBindings,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,table));
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==0&&producer.table.geometry[2].material==1);
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==1);
+ nativeBindings=originalBindings;table=originalNativeTable;
+ const auto oldExport=p.identifiers.privateAlpha;p.identifiers.privateAlpha[0]=19;
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==0&&producer.table.records[4][0]==19);
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==1);
+ p.identifiers.privateAlpha=oldExport;
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==0);
  assert((producer.table.bound==std::vector<unsigned char>{0,0,1}));
  assert((producer.allocationTokens==std::vector<std::uint64_t>{20,21,22}));
  assert(producer.table.records[0]==PTShaderTableAdapter::Bytes{}&&producer.table.records[4][0]==4);
  // Preserve original native validation before rebasing immutable build copies.
  auto frozen=std::make_shared<GIFrozenGeometry>();frozen->owner=std::make_shared<int>(1);
  frozen->indices={4096,width==2?8u:12u,65536,width==2?8u:12u};frozen->positions={8192,44,73728,44};
- witnesses[0].frozen=frozen;assert(prepare()==GISceneProducerError::None);
+ witnesses[0].frozen=frozen;assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==0);
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==1);
+ auto replacement=std::make_shared<int>(2);frozen->owner=replacement;
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==0);
+ assert(prepare()==GISceneProducerError::None&&diagnostic.persistent==1);
  assert(producer.table.geometry[2].indices.address==65536&&producer.table.geometry[2].positions.address==73728);
  if(width==2){
   const auto savedTable=table;const auto savedBindings=nativeBindings;
@@ -204,6 +230,7 @@ static void CheckBothWidths(unsigned width){
  assert(ResolveTraversalClosure(history,fullCut,1,top,whole,refs,closure)==TraversalError::Instances);
  // A later native build on another queue makes the copied source dependency ambiguous.
  assert(history.Submit(2,{recording}));assert(ResolveSceneHit(history,p,result)==SceneHitError::Order);
+ assert(prepare()==GISceneProducerError::Closure); // warm conversion cannot bypass competing writes
 }
 static void CheckRouteAndTable(){
  NativeGIRoute route;
@@ -221,6 +248,15 @@ static void CheckRouteAndTable(){
  std::vector<PTNativeBinding::Binding> bindings(2);bindings[1].type=1;
  assert(BuildNativeGITable(1,1,1,bindings,a,b,table));
  assert(table.bytes[0]==1&&table.bytes[192]==2&&table.Active(2)&&!table.Active(1));
+ assert(MatchesNativeGITable(table,bindings,a,b));
+ // Exact parity with reconstruction: active rows, both padding regions and
+ // reserved rows must all be checked, not merely shader identifiers.
+ for(std::size_t byte=0;byte<table.bytes.size();++byte){table.bytes[byte]^=1;
+  assert(!MatchesNativeGITable(table,bindings,a,b));table.bytes[byte]^=1;}
+ for(auto& active:table.active){active^=1;assert(!MatchesNativeGITable(table,bindings,a,b));active^=1;}
+ auto savedTable=table;table.bytes.pop_back();assert(!MatchesNativeGITable(table,bindings,a,b));table=savedTable;
+ table.active.pop_back();assert(!MatchesNativeGITable(table,bindings,a,b));table=savedTable;
+
  bindings[1].type=2;
  assert(!BuildNativeGITable(1,1,1,bindings,a,b,table)&&table.bytes.empty()&&!table.pipeline);
  bindings[1].type=1;

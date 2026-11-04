@@ -3,6 +3,7 @@
 #include "producer_table.h"
 #include "frozen_geometry.h"
 #include "pt_owned_scene.h"
+#include "validated_mapping_cache.h"
 #include <set>
 #include <tuple>
 namespace gi_reuse {
@@ -30,7 +31,7 @@ struct GISceneGeometrySample {
  GIFrozenRange frozenIndices{},frozenPositions{};
 };
 struct GISceneProducerDiagnostic {
- std::uint64_t checked=0,valid=0,reused=0,counts[static_cast<unsigned>(GISceneGeometryStage::Count)]{};
+ std::uint64_t checked=0,valid=0,reused=0,persistent=0,counts[static_cast<unsigned>(GISceneGeometryStage::Count)]{};
  std::vector<GISceneGeometrySample> samples;
  void Add(const GISceneGeometrySample& sample){
   auto& count=counts[static_cast<unsigned>(sample.stage)];++count;
@@ -47,7 +48,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
     const std::vector<GISceneGeometry>& capturedGeometry,const PTOwnedScene::Index& owners,
     const NativeGITable& native,const std::vector<PTNativeBinding::Binding>& bindings,
     std::uint64_t producerPipeline,const PTShaderTableAdapter::Exports& exports,
-    GISceneProducerPlan& output,GISceneProducerDiagnostic* diagnostic=nullptr) noexcept {
+    GISceneProducerPlan& output,GISceneProducerDiagnostic* diagnostic=nullptr,GIValidatedMappingCache* persistent=nullptr) noexcept {
     if(diagnostic)*diagnostic={};
     using namespace PTShaderTableAdapter;
     if(!epoch||!producerPipeline||!native.pipeline||!native.version||!owners.Revision()||
@@ -56,6 +57,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
        exports.privateOpaque==exports.privateAlpha)return GISceneProducerError::Identity;
     try {
         GISceneProducerPlan next;
+        if(persistent)persistent->Begin(native.pipeline,producerPipeline,exports);
         GISceneProducerError failure=GISceneProducerError::None;
         const auto reject=[&](GISceneGeometrySample sample,GISceneProducerError error){
             if(failure==GISceneProducerError::None)failure=error;
@@ -63,9 +65,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         };
         if(ResolveTraversalClosure(history,cut,epoch,top,instances,perInstance,next.closure)!=TraversalError::None)
             return GISceneProducerError::Closure;
-        NativeGITable rebuilt;
-        if(!BuildNativeGITable(native.pipeline,native.version,1,bindings,exports.nativeOpaque,exports.nativeAlpha,rebuilt)||
-           rebuilt.bytes!=native.bytes||rebuilt.active!=native.active)return GISceneProducerError::Table;
+        if(!MatchesNativeGITable(native,bindings,exports.nativeOpaque,exports.nativeAlpha))return GISceneProducerError::Table;
         using Key=std::tuple<std::uint64_t,std::uint64_t,std::uint64_t,std::uint32_t>;
         std::map<Key,const GISceneGeometry*> witnesses;
         for(const auto& g:capturedGeometry){
@@ -124,31 +124,40 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
                 PTShaderTableAdapter::Bytes converted;
                 MappingKey currentKey{{ref.address,ref.token,ref.revision,g},{}};
-                std::memcpy(currentKey.second.data(),native.bytes.data()+row*NativeStride,NativeStride);
-                const auto mapped=mappings.find(currentKey);
+                if(!persistent)std::memcpy(currentKey.second.data(),native.bytes.data()+row*NativeStride,NativeStride);
+                const auto mapped=persistent?mappings.end():mappings.find(currentKey);
                 if(mapped!=mappings.end()){
                     resolved=mapped->second.resolved;converted=mapped->second.record;if(diagnostic)++diagnostic->reused;
                 }else{
-                    // Typed source bounds are permitted only when a frozen copy
-                    // will be rebased and re-admitted for raw DWORD reads below.
-                    const auto access=found->second->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
-                    // Successful admissions need the exact match, not a census
-                    // of unrelated candidates. On failure rerun under the same
-                    // owner lock to preserve the complete diagnostic evidence.
-                    sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,nullptr,access);
-                    if(sample.status!=PTOwnedScene::Status::candidate&&diagnostic)
-                        sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,&sample.exact,access);
-                    if(sample.status!=PTOwnedScene::Status::candidate){sample.stage=GISceneGeometryStage::Resolve;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
-                    sample.resolved=resolved.geometry;
-                    sample.convertError=unsigned(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted,access));
-                    if(sample.convertError!=unsigned(Status::ready))
-                        {sample.stage=GISceneGeometryStage::Convert;if(!diagnostic)return GISceneProducerError::Table;reject(sample,GISceneProducerError::Table);continue;}
-                    if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted,&sample.rebase))
-                        {sample.stage=GISceneGeometryStage::Rebase;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
+                    const auto persistentKey=GIValidatedMappingCache::MakeKey(ref.address,ref.token,ref.revision,g,
+                        witness,found->second->frozen.get(),native.bytes.data()+row*NativeStride);
+                    bool acrossTransaction=false;
+                    if(persistent&&persistent->Find(persistentKey,found->second->frozen.get(),owners,epoch,resolved,converted,acrossTransaction)){
+                        if(diagnostic){if(acrossTransaction)++diagnostic->persistent;else ++diagnostic->reused;}
+                    }else{
+                        // Typed source bounds are permitted only when a frozen copy
+                        // will be rebased and re-admitted for raw DWORD reads below.
+                        const auto access=found->second->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
+                        // Successful admissions need the exact match, not a census
+                        // of unrelated candidates. On failure rerun under the same
+                        // owner lock to preserve the complete diagnostic evidence.
+                        sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,nullptr,access);
+                        if(sample.status!=PTOwnedScene::Status::candidate&&diagnostic)
+                            sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,&sample.exact,access);
+                        if(sample.status!=PTOwnedScene::Status::candidate){sample.stage=GISceneGeometryStage::Resolve;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
+                        sample.resolved=resolved.geometry;
+                        sample.convertError=unsigned(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted,access));
+                        if(sample.convertError!=unsigned(Status::ready))
+                            {sample.stage=GISceneGeometryStage::Convert;if(!diagnostic)return GISceneProducerError::Table;reject(sample,GISceneProducerError::Table);continue;}
+                        const auto original=resolved;
+                        if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted,&sample.rebase))
+                            {sample.stage=GISceneGeometryStage::Rebase;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
 
+                        if(persistent)persistent->Store(persistentKey,found->second->frozen.get(),original,resolved,converted);
+                    }
                     // Bound temporary CPU memory; uncached rows still undergo
                     // the identical full validation and conversion.
-                    if(mappings.size()<131072)mappings.emplace(std::move(currentKey),Mapping{resolved,converted});
+                    if(!persistent&&mappings.size()<131072)mappings.emplace(std::move(currentKey),Mapping{resolved,converted});
                 }
                 if(table.bound[binding]&&table.records[row]!=converted){sample.stage=GISceneGeometryStage::Conflict;if(!diagnostic)return GISceneProducerError::Conflict;reject(sample,GISceneProducerError::Conflict);continue;}
                 if(diagnostic)++diagnostic->valid;
