@@ -20,7 +20,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  char sha[65]{};
  if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de"))return;
  const auto owned=GIOwnedPipeline::Attach(device,desc->pRootSignature,native);
- if(GIOwnedPipeline::Enabled())Trace("GI_OWNED_PIPELINE attached=%u hr=0x%08lX dispatch_enabled=0",unsigned(owned==S_OK),static_cast<unsigned long>(owned));
+ if(GIOwnedPipeline::Enabled())Trace("GI_OWNED_PIPELINE attached=%u hr=0x%08lX dispatch_hook=1",unsigned(owned==S_OK),static_cast<unsigned long>(owned));
  if(!Enabled())return;
  auto replacement=*desc;replacement.CS={kEvaluatorShader,sizeof(kEvaluatorShader)};replacement.CachedPSO={};
  ID3D12PipelineState* alternate=nullptr;
@@ -57,6 +57,6 @@ inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  const auto rev=revision.load();const auto key=rev*4+mode;
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);
 }
-inline void Toggle() noexcept {if(!ready.load())return;const bool value=!requested.load();requested.store(value);GIOwnedPipeline::requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
-inline const wchar_t* Label() noexcept {if(GIOwnedPipeline::Enabled()&&ready.load())return !requested.load()?L"GI: NATIVE":GIOwnedPipeline::admitted.load()?L"GI: OWNED":L"GI: OWNED WAIT";return !ready.load()?L"GI EVAL: WAIT":requested.load()?L"GI EVAL: TRANSLATED":L"GI EVAL: NATIVE";}
+inline void Toggle() noexcept {if(!ready.load())return;GIOwnedPipeline::active=false;const bool value=!requested.load();requested.store(value);GIOwnedPipeline::requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
+inline const wchar_t* Label() noexcept {if(GIOwnedPipeline::Enabled()&&ready.load())return !requested.load()?L"GI: NATIVE":GIOwnedPipeline::active.load()?L"GI: OWNED":L"GI: OWNED WAIT";return !ready.load()?L"GI EVAL: WAIT":requested.load()?L"GI EVAL: TRANSLATED":L"GI EVAL: NATIVE";}
 }

@@ -15,16 +15,22 @@ public:
  gi_reuse::D3D12LiveSceneOwners::Lease scene;
  UINT64 bytes=0;
  ~Pass(){if(bytes)scratchBudget->Release(bytes);}
+ bool Reject(const char* reason,unsigned detail=0) noexcept {
+  GIOwnedPipeline::active=false;const auto n=++GIOwnedPipeline::rejected;
+  if(n<=12||n%600==0)Log("GI_OWNED_ADMISSION rejected=%s detail=%u writer=%llu count=%llu",reason,detail,native->writer->ticket.serial,n);
+  return false;
+ }
  bool Admit(const gi_reuse::GILiveSceneCatalog& catalog,UINT64 cut) noexcept override {
   try {
    const auto& writer=*native->writer;gi_reuse::GILiveSceneCatalog::Selection selected;
-   if(!catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected))return false;
+   if(!catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected))return Reject("ordered_scene");
    // Every triangle must be tied to its BLAS-build-time copies, including hair.
-   if(selected.geometry.empty())return false;
-   for(const auto& geometry:selected.geometry)if(!geometry.frozen||!geometry.frozen->owner)return false;
+   if(selected.geometry.empty())return Reject("empty_scene");
+   for(const auto& geometry:selected.geometry)if(!geometry.frozen||!geometry.frozen->owner)return Reject("unpreserved_geometry");
    PTShaderTableAdapter::Exports exports{writer.opaque,writer.alpha,pipeline->pipeline.Producer().Opaque(),pipeline->pipeline.Producer().Alpha()};
-   if(GINativeSceneOwners::owners.Prepare(catalog.History(),cut,native->generation,selected.top,selected.instances,selected.perInstance,
-      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene)!=gi_reuse::GISceneProducerError::None)return false;
+   const auto prepared=GINativeSceneOwners::owners.Prepare(catalog.History(),cut,native->generation,selected.top,selected.instances,selected.perInstance,
+      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene);
+   if(prepared!=gi_reuse::GISceneProducerError::None)return Reject("private_scene_table",unsigned(prepared));
    std::vector<ID3D12Resource*> resources;resources.reserve(scene.buffers.size()+scene.frozen.size()*2);
    for(const auto& lease:scene.buffers)resources.push_back(lease.resource.Get());
    std::set<const void*> storages;
@@ -32,14 +38,19 @@ public:
     const auto storage=std::static_pointer_cast<GIGeometrySnapshot::Storage>(geometry->owner);
     for(const auto& copy:storage->copies)resources.push_back(copy.second.Get());
    }
-   if(FAILED(table.Commit(device.Get(),scene.plan.table,resources))||FAILED(tile.CommitAdmission(table)))return false;
-   ++GIOwnedPipeline::admitted;return true;
-  }catch(...){Cancel();return false;}
+   const auto committed=table.Commit(device.Get(),scene.plan.table,resources);if(FAILED(committed))return Reject("table_commit",unsigned(committed));
+   const auto armed=tile.CommitAdmission(table);if(FAILED(armed))return Reject("controls",unsigned(armed));
+   const auto n=++GIOwnedPipeline::admitted;GIOwnedPipeline::active=true;
+   if(n<=4||n%600==0)Log("GI_OWNED_ADMITTED writer=%llu triangles=%llu backing_buffers=%llu count=%llu gpu_completion=0",writer.ticket.serial,
+    static_cast<UINT64>(selected.geometry.size()),static_cast<UINT64>(resources.size()),n);
+   return true;
+  }catch(...){Cancel();return Reject("exception");}
  }
  bool RecordGate(ID3D12GraphicsCommandList* prefix) noexcept override{return tile.RecordGate(prefix);}
- void Cancel() noexcept override{tile.CancelAdmission();}
+ void Cancel() noexcept override{tile.CancelAdmission();GIOwnedPipeline::active=false;}
 };
 static void Skip(const char* reason) noexcept {
+ GIOwnedPipeline::active=false;
  const auto count=++GIOwnedPipeline::rejected;if(count<=8||count%600==0)Log("GI_OWNED_SKIP reason=%s count=%llu native_output_retained=1",reason,count);
 }
 static void AfterCompute(ID3D12GraphicsCommandList4* list,const gi_reuse::ComputeBindingSnapshot& bindings,UINT x,UINT y,UINT z) noexcept {
@@ -47,7 +58,7 @@ static void AfterCompute(ID3D12GraphicsCommandList4* list,const gi_reuse::Comput
  auto pipeline=GIOwnedPipeline::Read(bindings.pipeline.Get());if(!pipeline)return;
  auto native=GINativeGIBindings::Take(list);if(!native){Skip("missing_native_bind");return;}
  const auto& writer=*native->writer;
- if(!writer.nativeInputs||writer.pass||writer.passes!=1||!writer.ticket.width||!writer.ticket.height||z!=1||!x||!y||
+ if(!writer.nativeInputs||writer.pass||writer.passes!=1||!writer.ticket.width||!writer.ticket.height||z!=1||x!=(writer.ticket.width+7)/8||y!=(writer.ticket.height+15)/16||
     !native->shadow.Has(native->generation,gi_reuse::D3D12InitialGITile::NativeRequired)){Skip("native_pass_contract");return;}
  const auto count=UINT64(writer.ticket.width)*writer.ticket.height;
  if(count>UINT32_MAX||!UINT(writer.ticket.serial)){Skip("image_or_revision_range");return;}

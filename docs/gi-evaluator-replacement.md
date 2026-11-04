@@ -519,7 +519,7 @@ binaries. Foundation run `41741443019` passed this integration; full-mod run
 `41741443098` was still running when this entry was written.
 
 The new route uses `CONTROLTOH_GI_OWNED`, deliberately separate from the existing
-`CONTROLTOH_GI_LIVE` sampler switch. No shipped launcher enables GI_OWNED yet.
+`CONTROLTOH_GI_LIVE` sampler switch. The R310 integration launcher enables this route explicitly; ordinary launches leave it off.
 
 Geometry preservation reuses the R103 PT strategy: bounded index/position copies
 at the BLAS build boundary, local transition tracking, source-state restoration,
@@ -531,8 +531,28 @@ inputs on Reset. Tests include source mutation after the copy and private-table
 rebasing for both index widths. Native read-default normalization is recovered
 from the earlier PT implementation; this is not a general D3D12 state inference.
 
-**Still not game-ready:** the live GI6 descriptor mirror/dispatch handoff,
-submission admission/arming, replay-safe execution, and spatial/temporal reuse
-remain to be completed. Pipeline creation and metadata tracking alone do not
-replace the live producer. R309 remains the last delivered game package. Reuse
-existing captures; do not request another standalone producer or R309 capture.
+## R310 live producer integration
+
+The GI6 CPU descriptor mirror and five-stage dispatch are now connected. Each
+recording retains its native table/writer snapshot and private output resources.
+At the exact queue submission boundary, ordered scene admission commits the
+private hit table and immutable upload controls. A separate queue prefix arms a
+single-use GPU flag; the original list clears it after resolve. Rejected
+admission keeps scene revision zero and preserves native output. Completed-list
+replay cannot repeat the owned pass. No live CPU fence wait is added.
+
+The original replay fixture incorrectly submitted the same command list again
+before its prior execution completed; it now waits between fixture replays, as
+required by D3D12. This test-only wait is not part of the game path.
+
+R310 adds Start-GI-Owned-Test.cmd and NATIVE/OWNED/OWNED WAIT status. Logging
+separates recording, admission, exact rejection reasons and completed queue
+checkpoints. The launcher retains the existing R307 sampler, requests GI RAW
+BYPASS for comparison, and collects logs automatically on exit. The owned path
+requires the observed one-pass GI contract and exact 8x16 GI6 dispatch dimensions.
+Native work still runs first for fallback; spatial/temporal reuse is not active.
+
+Build validation is in progress. The RTX 5090 standalone producer PASS remains
+accepted and requires no repeat. The next user action is the integrated R310
+game run once the package passes CI, not another one-off capture. R309 remains
+the last delivered package until then.

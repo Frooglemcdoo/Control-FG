@@ -25,18 +25,23 @@ int main()try{
  Check(gpu.device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),pipeline.Get(),IID_PPV_ARGS(&pass)));
  pass->SetComputeRootSignature(root.Get());pass->SetComputeRootShaderResourceView(0,gate.Resource()->GetGPUVirtualAddress());
  pass->SetComputeRootUnorderedAccessView(1,output->GetGPUVirtualAddress());pass->Dispatch(1,1,1);gate.Close(pass.Get());Check(pass->Close());
- ID3D12CommandList* first[]={gpu.list.Get(),pass.Get(),pass.Get()};gpu.queue->ExecuteCommandLists(3,first);
- // Test both same-batch replay and replay across an Execute boundary/decay.
- ID3D12CommandList* replay=pass.Get();gpu.queue->ExecuteCommandLists(1,&replay);
+ const auto complete=[&](UINT64 value){
+  Check(gpu.queue->Signal(gpu.fence.Get(),value));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"Fence event failed");
+  Check(gpu.fence->SetEventOnCompletion(value,event));const auto wait=WaitForSingleObject(event,15000);CloseHandle(event);Require(wait==WAIT_OBJECT_0,"GPU timeout");Check(gpu.device->GetDeviceRemovedReason());
+ };
+ ID3D12CommandList* first[]={gpu.list.Get(),pass.Get()};gpu.queue->ExecuteCommandLists(2,first);complete(1);
+ // D3D12 requires prior execution of a command list to finish before replay.
+ // Only this standalone fixture waits; the live path adds no such CPU wait.
+ ID3D12CommandList* replay=pass.Get();gpu.queue->ExecuteCommandLists(1,&replay);complete(2);
+ gpu.queue->ExecuteCommandLists(1,&replay);
  ComPtr<ID3D12CommandAllocator> readAllocator;ComPtr<ID3D12GraphicsCommandList> read;
  Check(gpu.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&readAllocator)));
  Check(gpu.device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,readAllocator.Get(),nullptr,IID_PPV_ARGS(&read)));
  D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
  barrier.Transition={output.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};read->ResourceBarrier(1,&barrier);
  read->CopyBufferRegion(readback.Get(),0,output.Get(),0,4);Check(read->Close());ID3D12CommandList* last=read.Get();gpu.queue->ExecuteCommandLists(1,&last);
- Check(gpu.queue->Signal(gpu.fence.Get(),1));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"Fence event failed");
- Check(gpu.fence->SetEventOnCompletion(1,event));const auto wait=WaitForSingleObject(event,15000);CloseHandle(event);Require(wait==WAIT_OBJECT_0,"GPU timeout");Check(gpu.device->GetDeviceRemovedReason());
+ complete(3);
  void* mapped=nullptr;D3D12_RANGE range{0,4};Check(readback->Map(0,&range,&mapped));Require(*static_cast<unsigned*>(mapped)==1,"Replayed pass executed replacement again");range={0,0};readback->Unmap(0,&range);
  for(UINT64 i=0;i<info->GetNumStoredMessages();++i){SIZE_T size=0;Check(info->GetMessage(i,nullptr,&size));std::vector<unsigned char> bytes(size);auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());Check(info->GetMessage(i,message,&size));if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(message->pDescription);}
- std::cout<<"PASS single-use GPU gate: one admitted execution, same-batch replay, cross-submission replay, no upload mutation or CPU wait between executions\n";return 0;
+ std::cout<<"PASS single-use GPU gate: one admitted execution, completed-list replays, COMMON decay and no upload mutation\n";return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}

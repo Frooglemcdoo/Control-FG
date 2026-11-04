@@ -19,7 +19,7 @@ inline bool Enabled() noexcept {
 using DispatchObserver=void(*)(ID3D12GraphicsCommandList4*,const gi_reuse::ComputeBindingSnapshot&,UINT,UINT,UINT) noexcept;
 inline std::atomic<DispatchObserver> dispatchObserver{nullptr};
 inline std::atomic<UINT64> recorded{0},admitted{0},rejected{0};
-inline std::atomic<bool> requested{true};
+inline std::atomic<bool> requested{true},active{false};
 inline thread_local bool recording=false;
 class Owner final:public IUnknown {
  std::atomic<ULONG> refs{1};

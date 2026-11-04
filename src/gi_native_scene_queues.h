@@ -1,6 +1,7 @@
 #pragma once
 #include "gi_native_scene_owners.h"
 #include "gi_native_submission_hooks.h"
+#include "gi_owned_pipeline_runtime.h"
 #include <deque>
 namespace GINativeSceneQueues {
 using Microsoft::WRL::ComPtr;
@@ -109,6 +110,9 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
   if(!prefixReady)for(const auto& item:pending)item.first->Cancel();
   if(catalog.Healthy())catalog.Mark(q->id);
   flight.stamp=catalog.TailStamp(q->id);flights.push_back(std::move(flight));++submits;
+  if(!catalog.Healthy())GIOwnedPipeline::active=false;
+  if(submits.load()<=8||submits.load()%600==0)Log("GI_OWNED_QUEUE submissions=%llu healthy=%u reason=%s pending=%llu admitted=%llu completed_checkpoints=%llu geometry_bytes=%llu",
+   submits.load(),unsigned(catalog.Healthy()),catalog.History().FailureReason(),static_cast<UINT64>(pending.size()),GIOwnedPipeline::admitted.load(),checkpoints.load(),geometryBudget->Held());
   if(prefixReady){ID3D12CommandList* prefix=flights.back().prefix.Get();input->ExecuteCommandLists(1,&prefix);}
 
  }catch(...){for(const auto& item:pending)item.first->Cancel();catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}
