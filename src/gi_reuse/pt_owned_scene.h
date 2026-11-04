@@ -105,13 +105,16 @@ public:
         if(!indexToken||!attributeToken)return Status::missingAllocation;
         auto bucket=triangles.find(address);if(bucket==triangles.end())return Status::missingGeometry;
         for(const auto& t:bucket->second){
-            const unsigned mismatch=
+            unsigned mismatch=
                 ((t.indices!=expected.indices||t.positions!=expected.positions)?1u:0u)|
                 ((t.positionStride!=expected.positionStride||t.indexStride!=expected.indexStride||t.indexCount!=expected.indexCount||t.vertexCount!=expected.vertexCount)?2u:0u)|
                 ((t.indexToken!=expected.indexToken||t.positionToken!=expected.positionToken)?4u:0u)|
                 (t.indexToken!=indexToken?8u:0u)|(t.indexStride!=c[1]?16u:0u)|
-                (U64(t.indexCount)*t.indexStride>U64(c[8])-c[0]?32u:0u)|
-                (Find(t.positions,U64(t.vertexCount-1)*t.positionStride+12)!=t.positionToken?64u:0u);
+                (U64(t.indexCount)*t.indexStride>U64(c[8])-c[0]?32u:0u);
+            // Unrelated candidates cannot match this frozen witness. Avoid an
+            // allocation lookup for each one; diagnostics retain the full census.
+            if(!mismatch||diagnostic)
+                mismatch|=Find(t.positions,U64(t.vertexCount-1)*t.positionStride+12)!=t.positionToken?64u:0u;
             if(diagnostic){++diagnostic->candidates;diagnostic->mismatch|=mismatch;}
             if(mismatch)continue;
             const auto& p=allocations.at(t.positionToken);

@@ -1182,11 +1182,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R323
+      - name: Package owned GI integration R324
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R323'
+          $out='ControlTOH-R324'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1218,14 +1218,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r323.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r324.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R323 - Owned GI integration test
+          R324 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd with the game closed.
@@ -1235,7 +1235,7 @@ jobs:
           Check the lit plant and hair while still, then move around and exit normally.
           No capture hotkey, fixed camera or standalone test is required.
           Logs are packaged automatically. Send the diagnostics ZIP.
-          R323 blocks wasted preparation after scene failure and reuses identical adjacent geometry mappings.
+          R324 resolves all shaded ray colors and avoids unrelated geometry owner lookups.
           The geometry census is retained. Activation and performance need in-game validation.
           This runs the owned producer and initial estimator after native GI6.
           Spatial/temporal sample reuse is not enabled. Native work remains for fallback.
@@ -1254,10 +1254,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R323
+          name: ControlTOH-R324
           path: |
-            ControlTOH-R323.zip
-            ControlTOH-R323.sha256
+            ControlTOH-R324.zip
+            ControlTOH-R324.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

@@ -13,13 +13,13 @@ int main()try {
     std::vector<GIShadedProducerSample> samples(pixels*rays);
     std::vector<Batch> batches(pixels);
     for(UINT i=0;i<pixels;++i){
-        results[i].surfaceContribution={1,2,3};results[i].fallbackContribution={.1f,.2f,.3f};
+        results[i].surfaceContribution={100,200,300};results[i].fallbackContribution={.1f,.2f,.3f};
         results[i].valid=1;results[i].isSurface=1;results[i].frameTag=19;
         batches[i]={i*rays,rays,19,2};
         for(UINT j=0;j<rays;++j){auto& s=samples[i*rays+j];s.hitDistance=j?10.f:2.f;
             s.random=.5f;s.geometryVerified=1;s.geometricNormal={0,0,1};
-            s.shading.secondaryPosition={0,0,1};s.shading.sourcePdf=1;s.shading.material=j?65535:0;
-            s.shading.secondaryRadiance={1,1,1};s.shading.primaryBrdfCos={1,1,1};
+            s.shading.secondaryPosition={0,0,1};s.shading.sourcePdf=.5f;s.shading.material=j?65535:0;
+            s.shading.secondaryRadiance={1,2,3};s.shading.fallbackContribution={.1f,.2f,.3f};s.shading.primaryBrdfCos={.5f,.5f,.5f};
             s.shading.rayIndex=j;s.shading.frameTag=19;s.shading.verified=7;
             s.shading.configuredCount=rays;s.shading.depthScale=2;
         }
@@ -29,6 +29,7 @@ int main()try {
     results[5].surfaceContribution.x=std::numeric_limits<float>::quiet_NaN();
     batches[6].first=UINT_MAX;samples[7*rays].reserved1=1;
     results[8].surfaceContribution={};results[8].fallbackContribution={};results[8].isSurface=0;
+    for(UINT j=0;j<rays;++j){samples[8*rays+j].shading.secondaryRadiance={};samples[8*rays+j].shading.fallbackContribution={};}
     results[9].frameTag=18;
     auto input=gpu.Upload(results),sampleBuffer=gpu.Upload(samples),batchBuffer=gpu.Upload(batches);
     D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;

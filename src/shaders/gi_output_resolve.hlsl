@@ -26,7 +26,7 @@ void main(uint3 id:SV_DispatchThreadID) {
     GIOutputBatch batch=giOutputBatches[id.x];
     if(batch.frameTag!=giOutputFrame||batch.count!=giOutputRayCount||
        batch.first>samples||batch.count>samples-batch.first)return;
-    GIOutputState state=GIBeginOutput(giOutputResults[id.x],giOutputFrame,batch.count,batch.depthScale);
+    GIOutputState state=GIBeginBatchOutput(giOutputResults[id.x],giOutputFrame,batch.count,batch.depthScale);
     if(!state.valid)return;
     for(uint i=0;i<batch.count;++i)if(!GIAddOutputDistance(state,giOutputSamples[batch.first+i]))return;
     if(!GIOutputComplete(state))return;

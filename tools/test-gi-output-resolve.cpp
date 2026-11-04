@@ -24,6 +24,24 @@ int main(){
         }
     }
     assert(!GIBeginOutput(result,6,2,2).valid&&!GIBeginOutput(result,7,0,2).valid&&!GIBeginOutput(result,7,65,2).valid);
+    // Independent analytical batch: unequal PDFs, colored hits, miss and black.
+    // The displayed estimate must not depend on the reservoir's selected color.
+    for(float selected:{1.f,1000.f}){
+        result.surfaceContribution={selected,0,0};
+        auto state=GIBeginBatchOutput(result,7,4,2);
+        for(uint i=0;i<4;++i){
+            GIShadedProducerSample v{};v.hitDistance=float(i+1);
+            auto& s=v.shading;s.frameTag=7;s.configuredCount=4;s.depthScale=2;s.rayIndex=i;
+            s.material=0;s.verified=7;s.sourcePdf=1;s.primaryBrdfCos={1,1,1};
+            if(i==0){s.secondaryRadiance={4,0,0};s.primaryBrdfCos={.5f,.5f,.5f};s.sourcePdf=.25f;}
+            if(i==1){s.secondaryRadiance={0,6,0};s.primaryBrdfCos={.25f,.25f,.25f};s.sourcePdf=.5f;}
+            if(i==2){s.material=65535;s.fallbackContribution={0,0,8};}
+            assert(GIAddOutputDistance(state,v));
+            if(i<3)assert(!GIOutputComplete(state));
+        }
+        assert(GIOutputComplete(state));
+        assert(state.color.x==4&&state.color.y==1.5f&&state.color.z==4&&state.distance==2.5f);
+    }
     result.surfaceContribution.x=std::numeric_limits<float>::max();result.fallbackContribution.x=std::numeric_limits<float>::max();
     assert(!GIBeginOutput(result,7,2,2).valid);
     std::puts("PASS native GI output contract: complete 1/2/63/64-ray coverage, all-ray distance mean, no double colour normalization, stale/duplicate/nonfinite rejection");
