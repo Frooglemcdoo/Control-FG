@@ -1,11 +1,11 @@
 #include "gpu_test_device.h"
 #include <d3d12sdklayers.h>
 #include "../src/gi_reuse/d3d12_dispatch_gate.h"
-int main()try{
+static void Run(bool admit){
  ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
  Device gpu(false);ComPtr<ID3D12InfoQueue> info;Check(gpu.device.As(&info));
  gi_reuse::D3D12DispatchGate gate;Check(gate.Initialize(gpu.device.Get()));
- auto one=gpu.Upload(std::vector<unsigned>{1}),zero=gpu.Upload(std::vector<unsigned>{0});
+ auto one=gpu.Upload(std::vector<unsigned>{0}),zero=gpu.Upload(std::vector<unsigned>{0});
  auto output=gpu.Buffer(4,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  auto readback=gpu.Buffer(4,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  gpu.list->CopyBufferRegion(output.Get(),0,zero.Get(),0,4);
@@ -29,7 +29,16 @@ int main()try{
   Check(gpu.queue->Signal(gpu.fence.Get(),value));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"Fence event failed");
   Check(gpu.fence->SetEventOnCompletion(value,event));const auto wait=WaitForSingleObject(event,15000);CloseHandle(event);Require(wait==WAIT_OBJECT_0,"GPU timeout");Check(gpu.device->GetDeviceRemovedReason());
  };
- ID3D12CommandList* first[]={gpu.list.Get(),pass.Get()};gpu.queue->ExecuteCommandLists(2,first);complete(1);
+ // R319: prefix and consumer are genuinely submitted before controls are
+ // decided. Only the private GPU wait makes that later upload write legal.
+ ComPtr<ID3D12Fence> hold;Check(gpu.device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&hold)));
+ Check(gpu.queue->Wait(hold.Get(),1));
+ ID3D12CommandList* first[]={gpu.list.Get(),pass.Get()};gpu.queue->ExecuteCommandLists(2,first);
+ Check(gpu.queue->Signal(gpu.fence.Get(),1));
+ Require(gpu.fence->GetCompletedValue()==0,"Private hold failed to block GPU reads");
+ if(admit){void* control=nullptr;D3D12_RANGE empty{0,0};Check(one->Map(0,&empty,&control));
+  *static_cast<unsigned*>(control)=1;D3D12_RANGE written{0,4};one->Unmap(0,&written);}
+ Check(hold->Signal(1));complete(1);
  // D3D12 requires prior execution of a command list to finish before replay.
  // Only this standalone fixture waits; the live path adds no such CPU wait.
  ID3D12CommandList* replay=pass.Get();gpu.queue->ExecuteCommandLists(1,&replay);complete(2);
@@ -41,7 +50,8 @@ int main()try{
  barrier.Transition={output.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};read->ResourceBarrier(1,&barrier);
  read->CopyBufferRegion(readback.Get(),0,output.Get(),0,4);Check(read->Close());ID3D12CommandList* last=read.Get();gpu.queue->ExecuteCommandLists(1,&last);
  complete(3);
- void* mapped=nullptr;D3D12_RANGE range{0,4};Check(readback->Map(0,&range,&mapped));Require(*static_cast<unsigned*>(mapped)==1,"Replayed pass executed replacement again");range={0,0};readback->Unmap(0,&range);
+ void* mapped=nullptr;D3D12_RANGE range{0,4};Check(readback->Map(0,&range,&mapped));Require(*static_cast<unsigned*>(mapped)==(admit?1u:0u),"Deferred admission/cancellation or replay count incorrect");range={0,0};readback->Unmap(0,&range);
  for(UINT64 i=0;i<info->GetNumStoredMessages();++i){SIZE_T size=0;Check(info->GetMessage(i,nullptr,&size));std::vector<unsigned char> bytes(size);auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());Check(info->GetMessage(i,message,&size));if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(message->pDescription);}
- std::cout<<"PASS single-use GPU gate: one admitted execution, completed-list replays, COMMON decay and no upload mutation\n";return 0;
-}catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}
+ std::cout<<"PASS deferred GPU hold: "<<(admit?"admitted":"cancelled")<<", submitted-prefix upload protection, single-use and replay validation\n";
+}
+int main()try{Run(true);Run(false);return 0;}catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}

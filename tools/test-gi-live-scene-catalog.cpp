@@ -72,6 +72,26 @@ int main(){
  assert(deferred.Wait(1,37,7,true));
  assert(!deferred.Select(deferred.Mark(1),1,2,512,selected));
  puts("PASS deferred GI admission: pending during recording, updated producer at submission, unresolved next wait still rejected.");
+ // Captured R318 queue sequence: four graphics waits are submitted before
+ // the copy queue's four signals; copy work waits on earlier graphics signals.
+ // Retain all admission cuts until the corresponding real signal is observed.
+ GILiveSceneCatalog split;std::vector<std::uint64_t> held;
+ assert(split.Submit(1,1,Bottom())&&split.Submit(1,2,Top()));
+ for(std::uint64_t n=1;n<=4;++n){
+  assert(split.Wait(1,37,n,true));held.push_back(split.Mark(1));
+  assert(!split.Select(held.back(),1,2,512,selected));
+  assert(split.Signal(1,38,n,true));
+ }
+ for(std::uint64_t n=1;n<=4;++n){
+  if(n>=3)assert(split.Wait(39,38,n-2,true));
+  assert(split.Signal(39,37,n,true));
+  for(std::size_t i=0;i<held.size();++i)
+   assert(split.Select(held[i],1,2,512,selected)==(i<n));
+ }
+ // Later graphics writes must not retarget already-held exact cuts.
+ assert(split.Submit(1,3,Bottom()));
+ assert(split.Select(held.back(),1,2,512,selected)&&selected.perInstance[0].revision==1);
+ puts("PASS R318 four-stage upload sequence: retained cuts release only after sufficient signals, no future scene substitution.");
  GILiveSceneCatalog unrelated;assert(unrelated.Submit(1,1,Bottom())&&unrelated.Submit(1,2,Top()));
  assert(unrelated.Wait(2,91,1,true));auto other=unrelated.Mark(2);
  assert(unrelated.ObserveFenceCompletion(91,1)==1);

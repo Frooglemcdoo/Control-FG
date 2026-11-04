@@ -230,8 +230,9 @@ public:
         native.Restore(list);recordedProducer_=hits.Pipeline();recordedHits_=hits.Range().StartAddress;recorded_=true;return true;
     }
     // Called once after strict submission admission and a committed hit table.
-    // The host owns serialization with Execute; this is not a live toggle and
-    // must never mutate controls after the first submission begins.
+    // The host must either precede submission or hold the entire prefix and
+    // consumer behind an unreleased private GPU fence. Once that fence is
+    // released, these controls must never be mutated. This is not a live toggle.
     HRESULT CommitAdmission(const D3D12ProducerTable& hits) noexcept {
         if(!deferred_||armed_||!recorded_||hits.Deferred()||hits.Pipeline()!=recordedProducer_.Get()||hits.Range().StartAddress!=recordedHits_||hits.Epoch()!=epoch_||hits.WriterVersion()!=version_)return E_INVALIDARG;
         if(!controls_)return E_UNEXPECTED;

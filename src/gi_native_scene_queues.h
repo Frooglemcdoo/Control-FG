@@ -19,6 +19,10 @@ struct Flight {
  std::vector<ComPtr<Recording>> recordings;
  ComPtr<ID3D12CommandAllocator> prefixAllocator;
  ComPtr<ID3D12GraphicsCommandList4> prefix;
+ ComPtr<ID3D12Fence> admissionHold;
+ std::vector<std::pair<std::shared_ptr<Use>,UINT64>> deferred;
+ UINT64 holdStarted=0;
+ bool holdReleased=false,holdResolved=false;
 };
 static std::vector<Queue> queues;
 static std::vector<ComPtr<IUnknown>> gameQueues;
@@ -134,8 +138,40 @@ static UINT64 FenceID(ID3D12Fence* input){
  for(const auto& f:fences)if(f.identity.Get()==identity.Get())return f.id;
  if(fences.size()>=256)return 0;const auto id=++serial;fences.push_back({identity,input,id});return id;
 }
+// Called under the observer mutex. Every control/SBT edit below is behind a
+// private GPU wait inserted before BOTH the prefix and the original lists.
+// Native queue signals remain untouched. Never edit controls after releasing it.
+static void ResolveDeferred() noexcept {
+ for(auto& flight:flights){if(!flight.admissionHold||flight.holdReleased)continue;
+  if(!flight.holdResolved){
+   try {
+   bool waiting=false;
+   if(catalog.Healthy()&&GetTickCount64()-flight.holdStarted<250)
+    for(const auto& item:flight.deferred)if(catalog.PendingWait(item.second).fence){waiting=true;break;}
+   if(waiting)continue;
+   for(const auto& item:flight.deferred){
+    if(!catalog.Healthy()||catalog.PendingWait(item.second).fence||!item.first->Admit(catalog,item.second))item.first->Cancel();
+   }
+   }catch(...){
+    catalog.Invalidate("deferred_admission_exception");
+    for(const auto& item:flight.deferred)item.first->Cancel();
+   }
+   flight.holdResolved=true;
+  }
+  const auto hr=flight.admissionHold->Signal(1);
+  if(SUCCEEDED(hr)){
+   flight.holdReleased=true;flight.deferred.clear();
+   static UINT64 reports=0;if(++reports<=8||reports%120==0)
+    Log("GI_OWNED_DEFERRED revision=R319 released=1 queue=%llu elapsed_ms=%llu admitted_total=%llu count=%llu",flight.queue,GetTickCount64()-flight.holdStarted,GIOwnedPipeline::admitted.load(),reports);
+  }else {catalog.Invalidate("admission_hold_release_failed");for(const auto& item:flight.deferred)item.first->Cancel();}
+ }
+}
+static bool HasDeferred() noexcept {
+ for(const auto& flight:flights)if(flight.admissionHold&&!flight.holdReleased)return true;
+ return false;
+}
 static void Poll(){
- PollNativeFences();
+ PollNativeFences();ResolveDeferred();
  for(auto it=flights.begin();it!=flights.end();){
   auto q=std::find_if(queues.begin(),queues.end(),[&](const Queue& entry){return entry.id==it->queue;});
   const auto done=q==queues.end()?0:q->completed->GetCompletedValue();
@@ -143,7 +179,7 @@ static void Poll(){
  }
  // Compact between admission cuts, using completed stamps only for retirement.
  // GPU work may remain in flight: its flights own independent resource leases.
- if(catalog.Healthy()&&submits.load()%32==0){
+ if(catalog.Healthy()&&!HasDeferred()&&submits.load()%32==0){
   std::map<std::uint64_t,std::uint64_t> completed;
   for(const auto& q:queues)completed.emplace(q.id,q.completedStamp);
   if(flights.empty()&&catalog.Checkpoint(completed,false))++checkpoints;
@@ -211,26 +247,44 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
   }
   // Create all prefix owners before arming any mapped controls. The prefix
   // initializes each gate once; the recorded pass clears it, including replays.
-  bool prefixReady=false;
+  bool prefixReady=false,defer=false;
   if(catalog.Healthy()&&!pending.empty()){
    ComPtr<ID3D12Device> device;const auto type=input->GetDesc().Type;
    prefixReady=SUCCEEDED(input->GetDevice(IID_PPV_ARGS(&device)))&&
     SUCCEEDED(device->CreateCommandAllocator(type,IID_PPV_ARGS(&flight.prefixAllocator)))&&
     SUCCEEDED(device->CreateCommandList(0,type,flight.prefixAllocator.Get(),nullptr,IID_PPV_ARGS(&flight.prefix)));
    if(prefixReady){
-    for(const auto& item:pending){if(!item.first->Admit(catalog,item.second))item.first->Cancel();
+    for(const auto& item:pending)if(catalog.PendingWait(item.second).fence){defer=true;break;}
+    if(defer){
+     unsigned held=0;for(const auto& f:flights)if(f.admissionHold&&!f.holdReleased)++held;
+     if(held>=8||FAILED(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&flight.admissionHold))))prefixReady=false;
+     else {flight.deferred=pending;flight.holdStarted=GetTickCount64();}
+    }
+    for(const auto& item:pending){if(!defer&&!item.first->Admit(catalog,item.second))item.first->Cancel();
      if(!item.first->RecordGate(flight.prefix.Get())){prefixReady=false;break;}}
     if(FAILED(flight.prefix->Close()))prefixReady=false;
    }
   }
-  if(!prefixReady)for(const auto& item:pending)item.first->Cancel();
+  if(!prefixReady){for(const auto& item:pending)item.first->Cancel();flight.admissionHold.Reset();flight.deferred.clear();}
+  // Allocation and container insertion happen before enqueuing the private wait,
+  // so exceptions cannot strand the GPU behind an unowned fence.
   if(catalog.Healthy())catalog.Mark(q->id);
   flight.stamp=catalog.TailStamp(q->id);flights.push_back(std::move(flight));++submits;
   if(!catalog.Healthy())GIOwnedPipeline::active=false;
   if(submits.load()<=8||submits.load()%600==0)Log("GI_OWNED_QUEUE submissions=%llu healthy=%u reason=%s pending=%llu admitted=%llu completed_checkpoints=%llu compactions=%llu geometry_bytes=%llu",
    submits.load(),unsigned(catalog.Healthy()),catalog.History().FailureReason(),static_cast<UINT64>(pending.size()),GIOwnedPipeline::admitted.load(),checkpoints.load(),compactions.load(),geometryBudget->Held());
   if(submits.load()%600==0)GIOwnedMetrics::Report();
-  if(prefixReady){ID3D12CommandList* prefix=flights.back().prefix.Get();input->ExecuteCommandLists(1,&prefix);}
+  if(prefixReady){
+   auto& submitted=flights.back();
+   if(submitted.admissionHold){
+    if(FAILED(input->Wait(submitted.admissionHold.Get(),1))){
+     for(const auto& item:submitted.deferred)item.first->Cancel();
+     submitted.deferred.clear();submitted.admissionHold.Reset();prefixReady=false;
+    }else {static UINT64 reports=0;if(++reports<=8||reports%120==0)
+     Log("GI_OWNED_DEFERRED revision=R319 held=1 queue=%llu uses=%llu count=%llu",q->id,UINT64(pending.size()),reports);}
+   }
+   if(prefixReady){ID3D12CommandList* prefix=submitted.prefix.Get();input->ExecuteCommandLists(1,&prefix);}
+  }
 
  }catch(...){for(const auto& item:pending)item.first->Cancel();catalog.Invalidate("live_submission_exception");Quarantine(count,lists);}
  SetLastError(error);return 1;
@@ -243,6 +297,7 @@ static void After(ID3D12CommandQueue* input,UINT64 locked) noexcept {
    else catalog.Invalidate("live_completion_signal_failed");
   }
  }catch(...){catalog.Invalidate("live_completion_exception");}
+ ResolveDeferred();
  SetLastError(error);mutex.unlock();
 }
 static bool BeforeFence() noexcept {if(!Active())return false;mutex.lock();return true;}
@@ -264,12 +319,13 @@ static void AfterFence(ID3D12CommandQueue* input,ID3D12Fence* fence,UINT64 value
    }
   }
  }catch(...){catalog.Invalidate("live_fence_exception");}
+ ResolveDeferred();
  SetLastError(error);mutex.unlock();
 }
 static void CpuSignal(ID3D12Fence* input) noexcept {
  if(!Active())return;const DWORD error=GetLastError();std::lock_guard<std::recursive_mutex> guard(mutex);
  ComPtr<IUnknown> identity;
- if(input&&SUCCEEDED(input->QueryInterface(IID_PPV_ARGS(&identity))))for(const auto& f:fences)if(f.identity.Get()==identity.Get()){catalog.Invalidate("live_cpu_signal_on_observed_fence");break;}
+ if(input&&SUCCEEDED(input->QueryInterface(IID_PPV_ARGS(&identity))))for(const auto& f:fences)if(f.identity.Get()==identity.Get()){catalog.Invalidate("live_cpu_signal_on_observed_fence");ResolveDeferred();break;}
  SetLastError(error);
 }
 static const GINativeSubmission::Callbacks callbacks{&Before,&After,&BeforeFence,&AfterFence,&CpuSignal};
