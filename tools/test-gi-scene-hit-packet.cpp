@@ -100,6 +100,22 @@ static void CheckBothWidths(unsigned width){
   assert((producer.table.bound==std::vector<unsigned char>{1,0,1}));
   assert(producer.table.geometry[0].material==1&&producer.table.geometry[2].material==2);
   assert(producer.table.geometry[0].positions.address==8192&&producer.table.geometry[2].positions.address==8448);
+  {
+   // Adjacent shared meshes reuse only an exact binding at this transaction.
+   unsigned char repeated[128];std::memcpy(repeated,two,sizeof(repeated));
+   std::uint64_t sameBLAS=512;std::memcpy(repeated+64+56,&sameBLAS,8);
+   auto repeatedView=Bytes(16384,23,repeated,sizeof(repeated));auto equal=distinct;equal[0]=equal[2];
+   NativeGITable equalTable;assert(BuildNativeGITable(44,2,1,equal,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,equalTable));
+   GISceneProducerDiagnostic census;GISceneProducerPlan cached;
+   const auto check=[&](){return PrepareGISceneProducer(multiple,cut,1,{1792,31,5},repeatedView,
+    {{512,11,2},{512,11,2}},{{{512,11,2},0,witness}},owners,equalTable,equal,45,p.identifiers,cached,&census);};
+   assert(check()==GISceneProducerError::None&&census.reused==1&&census.valid==2);
+   assert(cached.table.records[0]==cached.table.records[4]);
+   equal[0].constants[3]=1;
+   assert(BuildNativeGITable(44,2,1,equal,p.identifiers.nativeOpaque,p.identifiers.nativeAlpha,equalTable));
+   assert(check()==GISceneProducerError::None&&census.reused==0);
+   assert(cached.table.geometry[0].material==1&&cached.table.geometry[2].material==2);
+  }
   std::memcpy(two+64+52,&firstRow,4);both=Bytes(16384,23,two,sizeof(two));
   assert(prepareBoth()==GISceneProducerError::Conflict);
   assert(producer.table.geometry[2].positions.address==8448); // failed transaction preserves last valid plan

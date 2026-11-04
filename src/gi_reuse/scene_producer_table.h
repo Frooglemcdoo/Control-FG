@@ -30,7 +30,7 @@ struct GISceneGeometrySample {
  GIFrozenRange frozenIndices{},frozenPositions{};
 };
 struct GISceneProducerDiagnostic {
- std::uint64_t checked=0,valid=0,counts[static_cast<unsigned>(GISceneGeometryStage::Count)]{};
+ std::uint64_t checked=0,valid=0,reused=0,counts[static_cast<unsigned>(GISceneGeometryStage::Count)]{};
  std::vector<GISceneGeometrySample> samples;
  void Add(const GISceneGeometrySample& sample){
   auto& count=counts[static_cast<unsigned>(sample.stage)];++count;
@@ -82,6 +82,10 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         table.producerPipeline=producerPipeline;table.epoch=epoch;
         table.records.resize(bindings.size()*2);table.geometry.resize(bindings.size());table.bound.resize(bindings.size());
         std::set<std::uint64_t> tokens;
+        // Repeated adjacent instances commonly share all local-root data.
+        // Cache only a fully validated result inside this owner-locked call.
+        bool cachedMapping=false;Key mappingKey{};std::array<unsigned char,NativeStride> mappingSource{};
+        PTOwnedScene::Index::Resolved mappingResolved{};PTShaderTableAdapter::Bytes mappingRecord{};
         std::map<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>,ASRecord> selectedBottoms;
         for(std::uint32_t i=0;i<tlas.count;++i){
             InstanceRecord instance;
@@ -116,18 +120,27 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                    witness.indexCount!=triangle->indexCount||witness.vertexCount!=triangle->vertexCount)
                     {sample.stage=GISceneGeometryStage::Metadata;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
                 const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
-                // Typed source bounds are permitted only when a frozen copy
-                // will be rebased and re-admitted for raw DWORD reads below.
-                const auto access=found->second->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
-                sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,diagnostic?&sample.exact:nullptr,access);
-                if(sample.status!=PTOwnedScene::Status::candidate){sample.stage=GISceneGeometryStage::Resolve;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
-                sample.resolved=resolved.geometry;
                 PTShaderTableAdapter::Bytes converted;
-                sample.convertError=unsigned(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted,access));
-                if(sample.convertError!=unsigned(Status::ready))
-                    {sample.stage=GISceneGeometryStage::Convert;if(!diagnostic)return GISceneProducerError::Table;reject(sample,GISceneProducerError::Table);continue;}
-                if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted,&sample.rebase))
-                    {sample.stage=GISceneGeometryStage::Rebase;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
+                const Key currentKey{ref.address,ref.token,ref.revision,g};
+                if(cachedMapping&&mappingKey==currentKey&&
+                   !std::memcmp(mappingSource.data(),native.bytes.data()+row*NativeStride,NativeStride)){
+                    resolved=mappingResolved;converted=mappingRecord;if(diagnostic)++diagnostic->reused;
+                }else{
+                    // Typed source bounds are permitted only when a frozen copy
+                    // will be rebased and re-admitted for raw DWORD reads below.
+                    const auto access=found->second->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
+                    sample.status=owners.ResolveExact(bindings[binding],witness,epoch,resolved,diagnostic?&sample.exact:nullptr,access);
+                    if(sample.status!=PTOwnedScene::Status::candidate){sample.stage=GISceneGeometryStage::Resolve;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
+                    sample.resolved=resolved.geometry;
+                    sample.convertError=unsigned(Convert(native.bytes.data()+row*NativeStride,NativeStride,exports,&resolved.geometry,converted,access));
+                    if(sample.convertError!=unsigned(Status::ready))
+                        {sample.stage=GISceneGeometryStage::Convert;if(!diagnostic)return GISceneProducerError::Table;reject(sample,GISceneProducerError::Table);continue;}
+                    if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted,&sample.rebase))
+                        {sample.stage=GISceneGeometryStage::Rebase;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
+
+                    cachedMapping=true;mappingKey=currentKey;std::memcpy(mappingSource.data(),native.bytes.data()+row*NativeStride,NativeStride);
+                    mappingResolved=resolved;mappingRecord=converted;
+                }
                 if(table.bound[binding]&&table.records[row]!=converted){sample.stage=GISceneGeometryStage::Conflict;if(!diagnostic)return GISceneProducerError::Conflict;reject(sample,GISceneProducerError::Conflict);continue;}
                 if(diagnostic)++diagnostic->valid;
                 table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;

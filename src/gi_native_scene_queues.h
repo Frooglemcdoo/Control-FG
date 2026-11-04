@@ -95,10 +95,19 @@ static bool Preflight(ID3D12CommandQueue* input,const Recording& recording,const
   // Unsubmitted AS writes can make this list's scene newer than the catalog.
   // Defer these uncommon cases to the original exact submission check.
   std::lock_guard<std::recursive_mutex> guard(mutex);
+  // Fatal catalog failure cannot be repaired by a future submission. Reject
+  // before the pending-write/producer shortcuts allocate and record GPU work.
+  if(!catalog.Healthy()){
+   GIOwnedPipeline::active=false;
+   static UINT64 blocked=0;if(++blocked<=4||blocked%600==0)
+    Log("GI_OWNED_PREFLIGHT revision=R323 rejected=catalog_unhealthy reason=%s writer=%llu scratch_allocated=0 count=%llu",catalog.History().FailureReason(),writer.ticket.serial,blocked);
+   return false;
+  }
   ComPtr<IUnknown> identity;if(!input||FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return false;
   const auto queue=std::find_if(queues.begin(),queues.end(),[&](const Queue& q){return q.identity.Get()==identity.Get();});
   if(queue==queues.end()){static unsigned n=0;if(++n<=4)Log("GI_OWNED_PREFLIGHT_PATH revision=R318 path=unknown_queue queue=%p",static_cast<void*>(input));return true;}
   PollNativeFences();
+  if(!catalog.Healthy()){GIOwnedPipeline::active=false;return false;}
   const auto readiness=catalog.Mark(queue->id);
   const auto pending=catalog.PendingWait(readiness);
   {static unsigned n=0;if(++n<=8)Log("GI_OWNED_PREFLIGHT_PATH revision=R318 queue=%llu writer=%llu producer_ordered=%u events=%llu pending_fence=%llu",queue->id,writer.ticket.serial,unsigned(writer.submission.Precedes(queue->id)),UINT64(recording.events.size()),pending.fence);}
@@ -223,8 +232,15 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
    std::set<UINT64> unique;flight.recordings.reserve(count);
    for(UINT i=0;i<count;++i){auto recording=ReadRecording(lists[i],false);
     if(!recording){catalog.Invalidate("live_missing_recording");continue;}
-    if(!recording->complete||recording->submitted||!unique.insert(recording->generation).second)
-     catalog.Invalidate("live_incomplete_or_replayed_recording");
+    const bool duplicate=!unique.insert(recording->generation).second;
+    // A complete recording without scene events changes no tracked AS version
+    // or owned controls. Its replay is safe; AS/producer/use replay stays refused.
+    const bool replay=(recording->submitted||duplicate)&&!recording->events.empty();
+    if(!recording->complete||replay){
+     const char* reason=!recording->complete?recording->incompleteReason:duplicate?"duplicate_scene_recording":"replayed_scene_recording";
+     if(catalog.Healthy())Log("GI_OWNED_RECORDING_FAILURE revision=R323 reason=%s queue=%llu list=%p generation=%llu complete=%u submitted=%u duplicate=%u events=%llu",reason,q->id,static_cast<void*>(lists[i]),recording->generation,unsigned(recording->complete),unsigned(recording->submitted),unsigned(duplicate),UINT64(recording->events.size()));
+     catalog.Invalidate(reason);
+    }
     // Retain every recording even if an earlier list invalidated admission.
     // GPU lifetime is independent of whether replacement lighting is allowed.
     flight.recordings.push_back(std::move(recording));
