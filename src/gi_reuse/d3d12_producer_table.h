@@ -26,26 +26,33 @@ public:
     D3D12ProducerTable& operator=(const D3D12ProducerTable&)=delete;
 private:
     HRESULT InitializeImpl(ID3D12Device* device,ID3D12StateObject* pipeline,
-        const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources,bool validationOnly) noexcept {
+        const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources,bool validationOnly,const std::vector<BufferStorageLease>* retainedLeases=nullptr) noexcept {
         if(upload_||!device||!pipeline||!plan.epoch||!plan.writerVersion||!plan.nativePipeline||
            plan.producerPipeline!=reinterpret_cast<std::uintptr_t>(pipeline)||
            plan.geometry.empty()||plan.geometry.size()>65536||
            plan.bound.size()!=plan.geometry.size()||
            plan.records.size()!=plan.geometry.size()*2||resources.empty()||resources.size()>196608)return E_INVALIDARG;
         try {
+            if(retainedLeases&&retainedLeases->size()!=resources.size())return E_INVALIDARG;
             std::vector<BufferStorageLease> leases;
             leases.reserve(resources.size());
             std::unordered_set<ID3D12Resource*> unique;
             unique.reserve(resources.size());
             ProducerBackingRanges ranges;
             std::uint64_t retained=plan.records.size()*PTShaderTableAdapter::PrivateStride;
-            for(auto* resource:resources){
+            for(std::size_t resourceIndex=0;resourceIndex<resources.size();++resourceIndex){
+                auto* resource=resources[resourceIndex];
                 if(!resource)return E_INVALIDARG;
                 if(!unique.insert(resource).second)continue;
-                BufferStorageLease lease;if(!AcquireStorageLease(resource,lease))return E_INVALIDARG;
-                const auto desc=resource->GetDesc();const auto bytes=desc.Width;
-                if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||
-                   !ranges.Add(resource->GetGPUVirtualAddress(),bytes))return E_INVALIDARG;
+                BufferStorageLease lease;
+                if(retainedLeases){
+                    lease=(*retainedLeases)[resourceIndex];
+                    if(lease.resource.Get()!=resource||
+                       (lease.kind!=BufferStorageKind::Committed&&lease.kind!=BufferStorageKind::Placed)||
+                       (lease.kind==BufferStorageKind::Placed&&!lease.heap))return E_INVALIDARG;
+                }else if(!AcquireStorageLease(resource,lease))return E_INVALIDARG;
+                const auto bytes=lease.bytes;
+                if(!ranges.Add(lease.address,bytes))return E_INVALIDARG;
                 if(bytes>UINT64_MAX-retained)return E_INVALIDARG;
                 retained+=bytes;leases.push_back(std::move(lease));
             }
@@ -113,11 +120,11 @@ public:
     // Host calls once at the serialized first Execute boundary, after selecting
     // the strict scene cut and before arming the recorded constant upload. Never
     // call on an in-flight/replayed command list. Failure leaves zero records.
-    HRESULT Commit(ID3D12Device* device,const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources) noexcept {
+    HRESULT Commit(ID3D12Device* device,const GIProducerTable& plan,const std::vector<ID3D12Resource*>& resources,const std::vector<BufferStorageLease>* retainedLeases=nullptr) noexcept {
         if(!deferred_||!upload_||plan.epoch!=epoch_||plan.writerVersion!=version_||
            plan.records.size()*PTShaderTableAdapter::PrivateStride!=size_)return E_INVALIDARG;
         Ptr<ID3D12Device> owner;if(!device||FAILED(upload_->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device)return E_INVALIDARG;
-        D3D12ProducerTable checked;auto hr=checked.InitializeImpl(device,pipeline_.Get(),plan,resources,true);if(FAILED(hr))return hr;
+        D3D12ProducerTable checked;auto hr=checked.InitializeImpl(device,pipeline_.Get(),plan,resources,true,retainedLeases);if(FAILED(hr))return hr;
         void* mapped=nullptr;const D3D12_RANGE empty{};hr=upload_->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
         if(!mapped){upload_->Unmap(0,&empty);return E_UNEXPECTED;}
         std::memcpy(mapped,plan.records.data(),static_cast<SIZE_T>(size_));const D3D12_RANGE written{0,static_cast<SIZE_T>(size_)};upload_->Unmap(0,&written);

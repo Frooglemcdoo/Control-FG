@@ -21,6 +21,7 @@ struct BufferStorageLease {
     Microsoft::WRL::ComPtr<ID3D12Resource> resource;
     Microsoft::WRL::ComPtr<ID3D12Heap> heap;
     BufferStorageKind kind=BufferStorageKind::Unknown;
+    UINT64 address=0,bytes=0; // Immutable resource description captured with the lease.
 };
 inline bool AcquireStorageLease(ID3D12Resource* resource,BufferStorageLease& lease) noexcept {
     lease={};
@@ -34,7 +35,9 @@ inline bool AcquireStorageLease(ID3D12Resource* resource,BufferStorageLease& lea
         if (FAILED(resource->GetPrivateData(storageHeapKey,&bytes,object.GetAddressOf())) ||
             bytes!=sizeof(IUnknown*) || !object || FAILED(object.As(&heap))) return false;
     }
-    lease.resource=resource; lease.heap=heap; lease.kind=kind;
+    const auto desc=resource->GetDesc();const auto address=resource->GetGPUVirtualAddress();
+    if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||!address||!desc.Width||desc.Width>UINT64_MAX-address)return false;
+    lease.resource=resource; lease.heap=heap; lease.kind=kind;lease.address=address;lease.bytes=desc.Width;
     return true;
 }
 // A lease proves object/backing-heap retention only. It does not prove alias

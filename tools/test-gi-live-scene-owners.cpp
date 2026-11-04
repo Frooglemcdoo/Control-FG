@@ -11,7 +11,12 @@ int main()try {
     Require(bank.Identify(index->GetGPUVirtualAddress(),12,before),"Owner lookup failed");
     Require(bank.Created(3,index.Get(),index->GetGPUVirtualAddress(),12),"Shared wrapper failed");
     Require(bank.Identify(index->GetGPUVirtualAddress(),12,after)&&before.token==after.token,"Shared resource created ambiguous identity");
-    bank.Retire(1);Require(bank.Identify(index->GetGPUVirtualAddress(),12,after)&&before.token==after.token,"One wrapper retired shared storage");
+    BufferStorageLease inspected;std::uint64_t wrapper=0;
+    Require(bank.Inspect(before.token,inspected,wrapper)&&wrapper==1,"Initial reverse wrapper lookup failed");
+    bank.Retire(1);
+    Require(bank.Inspect(before.token,inspected,wrapper)&&wrapper==3,"Retired wrapper remained in reverse lookup");
+    Require(inspected.address==index->GetGPUVirtualAddress()&&inspected.bytes==12,"Retained description mismatch");
+    Require(bank.Identify(index->GetGPUVirtualAddress(),12,after)&&before.token==after.token,"One wrapper retired shared storage");
     TriangleMetadata metadata{position->GetGPUVirtualAddress(),index->GetGPUVirtualAddress(),0,12,3,3,6,42,0};
     PTOwnedScene::Triangle witness{};Require(bank.Geometry(metadata,witness)&&witness.indexToken==before.token,"Build-time geometry witness failed");
     // Exercise the real owner -> ordered scene -> private SBT preparation join.

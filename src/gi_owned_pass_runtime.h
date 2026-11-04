@@ -45,7 +45,7 @@ public:
    const auto& writer=*native->writer;gi_reuse::GILiveSceneCatalog::Selection selected;gi_reuse::GILiveSceneCatalog::Diagnostic diagnostic;
    bool selectionReady=false;
    {GIOwnedMetrics::Scope detail(GIOwnedMetrics::Selection);
-    selectionReady=catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected,&diagnostic);}
+    selectionReady=catalog.Select(cut,native->generation,writer.scene.token,writer.scene.address,selected,&diagnostic,false);}
    if(!selectionReady){
     if(GIOwnedPipeline::rejected.load()<12||GIOwnedPipeline::rejected.load()%120==0)
      Log("GI_OWNED_SCENE stage=%s order=%s status=%u token=%llu address=%llx instance=%u missing_instances=%u",diagnostic.stage,
@@ -71,14 +71,15 @@ public:
    GIOwnedMetrics::RecordMS(GIOwnedMetrics::OwnerLeases,timings.leasesMS);
    if(censusOutput)ReportGeometry(census,writer.ticket.serial,unsigned(prepared));
    if(prepared!=gi_reuse::GISceneProducerError::None)return Reject("private_scene_table",unsigned(prepared));
+   std::vector<gi_reuse::BufferStorageLease> retained=scene.buffers;
    std::vector<ID3D12Resource*> resources;resources.reserve(scene.buffers.size()+scene.frozen.size()*2);
    for(const auto& lease:scene.buffers)resources.push_back(lease.resource.Get());
    std::set<const void*> storages;
    for(const auto& geometry:scene.frozen)if(storages.insert(geometry->owner.get()).second){
     const auto storage=std::static_pointer_cast<GIGeometrySnapshot::Storage>(geometry->owner);
-    for(const auto& copy:storage->copies)resources.push_back(copy.second.Get());
+    for(const auto& lease:storage->leases){resources.push_back(lease.resource.Get());retained.push_back(lease);}
    }
-   HRESULT committed;{GIOwnedMetrics::Scope detail(GIOwnedMetrics::TableCommit);committed=table.Commit(device.Get(),scene.plan.table,resources);}if(FAILED(committed))return Reject("table_commit",unsigned(committed));
+   HRESULT committed;{GIOwnedMetrics::Scope detail(GIOwnedMetrics::TableCommit);committed=table.Commit(device.Get(),scene.plan.table,resources,&retained);}if(FAILED(committed))return Reject("table_commit",unsigned(committed));
    HRESULT armed;{GIOwnedMetrics::Scope detail(GIOwnedMetrics::Controls);armed=tile.CommitAdmission(table);}if(FAILED(armed))return Reject("controls",unsigned(armed));
    GIOwnedPipeline::attempts.Succeeded();const auto n=++GIOwnedPipeline::admitted;GIOwnedPipeline::active=true;
    if(n<=4||n%600==0)Log("GI_OWNED_ADMITTED writer=%llu triangles=%llu backing_buffers=%llu count=%llu gpu_completion=0",writer.ticket.serial,

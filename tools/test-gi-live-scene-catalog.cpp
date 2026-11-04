@@ -25,6 +25,12 @@ int main(){
   assert(repeated.Submit(1,1,Bottom())&&repeated.Submit(1,2,topMany));
   const auto oldCut=repeated.Mark(1);GILiveSceneCatalog::Selection result;
   assert(repeated.Select(oldCut,1,2,512,result)&&result.geometry.size()==1&&result.perInstance.size()==128);
+  GILiveSceneCatalog::Selection deferred;
+  assert(repeated.Select(oldCut,1,2,512,deferred,nullptr,false));
+  SceneTraversalClosure closure;
+  assert(ResolveTraversalClosure(repeated.History(),oldCut,1,deferred.top,deferred.instances,deferred.perInstance,closure)==TraversalError::None);
+  auto wrong=deferred.perInstance;wrong[0].revision+=1;
+  assert(ResolveTraversalClosure(repeated.History(),oldCut,1,deferred.top,deferred.instances,wrong,closure)!=TraversalError::None);
   assert(repeated.Submit(1,3,Bottom()));
   assert(repeated.Select(repeated.Mark(1),2,2,512,result));for(const auto& r:result.perInstance)assert(r.revision==3);
   assert(repeated.Select(oldCut,1,2,512,result));for(const auto& r:result.perInstance)assert(r.revision==1);

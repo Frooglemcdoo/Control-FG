@@ -15,7 +15,7 @@ class D3D12LiveSceneOwners {
     struct Entry {
         BufferStorageLease storage;
         Microsoft::WRL::ComPtr<IUnknown> identity;
-        U64 token=0,address=0,bytes=0;std::size_t wrappers=0;
+        U64 token=0,address=0,bytes=0;std::set<U64> wrappers;
     };
     std::mutex mutex_;
     PTOwnedScene::Index index_;
@@ -28,7 +28,8 @@ class D3D12LiveSceneOwners {
     std::shared_ptr<Entry> Remove(U64 wrapper) {
         const auto it=wrappers_.find(wrapper);if(it==wrappers_.end())return {};
         auto old=it->second;wrappers_.erase(it);
-        if(!--old->wrappers){index_.Remove(old->token);identities_.erase(old->identity.Get());tokens_.erase(old->token);bytes_-=old->bytes;}
+        old->wrappers.erase(wrapper);
+        if(old->wrappers.empty()){index_.Remove(old->token);identities_.erase(old->identity.Get());tokens_.erase(old->token);bytes_-=old->bytes;}
         return old;
     }
 public:
@@ -59,10 +60,10 @@ public:
             if(found!=identities_.end()){
                 const auto existing=tokens_.at(found->second);
                 if(existing->address!=address||existing->bytes!=d.Width)return false;
-                wrappers_.emplace(wrapper,existing);++existing->wrappers;return true;
+                existing->wrappers.insert(wrapper);wrappers_.emplace(wrapper,existing);return true;
             }
             if(tokens_.size()>=8192||bytes_>budget_||d.Width>budget_-bytes_||serial_==UINT64_MAX)return false;
-            candidate->token=++serial_;candidate->address=address;candidate->bytes=d.Width;candidate->wrappers=1;
+            candidate->token=++serial_;candidate->address=address;candidate->bytes=d.Width;candidate->wrappers.insert(wrapper);
             // Any allocation exception disables admission rather than exposing
             // an index with only half of its owner transaction installed.
             index_.Insert({candidate->token,address,d.Width});
@@ -143,8 +144,8 @@ public:
     bool Inspect(U64 token,BufferStorageLease& output,U64& wrapper) noexcept {
         wrapper=0;std::lock_guard<std::mutex> guard(mutex_);if(!healthy_)return false;
         const auto found=tokens_.find(token);if(found==tokens_.end())return false;
-        for(const auto& item:wrappers_)if(item.second==found->second){output=found->second->storage;wrapper=item.first;return true;}
-        return false;
+        if(found->second->wrappers.empty())return false;
+        wrapper=*found->second->wrappers.begin();output=found->second->storage;return true;
     }
     U64 RetainedBytes() {std::lock_guard<std::mutex> guard(mutex_);return bytes_;}
 };

@@ -57,7 +57,8 @@ struct Storage {
     std::shared_ptr<Pool> pool;
     U64 bytes=0;
     std::map<U64,ComPtr<ID3D12Resource>> copies;
-    ~Storage(){if(pool)for(auto& entry:copies)pool->Return(std::move(entry.second));copies.clear();if(bytes)budget->Release(bytes);}
+    std::vector<gi_reuse::BufferStorageLease> leases;
+    ~Storage(){leases.clear();if(pool)for(auto& entry:copies)pool->Return(std::move(entry.second));copies.clear();if(bytes)budget->Release(bytes);}
 };
 struct Transfer {
     std::shared_ptr<Storage> storage;
@@ -117,6 +118,8 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         if(pool)copy=pool->Take(device.Get(),desc.Width);
         else if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&copy))))return false;
         if(!copy||!gi_reuse::RetainCreatedStorage(copy.Get()))return false;
+        gi_reuse::BufferStorageLease retained;if(!gi_reuse::AcquireStorageLease(copy.Get(),retained))return false;
+        storage.leases.push_back(std::move(retained));
         storage.copies.emplace(entry.first,std::move(copy));transfer->sources.push_back(entry.second);
     }
     // All allocation/validation work completes before the first GPU command.

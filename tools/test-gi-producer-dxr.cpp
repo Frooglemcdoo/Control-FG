@@ -105,7 +105,17 @@ int main()try {
         }
         NativeGITable native;Require(BuildNativeGITable(1,mode+1,1,bindings,identifiers.nativeOpaque,identifiers.nativeAlpha,native),"Native table preparation failed");
         GIProducerTable plan;Require(PrepareGIProducerTable(native,1,mode+1,reinterpret_cast<std::uintptr_t>(pipeline.State()),1,identifiers,mapped,plan)==GIProducerTableError::None,"Private table preparation failed");
-        Check(tables[mode].Initialize(gpu.device.Get(),pipeline.State(),plan,{positions.Get(),indices16.Get(),indices32.Get(),attributes.Get()}));
+        const std::vector<ID3D12Resource*> resources={positions.Get(),indices16.Get(),indices32.Get(),attributes.Get()};
+        if(mode){
+            std::vector<BufferStorageLease> retained;
+            for(auto* resource:resources){BufferStorageLease lease;Require(AcquireStorageLease(resource,lease),"Retained table lease failed");retained.push_back(lease);}
+            Check(tables[mode].Reserve(gpu.device.Get(),pipeline.State(),UINT(bindings.size()),plan.epoch,plan.writerVersion));
+            auto bad=retained;bad[0].resource=indices16;
+            Require(FAILED(tables[mode].Commit(gpu.device.Get(),plan,resources,&bad)),"Mismatched retained lease accepted");
+            bad=retained;bad[0].bytes=0;
+            Require(FAILED(tables[mode].Commit(gpu.device.Get(),plan,resources,&bad)),"Invalid retained range accepted");
+            Check(tables[mode].Commit(gpu.device.Get(),plan,resources,&retained));
+        }else Check(tables[mode].Initialize(gpu.device.Get(),pipeline.State(),plan,resources));
         auto output=gpu.Buffer(sentinel.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);auto initial=gpu.Upload(sentinel);
         gpu.list->CopyResource(output.Get(),initial.Get());gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         gpu.list->SetComputeRootDescriptorTable(2,gpu.View(output.Get(),3+mode,sizeof(GIProducerShadingRequest),count+1,true));

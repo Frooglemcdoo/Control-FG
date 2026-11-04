@@ -125,22 +125,23 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 if(diagnostic)++diagnostic->checked;
                 const auto found=witnesses.find(Key{ref.address,ref.token,ref.revision,g});
                 if(found==witnesses.end()){sample.stage=GISceneGeometryStage::WitnessMissing;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
-                const auto& witness=found->second->triangle;const auto* triangle=bottom.geometry->At(g);
-                sample.witness=witness;sample.metadata=triangle?*triangle:TriangleMetadata{};sample.metadataError=triangle?unsigned(GeometryMetadata::Validate(*triangle)):UINT32_MAX;
-                if(found->second->frozen){sample.frozenIndices=found->second->frozen->indices;sample.frozenPositions=found->second->frozen->positions;}
-                if(!triangle||GeometryMetadata::Validate(*triangle)!=GeometryReject::None||triangle->transform||
-                   witness.indices!=triangle->indices||witness.positions!=triangle->vertices||
-                   witness.positionStride!=triangle->stride||witness.indexStride!=GeometryMetadata::IndexSize(*triangle)||
-                   witness.indexCount!=triangle->indexCount||witness.vertexCount!=triangle->vertexCount)
-                    {sample.stage=GISceneGeometryStage::Metadata;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
                 const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
                 PTShaderTableAdapter::Bytes converted;
                 MappingKey currentKey{{ref.address,ref.token,ref.revision,g},{}};
                 std::memcpy(currentKey.second.data(),native.bytes.data()+row*NativeStride,NativeStride);
                 const auto mapped=mappings.find(currentKey);
+                const bool reusedMapping=mapped!=mappings.end();
                 if(mapped!=mappings.end()){
                     resolved=mapped->second.resolved;converted=mapped->second.record;if(diagnostic)++diagnostic->reused;
                 }else{
+                    const auto& witness=found->second->triangle;const auto* triangle=bottom.geometry->At(g);
+                    sample.witness=witness;sample.metadata=triangle?*triangle:TriangleMetadata{};sample.metadataError=triangle?unsigned(GeometryMetadata::Validate(*triangle)):UINT32_MAX;
+                    if(found->second->frozen){sample.frozenIndices=found->second->frozen->indices;sample.frozenPositions=found->second->frozen->positions;}
+                    if(!triangle||GeometryMetadata::Validate(*triangle)!=GeometryReject::None||triangle->transform||
+                       witness.indices!=triangle->indices||witness.positions!=triangle->vertices||
+                       witness.positionStride!=triangle->stride||witness.indexStride!=GeometryMetadata::IndexSize(*triangle)||
+                       witness.indexCount!=triangle->indexCount||witness.vertexCount!=triangle->vertexCount)
+                        {sample.stage=GISceneGeometryStage::Metadata;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
                     const auto persistentKey=GIValidatedMappingCache::MakeKey(ref.address,ref.token,ref.revision,g,
                         witness,found->second->frozen.get(),native.bytes.data()+row*NativeStride);
                     bool acrossTransaction=false;
@@ -174,7 +175,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 if(table.bound[binding]&&table.records[row]!=converted){sample.stage=GISceneGeometryStage::Conflict;if(!diagnostic)return GISceneProducerError::Conflict;reject(sample,GISceneProducerError::Conflict);continue;}
                 if(diagnostic)++diagnostic->valid;
                 table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;
-                for(auto token:resolved.tokens)tokens.insert(token);
+                if(!reusedMapping)for(auto token:resolved.tokens)tokens.insert(token);
             }
         }
         if(failure!=GISceneProducerError::None)return failure;

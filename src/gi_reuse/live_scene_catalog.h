@@ -50,7 +50,9 @@ public:
   }
   payloads_.emplace(revision,std::move(input));return true;
  }
- bool Select(U64 cut,U64 epoch,U64 token,U64 address,Selection& output,Diagnostic* diagnostic=nullptr) const {
+ // Deferred admission may defer closure validation to PrepareGISceneProducer,
+ // which must run against this same catalog cut before any GPU gate is armed.
+ bool Select(U64 cut,U64 epoch,U64 token,U64 address,Selection& output,Diagnostic* diagnostic=nullptr,bool validateClosure=true) const {
   Diagnostic local;auto& d=diagnostic?*diagnostic:local;d={};d.token=token;d.address=address;
   const auto fail=[&](const char* stage){d.stage=stage;return false;};
   Selection next;ASRecord top;
@@ -83,7 +85,7 @@ public:
   }
   if(d.missingBottoms)return false;
   SceneTraversalClosure closure;
-  if(ResolveTraversalClosure(order_,cut,epoch,next.top,next.instances,next.perInstance,closure)!=TraversalError::None)return fail("traversal_closure");
+  if(validateClosure&&ResolveTraversalClosure(order_,cut,epoch,next.top,next.instances,next.perInstance,closure)!=TraversalError::None)return fail("traversal_closure");
   output=std::move(next);return true;
  }
  // Must run between admission calls, with no external CPU cut retained.
