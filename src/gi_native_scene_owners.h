@@ -4,6 +4,7 @@
 #include "gi_reuse/native_gi_identity.h"
 #include "gi_reuse/d3d12_geometry_snapshot.h"
 #include "gi_native_lifetime_runtime.h"
+#include "gi_reuse/writer_handoff.h"
 // Recovered R103 creation boundaries. These observe native ownership only;
 // installing them does not enable the replacement lighting dispatch.
 namespace GINativeSceneOwners {
@@ -70,6 +71,9 @@ static void* CopyHook(void* to,const void* from,std::size_t bytes){
  }catch(...){return {};}
 }
 struct Writer {
+ explicit Writer(UINT64 producerGeneration):submission(producerGeneration),generation(producerGeneration){}
+ mutable gi_reuse::GIWriterSubmission submission;
+ const UINT64 generation;
  GINativeJobRoute::Ticket ticket;
  gi_reuse::NativeGIWriterInputs inputs;
  Microsoft::WRL::ComPtr<ID3D12StateObject> pipeline;
@@ -79,8 +83,11 @@ struct Writer {
  const char* inputReason="not_observed";
 };
 static std::atomic<bool(*)(Writer&) noexcept> writerInputs{nullptr};
+static thread_local gi_reuse::GIWriterHandoff<Writer> writerHandoff;
+static std::atomic<UINT64> writerPublications{0};
 struct Use {
  virtual ~Use()=default;
+ virtual bool ProducerOrdered(UINT64 queue) noexcept=0;
  virtual bool Admit(const gi_reuse::GILiveSceneCatalog&,UINT64 cut) noexcept=0;
  virtual bool RecordGate(ID3D12GraphicsCommandList*) noexcept=0;
  virtual void Cancel() noexcept=0;
@@ -246,17 +253,26 @@ static void Copy(ID3D12GraphicsCommandList4* list,UINT64 destination,UINT64 sour
  }catch(...){recording->complete=false;}
 }
 static void WriterReady(const GINativeJobRoute::Ticket& ticket) noexcept {
- if(!ready.load())return;auto recording=ReadRecording(reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list));
- if(!recording||!recording->complete)return;
- try {if(recording->events.size()>=65536){recording->complete=false;return;}
-  auto writer=std::make_shared<Writer>();writer->ticket=ticket;
+ if(!ready.load())return;writerHandoff.Clear();
+ auto recording=ReadRecording(reinterpret_cast<ID3D12GraphicsCommandList4*>(ticket.list));
+ const auto n=++writerPublications;
+ const auto report=[&](const char* reason,const Writer* writer=nullptr){
+  if(n<=8||n%600==0)Log("GI_OWNED_WRITER serial=%llu invocation=%llu generation=%llu published=%u reason=%s native_inputs=%u input_reason=%s",
+   ticket.serial,rrNativeGIInvocation,recording?recording->generation:0ull,unsigned(writer!=nullptr),reason,
+   unsigned(writer&&writer->nativeInputs),writer?writer->inputReason:"not_observed");
+ };
+ if(!rrNativeGIDispatchScope||!rrNativeGIInvocation){report("native_invocation");return;}
+ if(!recording||!recording->complete||recording->submitted){report("producer_recording");return;}
+ try {if(recording->events.size()>=65536){recording->complete=false;report("event_capacity");return;}
+  auto writer=std::make_shared<Writer>(recording->generation);writer->ticket=ticket;
   gi_reuse::native_gi_detail::Header header;
-  if(!gi_reuse::SnapshotNativeGIWriter(ticket,writer->inputs)||!gi_reuse::native_gi_detail::ReadHeader(ticket.writer,header)||header.pipeline!=ticket.pipeline){recording->complete=false;return;}
+  if(!gi_reuse::SnapshotNativeGIWriter(ticket,writer->inputs)||!gi_reuse::native_gi_detail::ReadHeader(ticket.writer,header)||header.pipeline!=ticket.pipeline){recording->complete=false;report("writer_snapshot");return;}
   writer->opaque=header.opaque;writer->alpha=header.alpha;
   writer->pipeline=reinterpret_cast<ID3D12StateObject*>(ticket.pipeline);
   if(const auto fill=writerInputs.load())writer->nativeInputs=fill(*writer);
-  Event e;e.writer=std::move(writer);recording->events.push_back(std::move(e));
- }catch(...){recording->complete=false;}
+  Event e;e.writer=writer;recording->events.push_back(std::move(e));
+  writerHandoff.Publish(rrNativeGIInvocation,ticket.engineFrame,writer);report("none",writer.get());
+ }catch(...){recording->complete=false;report("exception");}
 }
 static bool Install(HMODULE d3d) noexcept {
  if(!Enabled()||!gi_reuse::runtime::Enabled()||!HashMatches(d3d,kD3dHash)||!HashMatches(verifiedRenderer,kRendererHash))return false;

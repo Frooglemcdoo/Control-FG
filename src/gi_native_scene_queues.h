@@ -89,8 +89,16 @@ static UINT64 Before(ID3D12CommandQueue* input,UINT count,ID3D12CommandList*cons
    }
    for(const auto& recording:flight.recordings){recording->submitted=true;
     if(catalog.Healthy())for(const auto& event:recording->events){
-     if(event.use){const auto cut=catalog.Mark(q->id);if(!cut)break;pending.emplace_back(event.use,cut);}
-     else if(event.writer){if(!catalog.Mark(q->id))break;++marks;}
+     if(event.use){
+      // Evaluate at this exact list/event position, before later producers in
+      // the same Execute batch can publish their receipt. No CPU-time guess.
+      if(!event.use->ProducerOrdered(q->id)){event.use->Cancel();continue;}
+      const auto cut=catalog.Mark(q->id);if(!cut)break;pending.emplace_back(event.use,cut);
+     }
+     else if(event.writer){
+      if(!event.writer->submission.Submit(q->id,recording->generation)){catalog.Invalidate("writer_submission_identity");break;}
+      if(!catalog.Mark(q->id))break;++marks;
+     }
      else if(!catalog.Submit(q->id,recording->generation,Payload(event)))break;
     }
    }

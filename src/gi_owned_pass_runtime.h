@@ -46,6 +46,9 @@ public:
    return true;
   }catch(...){Cancel();return Reject("exception");}
  }
+ bool ProducerOrdered(UINT64 queue) noexcept override {
+  return native->writer->submission.Precedes(queue)||Reject("producer_not_ordered");
+ }
  bool RecordGate(ID3D12GraphicsCommandList* prefix) noexcept override{return tile.RecordGate(prefix);}
  void Cancel() noexcept override{tile.CancelAdmission();GIOwnedPipeline::active=false;}
 };

@@ -1,8 +1,8 @@
 #pragma once
 #include "gi_native_scene_descriptors.h"
 // Mirrors CPU descriptor sources only during the exact GI6 ConstantTable bind.
-// The command list owns the completed snapshot, so another recording thread or
-// TLS pass cannot silently substitute a different writer/table.
+// The command list owns the completed snapshot. The exact ray invocation hands
+// its writer across native list rotation; submission proves producer ordering.
 namespace GINativeGIBindings {
 using Microsoft::WRL::ComPtr;
 using Bind=void(*)(void*);
@@ -24,6 +24,7 @@ public:
 };
 static thread_local bool capturing=false,rejected=false;
 static thread_local ComPtr<Snapshot> current;
+static thread_local std::shared_ptr<const GINativeSceneOwners::Writer> bindingWriter;
 static thread_local const char* failure="no_descriptor_callback";
 static thread_local UINT copies=0,constants=0;
 static std::atomic<UINT64> binds{0};
@@ -36,11 +37,9 @@ static Snapshot* Active() noexcept {
   if(!recording)return Reject("recording_missing");
   if(!recording->complete)return Reject("recording_incomplete");
   if(recording->submitted)return Reject("recording_submitted");
-  std::shared_ptr<const GINativeSceneOwners::Writer> writer;
-  for(auto event=recording->events.rbegin();event!=recording->events.rend();++event)if(event->writer){writer=event->writer;break;}
-  if(!writer)return Reject("writer_missing");
+  auto writer=bindingWriter;
+  if(!writer)return Reject("writer_handoff_missing");
   if(!writer->nativeInputs)return Reject(writer->inputReason);
-  if(writer->ticket.list!=reinterpret_cast<UINT_PTR>(context.rays))return Reject("writer_list_identity");
   ComPtr<Snapshot> snapshot;snapshot.Attach(new(std::nothrow) Snapshot);if(!snapshot)return Reject("snapshot_allocation");
   snapshot->generation=recording->generation;snapshot->context=context;snapshot->heap=context.table.heap;snapshot->writer=std::move(writer);
   GINativeSceneDescriptors::Mute mute;
@@ -58,6 +57,9 @@ static void Constant(D3D12_CPU_DESCRIPTOR_HANDLE destination,const D3D12_CONSTAN
 }
 static void Hook(void* shader){
  current.Reset();rejected=false;failure="no_descriptor_callback";copies=constants=0;capturing=true;
+ unsigned long long frame=0;DWORD fault=0;
+ if(!ReadEngineFrameSafe(&frame,&fault))frame=0;
+ bindingWriter=GINativeSceneOwners::writerHandoff.Take(rrNativeGIInvocation,frame);
  PTGlassRuntime::Context previous;if(PTGlassRuntime::ReadContext(&previous))previous.rays->SetPrivateDataInterface(key,nullptr);
  native(shader);
  const DWORD error=GetLastError();capturing=false;
@@ -66,11 +68,12 @@ static void Hook(void* shader){
  const auto n=++binds;
  if(n<=8||n%600==0){
   const auto stats=GINativeSceneDescriptors::index->Statistics();
-  Log("GI_OWNED_BIND_RESULT call=%llu snapshot=%u reason=%s copies=%u constants=%u observed=%llx descriptor_failed=%u index_healthy=%u index_reason=%s as_writes=%llu entries=%llu",
+  Log("GI_OWNED_BIND_RESULT call=%llu snapshot=%u reason=%s copies=%u constants=%u observed=%llx descriptor_failed=%u index_healthy=%u index_reason=%s as_writes=%llu entries=%llu producer_generation=%llu consumer_generation=%llu writer=%llu",
    n,unsigned(current.Get()!=nullptr&&!rejected),failure,copies,constants,current?current->shadow.Observed():0ull,
-   unsigned(GINativeSceneDescriptors::failed.load()),unsigned(stats.healthy),stats.failure,stats.asWrites,stats.entries);
+   unsigned(GINativeSceneDescriptors::failed.load()),unsigned(stats.healthy),stats.failure,stats.asWrites,stats.entries,
+   bindingWriter?bindingWriter->generation:0ull,current?current->generation:0ull,bindingWriter?bindingWriter->ticket.serial:0ull);
  }
- current.Reset();SetLastError(error);
+ current.Reset();bindingWriter.reset();SetLastError(error);
 }
 static ComPtr<Snapshot> Take(ID3D12GraphicsCommandList4* list) noexcept {
  ComPtr<Snapshot> result;if(!list)return result;

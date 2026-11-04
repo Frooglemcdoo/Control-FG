@@ -648,6 +648,8 @@ static bool PTReflectionInstallCommandListCaptureHooks(void* commandList) noexce
 #include "gi_reuse/native_gi_route.h"
 static thread_local gi_reuse::NativeGIRoute rrNativeGIRoute;
 static thread_local bool rrNativeGIDispatchScope=false;
+static std::atomic<UINT64> rrNativeGIInvocationCounter{0};
+static thread_local UINT64 rrNativeGIInvocation=0;
 static std::atomic<unsigned long long> rrNativeGIRouteCount{0},rrNativeGIRouteRejected{0};
 static thread_local int rrCurrentPipelineArg0 = -1;
 static thread_local int rrCurrentPipelineArg1 = -1;
@@ -770,6 +772,7 @@ static void HookRRRaytrace(int a, int b) {
     const bool priorGIScope=rrNativeGIDispatchScope;
     rrNativeGIDispatchScope=rrNativeGIRoute.Ready()&&verifiedRenderer&&
         reinterpret_cast<std::uintptr_t>(_ReturnAddress())==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x12c5f1;
+    if(rrNativeGIDispatchScope)rrNativeGIInvocation=++rrNativeGIInvocationCounter;
     originalRRRaytrace(a, b);
     rrNativeGIDispatchScope=priorGIScope;
     RRGuideTryCapture(aaCount.load(), rrCurrentRayGeneration);
