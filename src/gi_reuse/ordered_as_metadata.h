@@ -29,8 +29,8 @@ template<std::size_t Capacity=65536> class OrderedASMetadata {
  struct CachedSelection {U64 generation=0,cut=0,token=0,address=0,version=0;};
  static constexpr std::size_t SelectionSlots=16384;
  mutable std::vector<CachedSelection> selections_;
- U64 selectionGeneration_=1;
- void Changed(){if(++selectionGeneration_==0){selections_.clear();selectionGeneration_=1;}}
+ mutable U64 selectionGeneration_=1;
+ void Changed()const{if(++selectionGeneration_==0){selections_.clear();selectionGeneration_=1;}}
  static std::size_t SelectionSlot(U64 cut,U64 token,U64 address){
   U64 h=token^(address+0x9e3779b97f4a7c15ull+(cut<<6)+(cut>>2));
   h=(h^(h>>30))*0xbf58476d1ce4e5b9ull;h=(h^(h>>27))*0x94d049bb133111ebull;
@@ -127,7 +127,7 @@ public:
   if(!succeeded)return Fail("wait_failed");
   queues_.insert(queue);return order_.Wait(queue,fence,value)!=0||Fail("wait_contract");
  }
- PTSceneOrder::Graph::PendingFence PendingWait(U64 cut) const {return order_.PendingWait(cut);}
+ PTSceneOrder::Graph::PendingFence PendingWait(U64 cut) const {Changed();return order_.PendingWait(cut);}
  U64 ObserveFenceCompletion(U64 fence,U64 completed){Changed();return healthy_?order_.ObserveFenceCompletion(fence,completed):0;}
  U64 TailStamp(U64 queue) const {return order_.TailStamp(queue);}
  std::size_t VersionCount() const {return versions_.size();}
@@ -187,8 +187,8 @@ public:
    out=versions_.at(cached.version).record;return PTSceneOrder::Status::ready;
   }
   PTSceneOrder::Selection selected;const auto status=order_.Select(cut,{token,address},selected,reason);
-  if(status!=PTSceneOrder::Status::ready)return status;
-  if(!DependencyValid(selected.version)){if(reason)*reason="build_dependency";return PTSceneOrder::Status::invalid;}
+  if(status!=PTSceneOrder::Status::ready){Changed();return status;}
+  if(!DependencyValid(selected.version)){Changed();if(reason)*reason="build_dependency";return PTSceneOrder::Status::invalid;}
   cached={selectionGeneration_,cut,token,address,selected.version};
   out=versions_.at(selected.version).record;return status;
  }

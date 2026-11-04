@@ -19,6 +19,18 @@ int main(){
  ASRecord out;
  // Warm-cache parity and invalidation at an unchanged cut. New unordered
  // writes and derived-source races must still reject a formerly ready choice.
+ // A read can discover a graph cycle. It must also invalidate ready results
+ // cached before that discovery, including discovery through PendingWait.
+ for(bool viaPending:{false,true}){
+  Adapter cycle;assert(cycle.Submit(1,{Build(256,1)}));const auto independent=cycle.Mark(1);
+  assert(cycle.Wait(2,100,1,true)&&cycle.Signal(2,200,1,true));
+  assert(cycle.Wait(3,200,1,true)&&cycle.Signal(3,100,1,true));
+  const auto cyclic=cycle.Mark(2);
+  assert(cycle.Select(independent,1,256,out)==Status::ready);
+  if(viaPending)cycle.PendingWait(cyclic);
+  else assert(cycle.Select(cyclic,1,256,out)==Status::invalid);
+  assert(cycle.Select(independent,1,256,out)==Status::invalid&&!out.address);
+ }
  Adapter memo;
  assert(memo.Submit(1,{Build(256,1)}));const auto memoCut=memo.Mark(1);
  for(unsigned n=0;n<4;++n)assert(memo.Select(memoCut,1,256,out)==Status::ready&&out.revision==1);

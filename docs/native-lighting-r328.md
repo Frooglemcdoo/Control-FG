@@ -20,7 +20,9 @@ queries for instanced geometry at table commit.
   address and observation generation. The bounded 16384-slot CPU cache stores
   revision IDs only. Every metadata mutator invalidates it, including failed
   submits/signals/waits, fence completion, cut creation, explicit invalidation,
-  compaction and checkpoints. Later unordered writes and source-dependency
+  compaction and checkpoints. Failed selection and PendingWait queries also
+  invalidate reuse because reads can discover cycles in the ordering graph.
+  Later unordered writes and source-dependency
   races must still invalidate earlier successful selections. Failures are not
   cached. Full key comparisons make collisions misses, never authorization.
 - Reuse exact backing-range containment results inside each immutable table
@@ -40,7 +42,8 @@ Do not remove the hold while tables and control data are still unfinished.
 Portable tests cover ordered metadata, deferred scene catalog selection,
 complete scene packets, table validation, warm-cache invalidation by competing
 writes and source races, failed signals, explicit invalidation and pending
-fence completion. Randomized backing-range tests compare both first and cached
+fence completion and cycle discovery through both selection and wait queries.
+Randomized backing-range tests compare both first and cached
 queries against exhaustive containment with overlapping allocations.
 ASan/UBSan runs of the modified ordered-metadata and producer-table tests pass
 (leak detection disabled because this environment cannot enumerate threads).
@@ -50,6 +53,9 @@ ASan/UBSan runs of the modified ordered-metadata and producer-table tests pass
 over 2048 backing allocations. Initial paired optimized Linux results:
 R327 2.894 ms selection / 2.874 ms ranges; R328 2.240 / 0.951 ms.
 These are isolated CPU workloads, not in-game frame timings or an FPS claim.
+Additional paired runs showed substantial host timing variation; the existing
+single-BLAS mapping benchmark did not establish an end-to-end improvement.
+The actual R328 capture must determine the frame-time effect.
 
 ## In-game check
 
