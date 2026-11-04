@@ -6,6 +6,7 @@
 #include "validated_mapping_cache.h"
 #include <set>
 #include <tuple>
+#include <unordered_map>
 namespace gi_reuse {
 // Witnesses must carry the allocation identities observed at the BLAS build,
 // not identities recovered by looking up the same address later.
@@ -87,7 +88,18 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         // No result survives a new submit cut, owner change or frozen snapshot.
         using MappingKey=std::pair<Key,std::array<unsigned char,NativeStride>>;
         struct Mapping {PTOwnedScene::Index::Resolved resolved;PTShaderTableAdapter::Bytes record;};
-        std::map<MappingKey,Mapping> mappings;
+        struct MappingHash {
+            std::size_t operator()(const MappingKey& key)const noexcept {
+                std::uint64_t hash=std::get<1>(key.first)^(std::get<2>(key.first)*0x9e3779b97f4a7c15ull)^std::get<3>(key.first);
+                for(unsigned offset=32;offset<88;offset+=8){std::uint64_t word=0;std::memcpy(&word,key.second.data()+offset,8);
+                    hash^=word+0x9e3779b97f4a7c15ull+(hash<<6)+(hash>>2);}
+                hash=(hash^(hash>>30))*0xbf58476d1ce4e5b9ull;
+                hash=(hash^(hash>>27))*0x94d049bb133111ebull;
+                return static_cast<std::size_t>(hash^(hash>>31));
+            }
+        };
+        std::unordered_map<MappingKey,Mapping,MappingHash> mappings;
+        mappings.reserve((std::min)(bindings.size(),capturedGeometry.size()*2));
         std::map<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>,ASRecord> selectedBottoms;
         for(std::uint32_t i=0;i<tlas.count;++i){
             InstanceRecord instance;
@@ -124,8 +136,8 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 const auto binding=static_cast<std::size_t>(row/2);PTOwnedScene::Index::Resolved resolved;
                 PTShaderTableAdapter::Bytes converted;
                 MappingKey currentKey{{ref.address,ref.token,ref.revision,g},{}};
-                if(!persistent)std::memcpy(currentKey.second.data(),native.bytes.data()+row*NativeStride,NativeStride);
-                const auto mapped=persistent?mappings.end():mappings.find(currentKey);
+                std::memcpy(currentKey.second.data(),native.bytes.data()+row*NativeStride,NativeStride);
+                const auto mapped=mappings.find(currentKey);
                 if(mapped!=mappings.end()){
                     resolved=mapped->second.resolved;converted=mapped->second.record;if(diagnostic)++diagnostic->reused;
                 }else{
@@ -157,7 +169,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                     }
                     // Bound temporary CPU memory; uncached rows still undergo
                     // the identical full validation and conversion.
-                    if(!persistent&&mappings.size()<131072)mappings.emplace(std::move(currentKey),Mapping{resolved,converted});
+                    if(mappings.size()<131072)mappings.emplace(std::move(currentKey),Mapping{resolved,converted});
                 }
                 if(table.bound[binding]&&table.records[row]!=converted){sample.stage=GISceneGeometryStage::Conflict;if(!diagnostic)return GISceneProducerError::Conflict;reject(sample,GISceneProducerError::Conflict);continue;}
                 if(diagnostic)++diagnostic->valid;

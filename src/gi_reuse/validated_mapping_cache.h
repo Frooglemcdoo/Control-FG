@@ -34,14 +34,16 @@ private:
  std::vector<Entry> entries_;
  U64 native_=0,producer_=0,transaction_=0;PTShaderTableAdapter::Exports exports_{};
  static std::size_t Slot(const Key& key){
-  U64 hash=1469598103934665603ull;
-  for(auto value:key.identity){
-   value=(value^(value>>30))*0xbf58476d1ce4e5b9ull;
-   value=(value^(value>>27))*0x94d049bb133111ebull;
-   hash^=value^(value>>31);hash*=1099511628211ull;
+  // Hash the stable BLAS identity and local-root words. Remaining key bytes
+  // are compared exactly; omitting them from the hash can only cause a miss.
+  U64 hash=key.identity[1]^(key.identity[2]*0x9e3779b97f4a7c15ull)^(key.identity[3]*0xbf58476d1ce4e5b9ull);
+  for(unsigned offset=32;offset<88;offset+=8){
+   U64 word=0;std::memcpy(&word,key.source.data()+offset,8);
+   hash^=word+0x9e3779b97f4a7c15ull+(hash<<6)+(hash>>2);
   }
-  // Hash every source byte; exact comparison below also covers hash collisions.
-  for(auto value:key.source){hash^=value;hash*=1099511628211ull;}
+  hash=(hash^(hash>>30))*0xbf58476d1ce4e5b9ull;
+  hash=(hash^(hash>>27))*0x94d049bb133111ebull;
+  hash^=hash>>31;
   return static_cast<std::size_t>(hash)&(Slots-1);
  }
  static void Epoch(PTSceneAdmission::Geometry& g,U64 epoch){
@@ -60,11 +62,13 @@ public:
   U64 epoch,PTOwnedScene::Index::Resolved& mapped,PTShaderTableAdapter::Bytes& record,bool& acrossTransaction) {
   if(entries_.empty()||!epoch)return false;
   auto& e=entries_[Slot(key)];if(!e.valid||!(e.key==key))return false;
-  if(frozen){const auto owner=e.frozenOwner.lock();
-   if(!owner||!frozen->owner||owner.get()!=frozen->owner.get()||
-      owner.owner_before(frozen->owner)||frozen->owner.owner_before(owner))return false;}
   acrossTransaction=e.validatedTransaction!=transaction_;
-  if(acrossTransaction&&!owners.StillOwns(e.original))return false;
+  if(acrossTransaction){
+   if(frozen){const auto owner=e.frozenOwner.lock();
+    if(!owner||!frozen->owner||owner.get()!=frozen->owner.get()||
+       owner.owner_before(frozen->owner)||frozen->owner.owner_before(owner))return false;}
+   if(!owners.StillOwns(e.original))return false;
+  }
   e.validatedTransaction=transaction_;
   mapped=e.mapped;Epoch(mapped.geometry,epoch);record=e.record;return true;
  }

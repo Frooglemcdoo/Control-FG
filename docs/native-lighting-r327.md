@@ -24,9 +24,11 @@ Native GI and the private queue admission hold remain material unresolved costs.
   fresh leases are acquired. Overlaps, retired/replaced tokens, different
   materials, frozen-storage changes and altered bounds cannot use a stale entry.
   No scene cut, resource lease, GPU sample, or traversal permission is cached.
-- The persistent direct-mapped cache also replaces R326's per-admission
-  allocating conversion tree in the runtime path. Repeated visits inside one
-  owner-locked transaction reuse that transaction's ownership check.
+- Keep a compact transaction-local hash index for repeated instances. This
+  avoids probing the larger persistent cache and reacquiring weak owners on
+  every visit. Both indexes compare their complete keys; hash collisions cannot
+  authorize reuse. An initial all-visits persistent-cache prototype regressed
+  the synthetic benchmark and was revised before delivery.
 - Rebind CPU epoch metadata to the current admission. Current queue order,
   complete traversal closure, geometry metadata and row conflict checks remain.
 - Compare the captured native table directly against bindings, including active
@@ -67,6 +69,17 @@ widths, material/geometry distinctions, row conflicts and competing queue writes
 The native-table comparator rejects a mutation of every byte and active flag.
 WARP scratch tests exercise retired upload reuse and full overwrite/readback.
 Windows foundation, producer and proxy workflows are required before delivery.
+
+`tools/benchmark-gi-scene-mapping.cpp` supplies a reproducible CPU-only fixture:
+11344 instances, 1950 distinct material rows, one shared immutable BLAS, frozen
+geometry, 5 warmups and 50 timed preparations for each index width. GCC -O2,
+four interleaved pairs on this host: R326 median 9.776 ms (R16), 8.630 ms (R32);
+revised R327 median 6.463 ms (R16), 6.251 ms (R32). This intentionally isolates
+repeated mapping; it does not reproduce the game's full BLAS distribution,
+locking, D3D12 calls, private queue hold, native GI or GPU rendering. Do not
+translate these measurements into an FPS estimate. ASan/UBSan passed with leak
+detection disabled because this executor cannot enumerate threads for LSan.
+
 
 Install all contents beside Control_DX12.exe preserving folders. With the game
 closed run ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd. Keep RR, RT indirect
