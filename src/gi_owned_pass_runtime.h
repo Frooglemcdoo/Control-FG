@@ -21,6 +21,24 @@ public:
   if(n<=12||n%600==0)Log("GI_OWNED_ADMISSION rejected=%s detail=%u writer=%llu count=%llu",reason,detail,native->writer->ticket.serial,n);
   return false;
  }
+ static void ReportGeometry(const gi_reuse::GISceneProducerDiagnostic& d,UINT64 writer,unsigned result) noexcept {
+  Log("GI_OWNED_GEOMETRY revision=R320 writer=%llu result=%u checked=%llu valid=%llu samples=%llu",writer,result,d.checked,d.valid,UINT64(d.samples.size()));
+  const char* names[]={"witness_identity","transform","witness_missing","metadata","resolve","convert","rebase","conflict"};
+  for(unsigned i=0;i<unsigned(gi_reuse::GISceneGeometryStage::Count);++i)
+   Log("GI_OWNED_GEOMETRY_COUNT writer=%llu stage=%s count=%llu",writer,names[i],d.counts[i]);
+  for(const auto& s:d.samples){
+   Log("GI_OWNED_GEOMETRY_SAMPLE writer=%llu stage=%s instance=%u geometry=%u row=%llu blas=%llx token=%llu revision=%llu status=%u candidates=%u mismatch=%u admission=%u rebase=%u rebase_admission=%u",writer,names[unsigned(s.stage)],s.instance,s.geometry,s.row,s.blas.address,s.blas.token,s.blas.revision,unsigned(s.status),s.exact.candidates,s.exact.mismatch,unsigned(s.exact.admission),unsigned(s.rebase.stage),unsigned(s.rebase.admission));
+   const auto& b=s.binding;const auto& c=b.constants;const auto& w=s.witness;
+   Log("GI_OWNED_GEOMETRY_BIND writer=%llu row=%llu tag=%u type=%u indices=%llx attributes=%llx constants=%u,%u,%u,%u,%u,%u,%u,%u,%u,%u",writer,s.row,b.tag,b.type,b.indices,b.attributes,c[0],c[1],c[2],c[3],c[4],c[5],c[6],c[7],c[8],c[9]);
+   Log("GI_OWNED_GEOMETRY_WITNESS writer=%llu row=%llu indices=%llx positions=%llx index_stride=%u position_stride=%llu index_count=%u vertex_count=%u index_token=%llu position_token=%llu found_index=%llu found_position=%llu found_attribute=%llu",writer,s.row,w.indices,w.positions,w.indexStride,w.positionStride,w.indexCount,w.vertexCount,w.indexToken,w.positionToken,s.exact.indexToken,s.exact.positionToken,s.exact.attributeToken);
+   const auto& m=s.metadata;
+   Log("GI_OWNED_GEOMETRY_METADATA writer=%llu row=%llu indices=%llx positions=%llx transform=%llx stride=%llu index_count=%u vertex_count=%u index_format=%u vertex_format=%u flags=%u metadata_error=%u convert_error=%u",writer,s.row,m.indices,m.vertices,m.transform,m.stride,m.indexCount,m.vertexCount,m.indexFormat,m.vertexFormat,m.flags,s.metadataError,s.convertError);
+   const auto allocation=[&](const char* name,const PTOwnedScene::Allocation& a){Log("GI_OWNED_GEOMETRY_ALLOCATION writer=%llu row=%llu kind=%s token=%llu address=%llx bytes=%llu",writer,s.row,name,a.token,a.address,a.bytes);};
+   allocation("indices",s.exact.indexAllocation);allocation("positions",s.exact.positionAllocation);allocation("attributes",s.exact.attributeAllocation);
+   const auto range=[&](const char* name,const gi_reuse::GIFrozenRange& r){Log("GI_OWNED_GEOMETRY_FROZEN writer=%llu row=%llu kind=%s original=%llx bytes=%llu address=%llx capacity=%llu",writer,s.row,name,r.original,r.bytes,r.address,r.capacity);};
+   range("indices",s.frozenIndices);range("positions",s.frozenPositions);
+  }
+ }
  bool Admit(const gi_reuse::GILiveSceneCatalog& catalog,UINT64 cut) noexcept override {
   GIOwnedMetrics::Scope timing(GIOwnedMetrics::Admission);
   try {
@@ -36,8 +54,13 @@ public:
    if(selected.geometry.empty())return Reject("empty_scene");
    for(const auto& geometry:selected.geometry)if(!geometry.frozen||!geometry.frozen->owner)return Reject("unpreserved_geometry");
    PTShaderTableAdapter::Exports exports{writer.opaque,writer.alpha,pipeline->pipeline.Producer().Opaque(),pipeline->pipeline.Producer().Alpha()};
+   // Full census only three times per process. Later attempts retain fast rejection.
+   static std::atomic<unsigned> censusAttempts{0};
+   gi_reuse::GISceneProducerDiagnostic census;
+   auto* censusOutput=censusAttempts.fetch_add(1)<3?&census:nullptr;
    const auto prepared=GINativeSceneOwners::owners.Prepare(catalog.History(),cut,native->generation,selected.top,selected.instances,selected.perInstance,
-      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene);
+      selected.geometry,writer.inputs.table,writer.inputs.bindings,reinterpret_cast<UINT_PTR>(pipeline->pipeline.Producer().State()),exports,scene,censusOutput);
+   if(censusOutput)ReportGeometry(census,writer.ticket.serial,unsigned(prepared));
    if(prepared!=gi_reuse::GISceneProducerError::None)return Reject("private_scene_table",unsigned(prepared));
    std::vector<ID3D12Resource*> resources;resources.reserve(scene.buffers.size()+scene.frozen.size()*2);
    for(const auto& lease:scene.buffers)resources.push_back(lease.resource.Get());

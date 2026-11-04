@@ -41,9 +41,9 @@ static void CheckBothWidths(unsigned width){
  owners.Insert({20,4096,width==2?8u:12u});owners.Insert({21,8192,44});owners.Insert({22,12288,48});
  PTOwnedScene::Triangle witness{4096,8192,16,20,21,width,3,3};assert(owners.Observe(witness));
  std::vector<GISceneGeometry> witnesses={{{512,11,2},0,witness}};
- GISceneProducerPlan producer;
+ GISceneProducerPlan producer;GISceneProducerDiagnostic diagnostic;
  auto prepare=[&](){return PrepareGISceneProducer(history,p.cut,1,{768,12,3},p.instances,
-     {{512,11,2}},witnesses,owners,table,nativeBindings,45,p.identifiers,producer);};
+     {{512,11,2}},witnesses,owners,table,nativeBindings,45,p.identifiers,producer,&diagnostic);};
  assert(prepare()==GISceneProducerError::None);
  assert((producer.table.bound==std::vector<unsigned char>{0,0,1}));
  assert((producer.allocationTokens==std::vector<std::uint64_t>{20,21,22}));
@@ -53,7 +53,7 @@ static void CheckBothWidths(unsigned width){
  frozen->indices={4096,width==2?8u:12u,65536,width==2?8u:12u};frozen->positions={8192,44,73728,44};
  witnesses[0].frozen=frozen;assert(prepare()==GISceneProducerError::None);
  assert(producer.table.geometry[2].indices.address==65536&&producer.table.geometry[2].positions.address==73728);
- auto wrong=frozen->indices;frozen->indices.bytes=2;assert(prepare()==GISceneProducerError::Geometry);frozen->indices=wrong;
+ auto wrong=frozen->indices;frozen->indices.bytes=2;assert(prepare()==GISceneProducerError::Geometry);assert(diagnostic.samples.size()==1&&diagnostic.samples[0].rebase.stage==GIRebaseError::Indices);frozen->indices=wrong;
  auto oldOwner=frozen->owner;frozen->owner.reset();assert(prepare()==GISceneProducerError::Geometry);frozen->owner=oldOwner;
  auto originalTable=table;table.bytes[4*96+32]^=4;assert(prepare()==GISceneProducerError::Table);table=originalTable;
  witnesses[0].frozen.reset();assert(prepare()==GISceneProducerError::None);
@@ -93,7 +93,18 @@ static void CheckBothWidths(unsigned width){
   std::memcpy(two+64+52,&firstRow,4);both=Bytes(16384,23,two,sizeof(two));
   assert(prepareBoth()==GISceneProducerError::Conflict);
   assert(producer.table.geometry[2].positions.address==8448); // failed transaction preserves last valid plan
-  owners.Remove(24);
+  // A census reports both independent failures in a single transaction, while
+  // preserving the previously admitted plan. Ordinary calls still fail fast.
+  std::uint32_t secondRow=4;std::memcpy(two+64+52,&secondRow,4);both=Bytes(16384,23,two,sizeof(two));
+  owners.Remove(21);owners.Remove(24);
+  GISceneProducerDiagnostic census;const auto before=producer.table.records;
+  assert(PrepareGISceneProducer(multiple,cut,1,{1792,31,5},both,
+      {{512,11,2},{1536,30,4}},{{{512,11,2},0,witness},{{1536,30,4},0,secondWitness}},
+      owners,distinctTable,distinct,45,p.identifiers,producer,&census)==GISceneProducerError::Geometry);
+  assert(census.checked==2&&census.valid==0&&census.counts[unsigned(GISceneGeometryStage::Resolve)]==2);
+  assert(census.samples.size()==2&&census.samples[0].exact.positionToken==0&&census.samples[1].exact.positionToken==0);
+  assert((census.samples[0].exact.mismatch&64)&&producer.table.records==before);
+  owners.Insert({21,8192,44});
  }
  p.shaderTable=Bytes(32768,24,table.bytes.data(),table.bytes.size());SceneHitResult result;
  assert(ResolveSceneHit(history,p,result)==SceneHitError::None);

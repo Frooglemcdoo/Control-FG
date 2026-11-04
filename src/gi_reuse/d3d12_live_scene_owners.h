@@ -97,11 +97,11 @@ public:
         const SceneByteView& instances,const std::vector<SceneASReference>& perInstance,
         const std::vector<GISceneGeometry>& geometry,const NativeGITable& native,
         const std::vector<PTNativeBinding::Binding>& bindings,U64 pipeline,
-        const PTShaderTableAdapter::Exports& exports,Lease& output) noexcept {
+        const PTShaderTableAdapter::Exports& exports,Lease& output,GISceneProducerDiagnostic* diagnostic=nullptr) noexcept {
         Lease next;
         try {std::lock_guard<std::mutex> guard(mutex_);
             if(!healthy_)return GISceneProducerError::Identity;
-            const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan);
+            const auto result=PrepareGISceneProducer(history,cut,epoch,top,instances,perInstance,geometry,index_,native,bindings,pipeline,exports,next.plan,diagnostic);
             if(result!=GISceneProducerError::None)return result;
             for(const auto& g:geometry)if(g.frozen)next.frozen.push_back(g.frozen);
             auto tokens=next.plan.allocationTokens;tokens.push_back(top.token);

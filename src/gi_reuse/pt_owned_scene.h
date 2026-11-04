@@ -45,6 +45,7 @@ class Index {
         addressDirty=false;
     }
 public:
+    struct ExactDiagnostic {U64 indexToken=0,attributeToken=0,positionToken=0;unsigned candidates=0,mismatch=0;Allocation indexAllocation{},positionAllocation{},attributeAllocation{};PTSceneAdmission::Error admission=PTSceneAdmission::Error::none;};
     struct Resolved {PTSceneAdmission::Geometry geometry{};U64 tokens[3]{};};
     static constexpr std::size_t MaximumTriangles=65536;
     U64 Revision()const{return revision;} // Zero permanently disables reuse after overflow.
@@ -92,25 +93,35 @@ public:
     // Resolve the exact BLAS geometry selected by a frozen TLAS/SBT relation.
     // Unlike diagnostic Resolve, another geometry sharing the index range is
     // not ambiguous. The original observed allocation tokens must still exist.
-    Status ResolveExact(const PTNativeBinding::Binding& b,const Triangle& expected,U64 epoch,Resolved& out)const {
+    Status ResolveExact(const PTNativeBinding::Binding& b,const Triangle& expected,U64 epoch,Resolved& out,ExactDiagnostic* diagnostic=nullptr)const {
+        if(diagnostic)*diagnostic={};
         out={};U64 address=0;
         if(!epoch||!expected.indexToken||!expected.positionToken||!PTNativeBinding::IndexAddress(b,address)||b.constants[0]>=b.constants[8])return Status::invalidBinding;
         const auto& c=b.constants;const U64 padded=(U64(c[8])+3)&~U64(3);
         const U64 indexToken=Find(b.indices,padded),attributeToken=Find(b.attributes,c[9]);
+        if(diagnostic){diagnostic->indexToken=indexToken;diagnostic->attributeToken=attributeToken;diagnostic->positionToken=Find(expected.positions,U64(expected.vertexCount?expected.vertexCount-1:0)*expected.positionStride+12);
+            for(auto entry:{std::make_pair(indexToken,&diagnostic->indexAllocation),std::make_pair(diagnostic->positionToken,&diagnostic->positionAllocation),std::make_pair(attributeToken,&diagnostic->attributeAllocation)})
+                if(entry.first) *entry.second=allocations.at(entry.first);}
         if(!indexToken||!attributeToken)return Status::missingAllocation;
         auto bucket=triangles.find(address);if(bucket==triangles.end())return Status::missingGeometry;
         for(const auto& t:bucket->second){
-            if(t.indices!=expected.indices||t.positions!=expected.positions||t.positionStride!=expected.positionStride||
-               t.indexStride!=expected.indexStride||t.indexCount!=expected.indexCount||t.vertexCount!=expected.vertexCount||
-               t.indexToken!=expected.indexToken||t.positionToken!=expected.positionToken||
-               t.indexToken!=indexToken||t.indexStride!=c[1]||U64(t.indexCount)*t.indexStride>U64(c[8])-c[0]||
-               Find(t.positions,U64(t.vertexCount-1)*t.positionStride+12)!=t.positionToken)continue;
+            const unsigned mismatch=
+                ((t.indices!=expected.indices||t.positions!=expected.positions)?1u:0u)|
+                ((t.positionStride!=expected.positionStride||t.indexStride!=expected.indexStride||t.indexCount!=expected.indexCount||t.vertexCount!=expected.vertexCount)?2u:0u)|
+                ((t.indexToken!=expected.indexToken||t.positionToken!=expected.positionToken)?4u:0u)|
+                (t.indexToken!=indexToken?8u:0u)|(t.indexStride!=c[1]?16u:0u)|
+                (U64(t.indexCount)*t.indexStride>U64(c[8])-c[0]?32u:0u)|
+                (Find(t.positions,U64(t.vertexCount-1)*t.positionStride+12)!=t.positionToken?64u:0u);
+            if(diagnostic){++diagnostic->candidates;diagnostic->mismatch|=mismatch;}
+            if(mismatch)continue;
             const auto& p=allocations.at(t.positionToken);
             PTSceneAdmission::Geometry g{{{b.indices,padded,epoch},address},{{p.address,p.bytes,epoch},t.positions},
                 {{b.attributes,c[9],epoch},b.attributes},t.indexStride,t.indexCount,t.vertexCount,
                 static_cast<std::uint32_t>(t.positionStride),c[2],c[5],c[6],c[3],244000u/35u,epoch,true,true,true};
             PTSceneAdmission::Record record{};
-            if(PTSceneAdmission::Admit(g,record)!=PTSceneAdmission::Error::none)return Status::invalidGeometry;
+            const auto admitted=PTSceneAdmission::Admit(g,record);
+            if(diagnostic)diagnostic->admission=admitted;
+            if(admitted!=PTSceneAdmission::Error::none)return Status::invalidGeometry;
             out.geometry=g;out.tokens[0]=indexToken;out.tokens[1]=t.positionToken;out.tokens[2]=attributeToken;
             return Status::candidate;
         }
