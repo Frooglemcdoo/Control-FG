@@ -893,6 +893,13 @@ static bool PTReflectionInstallComputePsoHookOnDevice(ID3D12Device* device) noex
 
     ptReflectionOriginalCreateComputePipelineState=original;
     PTGlassRuntime::InstallDevice(device);
+    // Module hooks precede D3D device creation. Install the GI descriptor
+    // observers here, after glass hooks so their forwarding chain is preserved.
+    if(GINativeSceneOwners::Enabled()&&GINativeSceneOwners::ready.load()){
+        const bool descriptors=GINativeSceneDescriptors::Install(device);
+        const bool bindings=descriptors&&GINativeGIBindings::Install();
+        Log("GI_OWNED_DEVICE ready=%u descriptors=%u bindings=%u",unsigned(descriptors&&bindings),unsigned(descriptors),unsigned(bindings));
+    }
     ptReflectionCreateComputePipelineStateSlot=slot;
     Log("PT_REFLECTION_P2_PSO_HOOK ready=1 source=device_create device=%p vtable=%p slot_index=%llu slot=%p original=%p hook=%p exchange_error=%lu",
         device,vtable,static_cast<unsigned long long>(slotIndex),slot,
