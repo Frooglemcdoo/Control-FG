@@ -61,7 +61,7 @@ static void ExplainWait(UINT64 cut,UINT64 writer){
  if(n>8&&n%120)return;
  UINT64 actual=0;ID3D12Fence* native=nullptr;
  for(const auto& f:fences)if(f.id==pending.fence){native=f.native.Get();actual=native->GetCompletedValue();break;}
- Log("GI_OWNED_WAIT_DETAIL revision=R317 writer=%llu cut=%llu fence=%llu native_fence=%p wait_value=%llu observed_signal=%llu graph_completed=%llu actual_completed=%llu lane=%llu stamp=%llu count=%llu",
+ Log("GI_OWNED_WAIT_DETAIL revision=R318 writer=%llu cut=%llu fence=%llu native_fence=%p wait_value=%llu observed_signal=%llu graph_completed=%llu actual_completed=%llu lane=%llu stamp=%llu count=%llu",
   writer,cut,pending.fence,static_cast<void*>(native),pending.value,pending.signalValue,pending.completed,actual,pending.lane,pending.stamp,n);
  if(n>2)return;
  const auto first=traceSerial>=trace.size()?traceSerial-trace.size()+1:1;
@@ -93,17 +93,19 @@ static bool Preflight(ID3D12CommandQueue* input,const Recording& recording,const
   std::lock_guard<std::recursive_mutex> guard(mutex);
   ComPtr<IUnknown> identity;if(!input||FAILED(input->QueryInterface(IID_PPV_ARGS(&identity))))return false;
   const auto queue=std::find_if(queues.begin(),queues.end(),[&](const Queue& q){return q.identity.Get()==identity.Get();});
-  if(queue==queues.end()){static unsigned n=0;if(++n<=4)Log("GI_OWNED_PREFLIGHT_PATH revision=R317 path=unknown_queue queue=%p",static_cast<void*>(input));return true;}
+  if(queue==queues.end()){static unsigned n=0;if(++n<=4)Log("GI_OWNED_PREFLIGHT_PATH revision=R318 path=unknown_queue queue=%p",static_cast<void*>(input));return true;}
   PollNativeFences();
   const auto readiness=catalog.Mark(queue->id);
   const auto pending=catalog.PendingWait(readiness);
-  {static unsigned n=0;if(++n<=8)Log("GI_OWNED_PREFLIGHT_PATH revision=R317 queue=%llu writer=%llu producer_ordered=%u events=%llu pending_fence=%llu",queue->id,writer.ticket.serial,unsigned(writer.submission.Precedes(queue->id)),UINT64(recording.events.size()),pending.fence);}
-  if(pending.fence){static std::atomic<UINT64> rejectedWaits{0};const auto n=++rejectedWaits;
-   if(n<=8||n%120==0)Log("GI_OWNED_PREFLIGHT rejected=queue_wait fence=%llu value=%llu signal_value=%llu completed=%llu writer=%llu scratch_allocated=0 count=%llu",pending.fence,pending.value,pending.signalValue,pending.completed,writer.ticket.serial,n);
-   return false;
+  {static unsigned n=0;if(++n<=8)Log("GI_OWNED_PREFLIGHT_PATH revision=R318 queue=%llu writer=%llu producer_ordered=%u events=%llu pending_fence=%llu",queue->id,writer.ticket.serial,unsigned(writer.submission.Precedes(queue->id)),UINT64(recording.events.size()),pending.fence);}
+  if(pending.fence){static std::atomic<UINT64> deferredWaits{0};const auto n=++deferredWaits;
+   if(n<=8||n%120==0)Log("GI_OWNED_PREFLIGHT revision=R318 deferred=queue_wait fence=%llu value=%llu signal_value=%llu completed=%llu writer=%llu admission_required=1 count=%llu",pending.fence,pending.value,pending.signalValue,pending.completed,writer.ticket.serial,n);
+   // Recording precedes submission: a real producer may signal this fence
+   // before Execute. Keep the recorded pass disarmed; Pass::Admit must prove
+   // the exact scene at the actual submission cut before committing controls.
+   return true;
   }
-  // New AS writes may repair scene content, but cannot satisfy an existing
-  // queue wait. Check that wait first, before deferring content validation.
+  // New AS writes also require validation at their actual submission cut.
   for(const auto& event:recording.events)if(!event.writer&&!event.use)return true;
   // The producer may be queued with the consumer in a later Execute batch.
   if(!writer.submission.Precedes(queue->id))return true;

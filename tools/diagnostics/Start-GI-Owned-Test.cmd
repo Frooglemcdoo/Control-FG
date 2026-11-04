@@ -12,7 +12,7 @@ if not errorlevel 1 (
  pause
  exit /b 1
 )
-echo R317 - OWNED GI INTEGRATION
+echo R318 - OWNED GI INTEGRATION
 set "CONTROLTOH_GI_LIVE=1"
 set "CONTROLTOH_GI_EVALUATOR=1"
 set "CONTROLTOH_GI_OWNED=1"

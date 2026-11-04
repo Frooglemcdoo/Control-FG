@@ -56,6 +56,22 @@ int main(){
  assert(waited.Compact({{1,waited.TailStamp(1)}}));
  assert(waited.Wait(1,90,6,true));const auto future=waited.Mark(1);
  assert(!waited.ObserveFenceCompletion(90,5)&&!waited.Select(future,1,2,512,selected));
+ // R317: recording-time wait 37/3 precedes the producer signal. A pending
+ // recording snapshot must not permanently discard a future submission.
+ GILiveSceneCatalog deferred;
+ assert(deferred.Submit(2,1,Bottom())&&deferred.Submit(2,2,Top()));
+ assert(deferred.Wait(1,37,3,true));const auto recordCut=deferred.Mark(1);
+ assert(deferred.PendingWait(recordCut).value==3);
+ assert(!deferred.Select(recordCut,1,2,512,selected));
+ auto replacement=Bottom();
+ assert(deferred.Submit(2,3,replacement));
+ assert(!deferred.Select(deferred.Mark(1),1,2,512,selected));
+ assert(deferred.Signal(2,37,4,true));
+ assert(deferred.Select(deferred.Mark(1),1,2,512,selected));
+ assert(selected.perInstance[0].revision==3);
+ assert(deferred.Wait(1,37,7,true));
+ assert(!deferred.Select(deferred.Mark(1),1,2,512,selected));
+ puts("PASS deferred GI admission: pending during recording, updated producer at submission, unresolved next wait still rejected.");
  GILiveSceneCatalog unrelated;assert(unrelated.Submit(1,1,Bottom())&&unrelated.Submit(1,2,Top()));
  assert(unrelated.Wait(2,91,1,true));auto other=unrelated.Mark(2);
  assert(unrelated.ObserveFenceCompletion(91,1)==1);
