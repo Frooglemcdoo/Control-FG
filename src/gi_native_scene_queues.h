@@ -3,7 +3,7 @@
 #include "gi_native_submission_hooks.h"
 #include "gi_owned_pipeline_runtime.h"
 #include <deque>
-namespace rt_spot_table_audit {inline bool InstallGameQueue(ID3D12CommandQueue*) noexcept;}
+namespace native_lighting {namespace rt_spot_table_audit {inline bool InstallGameQueue(ID3D12CommandQueue*) noexcept;}}
 namespace GINativeSceneQueues {
 using Microsoft::WRL::ComPtr;
 using namespace GINativeSceneOwners;
@@ -41,7 +41,7 @@ static void RegisterGameQueue(ID3D12CommandQueue* queue) noexcept {
   if(gameQueues.size()>=16){catalog.Invalidate("game_queue_capacity");return;}
   // Hook the exact interface returned to Control, before its first submission.
   // The existing submitDepth guard suppresses synchronous native forwarding.
-  if(!rt_spot_table_audit::InstallGameQueue(queue)){catalog.Invalidate("game_queue_hook");return;}
+  if(!native_lighting::rt_spot_table_audit::InstallGameQueue(queue)){catalog.Invalidate("game_queue_hook");return;}
   gameQueues.push_back(std::move(identity));
   Log("GI_OWNED_GAME_QUEUE revision=R317 registered=1 queue=%p type=%u count=%llu",static_cast<void*>(queue),unsigned(queue->GetDesc().Type),UINT64(gameQueues.size()));
   }();
