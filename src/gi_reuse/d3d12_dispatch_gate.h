@@ -18,6 +18,7 @@ class D3D12DispatchGate {
   b.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,before,after};list->ResourceBarrier(1,&b);
  }
 public:
+ static GIScratchPool::Stats PoolStatistics(){return Pool().Statistics();}
  D3D12DispatchGate()=default;
  D3D12DispatchGate(const D3D12DispatchGate&)=delete;
  D3D12DispatchGate& operator=(const D3D12DispatchGate&)=delete;

@@ -4,10 +4,10 @@
 static void Run(bool admit){
  ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
  Device gpu(false);ComPtr<ID3D12InfoQueue> info;Check(gpu.device.As(&info));
- ID3D12Resource* retired=nullptr;
- {gi_reuse::D3D12DispatchGate temporary;Check(temporary.Initialize(gpu.device.Get()));retired=temporary.Resource();}
+ {gi_reuse::D3D12DispatchGate temporary;Check(temporary.Initialize(gpu.device.Get()));}
+ const auto beforeReuse=gi_reuse::D3D12DispatchGate::PoolStatistics().reuses;
  gi_reuse::D3D12DispatchGate gate;Check(gate.Initialize(gpu.device.Get()));
- Require(gate.Resource()==retired,"Retired gate buffer was not reused");
+ Require(gi_reuse::D3D12DispatchGate::PoolStatistics().reuses==beforeReuse+2,"Retired gate buffers were not reused");
  {gi_reuse::D3D12DispatchGate concurrent;Check(concurrent.Initialize(gpu.device.Get()));
   Require(concurrent.Resource()!=gate.Resource(),"Live gate buffer was reused prematurely");}
  auto one=gpu.Upload(std::vector<unsigned>{0}),zero=gpu.Upload(std::vector<unsigned>{0});
