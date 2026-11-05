@@ -4,8 +4,9 @@
 #include "../rr_native_blend_capture_policy.h"
 namespace native_lighting::capture_suite {
 // All suite state and file I/O belong to the diagnostic UI thread.
-enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character };
-inline bool character=false;
+enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character, Volume };
+inline bool character=false,volume=false;
+inline uint64_t previousVolumeBinds=0;
 inline bool preserveSettings=false,savedRR=false,savedDistance=false;
 inline unsigned savedSamples=0,savedEffects=0;
 inline uint64_t preservedSelection=0;
@@ -55,19 +56,20 @@ inline bool PackageCharacter(HWND game) noexcept {
     return ok;
 }
 inline void Finish(HWND game,const char* reason) noexcept {
+    volume_test::phase.store(0);
     rt_spot_capture_runtime::CancelPending();
     if(!preserveSettings)SelectMode(restore);ReportRRPaths("f9_restore");rt_shadow_capture::Summary();
     Trace("capture_suite_end reason=%s failures=%u restored=%s",reason,failures,ModeName(restore));
     DrainDiagnosticLog(true);
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
-    if(!character && !CopyLog(path))++failures;
+    if(!character && !volume && !CopyLog(path))++failures;
     Note("end=%s failures=%u restored=%s",reason,failures,ModeName(restore));
     if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
     active=false;
-    if(character){
+    if(character || volume){
         if(!PackageCharacter(game)){
             ShellExecuteW(game,L"open",folder,nullptr,nullptr,SW_SHOWNORMAL);
-            MessageBoxW(game,L"The full-screen images and manifest are in the opened folder.",L"Character shadows",MB_OK);
+            MessageBoxW(game,L"The full-screen images and manifest are in the opened folder.",volume?L"Volumetric lighting":L"Character shadows",MB_OK);
         }
         return;
     }
@@ -121,7 +123,8 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
     character=kind==Kind::Character;
-    if(swprintf_s(folder,L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,character?L"Character-Shadows":L"Shadow-R217",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    volume=kind==Kind::Volume;
+    if(swprintf_s(folder,L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,volume?L"Volume-Light":character?L"Character-Shadows":L"Shadow-R217",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
     manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
@@ -131,11 +134,16 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         if(log!=INVALID_HANDLE_VALUE)CloseHandle(log);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;return false;}
     CloseHandle(log);
     focusedBlockerStep={captureMode,L"shadow-blocker",true};
-    preserveSettings=kind==Kind::NativeBlend;preservedSelection=selection.Read();
+    preserveSettings=volume || kind==Kind::NativeBlend;preservedSelection=selection.Read();
     savedRR=control_rr::RRUserRequested();savedSamples=specularSampleChoice.load();
     savedEffects=control_rr_diagnostic::lastEffects.load();savedDistance=rr_compact_distance::enabled.load();
     motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
+    if(volume){
+        Note("R342 volumetriclight.obj final 2D composite. Original / suppress color writes / original. Two full-screen samples per phase. Counts measure recorded PSO binds, not GPU draws.");
+        lastFailure=native_blend_capture::Failure::None;
+        return true;
+    }
     if(character)Note("Character shadow comparison: full game client at native pixel resolution. Matched authored-clip modes. Two displayed samples per condition. No resource readback.");
     else Note("build=R217 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; Native Blend trace keeps the selected rendering configuration. Legacy blocker diagnostics may use RR-off modes. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
     Trace("capture_suite_start build=R217 restore=%s steps=%u",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
@@ -165,6 +173,31 @@ inline void Tick(HWND game,uint64_t now) noexcept {
     if(preserveSettings&&!native_blend_capture::SettingsMatch(control_rr::RRUserRequested(),savedRR,
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
+    if(volume){
+        static constexpr const wchar_t* names[]={L"normal",L"without-volume-composite",L"normal-repeat"};
+        if(step>=3){Finish(game,"complete");return;}
+        const unsigned phase=step+1;
+        if(!entered){
+            previousVolumeBinds=volume_test::binds[phase].load();
+            volume_test::phase.store(phase);
+            began=now;firstPresent=presentCount.load();imageIndex=0;entered=true;
+            nextImage=now+(step==0?5000:1500);
+        }
+        const auto binds=volume_test::binds[phase].load();
+        if(now-began>12000){
+            ++failures;Note("step=%u binds_since_last=%llu images=%u",step,binds-previousVolumeBinds,imageIndex);
+            Finish(game,"insufficient_composite_binds_or_presents");return;
+        }
+        if(now<nextImage || binds-previousVolumeBinds<2 || presentCount.load()-firstPresent<2)return;
+        wchar_t path[MAX_PATH]{};
+        swprintf_s(path,L"%s\\%02u-%s-%u.png",folder,step,names[step],imageIndex);
+        const auto hr=screenshots::Save(game,path);
+        Note("step=%u sample=%u binds_since_last=%llu present=%llu hr=0x%08lX",step,imageIndex,binds-previousVolumeBinds,presentCount.load(),static_cast<unsigned long>(hr));
+        if(FAILED(hr)){++failures;Finish(game,"screenshot_failed");return;}
+        previousVolumeBinds=binds;firstPresent=presentCount.load();nextImage=GetTickCount64()+250;
+        if(++imageIndex==2){++step;entered=false;}
+        return;
+    }
     rt_spot_capture_runtime::Poll();
     if(motion && !traceStarted)traceStarted=now;
     if(motion && now-traceStarted>=capture_plan::transitionTimeoutMs){++failures;Finish(game,"trace_timeout");return;}

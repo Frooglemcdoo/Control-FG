@@ -1204,11 +1204,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R341
+      - name: Package owned GI integration R342
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R341'
+          $out='ControlTOH-R342'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1248,11 +1248,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R341 - Owned GI integration test
+          R342 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
+          F10 TEST VOLUME: hold still. Captures native / volumetric composite suppressed / restored at your current settings. Send the Volume-Light ZIP. An unobserved composite is marked incomplete.
           F10 TEST SHADOWS: hold the camera still. Full-resolution game screenshots are packaged automatically.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
@@ -1281,10 +1282,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R341
+          name: ControlTOH-R342
           path: |
-            ControlTOH-R341.zip
-            ControlTOH-R341.sha256
+            ControlTOH-R342.zip
+            ControlTOH-R342.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
