@@ -697,15 +697,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator compile failed' }
           python tools/embed-gi-evaluator.py build/gi_evaluator.dxil build/gi_evaluator.generated.h
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator embedding failed' }
-          foreach($stage in 'proposals','shading','reservoirs','resolve','trace') {
-            $source=@{proposals='gi_producer_proposals';shading='gi_producer_shading';reservoirs='gi_initial_reservoir';resolve='gi_output_resolve';trace='gi_producer_trace'}[$stage]
+          foreach($stage in 'proposals','shading','resolve','trace') {
+            $source=@{proposals='gi_producer_proposals';shading='gi_producer_shading';resolve='gi_output_resolve';trace='gi_producer_trace'}[$stage]
             $arguments=@('-T','cs_6_0','-E','main','-WX','-HV','2018')
             if($stage -eq 'trace'){$arguments=@('-T','lib_6_5','-WX')}
-            if($stage -eq 'reservoirs'){$arguments+=@('-D','GI_NATIVE_INITIAL_BINDINGS=1')}
+            if($stage -eq 'resolve'){$arguments+=@('-D','GI_FUSED_INITIAL_RESOLVE=1')}
             & $dxc @arguments -D GI_OWNED_SINGLE_USE=1 "src/shaders/$source.hlsl" -Fo "build/gi-owned-$stage.dxil"
             if($LASTEXITCODE -ne 0){throw "Owned GI $stage compile failed"}
           }
-          python tools/embed-gi-owned.py build/gi_owned.generated.h build/gi-owned-proposals.dxil build/gi-owned-trace.dxil build/gi-owned-shading.dxil build/gi-owned-reservoirs.dxil build/gi-owned-resolve.dxil
+          python tools/embed-gi-owned.py build/gi_owned.generated.h build/gi-owned-proposals.dxil build/gi-owned-trace.dxil build/gi-owned-shading.dxil build/gi-owned-resolve.dxil
           if($LASTEXITCODE -ne 0){throw 'Owned GI stage embedding failed'}
           python tools/gi_live_sampling.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'Live GI producer DXIL validation failed'}
@@ -1190,11 +1190,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R333
+      - name: Package owned GI integration R334
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R333'
+          $out='ControlTOH-R334'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1227,14 +1227,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r333.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r334.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R333 - Owned GI integration test
+          R334 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Run ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd with the game closed.
@@ -1264,10 +1264,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R333
+          name: ControlTOH-R334
           path: |
-            ControlTOH-R333.zip
-            ControlTOH-R333.sha256
+            ControlTOH-R334.zip
+            ControlTOH-R334.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

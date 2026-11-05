@@ -125,7 +125,7 @@ static void AfterCompute(ID3D12GraphicsCommandList4* list,const gi_reuse::Comput
       UINT(writer.ticket.engineFrame),UINT(writer.ticket.serial),writer.ticket.width,writer.ticket.height,0,UINT(count),writer.rays,writer.baseRange,true,true))){Skip("allocation");return;}
   const auto bytes=pass->tile.RetainedBytes()+pass->table.RetainedBytes();
   if(!scratchBudget->Acquire(bytes)){Skip("scratch_budget");return;}pass->bytes=bytes;
-  std::array<PTGlass::DescriptorRange,5> fresh{};
+  std::array<PTGlass::DescriptorRange,4> fresh{};
   for(auto& range:fresh)if(!PTGlassRuntime::Fresh(native->context,&range)){Skip("native_descriptor_capacity");return;}
   if(!pass->tile.Publish(native->context.table,fresh)){Skip("descriptor_publication");return;}
   // Install lifetime ownership before the first injected GPU command. A false

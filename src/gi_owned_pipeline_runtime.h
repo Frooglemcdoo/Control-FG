@@ -49,7 +49,7 @@ inline HRESULT Attach(ID3D12Device* device,ID3D12RootSignature* root,IUnknown* n
  Microsoft::WRL::ComPtr<Owner> owner;owner.Attach(new(std::nothrow) Owner);if(!owner)return E_OUTOFMEMORY;
  hr=owner->pipeline.Initialize(dxr.Get(),root,{kGIOwnedProposals,sizeof(kGIOwnedProposals)},
   {kGIOwnedTrace,sizeof(kGIOwnedTrace)},{kGIOwnedShading,sizeof(kGIOwnedShading)},
-  {kGIOwnedReservoirs,sizeof(kGIOwnedReservoirs)},{kGIOwnedResolve,sizeof(kGIOwnedResolve)},true);
+  {kGIOwnedResolve,sizeof(kGIOwnedResolve)},true);
  if(SUCCEEDED(hr))hr=target->SetPrivateDataInterface(key,owner.Get());return hr;
 #else
  (void)device;(void)root;(void)native;return S_FALSE;

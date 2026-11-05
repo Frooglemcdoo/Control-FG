@@ -10,28 +10,27 @@
 #include <memory>
 #include "../pt_glass_descriptors.h"
 namespace gi_reuse {
-// Five stages sharing the admitted native GI6 root. Shader bytecode is prepared
+// Four stages sharing the admitted native GI6 root. Shader bytecode is prepared
 // before recording; the host must own the current scene and publication leases.
 class D3D12InitialGIPipeline {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
     Ptr<ID3D12RootSignature> root_;
-    Ptr<ID3D12PipelineState> proposals_,shading_,reservoirs_,resolve_;
+    Ptr<ID3D12PipelineState> proposals_,shading_,resolve_;
     D3D12ProducerPipeline producer_;
     bool gated_=false;
 public:
     HRESULT Initialize(ID3D12Device5* device,ID3D12RootSignature* root,
         D3D12_SHADER_BYTECODE proposals,D3D12_SHADER_BYTECODE trace,
-        D3D12_SHADER_BYTECODE shading,D3D12_SHADER_BYTECODE reservoirs,D3D12_SHADER_BYTECODE resolve,bool gated=false) noexcept {
+        D3D12_SHADER_BYTECODE shading,D3D12_SHADER_BYTECODE resolve,bool gated=false) noexcept {
         if(root_||producer_.State()||!device||!root)return E_INVALIDARG;
-        for(const auto code:{proposals,trace,shading,reservoirs,resolve})if(!code.pShaderBytecode||!code.BytecodeLength)return E_INVALIDARG;
-        Ptr<ID3D12PipelineState> a,b,c,e;
+        for(const auto code:{proposals,trace,shading,resolve})if(!code.pShaderBytecode||!code.BytecodeLength)return E_INVALIDARG;
+        Ptr<ID3D12PipelineState> a,b,e;
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root;
         desc.CS=proposals;HRESULT hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&a));if(FAILED(hr))return hr;
         desc.CS=shading;hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&b));if(FAILED(hr))return hr;
-        desc.CS=reservoirs;hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&c));if(FAILED(hr))return hr;
         desc.CS=resolve;hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&e));if(FAILED(hr))return hr;
         hr=producer_.Initialize(device,root,trace);if(FAILED(hr))return hr;
-        gated_=gated;root_=root;proposals_=std::move(a);shading_=std::move(b);reservoirs_=std::move(c);resolve_=std::move(e);return S_OK;
+        gated_=gated;root_=root;proposals_=std::move(a);shading_=std::move(b);resolve_=std::move(e);return S_OK;
     }
     bool Gated()const noexcept{return gated_;}
     ID3D12RootSignature* Root() const noexcept{return root_.Get();}
@@ -39,7 +38,6 @@ public:
     ID3D12PipelineState* Proposals() const noexcept{return proposals_.Get();}
     ID3D12PipelineState* Shading() const noexcept{return shading_.Get();}
     ID3D12PipelineState* Resolve() const noexcept{return resolve_.Get();}
-    ID3D12PipelineState* Reservoirs() const noexcept{return reservoirs_.Get();}
 };
 // Single-recording bounded frame or subregion. CPU descriptors and constants are immutable
 // after preparation. Retain this owner, its pipeline, the native binding owners,
@@ -50,11 +48,11 @@ class D3D12InitialGITile {
     template<class T> using Ptr=Microsoft::WRL::ComPtr<T>;
     Ptr<ID3D12Device> device_;
     Ptr<ID3D12DescriptorHeap> staging_;
-    Ptr<ID3D12Resource> rays_,batches_,requests_,samples_,reservoirs_,outputs_,constants_,controlUpload_;
+    Ptr<ID3D12Resource> rays_,batches_,requests_,samples_,constants_,controlUpload_;
     unsigned char* controls_=nullptr;
     GIFrameTiles layout_;
     D3D12DispatchGate gate_;
-    std::array<D3D12_GPU_DESCRIPTOR_HANDLE,5> tables_{};
+    std::array<D3D12_GPU_DESCRIPTOR_HANDLE,4> tables_{};
     Ptr<ID3D12DescriptorHeap> visible_;
     Ptr<ID3D12StateObject> recordedProducer_;
     UINT64 recordedHits_=0;
@@ -109,7 +107,7 @@ public:
         if(controls_){const D3D12_RANGE written{0,SIZE_T(layout_.tiles)*512};controlUpload_->Unmap(0,&written);}
         // Host retains this owner through command-list replay and GPU completion.
         // Record restores COMMON; an unrecorded allocation also starts COMMON.
-        for(auto* p:{std::addressof(rays_),std::addressof(batches_),std::addressof(requests_),std::addressof(samples_),std::addressof(reservoirs_),std::addressof(outputs_),std::addressof(constants_)})
+        for(auto* p:{std::addressof(rays_),std::addressof(batches_),std::addressof(requests_),std::addressof(samples_),std::addressof(constants_)})
             SharedGIScratchPool().Return(std::move(*p),D3D12_HEAP_TYPE_DEFAULT);
         SharedGIScratchPool().Return(std::move(controlUpload_),D3D12_HEAP_TYPE_UPLOAD);
     }
@@ -130,14 +128,13 @@ public:
         Ptr<ID3D12Device> sourceDevice;auto hr=source.heap->GetDevice(IID_PPV_ARGS(&sourceDevice));
         if(FAILED(hr)||sourceDevice.Get()!=device)return E_INVALIDARG;
         device_=device;step_=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=5*49;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=4*49;
         hr=device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&staging_));if(FAILED(hr))return hr;
         if(singleUse){hr=gate_.Initialize(device);if(FAILED(hr))return hr;bytes_+=8;}
         const UINT capacity=layout.capacity,total=capacity*rays;
         struct Allocation {UINT64 bytes;Ptr<ID3D12Resource>* resource;};
         const Allocation allocations[]={{UINT64(total)*sizeof(GIProducerRay),&rays_},{UINT64(capacity)*16,&batches_},
-            {UINT64(total)*sizeof(GIProducerShadingRequest),&requests_},{UINT64(total)*sizeof(GIShadedProducerSample),&samples_},
-            {UINT64(capacity)*sizeof(GIInitialReservoir),&reservoirs_},{UINT64(capacity)*sizeof(GIInitialResult),&outputs_}};
+            {UINT64(total)*sizeof(GIProducerShadingRequest),&requests_},{UINT64(total)*sizeof(GIShadedProducerSample),&samples_}};
         for(const auto& a:allocations){hr=Buffer(a.bytes,*a.resource);if(FAILED(hr))return hr;}
         // Every tile copies its own immutable controls into one GPU CBV buffer.
         // Rewriting a shader-visible descriptor or upload slice between recorded
@@ -155,11 +152,11 @@ public:
         }
         controls_=data;layout_=layout; // Persistently mapped, written only before first submission.
         auto from=source.heap->GetCPUDescriptorHandleForHeapStart();from.ptr+=SIZE_T(source.first)*step_;
-        for(UINT stage=0;stage<5;++stage){
+        for(UINT stage=0;stage<4;++stage){
             device->CopyDescriptorsSimple(49,At(stage,0),from,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            D3D12_CONSTANT_BUFFER_VIEW_DESC cb{constants_->GetGPUVirtualAddress()+((stage==0||stage==4)?0:256),256};device->CreateConstantBufferView(&cb,At(stage,1));
+            D3D12_CONSTANT_BUFFER_VIEW_DESC cb{constants_->GetGPUVirtualAddress()+((stage==0||stage==3)?0:256),256};device->CreateConstantBufferView(&cb,At(stage,1));
         }
-        if(gate_.Ready())for(UINT stage=0;stage<5;++stage){
+        if(gate_.Ready())for(UINT stage=0;stage<4;++stage){
             D3D12_SHADER_RESOURCE_VIEW_DESC flag{};flag.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;flag.Format=DXGI_FORMAT_R32_TYPELESS;
             flag.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;flag.Buffer.NumElements=1;flag.Buffer.Flags=D3D12_BUFFER_SRV_FLAG_RAW;
             device_->CreateShaderResourceView(gate_.Resource(),&flag,At(stage,40));
@@ -170,28 +167,26 @@ public:
         tlas.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;tlas.RaytracingAccelerationStructure.Location=sceneAddress;
         device->CreateShaderResourceView(nullptr,&tlas,At(1,33));
         View(2,32,requests_.Get(),sizeof(GIProducerShadingRequest),total,false);View(2,43,samples_.Get(),sizeof(GIShadedProducerSample),total,true);
-        View(3,32,samples_.Get(),sizeof(GIShadedProducerSample),total,false);View(3,33,batches_.Get(),16,capacity,false);
-        View(3,43,reservoirs_.Get(),sizeof(GIInitialReservoir),capacity,true);View(3,44,outputs_.Get(),sizeof(GIInitialResult),capacity,true);
-        View(4,32,outputs_.Get(),sizeof(GIInitialResult),capacity,false);View(4,33,samples_.Get(),sizeof(GIShadedProducerSample),total,false);
-        View(4,34,batches_.Get(),16,capacity,false);
+        View(3,33,samples_.Get(),sizeof(GIShadedProducerSample),total,false);
+        View(3,34,batches_.Get(),16,capacity,false);
         deferred_=deferred;sceneRevision_=sceneRevision;layout_=layout;pixels_=pixels;count_=total;firstPixel_=firstPixel;epoch_=epoch;version_=version;return S_OK;
     }
     // All ranges must be fresh native allocations in the SAME currently bound
     // heap. The host owns allocator retirement and supplies the native range to
     // exclude accidental writes to the original table or global material prefix.
-    bool Publish(const PTGlass::DescriptorRange& native,const std::array<PTGlass::DescriptorRange,5>& fresh) noexcept {
+    bool Publish(const PTGlass::DescriptorRange& native,const std::array<PTGlass::DescriptorRange,4>& fresh) noexcept {
         if(!pixels_||published_||!native.heap||native.count!=49)return false;
         const auto d=native.heap->GetDesc();
         if(d.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||
            native.first>d.NumDescriptors||native.count>d.NumDescriptors-native.first)return false;
         Ptr<ID3D12Device> owner;if(FAILED(native.heap->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device_.Get())return false;
-        for(UINT i=0;i<5;++i){const auto& r=fresh[i];
+        for(UINT i=0;i<4;++i){const auto& r=fresh[i];
             if(r.heap!=native.heap||r.count!=49||r.first<PTGlass::LightingTableLayout::NativeMaterialPrefix||
                r.first>d.NumDescriptors||r.count>d.NumDescriptors-r.first||
                (r.first<native.first+49&&native.first<r.first+49))return false;
             for(UINT j=0;j<i;++j)if(r.first<fresh[j].first+49&&fresh[j].first<r.first+49)return false;
         }
-        for(UINT i=0;i<5;++i){auto target=native.heap->GetCPUDescriptorHandleForHeapStart();target.ptr+=SIZE_T(fresh[i].first)*step_;
+        for(UINT i=0;i<4;++i){auto target=native.heap->GetCPUDescriptorHandleForHeapStart();target.ptr+=SIZE_T(fresh[i].first)*step_;
             device_->CopyDescriptorsSimple(49,target,At(i,0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             tables_[i]=native.heap->GetGPUDescriptorHandleForHeapStart();tables_[i].ptr+=UINT64(fresh[i].first)*step_;
         }
@@ -211,13 +206,13 @@ public:
             D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             b.Transition={resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,before,after};list->ResourceBarrier(1,&b);
         };
-        for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
+        for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get()})
             transition(resource,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         for(UINT tile=0;tile<layout_.tiles;++tile){const auto span=layout_.At(tile);
             transition(constants_.Get(),tile?D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER:D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
             list->CopyBufferRegion(constants_.Get(),0,controlUpload_.Get(),UINT64(tile)*512,512);
             transition(constants_.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-            if(tile)for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
+            if(tile)for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get()})
                 transition(resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             list->SetPipelineState(pipeline.Proposals());list->SetComputeRootDescriptorTable(0,tables_[0]);list->Dispatch((span.pixels+63)/64,1,1);
             Readable(list,rays_.Get());Readable(list,batches_.Get());
@@ -226,16 +221,14 @@ public:
             Readable(list,requests_.Get());
             list->SetPipelineState(pipeline.Shading());list->SetComputeRootDescriptorTable(0,tables_[2]);list->Dispatch((span.samples+63)/64,1,1);
             Readable(list,samples_.Get());
-            list->SetPipelineState(pipeline.Reservoirs());list->SetComputeRootDescriptorTable(0,tables_[3]);list->Dispatch((span.pixels+63)/64,1,1);
-            Readable(list,reservoirs_.Get());Readable(list,outputs_.Get());
             D3D12_RESOURCE_BARRIER outputBarrier{};outputBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
-            list->ResourceBarrier(1,&outputBarrier);
-            list->SetPipelineState(pipeline.Resolve());list->SetComputeRootDescriptorTable(0,tables_[4]);list->Dispatch((span.pixels+63)/64,1,1);
-            list->ResourceBarrier(1,&outputBarrier);
+            if(tile==0)list->ResourceBarrier(1,&outputBarrier);
+            list->SetPipelineState(pipeline.Resolve());list->SetComputeRootDescriptorTable(0,tables_[3]);list->Dispatch((span.pixels+63)/64,1,1);
+            if(tile+1==layout_.tiles)list->ResourceBarrier(1,&outputBarrier);
         }
         if(gate_.Ready())gate_.Close(list);
         // Closed-list replay must start from the same private resource states.
-        for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get(),reservoirs_.Get(),outputs_.Get()})
+        for(auto* resource:{rays_.Get(),batches_.Get(),requests_.Get(),samples_.Get()})
             transition(resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COMMON);
         transition(constants_.Get(),D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,D3D12_RESOURCE_STATE_COMMON);
         native.Restore(list);recordedProducer_=hits.Pipeline();recordedHits_=hits.Range().StartAddress;recorded_=true;return true;
@@ -262,9 +255,6 @@ public:
             std::memcpy(dst+4,&zero,4);std::memcpy(dst+260,&zero,4);}
         armed_=false;return S_OK;
     }
-    // Scratch contains the last tile only; it is not full-frame reuse history.
-    ID3D12Resource* Reservoirs()const noexcept{return reservoirs_.Get();}
-    ID3D12Resource* Outputs()const noexcept{return outputs_.Get();}
     UINT FirstPixel()const noexcept{return firstPixel_;}
     UINT Pixels()const noexcept{return pixels_;}
     UINT64 RetainedBytes()const noexcept{return bytes_;}

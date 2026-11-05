@@ -101,8 +101,8 @@ int main(int argc,char** argv)try{
   Require(shadow.Copy(17,41,{cpu.Get(),27,2}),"Native output shadow copy failed");
   gi_reuse::D3D12InitialGITile tile;
   Check(tile.Initialize(d.Get(),shadow,17,2,3,256,5,7,2,1,0,2,6,5));
-  Require(tile.Pixels()==2&&tile.FirstPixel()==0&&tile.RetainedBytes()==5856,"Tile allocation accounting mismatch");
-  std::array<PTGlass::DescriptorRange,5> fresh{};for(UINT i=0;i<5;++i)fresh[i]={visible.Get(),244049+i*49,49};
+  Require(tile.Pixels()==2&&tile.FirstPixel()==0&&tile.RetainedBytes()==5472,"Tile allocation accounting mismatch");
+  std::array<PTGlass::DescriptorRange,4> fresh{};for(UINT i=0;i<4;++i)fresh[i]={visible.Get(),244049+i*49,49};
   auto bad=fresh;bad[1]=bad[0];Require(!tile.Publish(originalRange,bad),"Overlapping private tables accepted");
   bad=fresh;bad[0]=originalRange;Require(!tile.Publish(originalRange,bad),"Native table overwrite accepted");
   bad=fresh;bad[0].first=0;Require(!tile.Publish(originalRange,bad),"Material prefix overwrite accepted");

@@ -1,7 +1,7 @@
 """Embed the validated owned GI stages for the hash-matched in-game pipeline."""
 import pathlib,sys
-names=('Proposals','Trace','Shading','Reservoirs','Resolve')
-if len(sys.argv)!=7:raise SystemExit('output proposals trace shading reservoirs resolve')
+names=('Proposals','Trace','Shading','Resolve')
+if len(sys.argv)!=6:raise SystemExit('output proposals trace shading resolve')
 lines=['#pragma once']
 for name,path in zip(names,sys.argv[2:]):
  data=pathlib.Path(path).read_bytes()
