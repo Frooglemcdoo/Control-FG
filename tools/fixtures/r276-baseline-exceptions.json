@@ -2,7 +2,7 @@
   "src/rr_clamp_strength_policy.h": [
     [
       "inline constexpr unsigned Requested()",
-      "inline std::atomic<bool> diagnosticBypass{false};\ninline constexpr unsigned Requested()"
+      "enum class Mode : unsigned { Native, Override60, Bypass };\ninline std::atomic<Mode> requestedMode{Mode::Native};\ninline Mode Next(Mode mode) noexcept {\n return mode==Mode::Native?Mode::Override60:mode==Mode::Override60?Mode::Bypass:Mode::Native;\n}\ninline constexpr unsigned Requested()"
     ],
     [
       "if(step&&step->raw)return 0;",
@@ -10,7 +10,7 @@
     ],
     [
       " return Requested();",
-      " return diagnosticBypass.load(std::memory_order_acquire)?0:Requested();"
+      " const auto mode=requestedMode.load(std::memory_order_acquire);\n return mode==Mode::Native?100u:mode==Mode::Bypass?0u:Requested();"
     ]
   ]
 }

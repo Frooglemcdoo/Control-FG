@@ -6,13 +6,18 @@ namespace control_rr_clamp {
 inline constexpr unsigned kReflectionDetailPercent = 60;
 inline std::atomic<unsigned> effective{100};
 inline std::atomic<bool> applied{true};
-inline std::atomic<bool> diagnosticBypass{false};
+enum class Mode : unsigned { Native, Override60, Bypass };
+inline std::atomic<Mode> requestedMode{Mode::Native};
+inline Mode Next(Mode mode) noexcept {
+ return mode==Mode::Native?Mode::Override60:mode==Mode::Override60?Mode::Bypass:Mode::Native;
+}
 inline constexpr unsigned Requested() noexcept {return kReflectionDetailPercent;}
 inline unsigned RuntimeRequested() noexcept {
 #ifdef CONTROL_RR_F9_SUITE
  const auto* step=rr_suite::Current();if(step)return step->raw?0:Requested();
 #endif
- return diagnosticBypass.load(std::memory_order_acquire)?0:Requested();
+ const auto mode=requestedMode.load(std::memory_order_acquire);
+ return mode==Mode::Native?100u:mode==Mode::Bypass?0u:Requested();
 }
 inline constexpr unsigned VariantCount=1;
 inline int Variant(unsigned v) noexcept {return v==kReflectionDetailPercent?0:-1;}

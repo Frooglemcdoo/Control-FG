@@ -28,7 +28,10 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+16)return gi_evaluator::Enabled()?gi_evaluator::Label():gi_live_toggle::Label();
 #endif
-    if(index==kModeCount+15)return control_rr_clamp::diagnosticBypass.load()?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%";
+    if(index==kModeCount+15){
+        const auto mode=control_rr_clamp::requestedMode.load();
+        return mode==control_rr_clamp::Mode::Native?L"CLAMP: NATIVE":mode==control_rr_clamp::Mode::Bypass?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%";
+    }
     if(index==kModeCount+3&&gi_spot_trace::Enabled())return L"ARM GI TRACE";
 #ifdef CONTROL_RR_FOLIAGE_AUDIT
     if(index==kModeCount+2)return L"CAPTURE MATERIALS";
@@ -369,9 +372,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
 #endif
             else if(index==kModeCount+15 && !capture_suite::active) {
-                const bool bypass=!control_rr_clamp::diagnosticBypass.load();
-                control_rr_clamp::diagnosticBypass.store(bypass,std::memory_order_release);
-                Trace("REF_CLAMP_R276 requested=%u other_settings_unchanged=1",bypass?0u:60u);
+                control_rr_clamp::requestedMode.store(control_rr_clamp::Next(control_rr_clamp::requestedMode.load()));
+                Trace("REF_CLAMP requested=%u",control_rr_clamp::RuntimeRequested());
             }
             else if(index==kModeCount+2) SaveReport(window);
             else if(index==kModeCount+3) RequestLightCapture(window);

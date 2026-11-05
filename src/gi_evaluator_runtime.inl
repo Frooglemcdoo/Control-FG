@@ -4,12 +4,13 @@ inline const GUID kVariant={0x309e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0
 inline const GUID kMode={0x309e0002,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline bool Enabled() noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
- static const bool value=[] {char v[8]{};return GetEnvironmentVariableA("CONTROLTOH_GI_EVALUATOR",v,sizeof(v))==1&&v[0]=='1';}();return value;
+ static const bool value=[] {char v[8]{};return gi_reuse::SingleProducerEnabled()||(GetEnvironmentVariableA("CONTROLTOH_GI_EVALUATOR",v,sizeof(v))==1&&v[0]=='1');}();return value;
 #else
  return false;
 #endif
 }
-inline std::atomic<bool> ready{false},requested{true};
+inline std::atomic<bool> ready{false};
+inline auto& requested=gi_reuse::ownedRequested;
 inline std::atomic<unsigned long long> revision{0},lastReported{~0ull};
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "../build/gi_evaluator.generated.h"
@@ -58,7 +59,7 @@ inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  const auto rev=revision.load();const auto key=rev*4+mode;
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);
 }
-inline void Toggle() noexcept {if(!ready.load())return;GIOwnedPipeline::active=false;const bool value=!requested.load();gi_reuse::singleRayApplied=false;requested.store(value);GIOwnedPipeline::requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
+inline void Toggle() noexcept {if(!ready.load()&&!gi_reuse::SingleProducerEnabled())return;GIOwnedPipeline::active=false;const bool value=!requested.load();gi_reuse::singleRayApplied=false;requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
 inline const wchar_t* Label() noexcept {
  if(gi_reuse::SingleProducerEnabled()){
   if(!requested.load())return L"GI: NATIVE";
