@@ -34,6 +34,14 @@ inline constexpr Step steps[]={
     {Mode::RoomHitY,L"hit-y",false},
     {Mode::RoomHitZ,L"hit-z",false}
 };
+inline constexpr Step characterSteps[]={
+    {Mode::RoomAuthoredClip,L"baseline",false},
+    {Mode::RoomContactOff,L"rt-contacts-off",false},
+    {Mode::RoomLocalMapsOff,L"local-shadow-maps-off",false},
+    {Mode::RoomScreenOcclusionOff,L"screen-occlusion-off",false},
+    {Mode::RoomAuthoredClip,L"baseline-repeat",false}
+};
+inline constexpr unsigned characterCount=sizeof(characterSteps)/sizeof(characterSteps[0]);
 inline constexpr unsigned count=sizeof(steps)/sizeof(steps[0]);
 inline constexpr unsigned imagesPerStep=3;
 // One stable RR-off pose for blocker identity and current filtered visibility.

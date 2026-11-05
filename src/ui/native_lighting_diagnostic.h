@@ -21,12 +21,13 @@ inline constexpr int kCaptureStatusY = kCameraY + 162;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 18;
+inline constexpr unsigned kButtonCount = kModeCount + 19;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
+    if(index==kModeCount+18)return L"TEST SHADOWS";
     if(index==kModeCount+17){
         if(!control_rr::RRUserRequested())return L"GI RAYS: RR OFF";
         const unsigned rays=control_rr::GISampleRequested();
@@ -342,7 +343,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                14+col*156,i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                i==kModeCount+18?326:14+col*156,i==kModeCount+18?kCameraY+36:i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,i==kModeCount+18?32:36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -377,6 +378,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
+            else if(index==kModeCount+18 && !capture_suite::active && !control_gi_button::Active()){
+                if(capture_suite::Start(capture_suite::Kind::Character))ClosePanel(window);
+                else MessageBoxW(window,L"Finish the active capture and return to gameplay before starting.",L"Character shadows",MB_OK);
+            }
             else if(index==kModeCount+17 && !capture_suite::active && !control_gi_button::Active()){
                 std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
                 const auto& option=control_settings::Definition(control_settings::Key::GlobalIlluminationSamples);

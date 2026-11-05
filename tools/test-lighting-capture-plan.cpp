@@ -5,6 +5,9 @@ int main(){
  assert(native_lighting::specularSampleChoice.load()==0);
  assert(native_lighting::SetSpecularSampleChoice(4));
  using namespace native_lighting;using namespace capture_plan;
+ assert(characterCount==5);
+ assert(characterSteps[0].mode==Mode::RoomAuthoredClip && characterSteps[4].mode==characterSteps[0].mode);
+ for(const auto& stage:characterSteps)assert(!stage.gpu && !BypassesRR(stage.mode) && UsesAuthoredClip(stage.mode));
  std::set<Mode> modes;unsigned gpu=0;
  for(auto step:steps){assert(modes.insert(step.mode).second);if(step.gpu){++gpu;assert(step.mode==Mode::RoomBoth);}}
  assert(modes.count(Mode::RoomNativeNoRR)&&modes.count(Mode::RoomClipNoRR)&&modes.count(Mode::RoomSelectedOff));

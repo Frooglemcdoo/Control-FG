@@ -4,7 +4,8 @@
 #include "../rr_native_blend_capture_policy.h"
 namespace native_lighting::capture_suite {
 // All suite state and file I/O belong to the diagnostic UI thread.
-enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend };
+enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character };
+inline bool character=false;
 inline bool preserveSettings=false,savedRR=false,savedDistance=false;
 inline unsigned savedSamples=0,savedEffects=0;
 inline uint64_t preservedSelection=0;
@@ -37,16 +38,39 @@ inline bool CopyLog(const wchar_t* destination) noexcept {
         ok=WriteFile(out,data,read,&written,nullptr) && written==read;}
     if(out!=INVALID_HANDLE_VALUE)CloseHandle(out);CloseHandle(in);return ok;
 }
+inline bool PackageCharacter(HWND game) noexcept {
+    wchar_t sys[MAX_PATH]{},exe[MAX_PATH]{},args[3*MAX_PATH]{};
+    if(!GetSystemDirectoryW(sys,MAX_PATH) || swprintf_s(exe,L"%s\\tar.exe",sys)<0 ||
+       swprintf_s(args,L"-a -cf \"%s.zip\" -C \"%s\" .",folder,folder)<0)return false;
+    SHELLEXECUTEINFOW run{sizeof(run)};
+    run.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;run.lpFile=exe;run.lpParameters=args;run.nShow=SW_HIDE;
+    if(!ShellExecuteExW(&run)||!run.hProcess)return false;
+    DWORD code=1;
+    const bool ok=WaitForSingleObject(run.hProcess,15000)==WAIT_OBJECT_0 && GetExitCodeProcess(run.hProcess,&code)&&code==0;
+    CloseHandle(run.hProcess);
+    if(ok){
+        swprintf_s(args,L"/select,\"%s.zip\"",folder);
+        ShellExecuteW(game,L"open",L"explorer.exe",args,nullptr,SW_SHOWNORMAL);
+    }
+    return ok;
+}
 inline void Finish(HWND game,const char* reason) noexcept {
     rt_spot_capture_runtime::CancelPending();
     if(!preserveSettings)SelectMode(restore);ReportRRPaths("f9_restore");rt_shadow_capture::Summary();
     Trace("capture_suite_end reason=%s failures=%u restored=%s",reason,failures,ModeName(restore));
     DrainDiagnosticLog(true);
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
-    if(!CopyLog(path))++failures;
+    if(!character && !CopyLog(path))++failures;
     Note("end=%s failures=%u restored=%s",reason,failures,ModeName(restore));
     if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
     active=false;
+    if(character){
+        if(!PackageCharacter(game)){
+            ShellExecuteW(game,L"open",folder,nullptr,nullptr,SW_SHOWNORMAL);
+            MessageBoxW(game,L"The individual crops and manifest are in the opened folder.",L"Character shadows",MB_OK);
+        }
+        return;
+    }
     if(blocker) {
         wchar_t message[1024]{};
         swprintf_s(message,L"Shadow trace %s. Failures: %u.\n\n%s\n\nSend lighting.log and the PNGs from this folder. Package-Lighting-Capture.cmd can split the folder into ZIPs below 200 MB. Your previous mode is restored.",
@@ -96,7 +120,8 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     if(!DrainDiagnosticLog(true))return false;
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
-    if(swprintf_s(folder,L"%s\\Shadow-R217-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    character=kind==Kind::Character;
+    if(swprintf_s(folder,L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,character?L"Character-Shadows":L"Shadow-R217",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
     manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
@@ -111,10 +136,11 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     savedEffects=control_rr_diagnostic::lastEffects.load();savedDistance=rr_compact_distance::enabled.load();
     motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
-    Note("build=R217 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; Native Blend trace keeps the selected rendering configuration. Legacy blocker diagnostics may use RR-off modes. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
-    Trace("capture_suite_start build=R217 restore=%s steps=%u",ModeName(restore),blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
-    Note("capture_kind=%s requested_samples=%u",preserveSettings?"native_blend_rays":blocker?"stationary_shadow_blocker":motion?"motion_light_context":"stationary_suite",
-        blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    if(character)Note("Character shadow comparison: native-pixel crop at x=1/3, y=1/2 of client. Matched authored-clip modes. Two displayed samples per condition. No resource readback.");
+    else Note("build=R217 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; Native Blend trace keeps the selected rendering configuration. Legacy blocker diagnostics may use RR-off modes. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    Trace("capture_suite_start build=R217 restore=%s steps=%u",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    Note("capture_kind=%s requested_samples=%u",character?"character_shadows":preserveSettings?"native_blend_rays":blocker?"stationary_shadow_blocker":motion?"motion_light_context":"stationary_suite",
+        character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
     if(blocker)Trace("blocker_trace_start mode=%s settle_ms=%llu reference_rays=full_length",ModeName(focusedBlockerStep.mode),capture_plan::blockerSettleMs);
     if(motion)Trace("transition_trace_start samples=%u mode=%s",capture_plan::transitionSamples,ModeName(kDefaultMode));
     if(motion)Note("Walk through the affected area and back for about 25 seconds. Normal lighting remains enabled. No screenshots or mode cycling. Selected light records use the corrected default; diagnostic hit rays remain unclipped reference rays. F9 cancels.");
@@ -142,9 +168,10 @@ inline void Tick(HWND game,uint64_t now) noexcept {
     rt_spot_capture_runtime::Poll();
     if(motion && !traceStarted)traceStarted=now;
     if(motion && now-traceStarted>=capture_plan::transitionTimeoutMs){++failures;Finish(game,"trace_timeout");return;}
-    const auto count=blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count;
+    const auto count=character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count;
     if(step>=count){Finish(game,"complete");return;}
-    const auto& current=blocker?focusedBlockerStep:motion?capture_plan::transitionStep:capture_plan::steps[step];
+    const unsigned imageCount=character?2u:capture_plan::imagesPerStep;
+    const auto& current=character?capture_plan::characterSteps[step]:blocker?focusedBlockerStep:motion?capture_plan::transitionStep:capture_plan::steps[step];
     if(!entered){
         if(motion && step>0 && LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(selectedState)){
             ++failures;Finish(game,"selection_changed");return;
@@ -175,15 +202,15 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         }
     }
     if((motion||blocker) && rt_spot_capture_runtime::phase.load()==rt_spot_capture_runtime::Phase::Failed){++failures;Finish(game,"gpu_capture_failed");return;}
-    if(!motion && settled && now>=nextImage && imageIndex<capture_plan::imagesPerStep){
+    if(!motion && settled && now>=nextImage && imageIndex<imageCount){
         wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.png",folder,step,current.name,imageIndex);
-        const HRESULT hr=screenshots::Save(game,path);
+        const HRESULT hr=screenshots::Save(game,path,character);
         Note("image step=%u sample=%u ms=%llu present=%llu hr=0x%08lX rr=%u effects=0x%X",step,imageIndex,now,presentCount.load(),static_cast<unsigned long>(hr),unsigned(control_rr_diagnostic::lastSelected.load()),control_rr_diagnostic::lastEffects.load());
         if(FAILED(hr))++failures;++imageIndex;nextImage=GetTickCount64()+capture_plan::burstIntervalMs;
     }
     const bool gpuDone=!current.gpu || (gpuAccepted && rt_spot_capture_runtime::Exported());
-    if(((motion||imageIndex==capture_plan::imagesPerStep) && gpuDone) || elapsed>=capture_plan::timeoutMs){
-        if((!motion&&imageIndex<capture_plan::imagesPerStep) || !gpuDone){++failures;Note("step=%u timeout=1 images=%u gpu_exported=%u",step,imageIndex,unsigned(gpuDone));}
+    if(((motion||imageIndex==imageCount) && gpuDone) || elapsed>=capture_plan::timeoutMs){
+        if((!motion&&imageIndex<imageCount) || !gpuDone){++failures;Note("step=%u timeout=1 images=%u gpu_exported=%u",step,imageIndex,unsigned(gpuDone));}
         Note("step=%u end_ms=%llu gpu_exported=%u",step,now,unsigned(current.gpu && gpuDone));
         ++step;entered=false;
     }
