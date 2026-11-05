@@ -1,5 +1,6 @@
 #pragma once
 #include "theme.h"
+#include "lighting_panel_window.h"
 #include "gi_button_capture.h"
 #include "../rr_gi_stage_policy.h"
 #include "../rr_clamp_strength_policy.h"
@@ -110,17 +111,19 @@ inline void ClosePanel(HWND panel) noexcept {
     RestoreCursorVisibility();
     ShowWindow(panel, SW_HIDE);
     if (returnToGame) SetForegroundWindow(GetWindow(panel, GW_OWNER));
+    Log("F10_PANEL_R337 closed=1 return_to_game=%u",returnToGame?1u:0u);
     Trace("overlay_closed return_to_game=%u", returnToGame ? 1u : 0u);
 }
 inline void OpenPanel(HWND panel) noexcept {
     panelOpen = true;
-    ShowWindow(panel, SW_SHOWNOACTIVATE);
+    // Position before first show in the timer tick to avoid a flash at (0,0).
     // Keep Control active so opening this tool does not trigger its pause menu.
     ClipCursor(nullptr);
     if (!cursorVisibilityIncrements) {
         int count;
         do { count=ShowCursor(TRUE); ++cursorVisibilityIncrements; } while(count<0);
     }
+    Log("F10_PANEL_R337 open=1");
     Trace("overlay_open activation=0 preserve_game_focus=1");
 }
 
@@ -434,12 +437,16 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     bodyFont=theme::CreateFontForStyle(theme::kHeadingFont);
     detailFont=theme::CreateFontForStyle(theme::kDetailFont);
     WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.hInstance=selfModule;wc.lpfnWndProc=WindowProc;wc.lpszClassName=kClass;wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
-    if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){Trace("overlay_failed reason=class");return 0;}
+    if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS){Trace("overlay_failed reason=class");started=false;return 0;}
     UINT_PTR timer=SetTimer(nullptr,0,50,nullptr);
-    if(!timer){Trace("overlay_failed reason=timer");return 0;}
+    if(!timer){Trace("overlay_failed reason=timer");started=false;return 0;}
     HWND panel=nullptr,owner=nullptr;bool held[kModeCount+1]{};
     ULONGLONG nextRefresh=0, nextWindowSearch=0, nextLogDrain=0, nextRRReport=0;
+    Log("F10_PANEL_R337 thread_ready=1");
     HWND cachedGame=nullptr;
+    constexpr int f10Id=0x5337;
+    bool f10Registered=false;
+    auto paintedMode=LiveSelection::GetMode(selection.Read());
     POINT lastOrigin{-1,-1};
     Trace("session_start build=R195-overlay-rr-capture pid=%lu default=authored_clip_surface_normals_current_spot_when_ready log=user-diagnostics-folder",GetCurrentProcessId());
 #ifdef CONTROL_RR_COMPONENT_CAPTURE
@@ -449,7 +456,18 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
 #endif
     MSG msg{};
     while(GetMessageW(&msg,nullptr,0,0)>0){
-        if (!panel || !IsDialogMessageW(panel, &msg)) {
+        if(msg.message==WM_HOTKEY && msg.hwnd==nullptr && msg.wParam==f10Id){
+            if(lighting_panel::Valid(panel,owner,kClass) &&
+               lighting_panel::Foreground(owner,panel,GetForegroundWindow()) && !capture_suite::active
+#ifdef CONTROL_RR_F9_SUITE
+               && !reflection_suite::active
+#endif
+            ){
+                if(panelOpen)ClosePanel(panel);else OpenPanel(panel);
+            }
+            continue;
+        }
+        if (msg.hwnd && (!panel || !IsDialogMessageW(panel, &msg))) {
             TranslateMessage(&msg); DispatchMessageW(&msg);
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
@@ -460,15 +478,27 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
         if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+((capture_suite::active||performance_capture::Active())?100:500);}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
-        if(!cachedGame&&now>=nextWindowSearch){cachedGame=FindFGGameWindow();nextWindowSearch=now+1000;}
+        if(now>=nextWindowSearch){
+            cachedGame=FindFGGameWindow();
+            nextWindowSearch=now+1000;
+        }
         HWND game=cachedGame;
         gi_trace_status::Tick(game);
-        if(panel&&owner!=game){ClosePanel(panel);DestroyWindow(panel);panel=nullptr;}
-        if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP,
+        if(panel && (owner!=game || !lighting_panel::Valid(panel,owner,kClass))){
+            if(lighting_panel::Valid(panel,owner,kClass))DestroyWindow(panel);
+            Log("F10_PANEL_R337 replacing_window=1");
+            panel=nullptr;owner=nullptr;panelOpen=false;RestoreCursorVisibility();
+            lastOrigin={-1,-1};
+        }
+        if(game&&!panel){panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,kClass,L"Control lighting diagnostic",WS_POPUP|WS_CLIPCHILDREN,
             0,0,kWidth,kHeight,game,nullptr,selfModule,nullptr);owner=game;}
 #ifdef CONTROL_RR_F9_SUITE
         if(!panel)reflection_suite::Tick(nullptr,now);
 #endif
+        const HWND foregroundWindow=GetForegroundWindow();
+        const bool foreground=panel && lighting_panel::Foreground(game,panel,foregroundWindow);
+        if(foreground && !f10Registered)f10Registered=RegisterHotKey(nullptr,f10Id,MOD_NOREPEAT,VK_F10)!=FALSE;
+        if(!foreground && f10Registered){UnregisterHotKey(nullptr,f10Id);f10Registered=false;}
         if(!panel){if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
         if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kNativeBlendDefaultMode,readyMask.load()))SelectMode(kNativeBlendDefaultMode);
         static bool f9Held=false;
@@ -495,7 +525,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
 #endif
         capture_suite::Tick(game,now);
         performance_capture::Tick(game,now);
-        const bool foreground=GetForegroundWindow()==game || PanelHasForeground(panel);
+
         const bool modifier=(GetAsyncKeyState(VK_CONTROL)&0x8000)&&(GetAsyncKeyState(VK_SHIFT)&0x8000);
         static_assert(kModeCount <= 9, "Numeric shortcuts support nine choices");
         for(int i=0;i<int(kModeCount+1);++i){const bool down=(GetAsyncKeyState(i == 0 ? VK_F10 : '0' + i)&0x8000)!=0;
@@ -506,7 +536,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
                (!control_rr_capture_ui::Busy()||i==0)&&
 #endif
-               !capture_suite::active&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
+               !capture_suite::active&&(i!=0||!f10Registered)&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;
         }
@@ -519,13 +549,24 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
             }
             // Release confinement only while this panel owns input, never over other apps.
             if (GetForegroundWindow()==game || PanelHasForeground(panel)) ClipCursor(nullptr);
-            if(GetTickCount64()>=nextRefresh){RedrawWindow(panel,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);nextRefresh=GetTickCount64()+250;}
-        }else {RestoreCursorVisibility();if(IsWindowVisible(panel))ShowWindow(panel,SW_HIDE);if(!foreground)panelOpen=false;}
+            if(GetTickCount64()>=nextRefresh){InvalidateRect(panel,nullptr,FALSE);
+                const auto mode=LiveSelection::GetMode(selection.Read());
+                for(unsigned i=0;i<kButtonCount;++i){
+                    HWND button=GetDlgItem(panel,kButtonFirst+i);
+                    wchar_t previous[64]{};
+                    GetWindowTextW(button,previous,64);
+                    const wchar_t* label=ButtonLabel(i);
+                    if(lstrcmpW(previous,label)!=0){SetWindowTextW(button,label);InvalidateRect(button,nullptr,FALSE);}
+                    else if(i<kModeCount && mode!=paintedMode)InvalidateRect(button,nullptr,FALSE);
+                }
+                paintedMode=mode;nextRefresh=GetTickCount64()+250;}
+        }else {RestoreCursorVisibility();if(IsWindowVisible(panel))ShowWindow(panel,SW_HIDE);if(!foreground && foregroundWindow)panelOpen=false;}
     }
     DrainDiagnosticLog(true);
     gi_trace_status::Close();
+    if(f10Registered)UnregisterHotKey(nullptr,f10Id);
     KillTimer(nullptr,timer);RestoreCursorVisibility();if(panel)DestroyWindow(panel);
-    DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);if(SUCCEEDED(comResult))CoUninitialize();return 0;
+    DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);started=false;if(SUCCEEDED(comResult))CoUninitialize();return 0;
 }
 } // namespace native_lighting::ui
 namespace native_lighting {
