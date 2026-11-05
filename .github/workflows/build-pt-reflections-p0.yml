@@ -1253,7 +1253,7 @@ jobs:
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
-          F10 TEST SHADOWS: frame Jesse at the left third, hold still. The compact comparison ZIP opens automatically.
+          F10 TEST SHADOWS: hold the camera still. Full-resolution game screenshots are packaged automatically.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.

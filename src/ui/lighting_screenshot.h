@@ -7,11 +7,11 @@
 namespace native_lighting::screenshots {
 // UI thread only. Captures the displayed game client, never the desktop bounds.
 // Display-referred PNG, not a linear/HDR render-target dump.
-inline HRESULT Save(HWND game,const wchar_t* path,bool character=false) noexcept {
+inline HRESULT Save(HWND game,const wchar_t* path) noexcept {
     using Microsoft::WRL::ComPtr;
     if(!game || GetForegroundWindow()!=game || IsIconic(game))return E_ABORT;
     RECT rect{};if(!GetClientRect(game,&rect))return E_FAIL;
-    int width=rect.right,height=rect.bottom;
+    const int width=rect.right,height=rect.bottom;
     if(width<=0 || height<=0 || width>16384 || height>16384)return E_INVALIDARG;
     POINT origin{0,0};if(!ClientToScreen(game,&origin))return E_FAIL;
     // Read the composed display at the client rectangle. A window GDI DC can
@@ -20,12 +20,6 @@ inline HRESULT Save(HWND game,const wchar_t* path,bool character=false) noexcept
         GetSystemMetrics(SM_XVIRTUALSCREEN)+GetSystemMetrics(SM_CXVIRTUALSCREEN),
         GetSystemMetrics(SM_YVIRTUALSCREEN)+GetSystemMetrics(SM_CYVIRTUALSCREEN)};
     if(origin.x<desktop.left || origin.y<desktop.top || origin.x+width>desktop.right || origin.y+height>desktop.bottom)return E_ABORT;
-    if(character){
-        // Keep native pixels around the left third where Jesse is framed.
-        const int w=width<960?width:960, h=height<960?height:960;
-        origin.x+=(std::max)(0,width/3-w/2);
-        origin.y+=(height-h)/2;width=w;height=h;
-    }
     const UINT stride=(UINT(width)*3+3)&~3u;
     if(UINT64(stride)*height>512ull*1024*1024)return E_OUTOFMEMORY;
     BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);

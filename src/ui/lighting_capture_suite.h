@@ -46,7 +46,7 @@ inline bool PackageCharacter(HWND game) noexcept {
     run.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;run.lpFile=exe;run.lpParameters=args;run.nShow=SW_HIDE;
     if(!ShellExecuteExW(&run)||!run.hProcess)return false;
     DWORD code=1;
-    const bool ok=WaitForSingleObject(run.hProcess,15000)==WAIT_OBJECT_0 && GetExitCodeProcess(run.hProcess,&code)&&code==0;
+    const bool ok=WaitForSingleObject(run.hProcess,120000)==WAIT_OBJECT_0 && GetExitCodeProcess(run.hProcess,&code)&&code==0;
     CloseHandle(run.hProcess);
     if(ok){
         swprintf_s(args,L"/select,\"%s.zip\"",folder);
@@ -67,7 +67,7 @@ inline void Finish(HWND game,const char* reason) noexcept {
     if(character){
         if(!PackageCharacter(game)){
             ShellExecuteW(game,L"open",folder,nullptr,nullptr,SW_SHOWNORMAL);
-            MessageBoxW(game,L"The individual crops and manifest are in the opened folder.",L"Character shadows",MB_OK);
+            MessageBoxW(game,L"The full-screen images and manifest are in the opened folder.",L"Character shadows",MB_OK);
         }
         return;
     }
@@ -136,7 +136,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     savedEffects=control_rr_diagnostic::lastEffects.load();savedDistance=rr_compact_distance::enabled.load();
     motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
-    if(character)Note("Character shadow comparison: native-pixel crop at x=1/3, y=1/2 of client. Matched authored-clip modes. Two displayed samples per condition. No resource readback.");
+    if(character)Note("Character shadow comparison: full game client at native pixel resolution. Matched authored-clip modes. Two displayed samples per condition. No resource readback.");
     else Note("build=R217 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; Native Blend trace keeps the selected rendering configuration. Legacy blocker diagnostics may use RR-off modes. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
     Trace("capture_suite_start build=R217 restore=%s steps=%u",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
     Note("capture_kind=%s requested_samples=%u",character?"character_shadows":preserveSettings?"native_blend_rays":blocker?"stationary_shadow_blocker":motion?"motion_light_context":"stationary_suite",
@@ -204,7 +204,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
     if((motion||blocker) && rt_spot_capture_runtime::phase.load()==rt_spot_capture_runtime::Phase::Failed){++failures;Finish(game,"gpu_capture_failed");return;}
     if(!motion && settled && now>=nextImage && imageIndex<imageCount){
         wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.png",folder,step,current.name,imageIndex);
-        const HRESULT hr=screenshots::Save(game,path,character);
+        const HRESULT hr=screenshots::Save(game,path);
         Note("image step=%u sample=%u ms=%llu present=%llu hr=0x%08lX rr=%u effects=0x%X",step,imageIndex,now,presentCount.load(),static_cast<unsigned long>(hr),unsigned(control_rr_diagnostic::lastSelected.load()),control_rr_diagnostic::lastEffects.load());
         if(FAILED(hr))++failures;++imageIndex;nextImage=GetTickCount64()+capture_plan::burstIntervalMs;
     }
