@@ -69,7 +69,8 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
             if(failure==GISceneProducerError::None)failure=error;
             if(diagnostic)diagnostic->Add(sample);
         };
-        if(ResolveTraversalClosure(history,cut,epoch,top,instances,perInstance,next.closure)!=TraversalError::None)
+        std::vector<std::uint32_t> instanceBottom;
+        if(ResolveTraversalClosure(history,cut,epoch,top,instances,perInstance,next.closure,&instanceBottom)!=TraversalError::None)
             return GISceneProducerError::Closure;
         const auto closureMS=elapsed();if(timings)timings->closureMS=closureMS;
         if(!MatchesNativeGITable(native,bindings,exports.nativeOpaque,exports.nativeAlpha))return GISceneProducerError::Table;
@@ -110,9 +111,10 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
         };
         std::unordered_map<MappingKey,Mapping,MappingHash> mappings;
         mappings.reserve((std::min)(bindings.size(),capturedGeometry.size()*2));
-        std::map<std::tuple<std::uint64_t,std::uint64_t,std::uint64_t>,const ASRecord*> selectedBottoms;
-        for(std::size_t i=0;i<next.closure.bottoms.size();++i){const auto& ref=next.closure.bottoms[i];
-            selectedBottoms.emplace(std::make_tuple(ref.address,ref.token,ref.revision),&next.closure.bottomRecords[i]);}
+        // A witness can serve several distinct hit-group slots with identical native bytes.
+        // Keep its last published slot only for the duration of this admission.
+        std::vector<std::size_t> lastBinding(capturedGeometry.size(),bindings.size());
+        std::vector<const GISceneGeometry*> firstWitness(next.closure.bottoms.size());
         for(std::uint32_t i=0;i<tlas.count;++i){
             InstanceRecord instance;
             if(!DecodeInstance(bytes+std::size_t(i)*64,instance))return GISceneProducerError::Closure;
@@ -120,10 +122,8 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
             GISceneGeometrySample sample;sample.instance=i;sample.blas=perInstance[i];
             bool finite=true;for(float value:instance.transform)finite=finite&&std::isfinite(value);
             if(!finite){sample.stage=GISceneGeometryStage::Transform;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
-            const auto& ref=perInstance[i];const auto key=std::make_tuple(ref.address,ref.token,ref.revision);
-            auto cached=selectedBottoms.find(key);
-            if(cached==selectedBottoms.end())return GISceneProducerError::Closure;
-            const auto& bottom=*cached->second;
+            const auto& ref=perInstance[i];
+            const auto& bottom=next.closure.bottomRecords[instanceBottom[i]];
             for(std::uint32_t g=0;g<bottom.count;++g){
                 const auto row=std::uint64_t(instance.hitGroup)+std::uint64_t(g)*2;
                 if((row&1)||row>=table.records.size())return GISceneProducerError::Mapping;
@@ -133,11 +133,33 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                     if(diagnostic){++diagnostic->checked;++diagnostic->valid;++diagnostic->reused;}
                     continue;
                 }
-                sample.geometry=g;sample.row=row;sample.binding=bindings[static_cast<std::size_t>(row/2)];
-                sample.witness={};sample.metadata={};sample.metadataError=sample.convertError=0;sample.resolved={};sample.exact={};sample.rebase={};sample.frozenIndices={};sample.frozenPositions={};sample.status=PTOwnedScene::Status::candidate;
                 if(diagnostic)++diagnostic->checked;
-                const auto found=witnesses.find(Key{ref.address,ref.token,ref.revision,g});
-                if(found==witnesses.end()){sample.stage=GISceneGeometryStage::WitnessMissing;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
+                const GISceneGeometry* captured=g==0?firstWitness[instanceBottom[i]]:nullptr;
+                if(!captured){
+                    const auto found=witnesses.find(identity);
+                    if(found!=witnesses.end()){
+                        captured=found->second;
+                        if(g==0)firstWitness[instanceBottom[i]]=captured;
+                    }
+                }
+                if(!captured){
+                    sample.geometry=g;sample.row=row;sample.binding=bindings[binding];
+                    sample.stage=GISceneGeometryStage::WitnessMissing;
+                    if(!diagnostic)return GISceneProducerError::Geometry;
+                    reject(sample,GISceneProducerError::Geometry);continue;
+                }
+                auto& last=lastBinding[static_cast<std::size_t>(captured-capturedGeometry.data())];
+                if(last<bindings.size() && !table.bound[binding] && boundIdentity[last]==identity &&
+                   std::memcmp(native.bytes.data()+row*NativeStride,native.bytes.data()+last*2*NativeStride,NativeStride)==0){
+                    table.records[row]=table.records[last*2];
+                    table.geometry[binding]=table.geometry[last];
+                    table.bound[binding]=1;
+                    boundIdentity[binding]=identity;
+                    if(diagnostic){++diagnostic->valid;++diagnostic->reused;}
+                    continue;
+                }
+                sample={};sample.instance=i;sample.blas=ref;
+                sample.geometry=g;sample.row=row;sample.binding=bindings[binding];
                 PTOwnedScene::Index::Resolved resolved;
                 PTShaderTableAdapter::Bytes converted;
                 MappingKey currentKey{{ref.address,ref.token,ref.revision,g},{}};
@@ -147,23 +169,23 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 if(mapped!=mappings.end()){
                     resolved=mapped->second.resolved;converted=mapped->second.record;if(diagnostic)++diagnostic->reused;
                 }else{
-                    const auto& witness=found->second->triangle;const auto* triangle=bottom.geometry->At(g);
+                    const auto& witness=captured->triangle;const auto* triangle=bottom.geometry->At(g);
                     sample.witness=witness;sample.metadata=triangle?*triangle:TriangleMetadata{};sample.metadataError=triangle?unsigned(GeometryMetadata::Validate(*triangle)):UINT32_MAX;
-                    if(found->second->frozen){sample.frozenIndices=found->second->frozen->indices;sample.frozenPositions=found->second->frozen->positions;}
+                    if(captured->frozen){sample.frozenIndices=captured->frozen->indices;sample.frozenPositions=captured->frozen->positions;}
                     if(!triangle||GeometryMetadata::Validate(*triangle)!=GeometryReject::None||triangle->transform||
                        witness.indices!=triangle->indices||witness.positions!=triangle->vertices||
                        witness.positionStride!=triangle->stride||witness.indexStride!=GeometryMetadata::IndexSize(*triangle)||
                        witness.indexCount!=triangle->indexCount||witness.vertexCount!=triangle->vertexCount)
                         {sample.stage=GISceneGeometryStage::Metadata;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
                     const auto persistentKey=GIValidatedMappingCache::MakeKey(ref.address,ref.token,ref.revision,g,
-                        witness,found->second->frozen.get(),native.bytes.data()+row*NativeStride);
+                        witness,captured->frozen.get(),native.bytes.data()+row*NativeStride);
                     bool acrossTransaction=false;
-                    if(persistent&&persistent->Find(persistentKey,found->second->frozen.get(),owners,epoch,resolved,converted,acrossTransaction)){
+                    if(persistent&&persistent->Find(persistentKey,captured->frozen.get(),owners,epoch,resolved,converted,acrossTransaction)){
                         if(diagnostic){if(acrossTransaction)++diagnostic->persistent;else ++diagnostic->reused;}
                     }else{
                         // Typed source bounds are permitted only when a frozen copy
                         // will be rebased and re-admitted for raw DWORD reads below.
-                        const auto access=found->second->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
+                        const auto access=captured->frozen?PTSceneAdmission::IndexAccess::NativeTyped:PTSceneAdmission::IndexAccess::RawDWORD;
                         // Successful admissions need the exact match, not a census
                         // of unrelated candidates. On failure rerun under the same
                         // owner lock to preserve the complete diagnostic evidence.
@@ -176,10 +198,10 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                         if(sample.convertError!=unsigned(Status::ready))
                             {sample.stage=GISceneGeometryStage::Convert;if(!diagnostic)return GISceneProducerError::Table;reject(sample,GISceneProducerError::Table);continue;}
                         const auto original=resolved;
-                        if(found->second->frozen&&!RebaseConvertedGeometry(*found->second->frozen,resolved.geometry,converted,&sample.rebase))
+                        if(captured->frozen&&!RebaseConvertedGeometry(*captured->frozen,resolved.geometry,converted,&sample.rebase))
                             {sample.stage=GISceneGeometryStage::Rebase;if(!diagnostic)return GISceneProducerError::Geometry;reject(sample,GISceneProducerError::Geometry);continue;}
 
-                        if(persistent)persistent->Store(persistentKey,found->second->frozen.get(),original,resolved,converted);
+                        if(persistent)persistent->Store(persistentKey,captured->frozen.get(),original,resolved,converted);
                     }
                     // Bound temporary CPU memory; uncached rows still undergo
                     // the identical full validation and conversion.
@@ -187,7 +209,7 @@ template<std::size_t Capacity> GISceneProducerError PrepareGISceneProducer(
                 }
                 if(table.bound[binding]&&table.records[row]!=converted){sample.stage=GISceneGeometryStage::Conflict;if(!diagnostic)return GISceneProducerError::Conflict;reject(sample,GISceneProducerError::Conflict);continue;}
                 if(diagnostic)++diagnostic->valid;
-                table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;boundIdentity[binding]=identity;
+                table.records[row]=converted;table.geometry[binding]=resolved.geometry;table.bound[binding]=1;boundIdentity[binding]=identity;last=binding;
                 if(!reusedMapping)for(auto token:resolved.tokens)tokens.insert(token);
             }
         }

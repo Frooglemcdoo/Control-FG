@@ -32,6 +32,15 @@ int main()try {
  transfer.reset();Require(budget->Held()==12,"Scene owner failed to retain frozen storage");
  copy.Reset();privateLease={};frozen.reset();Require(budget->Held()==0&&pool->Statistics().bytes==12,"Completed storage not returned to pool");
  auto reused=pool->Take(gpu.device.Get(),12);Require(reused&&pool->Statistics().reuses==1,"Idle snapshot allocation not reused");
+ // Two retired resources of equal size must coexist alongside other sizes.
+ auto second=pool->Take(gpu.device.Get(),12);
+ auto wider=pool->Take(gpu.device.Get(),32);
+ Require(second&&wider&&second.Get()!=reused.Get(),"Live geometry snapshots shared storage");
+ auto* firstAddress=reused.Get();auto* secondAddress=second.Get();auto* wideAddress=wider.Get();
+ pool->Return(std::move(reused));pool->Return(std::move(wider));pool->Return(std::move(second));
+ auto a=pool->Take(gpu.device.Get(),12);auto b=pool->Take(gpu.device.Get(),12);auto c=pool->Take(gpu.device.Get(),32);
+ Require(a.Get()==firstAddress&&b.Get()==secondAddress&&c.Get()==wideAddress&&pool->Statistics().bytes==0,
+         "Indexed snapshot pool lost a duplicate or returned a different size");
  for(UINT64 i=0;i<info->GetNumStoredMessages();++i){SIZE_T size=0;Check(info->GetMessage(i,nullptr,&size));std::vector<unsigned char> bytes(size);
   auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());Check(info->GetMessage(i,message,&size));
   if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(message->pDescription);

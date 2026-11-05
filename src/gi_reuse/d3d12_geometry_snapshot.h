@@ -4,6 +4,7 @@
 #include "pt_owned_scene.h"
 #include <map>
 #include <mutex>
+#include <list>
 // Copies are recorded at the BLAS build boundary. Source states are supplied
 // from the verified native buffer owner; no shader/root bindings are modified.
 namespace GIGeometrySnapshot {
@@ -15,16 +16,25 @@ struct Source {PTOwnedScene::Allocation allocation{};ComPtr<ID3D12Resource> reso
 // 64 MiB idle cache is separate from the 512 MiB active snapshot budget.
 class Pool {
     struct Idle {ComPtr<ID3D12Resource> resource;ComPtr<IUnknown> device;U64 bytes;};
-    std::mutex mutex;std::vector<Idle> idle;U64 held=0,created=0,reused=0,evicted=0;
+    using Key=std::pair<std::uintptr_t,U64>;
+    std::list<Idle> idle;
+    std::multimap<Key,std::list<Idle>::iterator> bySize;
+    std::mutex mutex;U64 held=0,created=0,reused=0,evicted=0;
 public:
     static constexpr U64 MaximumIdleBytes=64ull*1024*1024;
     struct Stats {U64 bytes,allocations,reuses,evictions;};
     Stats Statistics(){std::lock_guard<std::mutex> lock(mutex);return {held,created,reused,evicted};}
     ComPtr<ID3D12Resource> Take(ID3D12Device* device,U64 bytes){
         ComPtr<IUnknown> identity;if(!device||FAILED(device->QueryInterface(IID_PPV_ARGS(&identity))))return {};
-        std::lock_guard<std::mutex> lock(mutex);
-        for(auto it=idle.begin();it!=idle.end();++it)if(it->device.Get()==identity.Get()&&it->bytes==bytes){
-            auto out=std::move(it->resource);held-=bytes;idle.erase(it);++reused;return out;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            const auto hit=bySize.find({reinterpret_cast<std::uintptr_t>(identity.Get()),bytes});
+            if(hit!=bySize.end()){
+                auto node=hit->second;
+                auto resource=std::move(node->resource);
+                bySize.erase(hit);idle.erase(node);held-=bytes;++reused;
+                return resource;
+            }
         }
         D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
         D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=bytes;desc.Height=1;
@@ -32,7 +42,8 @@ public:
         ComPtr<ID3D12Resource> out;
         if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&out))))return {};
         if(!gi_reuse::RetainCreatedStorage(out.Get()))return {};
-        ++created;return out;
+        {std::lock_guard<std::mutex> lock(mutex);++created;}
+        return out;
     }
     void Return(ComPtr<ID3D12Resource> resource) noexcept {
         // Destruction must stay noexcept, including allocation pressure.
@@ -46,9 +57,15 @@ public:
             // return and allocated again on the following frame.
             // Only idle, fully retired storage is eligible for eviction.
             while(!idle.empty()&&(bytes>MaximumIdleBytes-held||idle.size()>=1024)){
-                held-=idle.front().bytes;idle.erase(idle.begin());++evicted;
+                const auto& oldest=idle.front();
+                bySize.erase(bySize.lower_bound({reinterpret_cast<std::uintptr_t>(oldest.device.Get()),oldest.bytes}));
+                held-=oldest.bytes;idle.pop_front();++evicted;
             }
-            idle.push_back({std::move(resource),std::move(device),bytes});held+=bytes;
+            const Key key{reinterpret_cast<std::uintptr_t>(device.Get()),bytes};
+            idle.push_back({std::move(resource),std::move(device),bytes});
+            try { bySize.emplace(key,std::prev(idle.end())); }
+            catch(...) { idle.pop_back();return; }
+            held+=bytes;
         }catch(...){}
     }
 };
@@ -117,7 +134,7 @@ inline bool Record(ID3D12GraphicsCommandList* list,const std::vector<Source>& so
         ComPtr<ID3D12Resource> copy;
         if(pool)copy=pool->Take(device.Get(),desc.Width);
         else if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&copy))))return false;
-        if(!copy||!gi_reuse::RetainCreatedStorage(copy.Get()))return false;
+        if(!copy||(!pool&&!gi_reuse::RetainCreatedStorage(copy.Get())))return false;
         gi_reuse::BufferStorageLease retained;if(!gi_reuse::AcquireStorageLease(copy.Get(),retained))return false;
         storage.leases.push_back(std::move(retained));
         storage.copies.emplace(entry.first,std::move(copy));transfer->sources.push_back(entry.second);

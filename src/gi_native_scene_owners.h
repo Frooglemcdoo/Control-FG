@@ -164,7 +164,7 @@ static bool FreezeGeometry(ID3D12GraphicsCommandList4* list,Recording& recording
   // The retained resource is callable; a changed wrapper is simply ineligible.
   reason="geometry_wrapper_identity";
   if(native.resource!=static_cast<IUnknown*>(lease.resource.Get()))return false;
-  const auto address=lease.resource->GetGPUVirtualAddress(),bytes=lease.resource->GetDesc().Width;
+  const auto address=lease.address,bytes=lease.bytes;
   if(address!=native.address||native.bytes>bytes)return false;
   reason="geometry_resource_state";
   const auto local=recording.states.Find(token);D3D12_RESOURCE_STATES state{};
@@ -227,7 +227,11 @@ static void Build(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_
    if(failures<=8||failures%600==0)Log("GI_OWNED_OWNER_FAILURE revision=R325 reason=%s address=%llx owners=%llu retained=%llu budget=%llu covering=%llu top=%u descriptors=%u",lookup.reason,desc->DestAccelerationStructureData,lookup.owners,lookup.bytes,lookup.budget,lookup.covering,unsigned(desc->Inputs.Type==D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL),desc->Inputs.NumDescs);
    recording->Incomplete("build_destination_owner");return;}
 
-  recording->events.reserve(recording->events.size()+1);
+  // Reserve before recording copy commands, while growing geometrically across BLAS builds.
+  if(recording->events.size()==recording->events.capacity()){
+   const auto capacity=recording->events.capacity();
+   recording->events.reserve((std::min)(std::size_t(65536),(std::max)(std::size_t(8),capacity*2)));
+  }
   Event e;auto& event=e.build.event;auto& r=event.record;
   r.address=desc->DestAccelerationStructureData;r.count=desc->Inputs.NumDescs;
   r.allowUpdate=(desc->Inputs.Flags&D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)!=0;

@@ -1,6 +1,7 @@
 #pragma once
 #include "scene_hit_packet.h"
-#include <map>
+#include <unordered_map>
+#include <algorithm>
 namespace gi_reuse {
 // Offline admission of a COMPLETE instance array at one ordered TLAS version.
 // Host-supplied allocation identities must have been captured at this version;
@@ -19,7 +20,7 @@ enum class TraversalError {None,Identity,Order,Version,Instances,Capacity,Bottom
 template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
  const OrderedASMetadata<Capacity>& history,std::uint64_t cut,std::uint64_t epoch,
  SceneASReference top,const SceneByteView& instances,
- const std::vector<SceneASReference>& perInstance,SceneTraversalClosure& result) {
+ const std::vector<SceneASReference>& perInstance,SceneTraversalClosure& result,std::vector<std::uint32_t>* instanceBottom=nullptr) {
  result={};
  if(!cut||!epoch||!top.address||!top.token||!top.revision)return TraversalError::Identity;
  ASRecord record;
@@ -31,7 +32,10 @@ template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
  const auto* bytes=instances.Read(record.instances,std::uint64_t(record.count)*64);
  if(!bytes)return TraversalError::Instances;
  SceneTraversalClosure out;out.top=top;out.cut=cut;out.epoch=epoch;out.topRecord=record;
- std::map<std::uint64_t,SceneASReference> unique;
+ std::vector<std::uint32_t> slots;
+ if(instanceBottom)slots.resize(record.count);
+ std::unordered_map<std::uint64_t,std::uint32_t> unique;
+ unique.reserve((std::min)(record.count,8192u));
  for(std::uint32_t i=0;i<record.count;++i){
   InstanceRecord instance;if(!DecodeInstance(bytes+std::size_t(i)*64,instance))return TraversalError::Instances;
   // Retain all non-null BLAS references even when their mask currently excludes
@@ -41,7 +45,9 @@ template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
   if(instance.blas%256||ref.address!=instance.blas||!ref.token||!ref.revision)return TraversalError::Identity;
   const auto prior=unique.find(ref.address);
   if(prior!=unique.end()){
-   if(prior->second.token!=ref.token||prior->second.revision!=ref.revision)return TraversalError::Identity;
+   const auto& existing=out.bottoms[prior->second];
+   if(existing.token!=ref.token||existing.revision!=ref.revision)return TraversalError::Identity;
+   if(instanceBottom)slots[i]=prior->second;
    continue;
   }
   if(unique.size()==8192)return TraversalError::Capacity;
@@ -49,8 +55,10 @@ template<std::size_t Capacity> TraversalError ResolveTraversalClosure(
   if(history.Select(cut,ref.token,ref.address,bottom)!=PTSceneOrder::Status::ready)return TraversalError::Order;
   if(bottom.revision!=ref.revision)return TraversalError::Version;
   if(bottom.topLevel||!bottom.geometry||bottom.count!=bottom.geometry->Size())return TraversalError::Bottom;
-  unique.emplace(ref.address,ref);out.bottoms.push_back(ref);out.bottomRecords.push_back(std::move(bottom));
+  const auto slot=static_cast<std::uint32_t>(out.bottoms.size());
+  unique.emplace(ref.address,slot);if(instanceBottom)slots[i]=slot;out.bottoms.push_back(ref);out.bottomRecords.push_back(std::move(bottom));
  }
+ if(instanceBottom)*instanceBottom=std::move(slots);
  result=std::move(out);return TraversalError::None;
 }
 }
