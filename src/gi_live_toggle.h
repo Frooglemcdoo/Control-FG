@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_reuse/native_gi_identity.h"
+#include "gi_reuse/owned_request.h"
 // Both raygens share one state object: native hit/miss identifiers remain valid.
 namespace gi_live_toggle {
 inline const GUID kRecord={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x66,0x77,0x01}};
@@ -41,6 +42,12 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   }
   D3D12_EXPORT_DESC alias{kExport,L"rayGenMain",D3D12_EXPORT_FLAG_NONE};
   D3D12_DXIL_LIBRARY_DESC lib{variant==0?D3D12_SHADER_BYTECODE{gi_sequence::kGILiveShader0,sizeof(gi_sequence::kGILiveShader0)}:D3D12_SHADER_BYTECODE{gi_sequence::kGILiveShader1,sizeof(gi_sequence::kGILiveShader1)},1,&alias};
+  auto shared=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(objects[match].pDesc);
+  if(gi_reuse::SingleProducerEnabled()){
+   shared.DXILLibrary=variant==0?D3D12_SHADER_BYTECODE{gi_sequence::kGISharedHit0,sizeof(gi_sequence::kGISharedHit0)}:D3D12_SHADER_BYTECODE{gi_sequence::kGISharedHit1,sizeof(gi_sequence::kGISharedHit1)};
+   objects[match].pDesc=&shared;
+   lib.DXILLibrary=variant==0?D3D12_SHADER_BYTECODE{gi_sequence::kGIOwnedRay0,sizeof(gi_sequence::kGIOwnedRay0)}:D3D12_SHADER_BYTECODE{gi_sequence::kGIOwnedRay1,sizeof(gi_sequence::kGIOwnedRay1)};
+  }
   objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&lib});auto augmented=*desc;augmented.NumSubobjects=static_cast<UINT>(objects.size());augmented.pSubobjects=objects.data();
   void* candidate=nullptr;const HRESULT hr=next(device,&augmented,iid,&candidate);
   if(FAILED(hr)||!candidate){if(candidate)static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 create_failed=1 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return next(device,desc,iid,out);}
@@ -67,7 +74,9 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
   if(SUCCEEDED(list->GetPrivateData(kState,&size,state.GetAddressOf()))&&state){
    Microsoft::WRL::ComPtr<ID3D12Resource> record;size=sizeof(ID3D12Resource*);
    if(SUCCEEDED(state->GetPrivateData(kRecord,&size,record.GetAddressOf()))&&record){
-    const auto version=revision.load();const bool useNew=requested.load();
+    const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();
+    const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
+    if(single){gi_reuse::singleRayApplied.store(useNew);if(useNew)++gi_reuse::singleRayDispatches;}
     if(applied.exchange(version)!=version)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",useNew?"new":"native",version);
     if(useNew){auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);return true;}
     return false;

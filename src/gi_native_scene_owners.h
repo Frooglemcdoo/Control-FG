@@ -13,7 +13,7 @@ namespace GINativeSceneOwners {
 static gi_reuse::D3D12LiveSceneOwners owners;
 static std::atomic<bool> ready{false};
 static std::atomic<UINT64> created{0},rejected{0};
-static bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_OWNED",b,4)==1&&b[0]=='1';}();return value;}
+static bool Enabled() noexcept {if(gi_reuse::SingleProducerEnabled())return false;static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_OWNED",b,4)==1&&b[0]=='1';}();return value;}
 struct Wrapper {IUnknown* resource=nullptr;UINT64 bytes=0,address=0;UINT state=0;};
 static bool Read(void* pointer,Wrapper& output) noexcept {
  output={};__try{if(!pointer)return false;auto* p=static_cast<unsigned char*>(pointer);

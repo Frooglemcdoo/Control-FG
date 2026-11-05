@@ -20,13 +20,20 @@ static unsigned augmentedCalls=0,nativeCalls=0;
 static HRESULT STDMETHODCALLTYPE Next(ID3D12Device5*,const D3D12_STATE_OBJECT_DESC* d,REFIID,void** out){
  if(d==source){++nativeCalls;*out=nullptr;return S_OK;}
  ++augmentedCalls;Require(d->NumSubobjects==source->NumSubobjects+1);
- Require(d->pSubobjects[0].pDesc==source->pSubobjects[0].pDesc);
+ const bool single=gi_reuse::SingleProducerEnabled();
+ if(!single)Require(d->pSubobjects[0].pDesc==source->pSubobjects[0].pDesc);
  auto& a=*static_cast<const D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION*>(d->pSubobjects[2].pDesc);
  Require(a.pSubobjectToAssociate==d->pSubobjects+1&&a.NumExports==2&&!wcscmp(a.pExports[0],L"rayGenMain")&&!wcscmp(a.pExports[1],gi_live_toggle::kExport));
  auto& l=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(d->pSubobjects[3].pDesc);
  auto& old=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(source->pSubobjects[0].pDesc);
  Require(l.NumExports==1&&!wcscmp(l.pExports[0].ExportToRename,L"rayGenMain")&&!wcscmp(l.pExports[0].Name,gi_live_toggle::kExport));
- Require(l.DXILLibrary.pShaderBytecode==(old.DXILLibrary.BytecodeLength==24472?gi_sequence::kGILiveShader0:gi_sequence::kGILiveShader1));
+ const bool v0=old.DXILLibrary.BytecodeLength==24472;
+ if(single){
+  auto& shared=*static_cast<const D3D12_DXIL_LIBRARY_DESC*>(d->pSubobjects[0].pDesc);
+  Require(shared.DXILLibrary.pShaderBytecode==(v0?gi_sequence::kGISharedHit0:gi_sequence::kGISharedHit1));
+  Require(shared.NumExports==old.NumExports&&shared.pExports==old.pExports);
+  Require(l.DXILLibrary.pShaderBytecode==(v0?gi_sequence::kGIOwnedRay0:gi_sequence::kGIOwnedRay1));
+ }else Require(l.DXILLibrary.pShaderBytecode==(v0?gi_sequence::kGILiveShader0:gi_sequence::kGILiveShader1));
  *out=nullptr;return E_FAIL; // Exercise clean fallback without a DXR device.
 }
 int main(){try{

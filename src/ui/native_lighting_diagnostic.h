@@ -288,7 +288,7 @@ inline void RequestPerformanceCapture(HWND panel) noexcept {
         MessageBoxW(panel,L"Finish the current capture first.",L"GI recording",MB_OK);return;
     }
     if(control_gi_button::Start(selfModule,GetWindow(panel,GW_OWNER))) {
-        Log("GI_BUTTON_CAPTURE requested=1 owned_requested=%u rr_requested=%u fg_selection=%u",unsigned(GIOwnedPipeline::requested.load()),unsigned(control_rr::RRUserRequested()),GetFGUserMultiplier());
+        Log("GI_BUTTON_CAPTURE requested=1 owned_requested=%u rr_requested=%u fg_selection=%u single_producer=%u single_ray_dispatches=%llu single_eval_dispatches=%llu single_ray_active=%u",unsigned(GIOwnedPipeline::requested.load()),unsigned(control_rr::RRUserRequested()),GetFGUserMultiplier(),unsigned(gi_reuse::SingleProducerEnabled()),gi_reuse::singleRayDispatches.load(),gi_reuse::singleEvaluatorDispatches.load(),unsigned(gi_reuse::singleRayApplied.load()));
         ClosePanel(panel);
     } else MessageBoxW(panel,L"Could not start the recorder. Make sure ControlTOH/Diagnostics/Capture-GI-Button.ps1 is installed.",L"GI recording",MB_OK|MB_ICONERROR);
 }

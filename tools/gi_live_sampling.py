@@ -8,6 +8,7 @@ import argparse, base64, hashlib, json, re, subprocess
 from pathlib import Path
 from gi_long_sequence import ROOT, HASHES
 from gi_producer_support import audit_source
+from gi_single_producer import shared_hits, owned_raygen
 
 
 def coordinate_ir(variant):
@@ -82,7 +83,15 @@ def main():
         data=base64.b64decode((ROOT/f'research/gi-sequence-r264/gi-ray-{v}.dxbc.b64').read_bytes());assert hashlib.sha256(data).hexdigest()==HASHES[v]
         native=build/f'gi-live-native-{v}.dxbc';native.write_bytes(data)
         source=subprocess.check_output([a.dxc,'-dumpbin',str(native)],text=True)
-        ir=build/f'gi-live-{v}.ll';ir.write_text(transform(source,v))
+        sampled=transform(source,v)
+        for name, program in [('GISharedHit',shared_hits(source)),('GIOwnedRay',owned_raygen(sampled,v))]:
+            ir_path=build/f'{name}-{v}.ll';ir_path.write_text(program)
+            compiled=ir_path.with_suffix('.dxil')
+            subprocess.run([a.assembler,str(ir_path),str(compiled),str(Path(a.dxc).parent/'dxcompiler.dll')],check=True)
+            blob=compiled.read_bytes()
+            if blob[:4]!=b'DXBC' or not any(blob[4:20]):raise ValueError('Invalid '+name)
+            header.append(f'static const unsigned char k{name}{v}[]={{\n'+','.join(f'0x{x:02x}' for x in blob)+'\n};')
+        ir=build/f'gi-live-{v}.ll';ir.write_text(sampled)
         output=build/f'gi-live-{v}.dxil'
         subprocess.run([a.assembler,str(ir),str(output),str(Path(a.dxc).parent/'dxcompiler.dll')],check=True)
         blob=output.read_bytes();assert blob[:4]==b'DXBC' and any(blob[4:20])

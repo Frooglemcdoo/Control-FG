@@ -34,7 +34,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  }
  if(SUCCEEDED(hr)&&alternate)GIOwnedPipeline::Share(native,alternate);
  if(alternate)alternate->Release();
- if(SUCCEEDED(hr))ready.store(true);
+ if(SUCCEEDED(hr)){ready.store(true);if(gi_reuse::SingleProducerEnabled())gi_reuse::singleEvaluatorReady=true;}
  Trace("GI_EVALUATOR_R309 ready=%u hr=0x%08lX shader=gi6 native_fallback=%u",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),unsigned(FAILED(hr)));
 #else
  (void)device;(void)desc;(void)native;(void)create;
@@ -54,9 +54,15 @@ inline void Bind(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexc
 inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled())return;UINT mode=0,size=sizeof(mode);
  if(FAILED(list->GetPrivateData(kMode,&size,&mode))||size!=sizeof(mode)||!mode)return;
+ if(mode==2&&gi_reuse::SingleProducerEnabled())++gi_reuse::singleEvaluatorDispatches;
  const auto rev=revision.load();const auto key=rev*4+mode;
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);
 }
-inline void Toggle() noexcept {if(!ready.load())return;GIOwnedPipeline::active=false;const bool value=!requested.load();requested.store(value);GIOwnedPipeline::requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
-inline const wchar_t* Label() noexcept {if(GIOwnedPipeline::Enabled()&&ready.load())return !requested.load()?L"GI: NATIVE":GIOwnedPipeline::active.load()?L"GI: OWNED":L"GI: OWNED WAIT";return !ready.load()?L"GI EVAL: WAIT":requested.load()?L"GI EVAL: TRANSLATED":L"GI EVAL: NATIVE";}
+inline void Toggle() noexcept {if(!ready.load())return;GIOwnedPipeline::active=false;const bool value=!requested.load();gi_reuse::singleRayApplied=false;requested.store(value);GIOwnedPipeline::requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
+inline const wchar_t* Label() noexcept {
+ if(gi_reuse::SingleProducerEnabled()){
+  if(!requested.load())return L"GI: NATIVE";
+  return gi_reuse::singleRayApplied.load()&&gi_reuse::singleEvaluatorDispatches.load()?L"GI: OWNED":L"GI: OWNED WAIT";
+ }
+ if(GIOwnedPipeline::Enabled()&&ready.load())return !requested.load()?L"GI: NATIVE":GIOwnedPipeline::active.load()?L"GI: OWNED":L"GI: OWNED WAIT";return !ready.load()?L"GI EVAL: WAIT":requested.load()?L"GI EVAL: TRANSLATED":L"GI EVAL: NATIVE";}
 }

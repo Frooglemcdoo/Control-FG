@@ -13,6 +13,7 @@ namespace GIOwnedPipeline {
 inline const GUID key={0x310e0004,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline bool Enabled() noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
+ if(gi_reuse::SingleProducerEnabled())return false;
  static const bool enabled=[] {char value[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_OWNED",value,4)==1&&value[0]=='1';}();return enabled;
 #else
  return false;
