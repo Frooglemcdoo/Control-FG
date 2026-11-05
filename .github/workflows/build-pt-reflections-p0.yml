@@ -1204,11 +1204,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R338
+      - name: Package owned GI integration R339
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R338'
+          $out='ControlTOH-R339'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1248,11 +1248,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R338 - Owned GI integration test
+          R339 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
+          With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
           F10: click RECORD GI. Compact capture; no WPR or administrator prompt.
@@ -1278,10 +1279,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R338
+          name: ControlTOH-R339
           path: |
-            ControlTOH-R338.zip
-            ControlTOH-R338.sha256
+            ControlTOH-R339.zip
+            ControlTOH-R339.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

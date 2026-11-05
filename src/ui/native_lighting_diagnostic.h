@@ -21,12 +21,20 @@ inline constexpr int kCaptureStatusY = kCameraY + 162;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 17;
+inline constexpr unsigned kButtonCount = kModeCount + 18;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
+    if(index==kModeCount+17){
+        if(!control_rr::RRUserRequested())return L"GI RAYS: RR OFF";
+        const unsigned rays=control_rr::GISampleRequested();
+        if(!rays)return L"GI RAYS: NATIVE";
+        static wchar_t label[32]{};
+        swprintf_s(label,L"GI RAYS: %u",rays);
+        return label;
+    }
     if(index==kModeCount+16)return gi_evaluator::Enabled()?gi_evaluator::Label():gi_live_toggle::Label();
 #endif
     if(index==kModeCount+15){
@@ -369,6 +377,12 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
+            else if(index==kModeCount+17 && !capture_suite::active && !control_gi_button::Active()){
+                std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+                const auto& option=control_settings::Definition(control_settings::Key::GlobalIlluminationSamples);
+                const unsigned next=control_rr::NextGISampleRequest(control_rr::GISampleRequested());
+                if(control_settings::Write(option,next))FGSettingsMarkSettingsDirty();
+            }
             else if(index==kModeCount+16 && !capture_suite::active) {
                 if(gi_evaluator::Enabled())gi_evaluator::Toggle();
                 else if(gi_live_toggle::ready.load())gi_live_toggle::Toggle();

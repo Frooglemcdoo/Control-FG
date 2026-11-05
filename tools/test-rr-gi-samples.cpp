@@ -7,13 +7,18 @@
 int main(){
  using namespace control_rr;
  for(unsigned requested: {0u,1u,2u,3u,4u,6u,8u,10u,12u,14u,16u,17u,32u,0xffffffffu}){
-  const bool accepted=requested==2||requested==4||requested==6||requested==8||requested==12||requested==16;
+  const bool accepted=requested==2||requested==4||requested==6||requested==8||requested==10||requested==14||requested==12||requested==16;
   assert(NormalizeGISampleRequest(requested)==(accepted?requested:0u));
   for(unsigned n: {0u,1u,2u,4u,16u,0xffffffffu}){
    assert(GISampleComparison(n,requested,false)==n);
    assert(GISampleComparison(n,requested,true)==(accepted&&n>=1&&n<=16?requested:n));
   }
  }
+ unsigned cycle=0;
+ for(unsigned expected=2;expected<=16;expected+=2){
+  cycle=NextGISampleRequest(cycle);assert(cycle==expected);
+ }
+ assert(NextGISampleRequest(cycle)==2);
  GISampleFrameSelection latch;
  RRFrameCoordinator frame;
  for(unsigned f=1;f<=7;++f){
@@ -47,5 +52,5 @@ int main(){
  assert(!off.Begin({1,3840,2160,3840,2160,0},false,false));
  assert(!off.ResetForSignalChange());
  assert(!off.Reset());
- puts("PASS: GI 2/4/6/8/12/16; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
+ puts("PASS: GI 2/4/6/8/10/12/14/16; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
 }
