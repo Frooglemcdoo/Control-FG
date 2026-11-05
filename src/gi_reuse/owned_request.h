@@ -14,6 +14,6 @@ inline bool SingleProducerEnabled() noexcept {
     return enabled;
 }
 inline std::atomic<bool> singleEvaluatorReady{false},singleRayApplied{false};
-inline std::atomic<unsigned long long> singleRayDispatches{0},singleEvaluatorDispatches{0};
+inline std::atomic<unsigned long long> temporalDispatches{0},singleRayDispatches{0},singleEvaluatorDispatches{0};
 }
 #endif

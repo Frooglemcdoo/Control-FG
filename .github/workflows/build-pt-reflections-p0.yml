@@ -707,6 +707,12 @@ jobs:
           }
           python tools/embed-gi-owned.py build/gi_owned.generated.h build/gi-owned-proposals.dxil build/gi-owned-trace.dxil build/gi-owned-shading.dxil build/gi-owned-resolve.dxil
           if($LASTEXITCODE -ne 0){throw 'Owned GI stage embedding failed'}
+          foreach($v in 0,1){
+            & $dxc -T lib_6_3 -D "GI_VARIANT=$v" -HV 2018 -O3 -WX src/shaders/gi_temporal_hit.hlsl -Fo "build/gi-temporal-$v.dxil"
+            if($LASTEXITCODE -ne 0){throw "Temporal GI shader variant $v failed"}
+          }
+          python -c "from pathlib import Path;Path('build/gi_temporal.generated.h').write_text(''.join('static const unsigned char kTemporal%d[]={'%v+','.join(str(x) for x in Path('build/gi-temporal-%d.dxil'%v).read_bytes())+'};'+chr(10) for v in (0,1)))"
+          if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
           python tools/gi_live_sampling.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'Live GI producer DXIL validation failed'}
           python tools/test-spec-phase-precision.py
@@ -1198,11 +1204,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R337
+      - name: Package owned GI integration R338
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R337'
+          $out='ControlTOH-R338'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1235,14 +1241,14 @@ jobs:
           Copy-Item build/DirectStorage "$diagnostics/DirectStorage" -Recurse
           Copy-Item build/DirectStorage/dstorage.dll,build/DirectStorage/dstoragecore.dll $out
           Copy-Item tools/directstorage/Validate-DirectStorage.cmd "$diagnostics/DirectStorage"
-          Copy-Item docs/native-lighting-r337.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
+          Copy-Item docs/native-lighting-r338.md "$out/ControlTOH/DIAGNOSTIC-NOTES.md"
           Copy-Item tools/Organize-Existing-Install.cmd,tools/Organize-Existing-Install.ps1 $tools
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R337 - Owned GI integration test
+          R338 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
@@ -1272,10 +1278,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R337
+          name: ControlTOH-R338
           path: |
-            ControlTOH-R337.zip
-            ControlTOH-R337.sha256
+            ControlTOH-R338.zip
+            ControlTOH-R338.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

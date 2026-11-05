@@ -23,15 +23,46 @@ def shared_hits(source):
     def decode(body, index, address):
         old = f'  %{index} = load i32, i32* %{address}, align 4'
         return replace_once(body, old, old.replace(f'%{index} =', '%GITaggedSlice =') +
-                            f'\n  %{index} = and i32 %GITaggedSlice, 2147483647')
+                            f'\n  %GIRegularSlice = and i32 %GITaggedSlice, 2147483647'
+                            '\n  %GIFlags = lshr i32 %GITaggedSlice, 30'
+                            '\n  %GIVisibility = icmp eq i32 %GIFlags, 3'
+                            '\n  %GIHistorySlice = and i32 %GITaggedSlice, 63'
+                            f'\n  %{index} = select i1 %GIVisibility, i32 %GIHistorySlice, i32 %GIRegularSlice')
     def closest(body):
         body = decode(body, 9, 8)
         old = '  %105 = fadd fast float %RayTCurrent, 0xBF847AE140000000'
+        entry = '  %128 = call '
+        guard = """  br i1 %GIVisibility, label %GIValidateEndpoint, label %GIPublish
+GIValidateEndpoint:
+  %GIShift = lshr i32 %GITaggedSlice, 6
+  %GIMillimeters = and i32 %GIShift, 65535
+  %GITarget = uitofp i32 %GIMillimeters to float
+  %GIActual = fmul float %RayTCurrent, 1.000000e+03
+  %GIError = fsub float %GIActual, %GITarget
+  %GIUpper = fcmp ole float %GIError, 3.000000e+00
+  %GILower = fcmp oge float %GIError, -3.000000e+00
+  %GIReach = and i1 %GIUpper, %GILower
+  %GIMatShift = lshr i32 %17, 8
+  %GIMatMix = xor i32 %17, %GIMatShift
+  %GIMatKey = and i32 %GIMatMix, 255
+  %GIExpectedShift = lshr i32 %GITaggedSlice, 22
+  %GIExpectedMat = and i32 %GIExpectedShift, 255
+  %GISameMat = icmp eq i32 %GIMatKey, %GIExpectedMat
+  %GIMatch = and i1 %GIReach, %GISameMat
+  br i1 %GIMatch, label %GIPublish, label %GIExit
+GIPublish:
+"""
+        body=replace_once(body,entry,guard+entry)
+        body=replace_once(body,'  store i32 %9,','  br label %GIExit\nGIExit:\n  store i32 %9,')
         return replace_once(body, old, old.replace('%105', '%GINativeDistance') +
                             '\n  %GIOwnedHit = icmp slt i32 %GITaggedSlice, 0' +
                             '\n  %105 = select i1 %GIOwnedHit, float %RayTCurrent, float %GINativeDistance')
+    def miss(body):
+        body=decode(body,5,4)
+        body=replace_once(body,'  %28 = call ', '  br i1 %GIVisibility, label %GIExit, label %GIPublish\nGIPublish:\n  %28 = call ')
+        return replace_once(body,'  ret void','  br label %GIExit\nGIExit:\n  ret void')
     return edit_export(edit_export(source, 'closestHitMain', closest),
-                       'missMain', lambda body: decode(body, 5, 4))
+                       'missMain', miss)
 
 
 def owned_raygen(source, variant):

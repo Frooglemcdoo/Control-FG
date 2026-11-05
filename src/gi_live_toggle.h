@@ -7,6 +7,7 @@ inline const GUID kRecord={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x
 inline const GUID kState={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x66,0x77,0x02}};
 inline std::atomic<bool> requested{gi_sequence::LiveRequested()},ready{false};
 inline std::atomic<unsigned long long> revision{0},applied{~0ull};
+inline void (*temporalRecord)(ID3D12GraphicsCommandList4*,ID3D12StateObject*,const D3D12_DISPATCH_RAYS_DESC&) noexcept=nullptr;
 inline constexpr LPCWSTR kExport=L"controlNewGIRayGen";
 inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
  if(!device||!desc||!out||!desc->pSubobjects||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)return next(device,desc,iid,out);
@@ -78,7 +79,9 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
     if(single){gi_reuse::singleRayApplied.store(useNew);if(useNew)++gi_reuse::singleRayDispatches;}
     if(applied.exchange(version)!=version)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",useNew?"new":"native",version);
-    if(useNew){auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);return true;}
+    if(useNew){auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);
+     if(single&&temporalRecord)temporalRecord(list,state.Get(),custom);
+     return true;}
     return false;
    }
   }
