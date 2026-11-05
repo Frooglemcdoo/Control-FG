@@ -5,7 +5,10 @@ from gi_live_sampling import coordinate_ir, transform, ROOT
 import numpy as np
 
 
-def evaluate(variant,n,frames=8192):
+from gi_single_producer import balance_owned_strata
+
+
+def evaluate(variant,n,frames=8192,owned=False):
     # Execute emitted IR arithmetic on a frame/ray grid, with float32 rounding.
     ray=np.tile(np.arange(n,dtype=np.uint32),frames)
     frame=np.repeat(np.arange(frames,dtype=np.uint32),n)
@@ -16,7 +19,9 @@ def evaluate(variant,n,frames=8192):
         if s.startswith('%'):return vals[s[1:]]
         if s.startswith('0x'):return np.float32(struct.unpack('>d',bytes.fromhex(s[2:]))[0])
         return np.float32(s) if '.' in s else np.uint32(int(s))
-    for line in coordinate_ir(variant).splitlines():
+    coords = coordinate_ir(variant)
+    if owned: coords = balance_owned_strata(coords)
+    for line in coords.splitlines():
         name,expr=line.strip()[1:].split(' = ',1)
         if expr.startswith('extractvalue'):r=frame
         elif expr.startswith('uitofp'):r=np.asarray(value(expr.split()[2]),dtype=np.float32)
@@ -29,7 +34,7 @@ def evaluate(variant,n,frames=8192):
             if op=='icmp':rest=rest.removeprefix('eq ')
             _,args=rest.split(' ',1);a,b=map(value,args.split(', '))
             with np.errstate(over='ignore'):
-                r={'mul':lambda:a*b,'xor':lambda:a^b,'lshr':lambda:a>>b,'and':lambda:a&b,
+                r={'add':lambda:a+b,'mul':lambda:a*b,'xor':lambda:a^b,'lshr':lambda:a>>b,'and':lambda:a&b,
                    'icmp':lambda:a==b,'udiv':lambda:a//b,'urem':lambda:a%b,
                    'fadd':lambda:a+b,'fmul':lambda:a*b,'fdiv':lambda:a/b}[op]()
         vals[name]=r
@@ -57,6 +62,14 @@ def main():
         assert abs(((u<.25)&(v<.25)).mean()-1/16)<.008
         assert not np.array_equal(u[:32],u[256:288])
         print('PASS emitted IR sampling: rays=',n,'mean_cos=',float(np.sqrt(v).mean()))
+    for variant in (0,1):
+        for n in (1,3,*range(2,17,2),63,64):
+            u,v,_ = evaluate(variant,n,frames=512,owned=True)
+            for axis in (u,v):
+                # A value that rounds exactly onto its upper boundary is valid.
+                ordered=np.sort(axis,axis=1)*n-np.arange(n)
+                assert np.min(ordered)>=-1e-5 and np.max(ordered)<=1.00001
+            assert np.all(np.isfinite(u+v))
     with tempfile.TemporaryDirectory() as tmp:
         for variant in (0,1):
             shader=Path(tmp)/'native.dxbc';shader.write_bytes(base64.b64decode((ROOT/f'research/gi-sequence-r264/gi-ray-{variant}.dxbc.b64').read_bytes()))

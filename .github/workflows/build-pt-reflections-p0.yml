@@ -1204,11 +1204,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R339
+      - name: Package owned GI integration R340
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R339'
+          $out='ControlTOH-R340'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1248,7 +1248,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R339 - Owned GI integration test
+          R340 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
@@ -1263,6 +1263,7 @@ jobs:
           No hotkeys, console prompts, preliminary recording, or game relaunch sequence.
           The capture records the selected GI mode. No automatic mode switches.
           Owned selects its raygen in the original GI dispatch. GI6 evaluates the batch once.
+          Owned distributes rays across the full angular range each frame.
           Native fallback uses the original raygen. Both routes use the existing GI hit table.
           In-game quality and performance still require validation.
           Use the F10 GI mode button to select the original game GI.
@@ -1279,10 +1280,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R339
+          name: ControlTOH-R340
           path: |
-            ControlTOH-R339.zip
-            ControlTOH-R339.sha256
+            ControlTOH-R340.zip
+            ControlTOH-R340.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

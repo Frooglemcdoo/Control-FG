@@ -65,6 +65,40 @@ GIPublish:
                        'missMain', miss)
 
 
+def balance_owned_strata(body):
+    # Keep one sample in each original 2D cell. Subdivide within each column
+    # and row so every single frame also covers all ray-count bins on each axis.
+    # The odd prime stride permutes rows for every supported count (<=64).
+    permutation = """  %GICycle = lshr i32 %GI307Frame, 2
+  %GICycleSeed = mul i32 %GICycle, 2654435761
+  %GIGroup = xor i32 %GI307SeedA, %GI307BatchSeed
+  %GIKey = xor i32 %GIGroup, %GICycleSeed
+  %GIKeyHigh = lshr i32 %GIKey, 16
+  %GIMix = xor i32 %GIKey, %GIKeyHigh
+  %GIHash = mul i32 %GIMix, 2146121005
+  %GIXSalt = lshr i32 %GIHash, 12
+  %GIColumnShift = mul i32 %GI307CellX, 73
+  %GIXStart = add i32 %GIXSalt, %GIColumnShift
+  %GIStride = mul i32 %GI307CellY, 67
+  %GIXBase = add i32 %GIXStart, %GIStride
+  %GIXBin = urem i32 %GIXBase, %GI307Rows
+  %GIYSeed = lshr i32 %GIHash, 23
+  %GIYStart = xor i32 %GIYSeed, %GI307CellY
+  %GIYBase = xor i32 %GIYStart, %GI307CellX
+  %GIYBin = urem i32 %GIYBase, %GI307Columns
+  %GIXBinF = uitofp i32 %GIXBin to float
+  %GIYBinF = uitofp i32 %GIYBin to float
+  %GIXJitter = fadd float %GIXBinF, %GI307D0Unit
+  %GIYJitter = fadd float %GIYBinF, %GI307D1Unit
+  %GIXUnit = fdiv float %GIXJitter, %GI307RowsF
+  %GIYUnit = fdiv float %GIYJitter, %GI307ColumnsF
+"""
+    old = '  %GI307U = fadd float %GI307CellXF, %GI307D0Unit'
+    body = replace_once(body, old, permutation + old.replace('%GI307D0Unit', '%GIXUnit'))
+    return replace_once(body, 'fadd float %GI307CellYF, %GI307D1Unit',
+                        'fadd float %GI307CellYF, %GIYUnit')
+
+
 def owned_raygen(source, variant):
     # Same orthonormal basis and cosine coordinates as gi_producer_proposals.
     # Use the existing hit/miss ABI, ray count, acceleration structure and origin.
@@ -73,23 +107,7 @@ def owned_raygen(source, variant):
         ux, uy, uz = ('%239','%240','%Sqrt9') if variant == 0 else ('%299','%300','%Sqrt56')
         ray = '%rayIndex.03' if variant == 0 else '%rayIndex2.038'
         directions = ('%.i0203','%.i1204','%.i2205') if variant == 0 else ('%.i0330','%.i1331','%.i2332')
-        # Divide each angular stratum into four subcells across four frames.
-        # Pixel and ray scramble the visitation order without consulting history.
-        phase = """  %GITileSeed = xor i32 %GI307PixelX, %GI307PixelY
-  %GITileKey = xor i32 %GITileSeed, %GI307RaySeed
-  %GITilePhase = xor i32 %GI307Frame, %GITileKey
-  %GITileX = and i32 %GITilePhase, 1
-  %GITileShift = lshr i32 %GITilePhase, 1
-  %GITileY = and i32 %GITileShift, 1
-"""
-        for axis, dim in [('X', 0), ('Y', 1)]:
-            phase += (f'  %GITile{axis}F = uitofp i32 %GITile{axis} to float\n'
-                      f'  %GITile{axis}Jitter = fadd float %GITile{axis}F, %GI307D{dim}Unit\n'
-                      f'  %GITile{axis}Unit = fmul float %GITile{axis}Jitter, 5.000000e-01\n')
-        old = '  %GI307U = fadd float %GI307CellXF, %GI307D0Unit'
-        body = replace_once(body, old, phase + old.replace('%GI307D0Unit', '%GITileXUnit'))
-        body = replace_once(body, 'fadd float %GI307CellYF, %GI307D1Unit',
-                            'fadd float %GI307CellYF, %GITileYUnit')
+        body = balance_owned_strata(body)
         ir = []
         def op(name, instruction):
             result = '%GISingle' + name
