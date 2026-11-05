@@ -254,8 +254,40 @@ inline void Observe(const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept
 inline void Bind(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
 inline void Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 }
+namespace volume_test {
+#include "volume_phase_patches.h"
+inline constexpr GUID alternateGuid{0xf2713a43,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
+inline constexpr unsigned scatteringKind=0x73430000, viewKind=scatteringKind+1;
+inline std::atomic<unsigned> phase{0}, matched[2]{}, ready[2]{};
+inline std::atomic<uint64_t> binds[5][2]{}, applied[5][2]{};
+
+template<class Desc, class Create, size_t N>
+inline void Observe(ID3D12Device* device,const Desc& desc,IUnknown* native,Create create,
+                    D3D12_SHADER_BYTECODE Desc::* field,const ShaderPatch (&patches)[N],unsigned kind) noexcept {
+    const auto& shader=desc.*field;
+    for(const auto& patch:patches){
+        if(!create || !native || shader.BytecodeLength!=patch.size)continue;
+        std::vector<unsigned char> bytes;
+        if(!Prepare(patch,shader,bytes))continue;
+        const unsigned route=kind-scatteringKind;
+        ++matched[route];
+        auto changed=desc; changed.*field={bytes.data(),bytes.size()}; changed.CachedPSO={nullptr,0};
+        ID3D12PipelineState *variant=nullptr,*owner=nullptr;
+        if(SUCCEEDED(create(device,&changed,IID_PPV_ARGS(&variant)))){
+            if(SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&owner)))){
+                if(SUCCEEDED(owner->SetPrivateDataInterface(alternateGuid,variant)) &&
+                   SUCCEEDED(owner->SetPrivateData(kKindGuid,sizeof(kind),&kind)))++ready[route];
+                owner->Release();
+            }
+            variant->Release();
+        }
+        return;
+    }
+}
+}
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
+    volume_test::Observe(device,*desc,native,original,&D3D12_COMPUTE_PIPELINE_STATE_DESC::CS,volume_test::viewVolumePatches,volume_test::viewKind);
     gi_evaluator::Observe(device,desc,native,original);
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
@@ -297,12 +329,6 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
 inline performance::Stage PerformanceStage(ID3D12PipelineState*) noexcept;
 inline performance::Stage PerformanceRayStage() noexcept;
 inline void BindPerformance(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
-// Phase-specific counters keep a late command-list recording in its original phase.
-namespace volume_test {
-inline constexpr GUID compositeGuid{0xf2713a42,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
-inline std::atomic<unsigned> phase{0};
-inline std::atomic<uint64_t> binds[4]{};
-}
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
@@ -310,18 +336,20 @@ struct Binding {
     unsigned kind = 0;
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
         bindingsSeen.fetch_add(1);
-        volumePhase = volume_test::phase.load(std::memory_order_relaxed);
-        if (volumePhase && native) {
-            UINT bytes = sizeof(alternate);
-            if (SUCCEEDED(native->GetPrivateData(volume_test::compositeGuid, &bytes, &alternate)) && alternate) {
-                if (volumePhase == 2) selected = alternate;
-                return;
-            }
-            volumePhase = 0;
-        }
         ReportBoundIdentity(native);
-        UINT size = sizeof(kind);
-        if (!native || FAILED(native->GetPrivateData(kKindGuid, &size, &kind)) || size != sizeof(kind) || (kind != kGiBit && kind != kDirectBit)) { kind = 0; return; }
+        UINT size=sizeof(kind);
+        if(!native || FAILED(native->GetPrivateData(kKindGuid,&size,&kind)) || size!=sizeof(kind)){kind=0;return;}
+        if(kind==volume_test::scatteringKind || kind==volume_test::viewKind){
+            volumePhase=volume_test::phase.load(std::memory_order_relaxed);
+            const bool stabilize=volumePhase==0 || volumePhase==4 ||
+                volumePhase==(kind==volume_test::scatteringKind?2u:3u);
+            if(stabilize){
+                size=sizeof(alternate);
+                if(SUCCEEDED(native->GetPrivateData(volume_test::alternateGuid,&size,&alternate)) && alternate)selected=alternate;
+            }
+            return;
+        }
+        if(kind!=kGiBit && kind!=kDirectBit){kind=0;return;}
         if (Disables(LiveSelection::GetMode(state), kind)) {
             size = sizeof(alternate);
             if (SUCCEEDED(native->GetPrivateData(VariantGuid(LiveSelection::GetMode(state)), &size, &alternate)) && alternate) selected = alternate;
@@ -330,7 +358,14 @@ struct Binding {
     }
     unsigned volumePhase = 0;
     void Recorded() const noexcept {
-        if (volumePhase && alternate) { ++volume_test::binds[volumePhase]; return; }
+        if(kind==volume_test::scatteringKind || kind==volume_test::viewKind){
+            if(volumePhase){
+                const unsigned route=kind-volume_test::scatteringKind;
+                ++volume_test::binds[volumePhase][route];
+                if(alternate)++volume_test::applied[volumePhase][route];
+            }
+            return;
+        }
         const auto mode=LiveSelection::GetMode(state);
         if (DisablesCorrectedBakedGi(mode) && kind==kGiBit && alternate &&
             selection.Observe(state,kBakedGiOverrideBit))
@@ -509,28 +544,7 @@ inline CreateGraphics originalGraphics = nullptr;
 inline CreateList originalCreateList = nullptr;
 inline void ObserveGraphics(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, IUnknown* native) noexcept {
     graphicsSeen.fetch_add(1);
-    const auto& target = desc->BlendState.RenderTarget[0];
-    if (originalGraphics && desc->PS.BytecodeLength == 2984 && desc->PS.pShaderBytecode &&
-        desc->NumRenderTargets == 1 && target.BlendEnable && !target.LogicOpEnable &&
-        target.DestBlend != D3D12_BLEND_ZERO && target.BlendOp == D3D12_BLEND_OP_ADD &&
-        target.RenderTargetWriteMask && !desc->DepthStencilState.StencilEnable &&
-        !(desc->DepthStencilState.DepthEnable && desc->DepthStencilState.DepthWriteMask == D3D12_DEPTH_WRITE_MASK_ALL)) {
-        char sha[65]{};
-        if (PTReflectionSha256(static_cast<const unsigned char*>(desc->PS.pShaderBytecode), desc->PS.BytecodeLength, sha) &&
-            !std::strcmp(sha, "7403040843440d5418acae879692e9d55475bca41904811efec7d076e52de714")) {
-            auto neutral = *desc;
-            neutral.CachedPSO = {nullptr, 0};
-            neutral.BlendState.RenderTarget[0].RenderTargetWriteMask = 0;
-            ID3D12PipelineState *owner = nullptr, *variant = nullptr;
-            if (SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&owner)))) {
-                if (SUCCEEDED(originalGraphics(device, &neutral, IID_PPV_ARGS(&variant)))) {
-                    owner->SetPrivateDataInterface(volume_test::compositeGuid, variant);
-                    variant->Release();
-                }
-                owner->Release();
-            }
-        }
-    }
+    volume_test::Observe(device,*desc,native,originalGraphics,&D3D12_GRAPHICS_PIPELINE_STATE_DESC::PS,volume_test::scatteringPatches,volume_test::scatteringKind);
     IdentifyPipeline(native, desc->PS, 1);
     std::vector<unsigned char> bytes;
     if (Prepare(kBakedGi, desc->PS, bytes)) {
