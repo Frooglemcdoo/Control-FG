@@ -104,3 +104,43 @@ including both native channel layouts, grid sizes, constant/random/checker input
 and clamped edges. Exact downstream instruction recovery and bindings are checked.
 Windows WARP validates native/stripped PSO creation for all12families and6variants;
 these tests do not render a real character or prove flicker removal.
+
+## R352 HQ reconstruction
+User reports R351 is a massive improvement but residual shimmer/flicker remains.
+Video20261106-1523-51.8870291.mp4 is11.47s/30fps. Inspected overview and consecutive
+frames show remaining fine variation around cheek/neck and jacket shading during
+idle motion. Compression, pose and downstream shading prevent assigning every
+remaining temporal change to one shader input from this video alone.
+
+HQ evaluates a cubic B-spline convolved with a [1,2,1]/4 kernel on each volume axis.
+The6x6x6 positive voxel weights are factored into27 trilinear reads per texture.
+This extends Sigg/Hadwiger's adjacent-pair factoring:
+https://developer.nvidia.com/gpugems/gpugems2/part-iii-high-quality-rendering/chapter-20-fast-third-order-texture-filtering
+The plain4-tap cubic alternative was not shipped: although it smooths cell
+transitions, its narrower kernel would preserve more high-frequency input noise
+than R351. The final wider kernel preserves constant energy, has no negative
+lobes/overshoot, and supplies continuous first/second derivatives for a fixed
+input grid. It filters only the rig's volume RGB/intensity before the existing
+normalization. Material normals, texture detail, rig lights, BRDF, shadows,
+alpha/depth/coverage and fog remain native. VL High remains supported.
+
+Cost:54 texture reads (27 per volume), versus16 in R351 and2 native. Twelve extra
+temporary registers versus5 in R351. No extra GPU pass/resource, readback or new
+history. This has real character-shader cost and may soften volume transitions;
+no game FPS or complete temporal-stability claim is made. Source-volume changes
+and other temporal effects can still survive a spatial reconstruction filter.
+
+F10 RIG cycles HQ(default), native, R351. R351 generated binaries are byte-identical
+to the prior build for all12families. Only2 replacement PSOs per family are now
+prepared, down from6. TEST JESSE is four phases/eight images: native,R351,HQ,native.
+Capture overrides selection temporarily and preserves it across completion,
+cancellation and failure. Skin/cloth/hair coverage remains mandatory.
+
+Validation:960 emitted-shader evaluations against an independent direct216-voxel
+reference and R351 reference, constant/random/checker/impulse fields, multiple
+volume dimensions, boundaries and derivative continuity. Stationary synthetic
+uncorrelated volume noise RMS0.025814(R351) versus0.014429(HQ), not a measurement
+of the user's game. Native downstream instructions recover bit-for-bit. Windows
+checks create both quality variants for all12native/stripped families and verify
+quality/capture selection. In-game quality, performance and remaining temporal
+noise must still be evaluated.

@@ -65,7 +65,7 @@ inline void Finish(HWND game,const char* reason) noexcept {
     DrainDiagnosticLog(true);
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
     if(!character && !volume && !CopyLog(path))++failures;
-    if(character)Note("rig_filter_restored=%u filtered_recorded_binds=%llu",unsigned(character_surface::filtered.load()),character_surface::filteredBinds.load());
+    if(character)Note("rig_quality_restored=%u filtered_recorded_binds=%llu",character_surface::quality.load(),character_surface::filteredBinds.load());
     if(character && failures){
         const unsigned saved=character_surface::ExportCandidates(folder);
         Note("shader_detection graphics_seen=%llu observed=%u candidate_files=%u dropped=%u",graphicsSeen.load(),character_surface::observed.load(),saved,character_surface::candidateDropped.load());
@@ -152,7 +152,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R351 character rig inputs. Native / filtered volume / surface normal / uniform volume / normal and uniform volume / rig diffuse only / rig specular only / native repeat. Full-client JPEGs. Previous rig filter selection resumes after capture. Hair has no bent-normal input and remains native in the surface-normal phase. Counters are recorded PSO binds, not executed draws.");
+        Note("R352 whole-character quality comparison. Native / R351 filter / HQ weighted cubic / native repeat. Full-client JPEGs. Previous rig quality resumes after capture. All lighting, normal, material and shadow inputs stay active. Counters are recorded PSO binds, not executed draws.");
         Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         Note("flat_views_expected=0 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 post_processing_not_bypassed=1");
         lastFailure=native_blend_capture::Failure::None;
@@ -188,9 +188,10 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"native",L"filtered-volume",L"surface-normal",L"uniform-volume",L"normal-and-uniform-volume",L"rig-diffuse-only",L"rig-specular-only",L"native-repeat"};
-        if(step>=8){Finish(game,failures?"incomplete":"complete");return;}
-        const unsigned phase=step+1;
+        static constexpr const wchar_t* names[]={L"native",L"r351-filter",L"hq-weighted-cubic",L"native-repeat"};
+        if(step>=4){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr unsigned phases[]={1,3,2,8};
+        const unsigned phase=phases[step];
         if(!entered){
             initialBinds=character_surface::binds[phase].load();initialApplied=character_surface::applied[phase].load();
             for(unsigned g=0;g<3;++g){initialGroupBinds[g]=character_surface::groupBinds[g][phase].load();initialGroupApplied[g]=character_surface::groupApplied[g][phase].load();}
@@ -206,9 +207,9 @@ inline void Tick(HWND game,uint64_t now) noexcept {
             const auto b=character_surface::groupBinds[g][phase].load()-initialGroupBinds[g];
             const auto a=character_surface::groupApplied[g][phase].load()-initialGroupApplied[g];
             if(imageIndex==0)Note("step=%u group=%s recorded_binds=%llu replacement_binds=%llu",step,g==0?"skin":g==1?"cloth":"hair",b,a);
-            if(!b || (phase>=2 && phase<=7 && !a))wholeCharacter=false;
+            if(!b || (phase>=2 && phase<=3 && !a))wholeCharacter=false;
         }
-        if(!wholeCharacter || !character_surface::ready.load() || !currentBinds || (phase>=2 && phase<=7 && !currentApplied)){
+        if(!wholeCharacter || !character_surface::ready.load() || !currentBinds || (phase>=2 && phase<=3 && !currentApplied)){
             Note("step=%u preflight_failed=1 matched=%u ready=%u binds=%llu applied=%llu screenshots_skipped=1",step,character_surface::matched.load(),character_surface::ready.load(),currentBinds,currentApplied);
             ++failures;Finish(game,"shader_not_active");
             MessageBoxW(game,L"Skin, clothing or hair coverage is missing. No comparison images were taken for this phase. A small shader report was packaged instead; send that ZIP.",L"TEST JESSE: shader report saved",MB_OK);
@@ -223,7 +224,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
             const auto binds=character_surface::binds[phase].load()-initialBinds;
             const auto applied=character_surface::applied[phase].load()-initialApplied;
             Note("step=%u matched_psos=%u ready_psos=%u recorded_binds=%llu replacement_binds=%llu",step,character_surface::matched.load(),character_surface::ready.load(),binds,applied);
-            if(!binds || (phase>=2 && phase<=7 && !applied))++failures;
+            if(!binds || (phase>=2 && phase<=3 && !applied))++failures;
             ++step;entered=false;
         }
         return;

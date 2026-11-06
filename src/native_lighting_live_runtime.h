@@ -353,9 +353,10 @@ struct Binding {
         if(kind==character_surface::kind){
             surfacePhase=character_surface::phase.load(std::memory_order_relaxed);
             if(surfacePhase){size=sizeof(surfaceGroup);if(FAILED(native->GetPrivateData(character_surface::VariantGuid(6),&size,&surfaceGroup)))surfaceGroup=3;}
-            if((surfacePhase==0 && character_surface::filtered.load(std::memory_order_relaxed)) || (surfacePhase>=2 && surfacePhase<=7)){
+            const int variant=character_surface::SelectedVariant(surfacePhase,character_surface::quality.load(std::memory_order_relaxed));
+            if(variant>=0){
                 size=sizeof(alternate);
-                if(SUCCEEDED(native->GetPrivateData(character_surface::VariantGuid(surfacePhase?surfacePhase-2:0),&size,&alternate)) && alternate)selected=alternate;
+                if(SUCCEEDED(native->GetPrivateData(character_surface::VariantGuid(unsigned(variant)),&size,&alternate)) && alternate)selected=alternate;
             }
             return;
         }

@@ -16,6 +16,11 @@ int main(){try{
     ComPtr<ID3D12Debug> debug;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     std::cout<<"Create WARP device\n";Device gpu(false);
+    for(unsigned q=0;q<3;++q){
+        Require(surface::SelectedVariant(0,q)==(q==0?-1:q==1?1:0),"Gameplay quality selection mismatch");
+        Require(surface::SelectedVariant(1,q)==-1 && surface::SelectedVariant(8,q)==-1,"Native comparison is not native");
+        Require(surface::SelectedVariant(2,q)==0 && surface::SelectedVariant(3,q)==1,"Quality comparison mismatch");
+    }
     for(unsigned family=0;family<surface::kCharacterFamilyCount;++family){
     const auto native=surface::kCharacterOriginals[family];
     const unsigned before=surface::matched.load();
@@ -71,7 +76,7 @@ int main(){try{
     Require(surface::matched.load()==before+1 && surface::ready.load()==before+1,"Surface variants not admitted");
     unsigned tag=0;UINT size=sizeof(tag);Check(original->GetPrivateData(kKindGuid,&size,&tag));Require(tag==surface::kind,"Surface tag mismatch");
     unsigned group=99;size=sizeof(group);Check(original->GetPrivateData(surface::VariantGuid(6),&size,&group));Require(group==surface::kCharacterGroups[family],"Material coverage group mismatch");
-    for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(original->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing owned variant");p->Release();}
+    for(UINT i=0;i<2;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(original->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing owned variant");p->Release();}
     surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==before+1,"Duplicate preparation");
     // Stripped reflection must still resolve to the same exact executable family.
     {
@@ -82,7 +87,7 @@ int main(){try{
         ComPtr<ID3D12PipelineState> live;Check(gpu.device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(&live)));
         surface::Observe(gpu.device.Get(),&desc,live.Get(),&Create);
         Require(surface::matched.load()==before+2 && surface::ready.load()==before+2,"Stripped variant creation failed");
-        for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(live->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing stripped variant");p->Release();}
+        for(UINT i=0;i<2;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(live->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing stripped variant");p->Release();}
         auto changed=std::vector<unsigned char>(static_cast<const unsigned char*>(native.pShaderBytecode),static_cast<const unsigned char*>(native.pShaderBytecode)+native.BytecodeLength);
         const auto chunk=surface::Chunk(native,"SHEX");
         changed[static_cast<const unsigned char*>(chunk.pShaderBytecode)-static_cast<const unsigned char*>(native.pShaderBytecode)+400]^=1;
@@ -90,5 +95,5 @@ int main(){try{
         changed.resize(31);Require(surface::Family({changed.data(),changed.size()})==-1,"Truncated container admitted");
     }
     }
-    std::cout<<"PASS all twelve skin/cloth/hair families and stripped containers; all six variants each on WARP; changed instructions rejected\n";
+    std::cout<<"PASS all twelve skin/cloth/hair families and stripped containers; both quality variants each on WARP; changed instructions rejected\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
