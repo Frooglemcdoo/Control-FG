@@ -62,7 +62,7 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
  else rrNativeGIHistoryReason="native_pipeline_fallback";
 }
 static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
- const unsigned capture=rt_surface_source::request.load(std::memory_order_acquire);
+ const unsigned capture=rt_surface_source::EffectiveRequest();
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEntry);
  const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&
   rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting&&color&&passes&&

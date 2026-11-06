@@ -716,10 +716,14 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  const bool contact=(rrNativeRTFrame.effects&control_rr::RTContactShadow)!=0;
  const unsigned sourceCapture=rt_surface_source::request.load(std::memory_order_acquire);
  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactEntry);
- const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering() || rt_surface_source::PreserveContact(sourceCapture);
+ const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering() || rt_surface_source::PreserveContact(sourceCapture) || rt_surface_source::ManualContactPreserved();
  const DWORD filterError=GetLastError();
  native_lighting::rt_spot_runtime::ReportShadowFiltering(full,contact,temporal,spatialSize,spatialStep);
  SetLastError(filterError);
+ if(full && contact && rt_surface_source::ManualContactUnfiltered()){
+  rrNativeContactShadowFilterOriginal(color,history,auxiliary,false,0,1);
+  return;
+ }
  const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep,fullSpot);
  if(!policy.neutralized){
   rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);

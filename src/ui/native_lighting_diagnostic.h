@@ -17,16 +17,20 @@ inline constexpr int kActionsY = kStatusY + 28;
 inline constexpr int kCaptureY = kActionsY + 46;
 inline constexpr int kPerformanceY = kCaptureY + 46;
 inline constexpr int kCameraY = kPerformanceY + 46;
-inline constexpr int kCaptureStatusY = kCameraY + 162;
+inline constexpr int kCaptureStatusY = kCameraY + 254;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 21;
+inline constexpr unsigned kButtonCount = kModeCount + 25;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
+    if(index==kModeCount+21)return rt_surface_source::manualGI.load()==1?L"GI REMOVE: ON":L"GI REMOVE: OFF";
+    if(index==kModeCount+22)return rt_surface_source::manualGI.load()==2?L"GI STABLE: ON":L"GI STABLE: OFF";
+    if(index==kModeCount+23){const auto c=rt_surface_source::manualContact.load();return c==1?L"CONTACT: FILTERED":c==2?L"CONTACT: RAW":L"CONTACT: AUTO";}
+    if(index==kModeCount+24)return L"RESET COMPARE";
     if(index==kModeCount+20){
         const unsigned quality=character_surface::quality.load();
         return !quality?L"RIG: NATIVE":!character_surface::filteredBinds.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::applied.load()?L"RIG: WAIT":L"RIG: STABLE";
@@ -77,6 +81,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     return actions[index - kModeCount];
 }
 inline const wchar_t* ModeHint(Mode mode) noexcept {
+    if(rt_surface_source::manualGI.load() || rt_surface_source::manualContact.load())return L"Manual comparison active. CONTACT RAW disables filtering, not shadows. RESET COMPARE restores.";
     if(gi_source_probe::Requested()) {
         if(!gi_source_probe::bound.load())return L"GI source probe requested; no matching shader bound yet. Check log.";
         if(gi_source_probe::Requested()==5)return L"GI SPOT: WHITE COOKIE. Native shadows; diagnostic only.";
@@ -153,7 +158,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R362", {14,8,kWidth-12,34}, theme::kAccent);
+    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R363", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
@@ -351,7 +356,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                i==kModeCount+20?14:i==kModeCount+19?170:i==kModeCount+18?326:14+col*156,i>=kModeCount+18?kCameraY+36:i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,i>=kModeCount+18?32:36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                i==kModeCount+20?14:i==kModeCount+19?170:i==kModeCount+18?326:14+col*156,i>=kModeCount+21?kCameraY+162+int((i-kModeCount-21)/3)*46:i>=kModeCount+18?kCameraY+36:i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,i>=kModeCount+18?32:36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -360,7 +365,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         const unsigned index=item->CtlID-kButtonFirst;
         if(index>=kButtonCount)return FALSE;
         const auto selected=LiveSelection::GetMode(selection.Read());
-        const bool active=index<kModeCount && (selected==kModeChoices[index].mode || (IsNativeBlend(kModeChoices[index].mode) && IsNativeBlend(selected)));
+        const bool active=(index<kModeCount && (selected==kModeChoices[index].mode || (IsNativeBlend(kModeChoices[index].mode) && IsNativeBlend(selected)))) ||
+            (index==kModeCount+21 && rt_surface_source::manualGI.load()==1) ||
+            (index==kModeCount+22 && rt_surface_source::manualGI.load()==2) ||
+            (index==kModeCount+23 && rt_surface_source::manualContact.load()!=0);
         HBRUSH brush=CreateSolidBrush(active?theme::kAccent:RGB(35,35,35)); FillRect(item->hDC,&item->rcItem,brush); DeleteObject(brush);
         HBRUSH border=CreateSolidBrush(theme::kBorder); FrameRect(item->hDC,&item->rcItem,border); DeleteObject(border);
         const auto previous=SelectObject(item->hDC,bodyFont); SetBkMode(item->hDC,TRANSPARENT); SetTextColor(item->hDC,theme::kText);
@@ -386,6 +394,12 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
+            else if(index>=kModeCount+21 && index<=kModeCount+24 && !capture_suite::active && !control_gi_button::Active()){
+                if(index==kModeCount+24)rt_surface_source::ResetManual();
+                else if(index==kModeCount+23)rt_surface_source::manualContact.store((rt_surface_source::manualContact.load()+1)%3);
+                else {const unsigned target=index==kModeCount+21?1:2;rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==target?0:target);}
+                Trace("manual_rt_compare gi=%u contact=%u",rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load());
+            }
             else if(index==kModeCount+20 && !capture_suite::active && !control_gi_button::Active()){
                 character_surface::quality.store((character_surface::quality.load()+1)%4);
                 Trace("character_rig_filter quality=%u recorded_binds=%llu",character_surface::quality.load(),character_surface::filteredBinds.load());

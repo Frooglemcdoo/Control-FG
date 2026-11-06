@@ -19,6 +19,14 @@
     [
       "  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNative);return;",
       "  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNative);\n  if(temporal)rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactTemporal);\n  if(spatialSize>0 && spatialStep>0)rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactSpatial);\n  return;"
+    ],
+    [
+      " || rt_surface_source::PreserveContact(sourceCapture);",
+      " || rt_surface_source::PreserveContact(sourceCapture) || rt_surface_source::ManualContactPreserved();"
+    ],
+    [
+      " const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep,fullSpot);",
+      " if(full && contact && rt_surface_source::ManualContactUnfiltered()){\n  rrNativeContactShadowFilterOriginal(color,history,auxiliary,false,0,1);\n  return;\n }\n const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep,fullSpot);"
     ]
   ]
 }

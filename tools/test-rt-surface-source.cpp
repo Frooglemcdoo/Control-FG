@@ -4,6 +4,13 @@
 int main(){
  using namespace rt_surface_source;using namespace control_rr_gi;
  assert(request.load()==0 && giScope==0);
+ manualGI.store(1);assert(EffectiveRequest()==2);
+ manualGI.store(2);assert(EffectiveRequest()==3);
+ manualContact.store(2);assert(ManualContactUnfiltered());
+ request.store(1);assert(EffectiveRequest()==1 && !ManualContactUnfiltered());
+ manualContact.store(1);assert(!ManualContactPreserved());
+ request.store(0);assert(EffectiveRequest()==3 && ManualContactPreserved());
+ ResetManual();assert(EffectiveRequest()==0 && !ManualContactPreserved() && !ManualContactUnfiltered());
  for(unsigned phase=0;phase<7;++phase)for(unsigned mode=0;mode<8;++mode)for(unsigned v=0;v<3;++v){
   auto saved=StageMode(mode);auto view=DiagnosticView(v);auto result=Stage(phase,saved);
   if(phase==2){assert(result==StageMode::ClampOnly && View(phase,result,view)==DiagnosticView::Zero);}
