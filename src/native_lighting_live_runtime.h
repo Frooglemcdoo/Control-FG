@@ -255,39 +255,39 @@ inline void Bind(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
 inline void Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 }
 namespace volume_test {
-#include "volume_phase_patches.h"
-inline constexpr GUID alternateGuid{0xf2713a43,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
-inline constexpr unsigned scatteringKind=0x73430000, viewKind=scatteringKind+1;
-inline std::atomic<unsigned> phase{0}, matched[2]{}, ready[2]{};
-inline std::atomic<uint64_t> binds[5][2]{}, applied[5][2]{};
-
-template<class Desc, class Create, size_t N>
-inline void Observe(ID3D12Device* device,const Desc& desc,IUnknown* native,Create create,
-                    D3D12_SHADER_BYTECODE Desc::* field,const ShaderPatch (&patches)[N],unsigned kind) noexcept {
-    const auto& shader=desc.*field;
-    for(const auto& patch:patches){
-        if(!create || !native || shader.BytecodeLength!=patch.size)continue;
-        std::vector<unsigned char> bytes;
-        if(!Prepare(patch,shader,bytes))continue;
-        const unsigned route=kind-scatteringKind;
-        ++matched[route];
-        auto changed=desc; changed.*field={bytes.data(),bytes.size()}; changed.CachedPSO={nullptr,0};
-        ID3D12PipelineState *variant=nullptr,*owner=nullptr;
-        if(SUCCEEDED(create(device,&changed,IID_PPV_ARGS(&variant)))){
-            if(SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&owner)))){
-                if(SUCCEEDED(owner->SetPrivateDataInterface(alternateGuid,variant)) &&
-                   SUCCEEDED(owner->SetPrivateData(kKindGuid,sizeof(kind),&kind)))++ready[route];
-                owner->Release();
-            }
-            variant->Release();
-        }
-        return;
+#include "volume_filter.generated.h"
+inline constexpr GUID alternateGuid{0xf2713a44,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
+inline constexpr unsigned filterKind=0x73440000;
+inline std::atomic<unsigned> phase{0}, matched{0}, ready{0};
+inline std::atomic<uint64_t> binds[4]{}, applied[4]{};
+inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
+                    IUnknown* native,CreateCompute create) noexcept {
+    if(!create || !native || !desc || !desc->CS.pShaderBytecode ||
+       desc->CS.BytecodeLength!=sizeof(kVolumeNativeShader) ||
+       std::memcmp(desc->CS.pShaderBytecode,kVolumeNativeShader,sizeof(kVolumeNativeShader)))return;
+    ID3D12PipelineState *owner=nullptr,*variant=nullptr;
+    if(FAILED(native->QueryInterface(IID_PPV_ARGS(&owner))))return;
+    unsigned kind=0;UINT size=sizeof(kind);
+    if(SUCCEEDED(owner->GetPrivateData(kKindGuid,&size,&kind)) && kind==filterKind){owner->Release();return;}
+    ++matched;
+    auto changed=*desc;
+    changed.CS={kVolumeFilteredShader,sizeof(kVolumeFilteredShader)};
+    changed.CachedPSO={nullptr,0};
+    HRESULT hr=create(device,&changed,IID_PPV_ARGS(&variant));
+    if(SUCCEEDED(hr)){
+        hr=owner->SetPrivateDataInterface(alternateGuid,variant);
+        if(SUCCEEDED(hr))hr=owner->SetPrivateData(kKindGuid,sizeof(filterKind),&filterKind);
+        if(SUCCEEDED(hr))++ready;
+        else owner->SetPrivateDataInterface(alternateGuid,nullptr);
+        variant->Release();
     }
+    Trace("VOLUME_FILTER_R344 ready=%u hr=0x%08lX",ready.load(),static_cast<unsigned long>(hr));
+    owner->Release();
 }
 }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
-    volume_test::Observe(device,*desc,native,original,&D3D12_COMPUTE_PIPELINE_STATE_DESC::CS,volume_test::viewVolumePatches,volume_test::viewKind);
+    volume_test::Observe(device,desc,native,original);
     gi_evaluator::Observe(device,desc,native,original);
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
@@ -339,10 +339,9 @@ struct Binding {
         ReportBoundIdentity(native);
         UINT size=sizeof(kind);
         if(!native || FAILED(native->GetPrivateData(kKindGuid,&size,&kind)) || size!=sizeof(kind)){kind=0;return;}
-        if(kind==volume_test::scatteringKind || kind==volume_test::viewKind){
+        if(kind==volume_test::filterKind){
             volumePhase=volume_test::phase.load(std::memory_order_relaxed);
-            const bool stabilize=volumePhase==0 || volumePhase==4 ||
-                volumePhase==(kind==volume_test::scatteringKind?2u:3u);
+            const bool stabilize=volumePhase==0 || volumePhase==2;
             if(stabilize){
                 size=sizeof(alternate);
                 if(SUCCEEDED(native->GetPrivateData(volume_test::alternateGuid,&size,&alternate)) && alternate)selected=alternate;
@@ -358,11 +357,10 @@ struct Binding {
     }
     unsigned volumePhase = 0;
     void Recorded() const noexcept {
-        if(kind==volume_test::scatteringKind || kind==volume_test::viewKind){
+        if(kind==volume_test::filterKind){
             if(volumePhase){
-                const unsigned route=kind-volume_test::scatteringKind;
-                ++volume_test::binds[volumePhase][route];
-                if(alternate)++volume_test::applied[volumePhase][route];
+                ++volume_test::binds[volumePhase];
+                if(alternate)++volume_test::applied[volumePhase];
             }
             return;
         }
@@ -544,7 +542,6 @@ inline CreateGraphics originalGraphics = nullptr;
 inline CreateList originalCreateList = nullptr;
 inline void ObserveGraphics(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, IUnknown* native) noexcept {
     graphicsSeen.fetch_add(1);
-    volume_test::Observe(device,*desc,native,originalGraphics,&D3D12_GRAPHICS_PIPELINE_STATE_DESC::PS,volume_test::scatteringPatches,volume_test::scatteringKind);
     IdentifyPipeline(native, desc->PS, 1);
     std::vector<unsigned char> bytes;
     if (Prepare(kBakedGi, desc->PS, bytes)) {

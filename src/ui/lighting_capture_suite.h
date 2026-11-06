@@ -6,7 +6,7 @@ namespace native_lighting::capture_suite {
 // All suite state and file I/O belong to the diagnostic UI thread.
 enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character, Volume };
 inline bool character=false,volume=false;
-inline uint64_t initialBinds[2]{},initialApplied[2]{};
+inline uint64_t initialBinds=0,initialApplied=0;
 inline bool preserveSettings=false,savedRR=false,savedDistance=false;
 inline unsigned savedSamples=0,savedEffects=0;
 inline uint64_t preservedSelection=0;
@@ -140,7 +140,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
     if(volume){
-        Note("R343 original / stable scattering / stable 3D volume / both stable. Full-screen samples. Recorded command-list binds and substitutions are counted independently for each producer.");
+        Note("R344 original / spatially filtered 3D lighting / original repeat. Full-resolution JPEG quality 95. Two samples per condition. Counters measure recorded PSO binds, not executed GPU draws.");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -174,34 +174,30 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(volume){
-        static constexpr const wchar_t* names[]={L"normal",L"stable-scattering",L"stable-view-volume",L"both-stable"};
-        if(step>=4){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr const wchar_t* names[]={L"normal",L"filtered-volume",L"normal-repeat"};
+        if(step>=3){Finish(game,failures?"incomplete":"complete");return;}
         const unsigned phase=step+1;
         if(!entered){
-            for(unsigned i=0;i<2;++i){
-                initialBinds[i]=volume_test::binds[phase][i].load();
-                initialApplied[i]=volume_test::applied[phase][i].load();
-            }
+            initialBinds=volume_test::binds[phase].load();
+            initialApplied=volume_test::applied[phase].load();
             volume_test::phase.store(phase);
             began=now;firstPresent=presentCount.load();imageIndex=0;entered=true;
-            nextImage=now+(step==0?5000:1500);
+            nextImage=now+(step==0?5000:2500);
         }
         if(now-began>15000){++failures;Finish(game,"present_timeout");return;}
         if(now<nextImage || presentCount.load()-firstPresent<2)return;
         wchar_t path[MAX_PATH]{};
-        swprintf_s(path,L"%s\\%02u-%s-%u.png",folder,step,names[step],imageIndex);
-        const auto hr=screenshots::Save(game,path);
+        swprintf_s(path,L"%s\\%02u-%s-%u.jpg",folder,step,names[step],imageIndex);
+        const auto hr=screenshots::Save(game,path,true);
         Note("step=%u sample=%u present=%llu hr=0x%08lX",step,imageIndex,presentCount.load(),static_cast<unsigned long>(hr));
         if(FAILED(hr)){++failures;Finish(game,"screenshot_failed");return;}
         firstPresent=presentCount.load();nextImage=GetTickCount64()+250;
         if(++imageIndex==2){
-            for(unsigned i=0;i<2;++i){
-                const auto binds=volume_test::binds[phase][i].load()-initialBinds[i];
-                const auto applied=volume_test::applied[phase][i].load()-initialApplied[i];
-                Note("step=%u route=%s matched_psos=%u ready_psos=%u recorded_binds=%llu stabilized_binds=%llu",step,
-                     i?"3D-view-volume":"2D-scattering",volume_test::matched[i].load(),volume_test::ready[i].load(),binds,applied);
-                if((phase==4 || phase==2+i) && !applied)++failures;
-            }
+            const auto binds=volume_test::binds[phase].load()-initialBinds;
+            const auto applied=volume_test::applied[phase].load()-initialApplied;
+            Note("step=%u matched_psos=%u ready_psos=%u recorded_binds=%llu filtered_binds=%llu",step,
+                 volume_test::matched.load(),volume_test::ready.load(),binds,applied);
+            if(!binds || (phase==2 && !applied))++failures;
             ++step;entered=false;
         }
         return;

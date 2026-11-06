@@ -7,7 +7,7 @@
 namespace native_lighting::screenshots {
 // UI thread only. Captures the displayed game client, never the desktop bounds.
 // Display-referred PNG, not a linear/HDR render-target dump.
-inline HRESULT Save(HWND game,const wchar_t* path) noexcept {
+inline HRESULT Save(HWND game,const wchar_t* path,bool jpeg=false) noexcept {
     using Microsoft::WRL::ComPtr;
     if(!game || GetForegroundWindow()!=game || IsIconic(game))return E_ABORT;
     RECT rect{};if(!GetClientRect(game,&rect))return E_FAIL;
@@ -35,10 +35,16 @@ inline HRESULT Save(HWND game,const wchar_t* path) noexcept {
         hr=CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory));
         if(SUCCEEDED(hr))hr=factory->CreateStream(&stream);
         if(SUCCEEDED(hr))hr=stream->InitializeFromFilename(path,GENERIC_WRITE);
-        if(SUCCEEDED(hr))hr=factory->CreateEncoder(GUID_ContainerFormatPng,nullptr,&encoder);
+        if(SUCCEEDED(hr))hr=factory->CreateEncoder(jpeg?GUID_ContainerFormatJpeg:GUID_ContainerFormatPng,nullptr,&encoder);
         if(SUCCEEDED(hr))hr=encoder->Initialize(stream.Get(),WICBitmapEncoderNoCache);
-        if(SUCCEEDED(hr))hr=encoder->CreateNewFrame(&frame,nullptr);
-        if(SUCCEEDED(hr))hr=frame->Initialize(nullptr);
+        ComPtr<IPropertyBag2> options;
+        if(SUCCEEDED(hr))hr=encoder->CreateNewFrame(&frame,&options);
+        if(SUCCEEDED(hr) && jpeg){
+            PROPBAG2 setting{};setting.pstrName=const_cast<LPOLESTR>(L"ImageQuality");
+            VARIANT quality{};quality.vt=VT_R4;quality.fltVal=.95f;
+            hr=options?options->Write(1,&setting,&quality):E_FAIL;
+        }
+        if(SUCCEEDED(hr))hr=frame->Initialize(options.Get());
         if(SUCCEEDED(hr))hr=frame->SetSize(width,height);
         WICPixelFormatGUID format=GUID_WICPixelFormat24bppBGR;
         if(SUCCEEDED(hr))hr=frame->SetPixelFormat(&format);
