@@ -154,7 +154,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R354 neck isolation. R353 stable / shadow Y neutral / shadow W neutral / skin translucency off / surface normal / rig off / light buffers off / stable repeat. Full-client JPEGs. Previous rig quality resumes after capture. Isolation overrides are temporary; HQ volume sampling and near history remain active throughout. Counters are recorded PSO binds, not executed draws.");
+        Note("R355 neck lighting-buffer split. Stable / diffuse buffer off / specular buffer off / diffuse input view / specular input view / stable repeat. Full-client JPEGs. Previous rig quality resumes after capture. Isolation overrides are temporary. Input views display 4*max(input,0)/(1+4*max(input,0)) in RGB only; alpha/depth/coverage and downstream post-processing stay native. HQ sampling and near history stay enabled. Counters are recorded PSO binds, not executed draws.");
         Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         Note("clamp_requested_percent=%u clamp_effective_percent=%u",control_rr_clamp::RuntimeRequested(),control_rr_clamp::effective.load());
         Note("flat_views_expected=0 lighting_source_isolation=1 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 post_processing_not_bypassed=1");
@@ -191,9 +191,9 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"stable",L"shadow-y",L"shadow-w",L"translucency-off",L"surface-normal",L"rig-off",L"buffers-off",L"stable-repeat"};
-        if(step>=8){Finish(game,failures?"incomplete":"complete");return;}
-        static constexpr unsigned phases[]={4,5,6,7,9,10,11,4};
+        static constexpr const wchar_t* names[]={L"stable",L"diffuse-buffer-off",L"specular-buffer-off",L"diffuse-input-view",L"specular-input-view",L"stable-repeat"};
+        if(step>=6){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr unsigned phases[]={4,5,6,7,9,4};
         const unsigned phase=phases[step];
         if(!entered){
             initialBinds=character_surface::binds[phase].load();initialApplied=character_surface::applied[phase].load();

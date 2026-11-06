@@ -22,7 +22,7 @@ int main(){try{
         Require(surface::SelectedVariant(2,q)==0 && surface::SelectedVariant(3,q)==1,"Quality comparison mismatch");
     }
     for(unsigned phase=0;phase<12;++phase){
-        const int expected[]={0,-1,0,1,0,2,3,4,-1,5,6,7};
+        const int expected[]={0,-1,0,1,0,2,3,4,-1,5,-1,-1};
         Require(surface::SelectedVariant(phase,3)==expected[phase],"Neck capture selection mismatch");
     }
     for(unsigned family=0;family<surface::kCharacterFamilyCount;++family){

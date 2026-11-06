@@ -219,3 +219,40 @@ input no-ops are explicit in the audit, not evidence that an input was changed.
 The short still sequence localizes visible mottling only if it reproduces during
 capture. It cannot guarantee full temporal diagnosis during arbitrary camera
 motion. No claim that this clip proves an additional defective shader is made.
+
+## R355 separate lighting-buffer evidence
+R354 capture Character-Surface-20261106-111229-96880-0 completed all8 phases with
+zero failures.13 PSOs ready; skin,cloth,hair replacement binds in every phase;
+near history1 matched/ready and8331 applied binds. Requested and effective clamp60.
+The neck mottling remains visible in the two shadow neutralizations, translucency
+off and surface-normal images. Buffers-off gives the strongest appearance change
+but is substantially darker; this does NOT prove the buffers are defective.
+Jesse changes idle pose between phases, preventing exact per-pixel comparisons.
+
+R355 removes those completed isolation phases from the build and splits the
+precomputed diffuse and specular contributions. TEST JESSE is six phases:
+stable / diffuse buffer off / specular buffer off / diffuse input view / specular
+input view / stable repeat. Twelve full-client JPEG95 images, no resource dump.
+The two off phases zero only the named sampled input. The view phases save that
+exact input immediately after its native LD, before material/rig composition,
+and overwrite only final RGB with4*max(input,0)/(1+4*max(input,0)). This fixed
+monotonic mapping is identical for both inputs; no per-image auto-normalization
+or extra texture samples. Native alpha, coverage, discard and depth remain.
+These are display diagnostics, NOT raw HDR measurements: later exposure, RR,
+post-processing and JPEG encoding can still influence them. The input views
+intentionally bypass character RGB lighting/fog only during those two phases.
+
+All four diagnostics are independently derived for12 SHA-admitted native shader
+families on top of the byte-identical HQ filter. Reversing the insertions and two
+extra view temporaries recovers that complete HQ shader. New source identity
+cannot be admitted by similarity. Required phase and whole-character coverage
+checks remain. Character near history stays enabled across all six phases.
+RIG quality choice resumes on completion/cancellation/failure. Startup clamp60
+and R353 stabilization remain unchanged. There are now6 replacement PSOs per
+family, reduced from8; ordinary gameplay selects the same HQ shader as R353.
+
+Local validation:48 reversible diagnostic variants,96 emitted display arithmetic
+cases (negative/zero/dim/bright inputs), unchanged binding and alpha/depth/coverage
+writes; existing960 HQ/R351 shader evaluations and132-file baseline check pass.
+Windows validation must create all72 replacement PSOs and run the full build.
+This is evidence gathering for the remaining neck issue, not a claimed fix.

@@ -8,7 +8,7 @@ inline constexpr unsigned kind=0x73460000;
 inline std::atomic<unsigned> quality{3};
 inline int SelectedVariant(unsigned phase,unsigned quality) noexcept {
     if(phase==0)return quality==1?1:(quality==2 || quality==3)?0:-1;
-    return (phase==2 || phase==4)?0:phase==3?1:phase==5?2:phase==6?3:phase==7?4:phase==9?5:phase==10?6:phase==11?7:-1;
+    return (phase==2 || phase==4)?0:phase==3?1:phase==5?2:phase==6?3:phase==7?4:phase==9?5:-1;
 }
 inline std::atomic<uint64_t> filteredBinds{0};
 inline std::atomic<unsigned> phase{0},matched{0},ready{0};
@@ -105,7 +105,7 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     if(SUCCEEDED(hr))++ready;
     else for(unsigned i=0;i<kCharacterVariantCount;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R354 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R355 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

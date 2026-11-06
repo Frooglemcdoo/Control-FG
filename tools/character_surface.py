@@ -6,7 +6,7 @@ from dxbc_checksum import checksum
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'research/native-integration-audit/tools'))
 from decode_dxbc import decode
-NAMES=['hq-cubic','r351-filter','shadow-y-neutral','shadow-w-neutral','translucency-off','surface-normal','rig-off','buffers-off']
+NAMES=['hq-cubic','r351-filter','diffuse-buffer-off','specular-buffer-off','diffuse-buffer-view','specular-buffer-view']
 def dst(r,mask):return [0x100002|(mask<<4),r]
 def imm(v):return [0x4001,struct.unpack('<I',struct.pack('<f',v))[0]]
 def mov(d,s):return [((1+len(d)+len(s))<<24)|54]+d+s
@@ -115,37 +115,37 @@ def cubic_volume(data,info):
  restored=words(result);assert restored[o:o+len(code)]==code
  restored[o:o+len(code)]=original;restored[decl+1]=count;restored[1]=len(restored);assert restored==w
  return result
-def neck_patches(info):
- x=info['instructions']
- hits=[n for n,i in enumerate(x) if i['name']=='ld' and i['operands'][-1]=='t[2][2].ywxz'];assert len(hits)==1
- n=hits[0];a=x[n:n+6]
- assert [i['name'] for i in a]==['ld','mul','mul','mad','add','dp3']
- shadow=reg(a[0]['operands'][0]);assert a[0]['operands'][0].endswith('.xy')
- diffuse=reg(a[1]['operands'][2]);specular=reg(a[2]['operands'][2])
- normal={};trans={};buffers={}
- for name,target in [('g_tLightBufferDiffuse',buffers),('g_tLightBufferSpecular',buffers),('g_tTranslucencyKernelSource',trans)]:
-  b=next((b for b in info['bindings'] if b['name']==name),None)
-  if not b:
-   assert name=='g_tTranslucencyKernelSource'
-   continue
-  t='t[%d][%d].xyzw'%(b['identifier'],b['slot'])
-  matches=[j for j,i in enumerate(x) if i['name'] in ('ld','sample_l') and t in i['operands']]
-  assert len(matches)==(3 if target is trans else 1),(name,matches)
-  for j in matches:
-   assert x[j]['operands'][0].endswith('.xyz')
-   target[x[j+1]['dword']]=mov(dst(reg(x[j]['operands'][0]),7),imm(0))
- bs=[b for b in info['bindings'] if b['name']=='g_tBentNormals']
- if bs:
-  t='t[%d][%d].xyzw'%(bs[0]['identifier'],bs[0]['slot'])
-  n=next(n for n,i in enumerate(x) if i['name']=='ld' and t in i['operands'])
-  r=reg(x[n]['operands'][0]);assert x[n+1]['name']=='mad'
-  assert x[n+1]['operands'][2:]==['l(2,2,2,0)','l(-1,-1,-1,0)']
-  decoded=[i for i in x[:n] if i['name']=='div'][-1]
-  assert decoded['operands']==['r[2].xyw','r[13].zwzy','r[13].xxxx']
-  normal={x[n+2]['dword']:mov(dst(r,7),src(2,0x34))}
- return [{a[1]['dword']:mov(dst(shadow,1),imm(1))},
-         {a[1]['dword']:mov(dst(shadow,2),imm(1))},trans,normal,
-         {a[0]['dword']:mov(dst(diffuse,7),imm(0))+mov(dst(specular,7),imm(0))},buffers]
+def buffer_site(info,name):
+ x=info['instructions'];b=next(b for b in info['bindings'] if b['name']==name)
+ t='t[%d][%d].xyzw'%(b['identifier'],b['slot'])
+ hits=[n for n,i in enumerate(x) if i['name']=='ld' and t in i['operands']]
+ assert len(hits)==1
+ n=hits[0];assert x[n]['operands'][0].endswith('.xyz')
+ return reg(x[n]['operands'][0]),x[n+1]['dword']
+def buffer_off(data,info,name):
+ r,offset=buffer_site(info,name)
+ return insert_verified(data,{offset:mov(dst(r,7),imm(0))})
+def buffer_view(data,info,name):
+ # Save the exact input before material/rig composition, then display RGB only.
+ # Fixed monotonic compression 4*max(x,0)/(1+4*max(x,0)); no automatic normalization.
+ r,offset=buffer_site(info,name);w=words(data)
+ decl=next(i['dword'] for i in info['instructions'] if i['name']=='dcl_temps');count=w[decl+1]
+ end=info['instructions'][-1];assert end['name']=='ret'
+ assert sum(i['name']=='ret' for i in info['instructions'])==1
+ keep=mov(dst(count,7),src(r));out=op(52,dst(count,7),src(count),imm(0))
+ out+=op(56,dst(count,7),src(count),imm(4))
+ out+=op(0,dst(count+1,7),src(count),imm(1))
+ out+=op(14,dst(count,7),src(count),src(count+1))
+ out+=mov([0x102072,0],src(count)) # o0.xyz only, native alpha/depth unchanged
+ patches={offset:keep,end['dword']:out}
+ def apply(v):
+  for at,code in sorted(patches.items(),reverse=True):v[at:at]=code
+  v[decl+1]=count+2
+ result=transform_shex(data,apply);a=words(result)
+ for at,code in sorted(patches.items()):
+  assert a[at:at+len(code)]==code;del a[at:at+len(code)]
+ a[decl+1]=count;a[1]=len(a);assert a==w
+ return result
 
 def insert_verified(data,patch):
  def apply(w):
@@ -163,26 +163,26 @@ def main():
   data=base64.b64decode((research/(family['name']+'.dxbc.b64')).read_text());assert hashlib.sha256(data).hexdigest()==family['sha']
   p=folder/('character-'+family['name']+'.dxbc');p.write_bytes(data);old=decode(p);shaders.append(data)
   hq=cubic_volume(data,old);hp=folder/'neck-hq-temporary.dxbc';hp.write_bytes(hq)
-  patchset=neck_patches(decode(hp))
-  results=[hq,filtered_volume(data,old)]+[insert_verified(hq,p) for p in patchset]
+  info=decode(hp);buffers=['g_tLightBufferDiffuse','g_tLightBufferSpecular']
+  results=[hq,filtered_volume(data,old)]+[buffer_off(hq,info,n) for n in buffers]+[buffer_view(hq,info,n) for n in buffers]
   for index,result in enumerate(results):
    assert result[4:20]==checksum(result)
    p=folder/('character-'+family['name']+'-'+NAMES[index]+'.dxbc');p.write_bytes(result);new=decode(p)
    assert old['bindings']==new['bindings'] and old['constant_buffers']==new['constant_buffers']
    shaders.append(result)
-  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27,27,27],'neck_patch_counts':[len(p) for p in patchset]})
+  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'buffer_display':'4*max(x,0)/(1+4*max(x,0))'})
  lines=['#pragma once','// Generated whole-character diagnostics. Alpha, depth and coverage stay native.']
  for i,b in enumerate(shaders):
   lines+=['inline constexpr unsigned char kCharacterSurface'+str(i)+'[] = {']
   lines+=[','.join(map(str,b[j:j+24]))+',' for j in range(0,len(b),24)];lines+=['};']
  ref=lambda i:'{kCharacterSurface'+str(i)+',sizeof(kCharacterSurface'+str(i)+')}'
- lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterOriginals[] = {'+','.join(ref(i*9) for i in range(len(families)))+'};']
- lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterVariants[][8] = {']
- lines+=['{'+','.join(ref(i*9+j) for j in range(1,9))+'},' for i in range(len(families))];lines+=['};']
- lines+=['inline constexpr unsigned kCharacterVariantCount=8;']
+ lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterOriginals[] = {'+','.join(ref(i*7) for i in range(len(families)))+'};']
+ lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterVariants[][6] = {']
+ lines+=['{'+','.join(ref(i*7+j) for j in range(1,7))+'},' for i in range(len(families))];lines+=['};']
+ lines+=['inline constexpr unsigned kCharacterVariantCount=6;']
  lines+=['inline constexpr unsigned kCharacterFamilyCount='+str(len(families))+';']
  lines+=['inline constexpr unsigned kCharacterGroups[] = {'+','.join(str(f['group']) for f in families)+'};']
  (folder/'character_surface.generated.h').write_text('\n'.join(lines)+'\n')
  (folder/'character-surface-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
- print(f'PASS {len(families)} native families, {8*len(families)} rig variants; exact bindings and full original instruction recovery; alpha/depth/coverage preserved')
+ print(f'PASS {len(families)} native families, {6*len(families)} rig variants; exact bindings and full original instruction recovery; alpha/depth/coverage preserved')
 if __name__=='__main__':main()
