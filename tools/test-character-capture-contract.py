@@ -7,8 +7,8 @@ assert not re.search(r'\b(?:RRUserSetMode|RRUserRequest|RRSetDiagnosticBypass)\s
 x=s[s.index('static constexpr const wchar_t* names[]={L"stable"'):]
 names=re.findall(r'L"([^"]+)"',x[:x.index(';')])
 phases=[int(v) for v in re.search(r'phases\[\]=\{([^}]+)\}',x)[1].split(',')]
-assert len(names)==len(phases)==6 and phases[0]==phases[-1]==4
-assert set(phases[1:-1])=={5,6,7,9} and 'stable-rr-off' not in names
+assert len(names)==len(phases)==6 and phases[0]==4 and phases[-1]==10
+assert phases==[4,10,5,6,9,10] and 'stable-rr-off' not in names
 assert 'rr_runtime_stopped_restart_required' in s and 'CopyLog(path,65536)' in s
 start=s.index('inline bool CopyLog(');end=s.index('inline bool PackageCharacter(',start)
 copier=s[start:end]

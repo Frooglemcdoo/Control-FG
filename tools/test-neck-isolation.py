@@ -7,7 +7,7 @@ rng=np.random.default_rng(359);checks=0
 for family in families:
  base=root/'build'/('character-'+family['name']+'-hq-cubic.dxbc');hq=base.read_bytes();info=decode(base);a=base_composition_site(info)
  decl=next(i['dword'] for i in info['instructions'] if i['name']=='dcl_temps');temp=words(hq)[decl+1]
- for component in range(4):
+ for component in (0,2):
   path=root/'build'/('character-'+family['name']+'-'+NAMES[component+2]+'.dxbc')
   assert path.read_bytes()==base_component_view(hq,info,component)
   new=decode(path);assert info['bindings']==new['bindings'] and info['constant_buffers']==new['constant_buffers']

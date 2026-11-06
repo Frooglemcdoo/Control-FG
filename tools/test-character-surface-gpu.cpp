@@ -17,12 +17,12 @@ int main(){try{
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     std::cout<<"Create WARP device\n";Device gpu(false);
     for(unsigned q=0;q<4;++q){
-        Require(surface::SelectedVariant(0,q)==(q==0?-1:q==1?1:0),"Gameplay quality selection mismatch");
+        Require(surface::SelectedVariant(0,q)==(q==0?-1:q==1?1:q==3?6:0),"Gameplay quality selection mismatch");
         Require(surface::SelectedVariant(1,q)==-1 && surface::SelectedVariant(8,q)==-1,"Native comparison is not native");
         Require(surface::SelectedVariant(2,q)==0 && surface::SelectedVariant(3,q)==1,"Quality comparison mismatch");
     }
     for(unsigned phase=0;phase<12;++phase){
-        const int expected[]={0,-1,0,1,0,2,3,4,-1,5,-1,-1};
+        const int expected[]={6,-1,0,1,0,2,3,4,-1,5,6,-1};
         Require(surface::SelectedVariant(phase,3)==expected[phase],"Neck capture selection mismatch");
     }
     for(unsigned family=0;family<surface::kCharacterFamilyCount;++family){

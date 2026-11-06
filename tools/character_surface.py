@@ -6,7 +6,7 @@ from dxbc_checksum import checksum
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'research/native-integration-audit/tools'))
 from decode_dxbc import decode
-NAMES=['hq-cubic','r351-filter','base-diffuse','base-specular','base-diffuse-dim','base-specular-dim']
+NAMES=['hq-cubic','r351-filter','base-diffuse','base-diffuse-filtered','base-diffuse-dim','base-diffuse-filtered-dim','hq-diffuse']
 def dst(r,mask):return [0x100002|(mask<<4),r]
 def imm(v):return [0x4001,struct.unpack('<I',struct.pack('<f',v))[0]]
 def mov(d,s):return [((1+len(d)+len(s))<<24)|54]+d+s
@@ -201,25 +201,31 @@ def main():
   p=folder/('character-'+family['name']+'.dxbc');p.write_bytes(data);old=decode(p);shaders.append(data)
   hq=cubic_volume(data,old);hp=folder/'neck-hq-temporary.dxbc';hp.write_bytes(hq)
   info=decode(hp)
-  results=[hq,filtered_volume(data,old)]+[base_component_view(hq,info,c) for c in range(4)]
+  from character_diffuse import filtered_diffuse
+  filtered=filtered_diffuse(hq,info)
+  diffuse=base_component_view(hq,info,0);dim=base_component_view(hq,info,2)
+  def add_filter(b):
+   fp=folder/'diffuse-filter-temporary.dxbc';fp.write_bytes(b)
+   return filtered_diffuse(b,decode(fp))
+  results=[hq,filtered_volume(data,old),diffuse,add_filter(diffuse),dim,add_filter(dim),filtered]
   for index,result in enumerate(results):
    assert result[4:20]==checksum(result)
    p=folder/('character-'+family['name']+'-'+NAMES[index]+'.dxbc');p.write_bytes(result);new=decode(p)
    assert old['bindings']==new['bindings'] and old['constant_buffers']==new['constant_buffers']
    shaders.append(result)
-  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'composition_views':['base diffuse times material','base specular','0.25 * base diffuse times material','0.25 * base specular'],'native_fog_tail':True})
+  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27,27],'composition_views':['original base diffuse times material','filtered base diffuse times material','0.25 * original base diffuse times material','0.25 * filtered base diffuse times material'],'native_fog_tail':True})
  lines=['#pragma once','// Generated whole-character diagnostics. Alpha, depth and coverage stay native.']
  for i,b in enumerate(shaders):
   lines+=['inline constexpr unsigned char kCharacterSurface'+str(i)+'[] = {']
   lines+=[','.join(map(str,b[j:j+24]))+',' for j in range(0,len(b),24)];lines+=['};']
  ref=lambda i:'{kCharacterSurface'+str(i)+',sizeof(kCharacterSurface'+str(i)+')}'
- lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterOriginals[] = {'+','.join(ref(i*7) for i in range(len(families)))+'};']
- lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterVariants[][6] = {']
- lines+=['{'+','.join(ref(i*7+j) for j in range(1,7))+'},' for i in range(len(families))];lines+=['};']
- lines+=['inline constexpr unsigned kCharacterVariantCount=6;']
+ lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterOriginals[] = {'+','.join(ref(i*8) for i in range(len(families)))+'};']
+ lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterVariants[][7] = {']
+ lines+=['{'+','.join(ref(i*8+j) for j in range(1,8))+'},' for i in range(len(families))];lines+=['};']
+ lines+=['inline constexpr unsigned kCharacterVariantCount=7;']
  lines+=['inline constexpr unsigned kCharacterFamilyCount='+str(len(families))+';']
  lines+=['inline constexpr unsigned kCharacterGroups[] = {'+','.join(str(f['group']) for f in families)+'};']
  (folder/'character_surface.generated.h').write_text('\n'.join(lines)+'\n')
  (folder/'character-surface-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
- print(f'PASS {len(families)} native families, {6*len(families)} rig variants; exact bindings and full original instruction recovery; alpha/depth/coverage preserved')
+ print(f'PASS {len(families)} native families, {7*len(families)} rig variants; exact bindings and full original instruction recovery; alpha/depth/coverage preserved')
 if __name__=='__main__':main()
