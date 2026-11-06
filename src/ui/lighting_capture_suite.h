@@ -170,7 +170,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R358 character composition split. Stable / base material lighting / rig diffuse / rig specular / material view / stable repeat. Twelve full-client JPEGs. RR mode is preserved throughout; no RR off/on transition. Component views retain native radiance and fog tail; material view uses 0.25*material RGB. Skin/cloth/hair alpha/depth/coverage stay native. HQ and near history remain enabled. Counters are recorded PSO binds, not executed draws.");
+        Note("R359 character base lighting split. Stable / base diffuse times material / base specular / quarter-gain base diffuse times material / quarter-gain base specular / stable repeat. Twelve full-client JPEGs. RR mode is preserved throughout; no RR off/on transition. First component pair uses native radiance; second pair uses 0.25 radiance before the unchanged fog tail. These are displayed comparisons, not raw buffers. Skin/cloth/hair alpha/depth/coverage stay native. HQ and near history remain enabled. Counters are recorded PSO binds, not executed draws.");
         Note("rr_saved_mode=%u rr_selected_at_start=%u",unsigned(characterSavedRR),unsigned(control_rr_diagnostic::lastSelected.load()));
         Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         Note("clamp_requested_percent=%u clamp_effective_percent=%u",control_rr_clamp::RuntimeRequested(),control_rr_clamp::effective.load());
@@ -209,7 +209,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"stable",L"base-material-lighting",L"rig-diffuse",L"rig-specular",L"material-view",L"stable-repeat"};
+        static constexpr const wchar_t* names[]={L"stable",L"base-diffuse",L"base-specular",L"base-diffuse-dim",L"base-specular-dim",L"stable-repeat"};
         if(step>=6){Finish(game,failures?"incomplete":"complete");return;}
         static constexpr unsigned phases[]={4,5,6,7,9,4};
         const unsigned phase=phases[step];

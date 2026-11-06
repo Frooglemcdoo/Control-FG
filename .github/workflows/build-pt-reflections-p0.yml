@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character rig sampling R358
+      - name: Validate character rig sampling R359
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -151,7 +151,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R358
+      - name: Validate near volume history R359
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1247,11 +1247,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R358
+      - name: Package owned GI integration R359
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R358'
+          $out='ControlTOH-R359'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1291,12 +1291,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R358 - Owned GI integration test
+          R359 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and REF CLAMP 60% are the defaults.
-          R358 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
+          R359 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
           Supports twelve audited native skin/cloth/hair variants including the captured in-game shaders and stripped reflection metadata.
           Failure packages a bounded shader report instead of ineffective comparison shots.
           The R345 owned participating-media integration remains unchanged.
@@ -1307,8 +1307,8 @@ jobs:
           HQ uses weighted cubic reconstruction of the rig volume, preserving lights, materials, shadows and fog.
           HQ uses27 trilinear reads per volume; R351 uses8. No new rendering pass or texture allocation. STABLE adds guarded near-slice reuse in the existing native history pass.
           Near history is capped at0.75, rejects invalid previous coordinates and fades out at25% coefficient change. Global history reset and far-slice behavior are preserved. This also affects other near-field consumers of the shared volume. In-game stability/performance need validation.
-          TEST JESSE splits character composition: stable / base material lighting / rig diffuse / rig specular / material view / stable repeat. Twelve full-screen JPEGs, no resource dump.
-          Component views preserve native component radiance and fog; material view shows 0.25*material RGB. RR mode stays unchanged for the entire capture. No automatic RR off/on transition. A stopped RR runtime reports its status and packages at most64KiB of capture-session log context. These are diagnostics, not a shadow-removal fix. Keep Jesse visible and hold the camera still. Packaging and restoration are automatic. Keep VL High.
+          TEST JESSE splits base character lighting: stable / base diffuse times material / base specular / quarter-gain diffuse times material / quarter-gain specular / stable repeat. Twelve full-screen JPEGs, no resource dump.
+          The first component pair preserves native radiance; the second uses 0.25 radiance before unchanged fog. Postprocessing remains active; images are not raw lighting buffers. RR mode stays unchanged for the entire capture. No automatic RR off/on transition. A stopped RR runtime reports its status and packages at most64KiB of capture-session log context. These are diagnostics, not a shadow-removal fix. Keep Jesse visible and hold the camera still. Packaging and restoration are automatic. Keep VL High.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
@@ -1336,10 +1336,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R358
+          name: ControlTOH-R359
           path: |
-            ControlTOH-R358.zip
-            ControlTOH-R358.sha256
+            ControlTOH-R359.zip
+            ControlTOH-R359.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

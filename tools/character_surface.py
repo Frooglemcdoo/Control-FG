@@ -6,7 +6,7 @@ from dxbc_checksum import checksum
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'research/native-integration-audit/tools'))
 from decode_dxbc import decode
-NAMES=['hq-cubic','r351-filter','base-material-only','rig-diffuse-only','rig-specular-only','material-view']
+NAMES=['hq-cubic','r351-filter','base-diffuse','base-specular','base-diffuse-dim','base-specular-dim']
 def dst(r,mask):return [0x100002|(mask<<4),r]
 def imm(v):return [0x4001,struct.unpack('<I',struct.pack('<f',v))[0]]
 def mov(d,s):return [((1+len(d)+len(s))<<24)|54]+d+s
@@ -148,6 +148,42 @@ def composition_view(data,info,component):
  v[decl+1]=count;v[1]=len(v);assert v==w
  return result
 
+def base_composition_site(info):
+ x=info['instructions']
+ diffuse=[i for i in x if i['name']=='ld' and i['operands'][-1]=='t[3][3].xyzw']
+ specular=[i for i in x if i['name']=='ld' and i['operands'][-1]=='t[4][4].xyzw']
+ assert len(diffuse)==len(specular)==1
+ d,s=diffuse[0],specular[0];dr=reg(d['operands'][0]);sr=reg(s['operands'][0])
+ assert d['operands'][0].endswith('.xyz') and s['operands'][0].endswith('.xyz')
+ end=next(i['dword'] for i in x if i['dword']>s['dword'] and i['name']=='ld' and i['operands'][-1]=='t[0][0].xyzw')
+ hits=[i for i in x if s['dword']<i['dword']<end and i['name']=='mad' and i['operands'][0]==f'r[{sr}].xyz' and i['operands'][1]==f'r[{dr}].xyzx' and i['operands'][3]==f'r[{sr}].xyzx' and i['operands'][2].endswith('.xyzx')]
+ assert len(hits)==1
+ a=hits[0];assert a['operands'][2].endswith('.xyzx')
+ # No diffuse/specular overwrite between their loads and the material MAD.
+ for load,rr in ((d,dr),(s,sr)):
+  for i in x:
+   if not load['dword']<i['dword']<a['dword'] or not i['operands']:continue
+   dest=i['operands'][0]
+   if dest.startswith(f'r[{rr}].'):assert not set(dest.split('.')[-1])&set('xyz')
+ return a
+
+def base_component_view(data,info,component):
+ assert component in range(4)
+ a=base_composition_site(info);tail=composition_site(info)[5]
+ w=words(data);decl=next(i['dword'] for i in info['instructions'] if i['name']=='dcl_temps');count=w[decl+1]
+ _,diffuse,material,specular=a['operands']
+ keep=(op(56,dst(count,7),src(reg(diffuse)),src(reg(material))) if component%2==0 else mov(dst(count,7),src(reg(specular))))
+ if component>=2:keep+=op(56,dst(count,7),src(count),imm(.25))
+ patches={a['dword']:keep,tail['dword']:mov(dst(0,7),src(count))}
+ def apply(v):
+  for at,code in sorted(patches.items(),reverse=True):v[at:at]=code
+  v[decl+1]=count+1
+ result=transform_shex(data,apply);v=words(result)
+ for at,code in sorted(patches.items()):
+  assert v[at:at+len(code)]==code;del v[at:at+len(code)]
+ v[decl+1]=count;v[1]=len(v);assert v==w
+ return result
+
 def insert_verified(data,patch):
  def apply(w):
   for offset,ins in sorted(patch.items(),reverse=True):w[offset:offset]=ins
@@ -165,13 +201,13 @@ def main():
   p=folder/('character-'+family['name']+'.dxbc');p.write_bytes(data);old=decode(p);shaders.append(data)
   hq=cubic_volume(data,old);hp=folder/'neck-hq-temporary.dxbc';hp.write_bytes(hq)
   info=decode(hp)
-  results=[hq,filtered_volume(data,old)]+[composition_view(hq,info,c) for c in range(4)]
+  results=[hq,filtered_volume(data,old)]+[base_component_view(hq,info,c) for c in range(4)]
   for index,result in enumerate(results):
    assert result[4:20]==checksum(result)
    p=folder/('character-'+family['name']+'-'+NAMES[index]+'.dxbc');p.write_bytes(result);new=decode(p)
    assert old['bindings']==new['bindings'] and old['constant_buffers']==new['constant_buffers']
    shaders.append(result)
-  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'composition_views':['base material lighting','shadowed rig diffuse times material','shadowed rig specular','material times 0.25'],'native_fog_tail':True})
+  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'composition_views':['base diffuse times material','base specular','0.25 * base diffuse times material','0.25 * base specular'],'native_fog_tail':True})
  lines=['#pragma once','// Generated whole-character diagnostics. Alpha, depth and coverage stay native.']
  for i,b in enumerate(shaders):
   lines+=['inline constexpr unsigned char kCharacterSurface'+str(i)+'[] = {']

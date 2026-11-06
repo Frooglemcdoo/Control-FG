@@ -153,7 +153,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R358", {14,8,kWidth-12,34}, theme::kAccent);
+    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R359", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
