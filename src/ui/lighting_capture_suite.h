@@ -64,6 +64,10 @@ inline void Finish(HWND game,const char* reason) noexcept {
     DrainDiagnosticLog(true);
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
     if(!character && !volume && !CopyLog(path))++failures;
+    if(character && failures){
+        const unsigned saved=character_surface::ExportCandidates(folder);
+        Note("shader_detection graphics_seen=%llu observed=%u candidate_files=%u dropped=%u",graphicsSeen.load(),character_surface::observed.load(),saved,character_surface::candidateDropped.load());
+    }
     Note("end=%s failures=%u restored=%s",reason,failures,ModeName(restore));
     if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
     active=false;
@@ -146,8 +150,8 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R346 character surface input isolation. Native / shadow Y neutral / shadow W neutral / uniform volume rig / diffuse buffer off / specular buffer off / translucency off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
-        Note("source_sha=bbdd044d5f91b2296297ce4b9efeb5ef72169906299084984595bd9c896b4cd9 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
+        Note("R347 character surface input isolation. Native / shadow Y neutral / shadow W neutral / uniform volume rig / diffuse buffer off / specular buffer off / translucency off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
+        Note("audited_families=2 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -191,6 +195,14 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         }
         if(now-began>15000){++failures;Finish(game,"present_timeout");return;}
         if(now<nextImage || presentCount.load()-firstPresent<2)return;
+        const auto currentBinds=character_surface::binds[phase].load()-initialBinds;
+        const auto currentApplied=character_surface::applied[phase].load()-initialApplied;
+        if(!character_surface::ready.load() || !currentBinds || (phase>=2 && phase<=7 && !currentApplied)){
+            Note("step=%u preflight_failed=1 matched=%u ready=%u binds=%llu applied=%llu screenshots_skipped=1",step,character_surface::matched.load(),character_surface::ready.load(),currentBinds,currentApplied);
+            ++failures;Finish(game,"shader_not_active");
+            MessageBoxW(game,L"The character override is not active. No comparison images were taken for this phase. A small shader report was packaged instead; send that ZIP.",L"TEST JESSE: shader report saved",MB_OK);
+            return;
+        }
         wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.jpg",folder,step,names[step],imageIndex);
         const auto hr=screenshots::Save(game,path,true);
         Note("step=%u sample=%u present=%llu hr=0x%08lX",step,imageIndex,presentCount.load(),static_cast<unsigned long>(hr));

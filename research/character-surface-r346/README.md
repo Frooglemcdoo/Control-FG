@@ -32,3 +32,8 @@ The one-click sequence contains native, six isolated inputs, native repeat. It
 preserves selected RR/GI/lighting settings, uses full-client JPEGs, and restores
 native character rendering after completion/cancellation/focus loss. Existing
 R345 owned fog remains constant throughout. This is diagnosis, not a claimed fix.
+
+## R347 correction
+R346 capture reported matched=ready=binds=0 for every phase. No input-isolation conclusion is valid. R347 supports both audited native character pixel shader binaries (detail and basic material variants) and compares the complete SHEX, ISGN and OSGN chunks rather than reflection/debug container bytes. It never applies offsets to unknown live bytecode. Each family has its own generated replacements.
+
+The capture checks readiness and recorded bindings before each screenshot and stops immediately on a failed phase. Failure packages bounded CPU shader candidates (at most 32 / 1 MiB) selected by character rig reflection name or matching declaration prefix. Candidate selection does not authorize substitution. No GPU readbacks are added. WARP checks both native and stripped inputs and rejects changed instructions. These checks do not establish game visual correctness or prove the actual cause of R346's missing match.

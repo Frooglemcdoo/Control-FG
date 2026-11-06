@@ -67,7 +67,22 @@ int main(){try{
     unsigned tag=0;UINT size=sizeof(tag);Check(original->GetPrivateData(kKindGuid,&size,&tag));Require(tag==surface::kind,"Surface tag mismatch");
     for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(original->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing owned variant");p->Release();}
     surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==1,"Duplicate preparation");
-    auto changed=std::vector<unsigned char>(surface::kCharacterSurface0,surface::kCharacterSurface0+sizeof(surface::kCharacterSurface0));changed[100]^=1;desc.PS={changed.data(),changed.size()};
-    surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==1,"Unrecognized shader accepted");
-    std::cout<<"PASS original + six character graphics PSOs on WARP, production exact admission, variant ownership, duplicate and mismatch rejection\n";
+    // Stripped reflection must still resolve to the same exact executable family.
+    for(unsigned family=0;family<2;++family){
+        const D3D12_SHADER_BYTECODE native=family?D3D12_SHADER_BYTECODE{surface::kCharacterSurface7,sizeof(surface::kCharacterSurface7)}:D3D12_SHADER_BYTECODE{surface::kCharacterSurface0,sizeof(surface::kCharacterSurface0)};
+        Require(surface::Family(native)==int(family),"Native family mismatch");
+        ComPtr<ID3DBlob> stripped;Check(D3DStripShader(native.pShaderBytecode,native.BytecodeLength,D3DCOMPILER_STRIP_REFLECTION_DATA|D3DCOMPILER_STRIP_DEBUG_INFO,&stripped));
+        desc.PS={stripped->GetBufferPointer(),stripped->GetBufferSize()};
+        Require(surface::Family(desc.PS)==int(family),"Stripped executable not recognized");
+        ComPtr<ID3D12PipelineState> live;Check(gpu.device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(&live)));
+        surface::Observe(gpu.device.Get(),&desc,live.Get(),&Create);
+        Require(surface::matched.load()==2+family && surface::ready.load()==2+family,"Stripped variant creation failed");
+        for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(live->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing stripped variant");p->Release();}
+        auto changed=std::vector<unsigned char>(static_cast<const unsigned char*>(native.pShaderBytecode),static_cast<const unsigned char*>(native.pShaderBytecode)+native.BytecodeLength);
+        const auto chunk=surface::Chunk(native,"SHEX");
+        changed[static_cast<const unsigned char*>(chunk.pShaderBytecode)-static_cast<const unsigned char*>(native.pShaderBytecode)+400]^=1;
+        Require(surface::Family({changed.data(),changed.size()})==-1,"Changed instructions admitted");
+        changed.resize(31);Require(surface::Family({changed.data(),changed.size()})==-1,"Truncated container admitted");
+    }
+    std::cout<<"PASS both native character families and stripped containers; all six variants each on WARP; changed instructions rejected\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
