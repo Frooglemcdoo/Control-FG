@@ -150,8 +150,9 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R347 character surface input isolation. Native / shadow Y neutral / shadow W neutral / uniform volume rig / diffuse buffer off / specular buffer off / translucency off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
+        Note("R348 character stage isolation. Native / surface normal / rig off / unlit albedo / flat before fog / flat final / fog off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
         Note("audited_families=2 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
+        Note("flat_views_expected=1 alpha_one_in_unlit_and_gray=1 lighting_quality_unchanged=1 post_processing_not_bypassed=1");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -185,7 +186,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"native",L"shadow-y-neutral",L"shadow-w-neutral",L"uniform-volume-rig",L"diffuse-buffer-off",L"specular-buffer-off",L"translucency-off",L"native-repeat"};
+        static constexpr const wchar_t* names[]={L"native",L"surface-normal",L"rig-off",L"unlit-albedo",L"flat-before-fog",L"flat-final",L"fog-off",L"native-repeat"};
         if(step>=8){Finish(game,failures?"incomplete":"complete");return;}
         const unsigned phase=step+1;
         if(!entered){

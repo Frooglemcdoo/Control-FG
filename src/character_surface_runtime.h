@@ -96,7 +96,7 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     if(SUCCEEDED(hr))++ready;
     else for(unsigned i=0;i<6;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R347 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R348 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character surface isolation R347
+      - name: Validate character surface isolation R348
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1222,11 +1222,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R347
+      - name: Package owned GI integration R348
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R347'
+          $out='ControlTOH-R348'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1266,19 +1266,21 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R347 - Owned GI integration test
+          R348 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
-          R347 fixes TEST JESSE shader recognition and stops inactive capture phases.
+          R348 TEST JESSE isolates character shading from fog and subsequent processing.
           Supports both audited native character variants and stripped reflection metadata.
           Failure packages a bounded shader report instead of ineffective comparison shots.
           The R345 owned participating-media integration remains unchanged.
           Native lights, density, atmosphere, output texture and producer sampling remain. Use High VL.
           F10 TEST VOLUME captures native / fog-isolation / owned-scattering / native-repeat full-resolution JPEGs and packages them automatically.
           Owned scattering resumes after completion or cancellation. This is the first integration stage; dedicated fog history is not yet implemented. In-game appearance and performance need validation.
-          F10 TEST JESSE isolates six character shader inputs in one capture: two shadow mask channels, volume rig, diffuse, specular and translucency.
+          F10 TEST JESSE: surface normal / rig off / unlit albedo / gray before fog / gray final / fog off, bracketed by native.
+          Jesse will temporarily appear unlit or gray in several phases. This is intentional.
+          High VL remains enabled; settings restore automatically.
           Keep Jesse visible and hold the camera still. Full-resolution JPEGs package automatically.
           This build diagnoses surface mottling; it does not yet claim a fix. Character shaders stay native outside TEST JESSE.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
@@ -1308,10 +1310,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R347
+          name: ControlTOH-R348
           path: |
-            ControlTOH-R347.zip
-            ControlTOH-R347.sha256
+            ControlTOH-R348.zip
+            ControlTOH-R348.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
