@@ -1,5 +1,6 @@
 #include "gpu_test_device.h"
 #include <atomic>
+#include <d3d12shader.h>
 #include <sstream>
 namespace native_lighting {
 inline constexpr GUID kKindGuid{0x72134610,0x3213,0x4321,{1,2,3,4,5,6,7,8}};

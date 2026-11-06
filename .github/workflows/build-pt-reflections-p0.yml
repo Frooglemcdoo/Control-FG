@@ -125,6 +125,18 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Validate character surface isolation R346
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          python tools/character_surface.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-character-surface-gpu.cpp /Febuild\test-character-surface-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-character-surface-gpu.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate geometry descriptor probe R279
         shell: cmd
         run: |
@@ -824,12 +836,6 @@ jobs:
           python tools/gi_spot_pcf.py
           if errorlevel 1 exit /b 1
           python tools/gi_motion_history.py
-          if errorlevel 1 exit /b 1
-          python tools/character_surface.py
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-character-surface-gpu.cpp /Febuild\test-character-surface-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
-          build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
           python tools/prepare-owned-volume.py
           if errorlevel 1 exit /b 1
