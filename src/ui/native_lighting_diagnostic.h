@@ -21,12 +21,13 @@ inline constexpr int kCaptureStatusY = kCameraY + 162;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 20;
+inline constexpr unsigned kButtonCount = kModeCount + 21;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
+    if(index==kModeCount+20)return !character_surface::filtered.load()?L"RIG: NATIVE":character_surface::filteredBinds.load()?L"RIG: FILTERED":L"RIG: WAIT";
     if(index==kModeCount+19)return L"TEST VOLUME";
     if(index==kModeCount+18)return L"TEST JESSE";
     if(index==kModeCount+17){
@@ -149,7 +150,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R350", {14,8,kWidth-12,34}, theme::kAccent);
+    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R351", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
@@ -158,7 +159,10 @@ inline void Paint(HWND window) noexcept {
     swprintf_s(status, L"Selected mode: %s   %s", ModeAvailable(mode,ready) ? L"ready" : L"waiting",
         (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
     DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
+
+#ifndef CONTROL_GI_LONG_SEQUENCE
     DrawLabel(dc, detailFont, free_camera::Status(), {14,kCameraY+36,kWidth-12,kCameraY+64}, theme::kMutedText);
+#endif
     wchar_t captureStatus[128]{};
     swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     if(gi_spot_trace::Enabled())swprintf_s(captureStatus,L"GI trace: %s",gi_spot_trace::Status());
@@ -344,7 +348,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         for (unsigned i=0;i<kButtonCount;++i) {
             const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                i==kModeCount+19?170:i==kModeCount+18?326:14+col*156,i>=kModeCount+18?kCameraY+36:i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,i>=kModeCount+18?32:36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                i==kModeCount+20?14:i==kModeCount+19?170:i==kModeCount+18?326:14+col*156,i>=kModeCount+18?kCameraY+36:i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,i>=kModeCount+18?32:36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -379,6 +383,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
+            else if(index==kModeCount+20 && !capture_suite::active && !control_gi_button::Active()){
+                character_surface::filtered.store(!character_surface::filtered.load());
+                Trace("character_rig_filter enabled=%u recorded_binds=%llu",unsigned(character_surface::filtered.load()),character_surface::filteredBinds.load());
+            }
             else if((index==kModeCount+18 || index==kModeCount+19) && !capture_suite::active && !control_gi_button::Active()){
                 if(capture_suite::Start(index==kModeCount+19?capture_suite::Kind::Volume:capture_suite::Kind::Character))ClosePanel(window);
                 else MessageBoxW(window,L"Finish the active capture and return to gameplay before starting.",L"Character shadows",MB_OK);

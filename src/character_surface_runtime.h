@@ -4,6 +4,8 @@
 namespace character_surface {
 #include "../build/character_surface.generated.h"
 inline constexpr unsigned kind=0x73460000;
+inline std::atomic<bool> filtered{true};
+inline std::atomic<uint64_t> filteredBinds{0};
 inline std::atomic<unsigned> phase{0},matched{0},ready{0};
 inline std::atomic<uint64_t> binds[9]{},applied[9]{};
 inline std::atomic<uint64_t> groupBinds[3][9]{},groupApplied[3][9]{};
@@ -98,7 +100,7 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     if(SUCCEEDED(hr))++ready;
     else for(unsigned i=0;i<6;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R350 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R351 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

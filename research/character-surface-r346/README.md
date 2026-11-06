@@ -66,3 +66,41 @@ This is full-character localization, not a claimed repair or a shipping shadow-d
 R349's failure report observed208 graphics pipeline descriptions, captured9 candidate binaries with no drops, and recorded only the skin group. No comparison images were taken. The already-supported basic skin hash matched. Six additional captured binaries are now admitted separately: skin live, cloth live, hair with native noise/coverage inputs, two skin noise variants, and cloth noise variant. Their resource bindings and shader instruction sequences were inspected against the existing material implementations; each replacement derives from that exact captured original. Two remaining candidates with different material math are retained in the original report and not admitted by similarity.
 
 Family count and coverage groups are explicit generated metadata, not assumptions based on array order. The validator creates every original/stripped family plus all six replacements using a root signature covering the captured sampler0, sampler6, sampler19,8 CBVs and24 SRVs; production continues to copy each game's actual original PSO/root signature. All native noise, alpha, sample coverage, and depth code remains intact. This corrects recognition only; full-character quality is still unproven.
+
+## R351 evidence and candidate correction
+R350 capture Character-Surface-20261106-083159-57852-0 completed all eight phases,
+matched/ready9, zero failures. Skin, cloth and hair had recorded replacement binds
+in every override phase. Full-character gray views confirm broad visible coverage.
+Rig-off substantially reduced the obvious skin/neck/jacket mottling; rig-only,
+shadow-channel neutral and fog-off retained it. Stills and idle pose changes do not
+establish temporal stability or an exact defective instruction.
+
+The rig samples view-volume RGB and scalar intensity, normalizes RGB by luminance,
+applies a brightness floor, then shades its authored lights. Skin and cloth also
+consume screen-space bent normals; the admitted hair shaders do not. R347/R348
+isolations were skin-only and do not settle interactions across the whole character.
+
+R351 offers FILTERED/NATIVE in F10, FILTERED at startup. The candidate replaces
+only those two character-consumer volume reads with eight trilinear sample pairs
+at XYZ half-cell offsets. It averages coefficients before the unchanged nonlinear
+normalization/floor. Actual grid dimensions come from native constants. Normalized
+weights preserve constant inputs; no new temporal history, random jitter, render
+pass, GPU resource, CPU readback or light removal is added. Existing material,
+alpha, coverage, depth, bent normals, rig BRDF, shadow masks and fog remain native.
+Cost:14 extra texture reads per covered character pixel and5 temporary registers.
+A one-cell neighborhood may soften volume transitions. Game performance/appearance
+are unverified; this is a candidate, not a proven fix. This changes the character
+consumer, not the previous participating-media integration or producer filter.
+
+TEST JESSE now captures native, candidate filter, surface-normal substitution,
+uniform volume modulation, both substitutions together, rig diffuse-only,
+rig specular-only and native repeat. Buffer lighting remains in the latter two;
+only the rig's other lobe is zeroed. Hair's surface-normal phase is intentionally
+unchanged because that family has no bent-normal input. Diagnostic substitutions
+never persist. Completion/cancellation resumes the prior FILTERED/NATIVE choice.
+
+The Python test executes the emitted filter instructions on360 synthetic cases,
+including both native channel layouts, grid sizes, constant/random/checker inputs
+and clamped edges. Exact downstream instruction recovery and bindings are checked.
+Windows WARP validates native/stripped PSO creation for all12families and6variants;
+these tests do not render a real character or prove flicker removal.

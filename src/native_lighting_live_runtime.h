@@ -353,9 +353,9 @@ struct Binding {
         if(kind==character_surface::kind){
             surfacePhase=character_surface::phase.load(std::memory_order_relaxed);
             if(surfacePhase){size=sizeof(surfaceGroup);if(FAILED(native->GetPrivateData(character_surface::VariantGuid(6),&size,&surfaceGroup)))surfaceGroup=3;}
-            if(surfacePhase>=2 && surfacePhase<=7){
+            if((surfacePhase==0 && character_surface::filtered.load(std::memory_order_relaxed)) || (surfacePhase>=2 && surfacePhase<=7)){
                 size=sizeof(alternate);
-                if(SUCCEEDED(native->GetPrivateData(character_surface::VariantGuid(surfacePhase-2),&size,&alternate)) && alternate)selected=alternate;
+                if(SUCCEEDED(native->GetPrivateData(character_surface::VariantGuid(surfacePhase?surfacePhase-2:0),&size,&alternate)) && alternate)selected=alternate;
             }
             return;
         }
@@ -378,6 +378,7 @@ struct Binding {
     unsigned volumePhase = 0,surfacePhase=0,surfaceGroup=3;
     void Recorded() const noexcept {
         if(kind==character_surface::kind){
+            if(surfacePhase==0 && alternate)++character_surface::filteredBinds;
             if(surfacePhase>0 && surfacePhase<9){
                 ++character_surface::binds[surfacePhase];
                 if(surfaceGroup<3){++character_surface::groupBinds[surfaceGroup][surfacePhase];if(alternate)++character_surface::groupApplied[surfaceGroup][surfacePhase];}

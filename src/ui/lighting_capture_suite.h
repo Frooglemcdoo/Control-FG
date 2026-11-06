@@ -65,6 +65,7 @@ inline void Finish(HWND game,const char* reason) noexcept {
     DrainDiagnosticLog(true);
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
     if(!character && !volume && !CopyLog(path))++failures;
+    if(character)Note("rig_filter_restored=%u filtered_recorded_binds=%llu",unsigned(character_surface::filtered.load()),character_surface::filteredBinds.load());
     if(character && failures){
         const unsigned saved=character_surface::ExportCandidates(folder);
         Note("shader_detection graphics_seen=%llu observed=%u candidate_files=%u dropped=%u",graphicsSeen.load(),character_surface::observed.load(),saved,character_surface::candidateDropped.load());
@@ -151,9 +152,9 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R350 whole-character isolation. Native / both shadow channels neutral / rig off / rig only / flat before fog / flat final / fog off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
+        Note("R351 character rig inputs. Native / filtered volume / surface normal / uniform volume / normal and uniform volume / rig diffuse only / rig specular only / native repeat. Full-client JPEGs. Previous rig filter selection resumes after capture. Hair has no bent-normal input and remains native in the surface-normal phase. Counters are recorded PSO binds, not executed draws.");
         Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
-        Note("flat_views_expected=1 native_alpha_depth_coverage_preserved=1 lighting_quality_unchanged=1 post_processing_not_bypassed=1");
+        Note("flat_views_expected=0 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 post_processing_not_bypassed=1");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -187,7 +188,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"native",L"both-shadows-neutral",L"rig-off",L"rig-only",L"flat-before-fog",L"flat-final",L"fog-off",L"native-repeat"};
+        static constexpr const wchar_t* names[]={L"native",L"filtered-volume",L"surface-normal",L"uniform-volume",L"normal-and-uniform-volume",L"rig-diffuse-only",L"rig-specular-only",L"native-repeat"};
         if(step>=8){Finish(game,failures?"incomplete":"complete");return;}
         const unsigned phase=step+1;
         if(!entered){
