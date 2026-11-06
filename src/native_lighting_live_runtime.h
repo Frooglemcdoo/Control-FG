@@ -255,11 +255,12 @@ inline void Bind(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
 inline void Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 }
 namespace volume_test {
-#include "volume_filter.generated.h"
-inline constexpr GUID alternateGuid{0xf2713a44,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
-inline constexpr unsigned filterKind=0x73440000;
+#include "owned_volume.generated.h"
+inline constexpr GUID alternateGuid{0xf2713a45,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
+inline constexpr GUID neutralGuid{0xf2713a46,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
+inline constexpr unsigned filterKind=0x73450000;
 inline std::atomic<unsigned> phase{0}, matched{0}, ready{0};
-inline std::atomic<uint64_t> binds[4]{}, applied[4]{};
+inline std::atomic<uint64_t> binds[5]{}, applied[5]{};
 inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,
                     IUnknown* native,CreateCompute create) noexcept {
     if(!create || !native || !desc || !desc->CS.pShaderBytecode ||
@@ -271,17 +272,26 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
     if(SUCCEEDED(owner->GetPrivateData(kKindGuid,&size,&kind)) && kind==filterKind){owner->Release();return;}
     ++matched;
     auto changed=*desc;
-    changed.CS={kVolumeFilteredShader,sizeof(kVolumeFilteredShader)};
+    changed.CS={kVolumeOwnedShader,sizeof(kVolumeOwnedShader)};
     changed.CachedPSO={nullptr,0};
     HRESULT hr=create(device,&changed,IID_PPV_ARGS(&variant));
     if(SUCCEEDED(hr)){
         hr=owner->SetPrivateDataInterface(alternateGuid,variant);
+        if(SUCCEEDED(hr)){
+            ID3D12PipelineState* neutral=nullptr;
+            changed.CS={kVolumeNeutralShader,sizeof(kVolumeNeutralShader)};
+            hr=create(device,&changed,IID_PPV_ARGS(&neutral));
+            if(SUCCEEDED(hr)){
+                hr=owner->SetPrivateDataInterface(neutralGuid,neutral);
+                neutral->Release();
+            }
+        }
         if(SUCCEEDED(hr))hr=owner->SetPrivateData(kKindGuid,sizeof(filterKind),&filterKind);
         if(SUCCEEDED(hr))++ready;
-        else owner->SetPrivateDataInterface(alternateGuid,nullptr);
+        else {owner->SetPrivateDataInterface(alternateGuid,nullptr);owner->SetPrivateDataInterface(neutralGuid,nullptr);}
         variant->Release();
     }
-    Trace("VOLUME_FILTER_R344 ready=%u hr=0x%08lX",ready.load(),static_cast<unsigned long>(hr));
+    Trace("OWNED_VOLUME_R345 ready=%u hr=0x%08lX",ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }
@@ -341,10 +351,10 @@ struct Binding {
         if(!native || FAILED(native->GetPrivateData(kKindGuid,&size,&kind)) || size!=sizeof(kind)){kind=0;return;}
         if(kind==volume_test::filterKind){
             volumePhase=volume_test::phase.load(std::memory_order_relaxed);
-            const bool stabilize=volumePhase==0 || volumePhase==2;
+            const bool stabilize=volumePhase==0 || volumePhase==2 || volumePhase==3;
             if(stabilize){
                 size=sizeof(alternate);
-                if(SUCCEEDED(native->GetPrivateData(volume_test::alternateGuid,&size,&alternate)) && alternate)selected=alternate;
+                if(SUCCEEDED(native->GetPrivateData(volumePhase==2?volume_test::neutralGuid:volume_test::alternateGuid,&size,&alternate)) && alternate)selected=alternate;
             }
             return;
         }

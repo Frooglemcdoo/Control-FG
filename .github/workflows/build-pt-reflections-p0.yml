@@ -825,13 +825,11 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/gi_motion_history.py
           if errorlevel 1 exit /b 1
-          python tools/volume_filter.py
+          python tools/prepare-owned-volume.py
           if errorlevel 1 exit /b 1
-          python tools/test-volume-filter.py
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-owned-volume-gpu.cpp /Febuild\test-owned-volume-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-volume-filter-gpu.cpp /Febuild\test-volume-filter-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
-          build\test-volume-filter-gpu.exe
+          build\test-owned-volume-gpu.exe
           if errorlevel 1 exit /b 1
           python tools/test-gi-motion-history.py
           if errorlevel 1 exit /b 1
@@ -1212,11 +1210,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R344
+      - name: Package owned GI integration R345
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R344'
+          $out='ControlTOH-R345'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1256,15 +1254,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R344 - Owned GI integration test
+          R345 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
-          R344 adds spatial reconstruction before native 3D lighting history, with prior-view bounds rejection.
-          Native sampling jitter is restored. Use your normal High VL setting.
-          F10 TEST VOLUME captures original / filtered / original-repeat full-resolution JPEGs and packages them automatically.
-          Filtered volume lighting resumes after completion or cancellation. In-game appearance and performance need validation.
+          R345 replaces the participating-media integration pass with owned four-column sampling.
+          Native lights, density, atmosphere, output texture and producer sampling remain. Use High VL.
+          F10 TEST VOLUME captures native / fog-isolation / owned-scattering / native-repeat full-resolution JPEGs and packages them automatically.
+          Owned scattering resumes after completion or cancellation. This is the first integration stage; dedicated fog history is not yet implemented. In-game appearance and performance need validation.
           F10 TEST SHADOWS: hold the camera still. Full-resolution game screenshots are packaged automatically.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
@@ -1293,10 +1291,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R344
+          name: ControlTOH-R345
           path: |
-            ControlTOH-R344.zip
-            ControlTOH-R344.sha256
+            ControlTOH-R345.zip
+            ControlTOH-R345.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

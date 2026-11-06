@@ -140,7 +140,7 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
     restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
     if(volume){
-        Note("R344 original / spatially filtered 3D lighting / original repeat. Full-resolution JPEG quality 95. Two samples per condition. Counters measure recorded PSO binds, not executed GPU draws.");
+        Note("R345 native / fog-isolation (transparent media) / owned scattering / native repeat. Full-resolution JPEG quality 95. Two samples per condition. Counters measure recorded PSO binds, not executed GPU draws.");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -174,8 +174,8 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(volume){
-        static constexpr const wchar_t* names[]={L"normal",L"filtered-volume",L"normal-repeat"};
-        if(step>=3){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr const wchar_t* names[]={L"native",L"fog-isolation",L"owned-scattering",L"native-repeat"};
+        if(step>=4){Finish(game,failures?"incomplete":"complete");return;}
         const unsigned phase=step+1;
         if(!entered){
             initialBinds=volume_test::binds[phase].load();
@@ -195,9 +195,9 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         if(++imageIndex==2){
             const auto binds=volume_test::binds[phase].load()-initialBinds;
             const auto applied=volume_test::applied[phase].load()-initialApplied;
-            Note("step=%u matched_psos=%u ready_psos=%u recorded_binds=%llu filtered_binds=%llu",step,
+            Note("step=%u matched_psos=%u ready_psos=%u recorded_binds=%llu replacement_binds=%llu",step,
                  volume_test::matched.load(),volume_test::ready.load(),binds,applied);
-            if(!binds || (phase==2 && !applied))++failures;
+            if(!binds || ((phase==2 || phase==3) && !applied))++failures;
             ++step;entered=false;
         }
         return;
