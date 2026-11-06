@@ -1,6 +1,7 @@
 #pragma once
 #include "../lighting_capture_plan.h"
 #include "../rr_clamp_strength_policy.h"
+#include "../rr_diffuse_source_policy.h"
 #include "lighting_screenshot.h"
 #include "../rr_native_blend_capture_policy.h"
 namespace native_lighting::capture_suite {
@@ -10,6 +11,7 @@ inline bool character=false,volume=false;
 inline bool characterRRWasSelected=false;
 inline control_rr::RRUserMode characterSavedRR=control_rr::RRUserMode::Off;
 inline uint64_t characterRRSuccess=0;
+inline uint64_t sourceStartA=0,sourceStartB=0,sourceStartNative=0,sourceStartBypass=0;
 inline uint64_t initialBinds=0,initialApplied=0,initialTemporalApplied=0;
 inline uint64_t initialGroupBinds[3]{},initialGroupApplied[3]{};
 inline bool preserveSettings=false,savedRR=false,savedDistance=false;
@@ -72,6 +74,7 @@ inline bool PackageCharacter(HWND game) noexcept {
 inline void Finish(HWND game,const char* reason) noexcept {
     volume_test::phase.store(0);
     character_surface::phase.store(0);
+    control_rr_diffuse_source::legacyBypass.store(false,std::memory_order_release);
     rt_spot_capture_runtime::CancelPending();
     if(!preserveSettings)SelectMode(restore);ReportRRPaths("f9_restore");rt_shadow_capture::Summary();
     Trace("capture_suite_end reason=%s failures=%u restored=%s",reason,failures,ModeName(restore));
@@ -170,11 +173,11 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R360 diffuse reconstruction. Original stable / reconstructed full lighting / original base diffuse / reconstructed base diffuse / quarter-gain reconstructed diffuse / reconstructed full repeat. Twelve full-client JPEGs. Native map, material ID, normal/mask and radiance guards. MSAA>1 keeps original diffuse. No depth/object-identity guard or new history. RR mode remains unchanged. Material textures, specular, rig, fog, alpha/depth/coverage remain native. Counters are recorded PSO binds, not executed draws.");
+        Note("R361 upstream diffuse restoration. R360 legacy bypass / upstream filtering with R360 / upstream filtering without consumer gather / upstream filtering with R360 repeat. Eight full-client JPEGs. RT/RR, GI mode, clamp and quality settings unchanged. Native diffuse calls retain original arguments and histories. Five-second settling per phase. Source counters are CPU calls, not GPU completion. Zero legacy bypass means this restoration is not exercised in this configuration.");
         Note("rr_saved_mode=%u rr_selected_at_start=%u",unsigned(characterSavedRR),unsigned(control_rr_diagnostic::lastSelected.load()));
         Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         Note("clamp_requested_percent=%u clamp_effective_percent=%u",control_rr_clamp::RuntimeRequested(),control_rr_clamp::effective.load());
-        Note("flat_views_expected=0 lighting_source_isolation=1 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 rr_modified_by_capture=0 post_processing_retained=1");
+        Note("flat_views_expected=0 lighting_source_isolation=0 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 rr_modified_by_capture=0 post_processing_retained=1");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -209,17 +212,23 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"stable",L"diffuse-reconstructed",L"base-diffuse",L"base-diffuse-reconstructed",L"base-diffuse-reconstructed-dim",L"reconstructed-repeat"};
-        if(step>=6){Finish(game,failures?"incomplete":"complete");return;}
-        static constexpr unsigned phases[]={4,10,5,6,9,10};
+        static constexpr const wchar_t* names[]={L"r360-legacy",L"upstream-filtered",L"upstream-no-consumer-gather",L"upstream-repeat"};
+        if(step>=4){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr unsigned phases[]={10,10,4,10};
         const unsigned phase=phases[step];
         if(!entered){
+            control_rr_diffuse_source::legacyBypass.store(step==0,std::memory_order_release);
+            const auto sources=control_rr_diagnostic::counters.Snapshot();
+            sourceStartA=sources[size_t(control_rr_diagnostic::Event::BroadA)];
+            sourceStartB=sources[size_t(control_rr_diagnostic::Event::BroadB)];
+            sourceStartNative=sources[size_t(control_rr_diagnostic::Event::BroadNative)];
+            sourceStartBypass=sources[size_t(control_rr_diagnostic::Event::BroadBypass)];
             characterRRSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
             initialBinds=character_surface::binds[phase].load();initialApplied=character_surface::applied[phase].load();
             for(unsigned g=0;g<3;++g){initialGroupBinds[g]=character_surface::groupBinds[g][phase].load();initialGroupApplied[g]=character_surface::groupApplied[g][phase].load();}
             initialTemporalApplied=volume_temporal::applied.load();
             character_surface::phase.store(phase);began=now;firstPresent=presentCount.load();imageIndex=0;entered=true;
-            nextImage=now+(step==0?5000:2500);
+            nextImage=now+5000;
         }
         if(characterSavedRR==control_rr::RRUserMode::Full && control_rr::rrUserStatus.load()==control_rr::RRUserStatus::Stopped){
             ++failures;Finish(game,"rr_runtime_stopped_restart_required");return;
@@ -231,6 +240,14 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         const auto rrSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
         Note("step=%u sample=%u rr_mode=%u rr_selected=%u rr_status=%u rr_success_delta=%llu clamp_effective=%u",step,imageIndex,unsigned(control_rr::RRUserModeValue()),unsigned(control_rr_diagnostic::lastSelected.load()),unsigned(control_rr::rrUserStatus.load()),rrSuccess-characterRRSuccess,control_rr_clamp::effective.load());
         characterRRSuccess=rrSuccess;
+        if(imageIndex==0){
+            const auto sources=control_rr_diagnostic::counters.Snapshot();
+            Note("step=%u upstream_preserve=%u rt_effects=0x%X source_a_calls=%llu source_b_calls=%llu native_filter_calls=%llu bypass_calls=%llu cpu_observation_only=1",step,unsigned(step!=0),control_rr_diagnostic::lastEffects.load(),
+                sources[size_t(control_rr_diagnostic::Event::BroadA)]-sourceStartA,
+                sources[size_t(control_rr_diagnostic::Event::BroadB)]-sourceStartB,
+                sources[size_t(control_rr_diagnostic::Event::BroadNative)]-sourceStartNative,
+                sources[size_t(control_rr_diagnostic::Event::BroadBypass)]-sourceStartBypass);
+        }
         const auto currentBinds=character_surface::binds[phase].load()-initialBinds;
         const auto currentApplied=character_surface::applied[phase].load()-initialApplied;
         bool wholeCharacter=true;

@@ -13,6 +13,7 @@
 #include "rr_rt_stack.h"
 #include "rr_contact_shadow_policy.h"
 #include "rr_broad_diffuse_policy.h"
+#include "rr_diffuse_source_policy.h"
 #include "rr_gi_sample_control.h"
 #include "rr_sample_diagnostic.h"
 #include "rr_specular_sample_windows.h"
@@ -741,7 +742,7 @@ static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* his
  const auto mode=native_lighting::LiveSelection::GetMode(selected);
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  const bool partial=RRNativePartialActive();
- const bool preserve=native_lighting::PreservesBroadDiffuseFiltering(mode);
+ const bool preserve=control_rr_diffuse_source::Preserve(native_lighting::PreservesBroadDiffuseFiltering(mode));
  const auto policy=control_rr::BroadDiffusePolicy(full,partial,rrNativeRTFrame.effects,preserve);
  SetLastError(entryError);
  if(!policy.bypass){
