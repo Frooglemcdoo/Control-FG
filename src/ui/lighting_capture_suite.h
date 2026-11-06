@@ -220,7 +220,8 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         if(now-began>15000){++failures;Finish(game,"present_timeout");return;}
         if(now<nextImage || presentCount.load()-firstPresent<2)return;
         if(characterRROff && control_rr_diagnostic::lastSelected.load())return;
-        if(!characterRROff && characterRRWasSelected && !control_rr_diagnostic::lastSelected.load())return;
+        if(step==0 && !imageIndex)characterRRWasSelected=characterSavedRR==control_rr::RRUserMode::Full && control_rr_diagnostic::lastSelected.load();
+        if(step>1 && !characterRROff && characterRRWasSelected && !control_rr_diagnostic::lastSelected.load())return;
         const auto rrSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
         if(characterRROff && imageIndex && rrSuccess!=characterRRSuccess){++failures;Finish(game,"rr_off_not_stable");return;}
         Note("step=%u sample=%u rr_mode=%u rr_selected=%u rr_status=%u rr_success_delta=%llu clamp_effective=%u",step,imageIndex,unsigned(control_rr::RRUserModeValue()),unsigned(control_rr_diagnostic::lastSelected.load()),unsigned(control_rr::rrUserStatus.load()),rrSuccess-characterRRSuccess,control_rr_clamp::effective.load());
