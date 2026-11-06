@@ -37,7 +37,7 @@ inline bool Equivalent(const D3D12_SHADER_BYTECODE& b,const D3D12_SHADER_BYTECOD
     return true;
 }
 inline int Family(const D3D12_SHADER_BYTECODE& b) noexcept {
-    for(unsigned i=0;i<6;++i)if(Equivalent(b,kCharacterOriginals[i]))return int(i);
+    for(unsigned i=0;i<kCharacterFamilyCount;++i)if(Equivalent(b,kCharacterOriginals[i]))return int(i);
     return -1;
 }
 // Bounded startup-only CPU evidence; no capture readbacks or per-frame copies.
@@ -92,13 +92,13 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
         hr=create(device,&copy,IID_PPV_ARGS(&variants[i]));
     }
     for(unsigned i=0;i<6 && SUCCEEDED(hr);++i)hr=owner->SetPrivateDataInterface(VariantGuid(i),variants[i]);
-    const unsigned group=unsigned(family)/2;
+    const unsigned group=kCharacterGroups[family];
     if(SUCCEEDED(hr))hr=owner->SetPrivateData(VariantGuid(6),sizeof(group),&group);
     if(SUCCEEDED(hr))hr=owner->SetPrivateData(kKindGuid,sizeof(kind),&kind);
     if(SUCCEEDED(hr))++ready;
     else for(unsigned i=0;i<6;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R349 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R350 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

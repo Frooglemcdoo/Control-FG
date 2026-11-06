@@ -16,7 +16,7 @@ int main(){try{
     ComPtr<ID3D12Debug> debug;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     std::cout<<"Create WARP device\n";Device gpu(false);
-    for(unsigned family=0;family<6;++family){
+    for(unsigned family=0;family<surface::kCharacterFamilyCount;++family){
     const auto native=surface::kCharacterOriginals[family];
     const unsigned before=surface::matched.load();
     std::cout<<"Family "<<family<<"\n";
@@ -41,13 +41,14 @@ int main(){try{
     const auto hlsl=source.str();ComPtr<ID3DBlob> vs,error;
     const auto hr=D3DCompile(hlsl.data(),hlsl.size(),nullptr,nullptr,nullptr,"main","vs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&error);
     if(error)std::cerr<<static_cast<const char*>(error->GetBufferPointer());Check(hr);
-    D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,18,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,UINT_MAX,0,1,0}};
-    D3D12_ROOT_PARAMETER params[9]{};
-    for(UINT i=0;i<7;++i){params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;params[i].Descriptor.ShaderRegister=i;params[i].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
-    for(UINT i=0;i<2;++i){params[7+i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[7+i].DescriptorTable={1,&ranges[i]};params[7+i].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
-    D3D12_STATIC_SAMPLER_DESC samplers[2]{};
-    for(UINT i=0;i<2;++i){auto& s=samplers[i];s.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;s.ShaderRegister=i?19:6;s.RegisterSpace=1;s.MaxLOD=D3D12_FLOAT32_MAX;s.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;s.MaxAnisotropy=1;s.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
-    D3D12_ROOT_SIGNATURE_DESC rs{9,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,24,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,UINT_MAX,0,1,0}};
+    D3D12_ROOT_PARAMETER params[10]{};
+    for(UINT i=0;i<8;++i){params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;params[i].Descriptor.ShaderRegister=i;params[i].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
+    for(UINT i=0;i<2;++i){params[8+i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[8+i].DescriptorTable={1,&ranges[i]};params[8+i].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
+    D3D12_STATIC_SAMPLER_DESC samplers[3]{};
+    for(UINT i=0;i<3;++i){auto& s=samplers[i];s.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;s.ShaderRegister=i==0?6:i==1?19:0;s.RegisterSpace=1;s.MaxLOD=D3D12_FLOAT32_MAX;s.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;s.MaxAnisotropy=1;s.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
+    samplers[2].Filter=D3D12_FILTER_MIN_MAG_MIP_POINT;samplers[2].AddressU=samplers[2].AddressV=samplers[2].AddressW=D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+    D3D12_ROOT_SIGNATURE_DESC rs{10,params,3,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
     std::cout<<"Create compatible root signature\n";
     ComPtr<ID3DBlob> rootBytes;Check(D3D12SerializeRootSignature(&rs,D3D_ROOT_SIGNATURE_VERSION_1,&rootBytes,&error));
     ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),IID_PPV_ARGS(&root)));
@@ -69,6 +70,7 @@ int main(){try{
     surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);
     Require(surface::matched.load()==before+1 && surface::ready.load()==before+1,"Surface variants not admitted");
     unsigned tag=0;UINT size=sizeof(tag);Check(original->GetPrivateData(kKindGuid,&size,&tag));Require(tag==surface::kind,"Surface tag mismatch");
+    unsigned group=99;size=sizeof(group);Check(original->GetPrivateData(surface::VariantGuid(6),&size,&group));Require(group==surface::kCharacterGroups[family],"Material coverage group mismatch");
     for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(original->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing owned variant");p->Release();}
     surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==before+1,"Duplicate preparation");
     // Stripped reflection must still resolve to the same exact executable family.
@@ -88,5 +90,5 @@ int main(){try{
         changed.resize(31);Require(surface::Family({changed.data(),changed.size()})==-1,"Truncated container admitted");
     }
     }
-    std::cout<<"PASS all six skin/cloth/hair families and stripped containers; all six variants each on WARP; changed instructions rejected\n";
+    std::cout<<"PASS all twelve skin/cloth/hair families and stripped containers; all six variants each on WARP; changed instructions rejected\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

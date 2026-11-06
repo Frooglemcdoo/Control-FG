@@ -151,8 +151,8 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R349 whole-character isolation. Native / both shadow channels neutral / rig off / rig only / flat before fog / flat final / fog off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
-        Note("audited_families=6 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
+        Note("R350 whole-character isolation. Native / both shadow channels neutral / rig off / rig only / flat before fog / flat final / fog off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
+        Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         Note("flat_views_expected=1 native_alpha_depth_coverage_preserved=1 lighting_quality_unchanged=1 post_processing_not_bypassed=1");
         lastFailure=native_blend_capture::Failure::None;
         return true;

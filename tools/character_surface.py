@@ -59,10 +59,12 @@ def main():
   lines+=['inline constexpr unsigned char kCharacterSurface'+str(i)+'[] = {']
   lines+=[','.join(map(str,b[j:j+24]))+',' for j in range(0,len(b),24)];lines+=['};']
  ref=lambda i:'{kCharacterSurface'+str(i)+',sizeof(kCharacterSurface'+str(i)+')}'
- lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterOriginals[] = {'+','.join(ref(i*7) for i in range(6))+'};']
- lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterVariants[6][6] = {']
- lines+=['{'+','.join(ref(i*7+j) for j in range(1,7))+'},' for i in range(6)];lines+=['};']
+ lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterOriginals[] = {'+','.join(ref(i*7) for i in range(len(families)))+'};']
+ lines+=['inline constexpr D3D12_SHADER_BYTECODE kCharacterVariants[][6] = {']
+ lines+=['{'+','.join(ref(i*7+j) for j in range(1,7))+'},' for i in range(len(families))];lines+=['};']
+ lines+=['inline constexpr unsigned kCharacterFamilyCount='+str(len(families))+';']
+ lines+=['inline constexpr unsigned kCharacterGroups[] = {'+','.join(str(f['group']) for f in families)+'};']
  (folder/'character_surface.generated.h').write_text('\n'.join(lines)+'\n')
  (folder/'character-surface-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
- print('PASS six native families, 36 stage variants; exact bindings and full original instruction recovery; alpha/depth/coverage preserved')
+ print(f'PASS {len(families)} native families, {6*len(families)} stage variants; exact bindings and full original instruction recovery; alpha/depth/coverage preserved')
 if __name__=='__main__':main()
