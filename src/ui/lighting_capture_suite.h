@@ -7,6 +7,9 @@ namespace native_lighting::capture_suite {
 // All suite state and file I/O belong to the diagnostic UI thread.
 enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character, Volume };
 inline bool character=false,volume=false;
+inline bool characterRROff=false,characterRRWasSelected=false;
+inline control_rr::RRUserMode characterSavedRR=control_rr::RRUserMode::Off;
+inline uint64_t characterRRSuccess=0;
 inline uint64_t initialBinds=0,initialApplied=0,initialTemporalApplied=0;
 inline uint64_t initialGroupBinds[3]{},initialGroupApplied[3]{};
 inline bool preserveSettings=false,savedRR=false,savedDistance=false;
@@ -58,6 +61,10 @@ inline bool PackageCharacter(HWND game) noexcept {
     return ok;
 }
 inline void Finish(HWND game,const char* reason) noexcept {
+    if(character && characterRROff){
+        if(control_rr::RRUserModeValue()==control_rr::RRUserMode::Off)control_rr::RRUserSetMode(characterSavedRR);
+        characterRROff=false;
+    }
     volume_test::phase.store(0);
     character_surface::phase.store(0);
     rt_spot_capture_runtime::CancelPending();
@@ -67,6 +74,7 @@ inline void Finish(HWND game,const char* reason) noexcept {
     wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
     if(!character && !volume && !CopyLog(path))++failures;
     if(character)Note("near_history matched=%u ready=%u recorded_binds=%llu applied=%llu",volume_temporal::matched.load(),volume_temporal::ready.load(),volume_temporal::binds.load(),volume_temporal::applied.load());
+    if(character)Note("rr_restored_mode=%u rr_saved_mode=%u",unsigned(control_rr::RRUserModeValue()),unsigned(characterSavedRR));
     if(character)Note("rig_quality_restored=%u filtered_recorded_binds=%llu",character_surface::quality.load(),character_surface::filteredBinds.load());
     if(character && failures){
         const unsigned saved=character_surface::ExportCandidates(folder);
@@ -132,6 +140,8 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
     wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
     SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
     character=kind==Kind::Character;
+    characterRROff=false;characterSavedRR=control_rr::RRUserModeValue();
+    characterRRWasSelected=control_rr_diagnostic::lastSelected.load();
     volume=kind==Kind::Volume;
     if(swprintf_s(folder,L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,volume?L"Volume-Light":character?L"Character-Surface":L"Shadow-R217",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
     if(!CreateDirectoryW(folder,nullptr))return false;
@@ -154,10 +164,11 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R356 neck exposure bracket. Stable / diffuse gain 1:64 / diffuse gain 1:16 / diffuse gain 1:4 / specular gain 1:16 / stable repeat. Full-client JPEGs. Previous rig quality resumes after capture. Isolation overrides are temporary. Input views display gain*max(input,0)/(1+gain*max(input,0)); fixed gains 1/64, 1/16, 1/4, 1/16 in RGB only; alpha/depth/coverage and downstream post-processing stay native. HQ sampling and near history stay enabled. Counters are recorded PSO binds, not executed draws.");
+        Note("R357 character composition split. Stable / stable RR off / base material lighting / rig diffuse / rig specular / material view / stable repeat. Fourteen full-client JPEGs. Component views retain native radiance and fog tail; material view uses 0.25*material RGB. RR off is temporary and can also change native denoising/ray selection; it is a path comparison, not a pure postprocess isolation. Skin/cloth/hair alpha/depth/coverage stay native. HQ and near history remain enabled. Counters are recorded PSO binds, not executed draws.");
+        Note("rr_saved_mode=%u rr_selected_at_start=%u",unsigned(characterSavedRR),unsigned(control_rr_diagnostic::lastSelected.load()));
         Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
         Note("clamp_requested_percent=%u clamp_effective_percent=%u",control_rr_clamp::RuntimeRequested(),control_rr_clamp::effective.load());
-        Note("flat_views_expected=0 lighting_source_isolation=1 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 post_processing_not_bypassed=1");
+        Note("flat_views_expected=0 lighting_source_isolation=1 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 rr_temporary_off_step=1 post_processing_retained=1");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -187,15 +198,19 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         Finish(game,"camera_mode_changed");return;
     }
     if(preserveSettings&&LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(preservedSelection)){Finish(game,"selection_changed");return;}
-    if(preserveSettings&&!native_blend_capture::SettingsMatch(control_rr::RRUserRequested(),savedRR,
+    if(character && control_rr::RRUserModeValue()!=(characterRROff?control_rr::RRUserMode::Off:characterSavedRR)){Finish(game,"rr_mode_changed");return;}
+    if(preserveSettings&&!native_blend_capture::SettingsMatch(control_rr::RRUserRequested(),characterRROff?false:savedRR,
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"stable",L"diffuse-gain-1of64",L"diffuse-gain-1of16",L"diffuse-gain-1of4",L"specular-gain-1of16",L"stable-repeat"};
-        if(step>=6){Finish(game,failures?"incomplete":"complete");return;}
-        static constexpr unsigned phases[]={4,5,6,7,9,4};
+        static constexpr const wchar_t* names[]={L"stable",L"stable-rr-off",L"base-material-lighting",L"rig-diffuse",L"rig-specular",L"material-view",L"stable-repeat"};
+        if(step>=7){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr unsigned phases[]={4,4,5,6,7,9,4};
         const unsigned phase=phases[step];
         if(!entered){
+            if(step==1){control_rr::RRUserSetMode(control_rr::RRUserMode::Off);characterRROff=true;}
+            else if(characterRROff){control_rr::RRUserSetMode(characterSavedRR);characterRROff=false;}
+            characterRRSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
             initialBinds=character_surface::binds[phase].load();initialApplied=character_surface::applied[phase].load();
             for(unsigned g=0;g<3;++g){initialGroupBinds[g]=character_surface::groupBinds[g][phase].load();initialGroupApplied[g]=character_surface::groupApplied[g][phase].load();}
             initialTemporalApplied=volume_temporal::applied.load();
@@ -204,6 +219,12 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         }
         if(now-began>15000){++failures;Finish(game,"present_timeout");return;}
         if(now<nextImage || presentCount.load()-firstPresent<2)return;
+        if(characterRROff && control_rr_diagnostic::lastSelected.load())return;
+        if(!characterRROff && characterRRWasSelected && !control_rr_diagnostic::lastSelected.load())return;
+        const auto rrSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
+        if(characterRROff && imageIndex && rrSuccess!=characterRRSuccess){++failures;Finish(game,"rr_off_not_stable");return;}
+        Note("step=%u sample=%u rr_mode=%u rr_selected=%u rr_status=%u rr_success_delta=%llu clamp_effective=%u",step,imageIndex,unsigned(control_rr::RRUserModeValue()),unsigned(control_rr_diagnostic::lastSelected.load()),unsigned(control_rr::rrUserStatus.load()),rrSuccess-characterRRSuccess,control_rr_clamp::effective.load());
+        characterRRSuccess=rrSuccess;
         const auto currentBinds=character_surface::binds[phase].load()-initialBinds;
         const auto currentApplied=character_surface::applied[phase].load()-initialApplied;
         bool wholeCharacter=true;

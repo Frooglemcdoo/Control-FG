@@ -6,8 +6,7 @@ from dxbc_checksum import checksum
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'research/native-integration-audit/tools'))
 from decode_dxbc import decode
-NAMES=['hq-cubic','r351-filter','diffuse-view-dark','diffuse-view-mid','diffuse-view-bright','specular-view-mid']
-VIEWS=[('g_tLightBufferDiffuse',1/64),('g_tLightBufferDiffuse',1/16),('g_tLightBufferDiffuse',1/4),('g_tLightBufferSpecular',1/16)]
+NAMES=['hq-cubic','r351-filter','base-material-only','rig-diffuse-only','rig-specular-only','material-view']
 def dst(r,mask):return [0x100002|(mask<<4),r]
 def imm(v):return [0x4001,struct.unpack('<I',struct.pack('<f',v))[0]]
 def mov(d,s):return [((1+len(d)+len(s))<<24)|54]+d+s
@@ -116,38 +115,37 @@ def cubic_volume(data,info):
  restored=words(result);assert restored[o:o+len(code)]==code
  restored[o:o+len(code)]=original;restored[decl+1]=count;restored[1]=len(restored);assert restored==w
  return result
-def buffer_site(info,name):
- x=info['instructions'];b=next(b for b in info['bindings'] if b['name']==name)
- t='t[%d][%d].xyzw'%(b['identifier'],b['slot'])
- hits=[n for n,i in enumerate(x) if i['name']=='ld' and t in i['operands']]
+def composition_site(info):
+ x=info['instructions']
+ hits=[n for n,i in enumerate(x) if i['name']=='ld' and i['operands'][-1]=='t[2][2].ywxz']
  assert len(hits)==1
- n=hits[0];assert x[n]['operands'][0].endswith('.xyz')
- return reg(x[n]['operands'][0]),x[n+1]['dword']
-def buffer_off(data,info,name):
- r,offset=buffer_site(info,name)
- return insert_verified(data,{offset:mov(dst(r,7),imm(0))})
-def buffer_view(data,info,name,gain):
- # Save the exact input before material/rig composition, then display RGB only.
- # Fixed monotonic compression gain*max(x,0)/(1+gain*max(x,0)).
- # Exposure brackets are fixed, not selected from image content.
- assert gain in (1/64,1/16,1/4)
- r,offset=buffer_site(info,name);w=words(data)
+ a=x[hits[0]:hits[0]+6]
+ assert [i['name'] for i in a]==['ld','mul','mul','mad','add','dp3']
+ assert a[3]['operands'][0]==a[4]['operands'][0]=='r[0].xyz'
+ assert a[3]['operands'][1].endswith('.yzwy')
+ assert all(z.endswith('.xyzx') for z in a[3]['operands'][2:])
+ assert a[4]['operands'][1]=='r[0].xyzx' and a[4]['operands'][2].endswith('.xyzx')
+ return a
+
+def composition_view(data,info,component):
+ # Capture one actual composition term before the multiply-add overwrites it,
+ # then feed that term through the unchanged native atmosphere/media tail.
+ assert component in range(4)
+ a=composition_site(info);w=words(data)
  decl=next(i['dword'] for i in info['instructions'] if i['name']=='dcl_temps');count=w[decl+1]
- end=info['instructions'][-1];assert end['name']=='ret'
- assert sum(i['name']=='ret' for i in info['instructions'])==1
- keep=mov(dst(count,7),src(r));out=op(52,dst(count,7),src(count),imm(0))
- out+=op(56,dst(count,7),src(count),imm(gain))
- out+=op(0,dst(count+1,7),src(count),imm(1))
- out+=op(14,dst(count,7),src(count),src(count+1))
- out+=mov([0x102072,0],src(count)) # o0.xyz only, native alpha/depth unchanged
- patches={offset:keep,end['dword']:out}
+ operands=a[3]['operands']
+ if component==0:keep=mov(dst(count,7),src(reg(a[4]['operands'][2])))
+ elif component==1:keep=op(56,dst(count,7),src(reg(operands[1]),0x39),src(reg(operands[2])))
+ elif component==2:keep=mov(dst(count,7),src(reg(operands[3])))
+ else:keep=op(56,dst(count,7),src(reg(operands[2])),imm(.25))
+ patches={a[3]['dword']:keep,a[5]['dword']:mov(dst(0,7),src(count))}
  def apply(v):
   for at,code in sorted(patches.items(),reverse=True):v[at:at]=code
-  v[decl+1]=count+2
- result=transform_shex(data,apply);a=words(result)
+  v[decl+1]=count+1
+ result=transform_shex(data,apply);v=words(result)
  for at,code in sorted(patches.items()):
-  assert a[at:at+len(code)]==code;del a[at:at+len(code)]
- a[decl+1]=count;a[1]=len(a);assert a==w
+  assert v[at:at+len(code)]==code;del v[at:at+len(code)]
+ v[decl+1]=count;v[1]=len(v);assert v==w
  return result
 
 def insert_verified(data,patch):
@@ -167,13 +165,13 @@ def main():
   p=folder/('character-'+family['name']+'.dxbc');p.write_bytes(data);old=decode(p);shaders.append(data)
   hq=cubic_volume(data,old);hp=folder/'neck-hq-temporary.dxbc';hp.write_bytes(hq)
   info=decode(hp)
-  results=[hq,filtered_volume(data,old)]+[buffer_view(hq,info,n,gain) for n,gain in VIEWS]
+  results=[hq,filtered_volume(data,old)]+[composition_view(hq,info,c) for c in range(4)]
   for index,result in enumerate(results):
    assert result[4:20]==checksum(result)
    p=folder/('character-'+family['name']+'-'+NAMES[index]+'.dxbc');p.write_bytes(result);new=decode(p)
    assert old['bindings']==new['bindings'] and old['constant_buffers']==new['constant_buffers']
    shaders.append(result)
-  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'buffer_display':'gain*max(x,0)/(1+gain*max(x,0))','view_inputs_and_gains':VIEWS})
+  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'composition_views':['base material lighting','shadowed rig diffuse times material','shadowed rig specular','material times 0.25'],'native_fog_tail':True})
  lines=['#pragma once','// Generated whole-character diagnostics. Alpha, depth and coverage stay native.']
  for i,b in enumerate(shaders):
   lines+=['inline constexpr unsigned char kCharacterSurface'+str(i)+'[] = {']
