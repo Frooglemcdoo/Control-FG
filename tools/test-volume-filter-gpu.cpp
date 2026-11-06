@@ -91,7 +91,7 @@ int main(){try{
         cb0[24*4]=.1f;cb0[24*4+1]=.1f;cb0[24*4+2]=2;
         std::array<float,64> cb1{};
         cb1[4*4]=c.outside?2.f:.5f;cb1[4*4+1]=.5f;cb1[4*4+3]=1;
-        cb1[5*4]=c.history?.5f:0;cb1[5*4+1]=100;
+        cb1[5*4]=c.history?.5f:0;cb1[5*4+1]=-1;
         auto a=gpu.Buffer(sizeof(cb0),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,cb0.data());
         auto b=gpu.Buffer(sizeof(cb1),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,cb1.data());
         Volume outputs[]={Texture(gpu,first+4,true,false,0),Texture(gpu,first+5,true,false,0)};
@@ -123,7 +123,10 @@ int main(){try{
             if(result.test==2)expected+=((x+y)%2)?1.f:-1.f;
             if(result.test==4)expected+=1;
             if(result.coefficient==0 && c==3)expected=0;
-            Require(std::isfinite(actual)&&std::abs(actual-expected)<.0001f,"volume filter pixel mismatch");
+            if(!std::isfinite(actual)||std::abs(actual-expected)>=.0001f){
+                std::cerr<<"case="<<result.test<<" coefficient="<<result.coefficient<<" x="<<x<<" y="<<y<<" channel="<<c<<" actual="<<actual<<" expected="<<expected<<"\n";
+                throw std::runtime_error("volume filter pixel mismatch");
+            }
         }
         result.buffer->Unmap(0,nullptr);
     }
