@@ -19,7 +19,8 @@ int main(){
  gi[unsigned(Event::ContactTemporal)]=1;assert(Covered(5,gi));
  auto partial=gi;partial[unsigned(Event::GISteady)]=0;assert(!Covered(5,partial));
  Snapshot zero{};zero[unsigned(Event::GITemporal)]=1;assert(!Covered(2,zero));
- zero[unsigned(Event::GIZero)]=1;assert(Covered(2,zero));
+ zero[unsigned(Event::GIZero)]=1;assert(!Covered(2,zero));
+ zero[unsigned(Event::GIEligible)]=1;assert(Covered(2,zero));
  Record(0,Event::GIZero);assert(Read(0)[unsigned(Event::GIZero)]==0);
  Record(2,Event::GIZero);assert(Read(2)[unsigned(Event::GIZero)]==1 && Read(3)[unsigned(Event::GIZero)]==0);
  std::cout<<"PASS transient source override truth table, missing and partial execution coverage, phase counter attribution and unchanged gameplay\n";

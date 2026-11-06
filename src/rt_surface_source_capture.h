@@ -35,7 +35,7 @@ inline control_rr_gi::DiagnosticView View(unsigned phase,control_rr_gi::StageMod
         StabilizeGI(phase)?control_rr_gi::DiagnosticView::Normal:control_rr_gi::EffectiveView(mode,saved);
 }
 inline bool Covered(unsigned phase,const Snapshot& delta) noexcept {
-    if(phase==2 && !delta[unsigned(Event::GIZero)])return false;
+    if(phase==2 && (!delta[unsigned(Event::GIZero)] || !delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)]))return false;
     if(StabilizeGI(phase) && (!delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)] || !delta[unsigned(Event::GISteady)]))return false;
     if(PreserveContact(phase) && (!delta[unsigned(Event::ContactEntry)] || !delta[unsigned(Event::ContactNative)] || (!delta[unsigned(Event::ContactTemporal)] && !delta[unsigned(Event::ContactSpatial)])))return false;
     return phase>0 && phase<phases;
