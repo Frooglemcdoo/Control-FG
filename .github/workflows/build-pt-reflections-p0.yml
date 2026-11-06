@@ -825,6 +825,12 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/gi_motion_history.py
           if errorlevel 1 exit /b 1
+          python tools/character_surface.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-character-surface-gpu.cpp /Febuild\test-character-surface-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-character-surface-gpu.exe
+          if errorlevel 1 exit /b 1
           python tools/prepare-owned-volume.py
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-owned-volume-gpu.cpp /Febuild\test-owned-volume-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
@@ -1210,11 +1216,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R345
+      - name: Package owned GI integration R346
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R345'
+          $out='ControlTOH-R346'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1254,16 +1260,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R345 - Owned GI integration test
+          R346 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
-          R345 replaces the participating-media integration pass with owned four-column sampling.
+          R346 replaces the participating-media integration pass with owned four-column sampling.
           Native lights, density, atmosphere, output texture and producer sampling remain. Use High VL.
           F10 TEST VOLUME captures native / fog-isolation / owned-scattering / native-repeat full-resolution JPEGs and packages them automatically.
           Owned scattering resumes after completion or cancellation. This is the first integration stage; dedicated fog history is not yet implemented. In-game appearance and performance need validation.
-          F10 TEST SHADOWS: hold the camera still. Full-resolution game screenshots are packaged automatically.
+          F10 TEST JESSE isolates six character shader inputs in one capture: two shadow mask channels, volume rig, diffuse, specular and translucency.
+          Keep Jesse visible and hold the camera still. Full-resolution JPEGs package automatically.
+          This build diagnoses surface mottling; it does not yet claim a fix. Character shaders stay native outside TEST JESSE.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
@@ -1291,10 +1299,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R345
+          name: ControlTOH-R346
           path: |
-            ControlTOH-R345.zip
-            ControlTOH-R345.sha256
+            ControlTOH-R346.zip
+            ControlTOH-R346.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

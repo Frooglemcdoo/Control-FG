@@ -339,6 +339,7 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
 inline performance::Stage PerformanceStage(ID3D12PipelineState*) noexcept;
 inline performance::Stage PerformanceRayStage() noexcept;
 inline void BindPerformance(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
+#include "character_surface_runtime.h"
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
@@ -349,6 +350,14 @@ struct Binding {
         ReportBoundIdentity(native);
         UINT size=sizeof(kind);
         if(!native || FAILED(native->GetPrivateData(kKindGuid,&size,&kind)) || size!=sizeof(kind)){kind=0;return;}
+        if(kind==character_surface::kind){
+            surfacePhase=character_surface::phase.load(std::memory_order_relaxed);
+            if(surfacePhase>=2 && surfacePhase<=7){
+                size=sizeof(alternate);
+                if(SUCCEEDED(native->GetPrivateData(character_surface::VariantGuid(surfacePhase-2),&size,&alternate)) && alternate)selected=alternate;
+            }
+            return;
+        }
         if(kind==volume_test::filterKind){
             volumePhase=volume_test::phase.load(std::memory_order_relaxed);
             const bool stabilize=volumePhase==0 || volumePhase==2 || volumePhase==3;
@@ -365,8 +374,15 @@ struct Binding {
             else { kind = 0; Trace("bind_fallback reason=variant_missing"); }
         }
     }
-    unsigned volumePhase = 0;
+    unsigned volumePhase = 0,surfacePhase=0;
     void Recorded() const noexcept {
+        if(kind==character_surface::kind){
+            if(surfacePhase>0 && surfacePhase<9){
+                ++character_surface::binds[surfacePhase];
+                if(alternate)++character_surface::applied[surfacePhase];
+            }
+            return;
+        }
         if(kind==volume_test::filterKind){
             if(volumePhase){
                 ++volume_test::binds[volumePhase];
@@ -552,6 +568,7 @@ inline CreateGraphics originalGraphics = nullptr;
 inline CreateList originalCreateList = nullptr;
 inline void ObserveGraphics(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, IUnknown* native) noexcept {
     graphicsSeen.fetch_add(1);
+    character_surface::Observe(device,desc,native,originalGraphics);
     IdentifyPipeline(native, desc->PS, 1);
     std::vector<unsigned char> bytes;
     if (Prepare(kBakedGi, desc->PS, bytes)) {

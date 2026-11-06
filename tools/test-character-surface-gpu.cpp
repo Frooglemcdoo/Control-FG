@@ -1,0 +1,54 @@
+#include "gpu_test_device.h"
+#include <atomic>
+#include <sstream>
+namespace native_lighting {
+inline constexpr GUID kKindGuid{0x72134610,0x3213,0x4321,{1,2,3,4,5,6,7,8}};
+static void Trace(const char*,...){}
+#include "../src/character_surface_runtime.h"
+}
+static HRESULT STDMETHODCALLTYPE Create(ID3D12Device* d,const D3D12_GRAPHICS_PIPELINE_STATE_DESC* p,REFIID iid,void** out){return d->CreateGraphicsPipelineState(p,iid,out);}
+int main(){try{
+    using namespace native_lighting;
+    namespace surface=character_surface;
+    Device gpu(false);
+    ComPtr<ID3D12ShaderReflection> reflect;
+    Check(D3DReflect(surface::kCharacterSurface0,sizeof(surface::kCharacterSurface0),IID_PPV_ARGS(&reflect)));
+    D3D12_SHADER_DESC info{};Check(reflect->GetDesc(&info));
+    std::ostringstream source;source<<"struct Output {";
+    std::vector<std::pair<UINT,bool>> fields;
+    for(UINT i=0;i<info.InputParameters;++i){
+        D3D12_SIGNATURE_PARAMETER_DESC p{};Check(reflect->GetInputParameterDesc(i,&p));
+        if(p.SystemValueType==D3D_NAME_IS_FRONT_FACE || p.SystemValueType==D3D_NAME_PRIMITIVE_ID || p.SystemValueType==D3D_NAME_SAMPLE_INDEX)continue;
+        const bool integer=p.ComponentType!=D3D_REGISTER_COMPONENT_FLOAT32;
+        source<<(integer?"nointerpolation ":"")<<(p.ComponentType==D3D_REGISTER_COMPONENT_UINT32?"uint4 ":p.ComponentType==D3D_REGISTER_COMPONENT_SINT32?"int4 ":"float4 ")<<"f"<<i<<":"<<p.SemanticName<<p.SemanticIndex<<";";
+        fields.push_back({i,p.SystemValueType==D3D_NAME_POSITION});
+    }
+    source<<"}; Output main(uint id:SV_VertexID){Output o;";
+    for(auto f:fields)source<<"o.f"<<f.first<<(f.second?"=float4((id==1)?3:-1,(id==2)?3:-1,0,1);":"=0;");
+    source<<"return o;}";
+    const auto hlsl=source.str();ComPtr<ID3DBlob> vs,error;
+    const auto hr=D3DCompile(hlsl.data(),hlsl.size(),nullptr,nullptr,nullptr,"main","vs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&vs,&error);
+    if(error)std::cerr<<static_cast<const char*>(error->GetBufferPointer());Check(hr);
+    D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,18,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,UINT_MAX,0,1,0}};
+    D3D12_ROOT_PARAMETER params[9]{};
+    for(UINT i=0;i<7;++i){params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;params[i].Descriptor.ShaderRegister=i;params[i].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
+    for(UINT i=0;i<2;++i){params[7+i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[7+i].DescriptorTable={1,&ranges[i]};params[7+i].ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
+    D3D12_STATIC_SAMPLER_DESC samplers[2]{};
+    for(UINT i=0;i<2;++i){auto& s=samplers[i];s.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;s.AddressU=s.AddressV=s.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;s.ShaderRegister=i?19:6;s.RegisterSpace=1;s.MaxLOD=D3D12_FLOAT32_MAX;s.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;s.MaxAnisotropy=1;s.ShaderVisibility=D3D12_SHADER_VISIBILITY_PIXEL;}
+    D3D12_ROOT_SIGNATURE_DESC rs{9,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    ComPtr<ID3DBlob> rootBytes;Check(D3D12SerializeRootSignature(&rs,D3D_ROOT_SIGNATURE_VERSION_1,&rootBytes,&error));
+    ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),IID_PPV_ARGS(&root)));
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.VS={vs->GetBufferPointer(),vs->GetBufferSize()};desc.PS={surface::kCharacterSurface0,sizeof(surface::kCharacterSurface0)};
+    desc.BlendState.RenderTarget[0].RenderTargetWriteMask=D3D12_COLOR_WRITE_ENABLE_ALL;
+    desc.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;desc.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;desc.RasterizerState.DepthClipEnable=TRUE;
+    desc.SampleMask=UINT_MAX;desc.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;desc.NumRenderTargets=1;desc.RTVFormats[0]=DXGI_FORMAT_R16G16B16A16_FLOAT;desc.SampleDesc.Count=1;
+    ComPtr<ID3D12PipelineState> original;Check(gpu.device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(&original)));
+    surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);
+    Require(surface::matched.load()==1 && surface::ready.load()==1,"Surface variants not admitted");
+    unsigned tag=0;UINT size=sizeof(tag);Check(original->GetPrivateData(kKindGuid,&size,&tag));Require(tag==surface::kind,"Surface tag mismatch");
+    for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(original->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing owned variant");p->Release();}
+    surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==1,"Duplicate preparation");
+    auto changed=std::vector<unsigned char>(surface::kCharacterSurface0,surface::kCharacterSurface0+sizeof(surface::kCharacterSurface0));changed[100]^=1;desc.PS={changed.data(),changed.size()};
+    surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==1,"Unrecognized shader accepted");
+    std::cout<<"PASS original + six character graphics PSOs on WARP, production exact admission, variant ownership, duplicate and mismatch rejection\n";
+}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

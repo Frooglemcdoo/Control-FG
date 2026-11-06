@@ -28,7 +28,7 @@ inline constexpr unsigned kButtonCount = kModeCount + 16;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+19)return L"TEST VOLUME";
-    if(index==kModeCount+18)return L"TEST SHADOWS";
+    if(index==kModeCount+18)return L"TEST JESSE";
     if(index==kModeCount+17){
         if(!control_rr::RRUserRequested())return L"GI RAYS: RR OFF";
         const unsigned rays=control_rr::GISampleRequested();
@@ -149,7 +149,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC", {14,8,kWidth-12,34}, theme::kAccent);
+    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R346", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
