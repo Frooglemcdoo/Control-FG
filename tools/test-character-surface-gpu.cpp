@@ -26,7 +26,8 @@ int main(){try{
         D3D12_SIGNATURE_PARAMETER_DESC p{};Check(reflect->GetInputParameterDesc(i,&p));
         if(p.SystemValueType==D3D_NAME_IS_FRONT_FACE || p.SystemValueType==D3D_NAME_PRIMITIVE_ID || p.SystemValueType==D3D_NAME_SAMPLE_INDEX)continue;
         const bool integer=p.ComponentType!=D3D_REGISTER_COMPONENT_FLOAT32;
-        source<<(integer?"nointerpolation ":"")<<(p.ComponentType==D3D_REGISTER_COMPONENT_UINT32?"uint4 ":p.ComponentType==D3D_REGISTER_COMPONENT_SINT32?"int4 ":"float4 ")<<"f"<<i<<":"<<p.SemanticName<<p.SemanticIndex<<";";
+        unsigned components=0;for(unsigned bit=0;bit<4;++bit)if(p.Mask&(1u<<bit))++components;
+        source<<(integer?"nointerpolation ":"")<<(p.ComponentType==D3D_REGISTER_COMPONENT_UINT32?"uint":p.ComponentType==D3D_REGISTER_COMPONENT_SINT32?"int":"float")<<components<<" f"<<i<<":"<<p.SemanticName<<p.SemanticIndex<<";";
         fields.push_back({i,p.SystemValueType==D3D_NAME_POSITION});
     }
     source<<"}; Output main(uint id:SV_VertexID){Output o;";
