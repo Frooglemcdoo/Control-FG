@@ -16,7 +16,7 @@ int main(){try{
     ComPtr<ID3D12Debug> debug;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     std::cout<<"Create WARP device\n";Device gpu(false);
-    for(unsigned q=0;q<3;++q){
+    for(unsigned q=0;q<4;++q){
         Require(surface::SelectedVariant(0,q)==(q==0?-1:q==1?1:0),"Gameplay quality selection mismatch");
         Require(surface::SelectedVariant(1,q)==-1 && surface::SelectedVariant(8,q)==-1,"Native comparison is not native");
         Require(surface::SelectedVariant(2,q)==0 && surface::SelectedVariant(3,q)==1,"Quality comparison mismatch");

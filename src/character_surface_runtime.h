@@ -4,11 +4,11 @@
 namespace character_surface {
 #include "../build/character_surface.generated.h"
 inline constexpr unsigned kind=0x73460000;
-// 0=native,1=R351,2=HQ. Capture phase overrides never mutate this choice.
-inline std::atomic<unsigned> quality{2};
+// 0=native,1=R351,2=R353 HQ,3=HQ with near history. Capture phase overrides never mutate this choice.
+inline std::atomic<unsigned> quality{3};
 inline int SelectedVariant(unsigned phase,unsigned quality) noexcept {
-    if(phase==0)return quality==1?1:quality==2?0:-1;
-    return phase==2?0:phase==3?1:-1;
+    if(phase==0)return quality==1?1:(quality==2 || quality==3)?0:-1;
+    return (phase==2 || phase==4)?0:phase==3?1:-1;
 }
 inline std::atomic<uint64_t> filteredBinds{0};
 inline std::atomic<unsigned> phase{0},matched{0},ready{0};
@@ -105,7 +105,7 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     if(SUCCEEDED(hr))++ready;
     else for(unsigned i=0;i<2;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R352 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R353 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

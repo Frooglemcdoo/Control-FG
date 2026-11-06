@@ -29,7 +29,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+20){
         const unsigned quality=character_surface::quality.load();
-        return !quality?L"RIG: NATIVE":!character_surface::filteredBinds.load()?L"RIG: WAIT":quality==1?L"RIG: R351":L"RIG: HQ";
+        return !quality?L"RIG: NATIVE":!character_surface::filteredBinds.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::applied.load()?L"RIG: WAIT":L"RIG: STABLE";
     }
     if(index==kModeCount+19)return L"TEST VOLUME";
     if(index==kModeCount+18)return L"TEST JESSE";
@@ -153,7 +153,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R352", {14,8,kWidth-12,34}, theme::kAccent);
+    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R353", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
@@ -387,7 +387,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
             else if(index==kModeCount+20 && !capture_suite::active && !control_gi_button::Active()){
-                character_surface::quality.store((character_surface::quality.load()+1)%3);
+                character_surface::quality.store((character_surface::quality.load()+1)%4);
                 Trace("character_rig_filter quality=%u recorded_binds=%llu",character_surface::quality.load(),character_surface::filteredBinds.load());
             }
             else if((index==kModeCount+18 || index==kModeCount+19) && !capture_suite::active && !control_gi_button::Active()){

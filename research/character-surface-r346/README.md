@@ -144,3 +144,43 @@ of the user's game. Native downstream instructions recover bit-for-bit. Windows
 checks create both quality variants for all12native/stripped families and verify
 quality/capture selection. In-game quality, performance and remaining temporal
 noise must still be evaluated.
+
+## R353 guarded near-volume history candidate
+R352 video20261106-1604-47.3172574.mp4 and user feedback: much better, a little
+flicker remains. R352 character reconstruction is unchanged byte-for-byte.
+The audited native deferredlight_vvfilter shader gates history using
+`g_fViewVolumeFilterTemporalWeightMinDistance` against the current depth-slice
+index (r1.z); near slices use current coefficients only. The video cannot prove
+that this gate is the remaining source, and its live threshold is not captured.
+
+R353 adds conservative reuse only where the native depth gate disables it.
+It uses the existing reprojected history, capped at min(engineWeight,0.75).
+A uniform weight over both coefficient textures fades to zero when any channel
+changes by25% relative to max(abs(current),abs(history),0.001). Unclamped old
+XYZ outside[0,1] and nonpositive old clip W reject near history. Engine weight0
+still disables history (including resets); far slices keep native weighting.
+Rejection explicitly selects current values, avoiding zero-times-NaN pollution.
+This is coefficient-change rejection, not object-ID/depth/normal visibility
+validation; small moving changes can retain a short lag. No claim of perfect
+flicker removal or complete disocclusion rejection is made.
+
+The shared view-volume pass is changed, so other near-volume consumers may be
+influenced too. Character normals/materials/rig BRDF/shadow inputs and R345 fog
+integration remain unchanged. Four native volume reads remain four; seven extra
+temporaries and arithmetic in the existing compute pass, no extra pass, resources,
+CPU readback or per-frame shader analysis. Native PSO stays owned by the game;
+exact SHEX admission accepts stripped reflection containers, unknown code fails
+closed. F10 RIG cycles STABLE(default), NATIVE, R351, R352; WAIT means no recorded
+replacement binding has been observed. Counters do not prove executed GPU draws.
+
+TEST JESSE compares native/R352/STABLE/native and resumes the chosen quality.
+STABLE phase requires history replacement binds as well as all three character
+groups. Eight full-screen JPEGs remain a compact appearance diagnostic, not a
+complete temporal measurement. Live comparison requires several frames to let
+existing history settle after a toggle; no artificial history clear is added.
+
+Validation: structural checksum/resource/reprojection tests and unchanged960
+character-filter evaluations locally; ten WARP dispatch cases in CI cover near
+reuse, native far weighting, global reset, XY/Z bounds, large lighting changes,
+constant-field energy and low engine history weight. Actual game confirmation
+and GPU performance remain outstanding.

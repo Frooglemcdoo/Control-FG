@@ -254,6 +254,8 @@ inline void Observe(const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept
 inline void Bind(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
 inline void Dispatch(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept;
 }
+#include "character_surface_runtime.h"
+#include "volume_temporal_runtime.h"
 namespace volume_test {
 #include "owned_volume.generated.h"
 inline constexpr GUID alternateGuid{0xf2713a45,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
@@ -298,6 +300,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
     computeSeen.fetch_add(1);
     volume_test::Observe(device,desc,native,original);
+    volume_temporal::Observe(device,desc,native,original);
     gi_evaluator::Observe(device,desc,native,original);
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
@@ -339,7 +342,6 @@ inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_ST
 inline performance::Stage PerformanceStage(ID3D12PipelineState*) noexcept;
 inline performance::Stage PerformanceRayStage() noexcept;
 inline void BindPerformance(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noexcept;
-#include "character_surface_runtime.h"
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
@@ -350,6 +352,13 @@ struct Binding {
         ReportBoundIdentity(native);
         UINT size=sizeof(kind);
         if(!native || FAILED(native->GetPrivateData(kKindGuid,&size,&kind)) || size!=sizeof(kind)){kind=0;return;}
+        if(kind==volume_temporal::kind){
+            if(volume_test::phase.load()==0 && volume_temporal::Enabled(character_surface::phase.load(),character_surface::quality.load())){
+                size=sizeof(alternate);
+                if(SUCCEEDED(native->GetPrivateData(volume_temporal::variantGuid,&size,&alternate))&&alternate)selected=alternate;
+            }
+            return;
+        }
         if(kind==character_surface::kind){
             surfacePhase=character_surface::phase.load(std::memory_order_relaxed);
             if(surfacePhase){size=sizeof(surfaceGroup);if(FAILED(native->GetPrivateData(character_surface::VariantGuid(6),&size,&surfaceGroup)))surfaceGroup=3;}
@@ -378,6 +387,7 @@ struct Binding {
     }
     unsigned volumePhase = 0,surfacePhase=0,surfaceGroup=3;
     void Recorded() const noexcept {
+        if(kind==volume_temporal::kind){++volume_temporal::binds;if(alternate)++volume_temporal::applied;return;}
         if(kind==character_surface::kind){
             if(surfacePhase==0 && alternate)++character_surface::filteredBinds;
             if(surfacePhase>0 && surfacePhase<9){
