@@ -37,6 +37,13 @@ for name, expected in manifest['files'].items():
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name == 'src/rr_clamp_strength_policy.h':
+        # R354 user-requested startup selection only; retain the full historical
+        # shader/dispatch baseline check after reversing this one exact edit.
+        before=b'inline std::atomic<Mode> requestedMode{Mode::Native};'
+        after=b'inline std::atomic<Mode> requestedMode{Mode::Override60};'
+        assert data.count(after)==1, 'R354 startup clamp must be60'
+        data=data.replace(after,before,1)
     if name in queue_boundary_exceptions:
         text=data.decode()
         for before,after in reversed(queue_boundary_exceptions[name]):

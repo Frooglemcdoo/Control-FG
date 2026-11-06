@@ -13,7 +13,9 @@ int main(){
  assert(control_rr::InputCapturePairMayExport(P::Exporting,P::Recorded,false));
  assert(control_rr::InputCapturePairMayExport(P::Submitted,P::Ready,true));
  namespace clamp=control_rr_clamp;
- assert(clamp::RuntimeRequested()==100);
+ assert(clamp::RuntimeRequested()==60);
+ assert(clamp::requestedMode.load()==clamp::Mode::Override60);
+ clamp::requestedMode=clamp::Mode::Native;assert(clamp::RuntimeRequested()==100);
  assert(clamp::Variant(100)<0 && control_rr::UseNativeSignalClamp(false,true,100));
  assert(clamp::Next(clamp::Next(clamp::Next(clamp::Mode::Native)))==clamp::Mode::Native);
  clamp::requestedMode=clamp::Mode::Bypass;
@@ -33,6 +35,6 @@ int main(){
  assert(!ui::Request());requested=0;assert(Latch(17));assert(!Current());assert(control_rr_clamp::RuntimeRequested()==0);
  clamp::requestedMode=clamp::Mode::Override60;assert(clamp::RuntimeRequested()==60);
  assert(control_rr::UseNativeSignalClamp(false,true,clamp::RuntimeRequested()));
- puts("PASS R276: default native, bypass selects raw path, suite isolation, restore to 60");
+ puts("PASS R354: default60, explicit native, bypass selects raw path, suite isolation, restore to 60");
  puts("PASS: sixteen capture pairs, state changes, frame/sample guards, clamp restore and fence gating");
 }

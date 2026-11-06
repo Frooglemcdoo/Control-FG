@@ -60,8 +60,8 @@ static Volume Texture(Device& gpu,UINT index,bool output,bool checker,float valu
 }
 int main(){try{
     Device gpu(false);
-    for(unsigned p=0;p<9;++p)for(unsigned q=0;q<4;++q)
-        Require(Enabled(p,q)==(p==4 || (!p && q==3)),"History selection mismatch");
+    for(unsigned p=0;p<12;++p)for(unsigned q=0;q<4;++q)
+        Require(Enabled(p,q)==((p>=4 && p!=8) || (!p && q==3)),"History selection mismatch");
     D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,4,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,0,0,0}};
     D3D12_ROOT_PARAMETER params[4]{};
     for(UINT i=0;i<2;++i){

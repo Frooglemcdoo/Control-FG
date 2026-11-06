@@ -8,12 +8,12 @@ inline constexpr unsigned kind=0x73460000;
 inline std::atomic<unsigned> quality{3};
 inline int SelectedVariant(unsigned phase,unsigned quality) noexcept {
     if(phase==0)return quality==1?1:(quality==2 || quality==3)?0:-1;
-    return (phase==2 || phase==4)?0:phase==3?1:-1;
+    return (phase==2 || phase==4)?0:phase==3?1:phase==5?2:phase==6?3:phase==7?4:phase==9?5:phase==10?6:phase==11?7:-1;
 }
 inline std::atomic<uint64_t> filteredBinds{0};
 inline std::atomic<unsigned> phase{0},matched{0},ready{0};
-inline std::atomic<uint64_t> binds[9]{},applied[9]{};
-inline std::atomic<uint64_t> groupBinds[3][9]{},groupApplied[3][9]{};
+inline std::atomic<uint64_t> binds[12]{},applied[12]{};
+inline std::atomic<uint64_t> groupBinds[3][12]{},groupApplied[3][12]{};
 inline GUID VariantGuid(unsigned index) noexcept {
     return GUID{0xf2713460+index,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
 }
@@ -92,20 +92,20 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     unsigned tag=0;UINT size=sizeof(tag);
     if(SUCCEEDED(owner->GetPrivateData(kKindGuid,&size,&tag)) && tag==kind){owner->Release();return;}
     ++matched;
-    ID3D12PipelineState* variants[2]{};
+    ID3D12PipelineState* variants[kCharacterVariantCount]{};
     HRESULT hr=S_OK;
-    for(unsigned i=0;i<2 && SUCCEEDED(hr);++i){
+    for(unsigned i=0;i<kCharacterVariantCount && SUCCEEDED(hr);++i){
         auto copy=*desc;copy.PS=kCharacterVariants[family][i];copy.CachedPSO={nullptr,0};
         hr=create(device,&copy,IID_PPV_ARGS(&variants[i]));
     }
-    for(unsigned i=0;i<2 && SUCCEEDED(hr);++i)hr=owner->SetPrivateDataInterface(VariantGuid(i),variants[i]);
+    for(unsigned i=0;i<kCharacterVariantCount && SUCCEEDED(hr);++i)hr=owner->SetPrivateDataInterface(VariantGuid(i),variants[i]);
     const unsigned group=kCharacterGroups[family];
-    if(SUCCEEDED(hr))hr=owner->SetPrivateData(VariantGuid(6),sizeof(group),&group);
+    if(SUCCEEDED(hr))hr=owner->SetPrivateData(VariantGuid(16),sizeof(group),&group);
     if(SUCCEEDED(hr))hr=owner->SetPrivateData(kKindGuid,sizeof(kind),&kind);
     if(SUCCEEDED(hr))++ready;
-    else for(unsigned i=0;i<2;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
+    else for(unsigned i=0;i<kCharacterVariantCount;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R353 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R354 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

@@ -7,7 +7,7 @@ inline constexpr unsigned kReflectionDetailPercent = 60;
 inline std::atomic<unsigned> effective{100};
 inline std::atomic<bool> applied{true};
 enum class Mode : unsigned { Native, Override60, Bypass };
-inline std::atomic<Mode> requestedMode{Mode::Native};
+inline std::atomic<Mode> requestedMode{Mode::Override60};
 inline Mode Next(Mode mode) noexcept {
  return mode==Mode::Native?Mode::Override60:mode==Mode::Override60?Mode::Bypass:Mode::Native;
 }

@@ -361,7 +361,7 @@ struct Binding {
         }
         if(kind==character_surface::kind){
             surfacePhase=character_surface::phase.load(std::memory_order_relaxed);
-            if(surfacePhase){size=sizeof(surfaceGroup);if(FAILED(native->GetPrivateData(character_surface::VariantGuid(6),&size,&surfaceGroup)))surfaceGroup=3;}
+            if(surfacePhase){size=sizeof(surfaceGroup);if(FAILED(native->GetPrivateData(character_surface::VariantGuid(16),&size,&surfaceGroup)))surfaceGroup=3;}
             const int variant=character_surface::SelectedVariant(surfacePhase,character_surface::quality.load(std::memory_order_relaxed));
             if(variant>=0){
                 size=sizeof(alternate);
@@ -390,7 +390,7 @@ struct Binding {
         if(kind==volume_temporal::kind){++volume_temporal::binds;if(alternate)++volume_temporal::applied;return;}
         if(kind==character_surface::kind){
             if(surfacePhase==0 && alternate)++character_surface::filteredBinds;
-            if(surfacePhase>0 && surfacePhase<9){
+            if(surfacePhase>0 && surfacePhase<12){
                 ++character_surface::binds[surfacePhase];
                 if(surfaceGroup<3){++character_surface::groupBinds[surfaceGroup][surfacePhase];if(alternate)++character_surface::groupApplied[surfaceGroup][surfacePhase];}
                 if(alternate)++character_surface::applied[surfacePhase];

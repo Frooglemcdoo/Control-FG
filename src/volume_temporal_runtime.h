@@ -5,7 +5,7 @@ inline constexpr unsigned kind=0x73530000;
 inline constexpr GUID variantGuid{0xf2713a53,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
 inline std::atomic<unsigned> matched{0},ready{0};
 inline std::atomic<uint64_t> binds{0},applied{0};
-inline bool Enabled(unsigned phase,unsigned quality) noexcept {return phase==4 || (phase==0 && quality==3);}
+inline bool Enabled(unsigned phase,unsigned quality) noexcept {return (phase>=4 && phase<12 && phase!=8) || (phase==0 && quality==3);}
 inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* native,CreateCompute create) noexcept {
     if(!device||!create||!native||!desc||!desc->CS.pShaderBytecode)return;
     const D3D12_SHADER_BYTECODE original{kTemporalNative,sizeof(kTemporalNative)};

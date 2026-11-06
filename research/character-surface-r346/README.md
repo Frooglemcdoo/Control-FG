@@ -184,3 +184,38 @@ character-filter evaluations locally; ten WARP dispatch cases in CI cover near
 reuse, native far weighting, global reset, XY/Z bounds, large lighting changes,
 constant-field energy and low engine history weight. Actual game confirmation
 and GPU performance remain outstanding.
+
+## R354 neck input isolation and startup clamp60
+User confirms R353 fixed the prior flicker. New video20261106-1653-27.4116257.mp4
+shows dense mottled neck/under-jaw noise at6.97–7.03seconds while the camera rotates.
+This cannot identify shadow/translucency/bent-normal/buffer input from video alone.
+R354 is a targeted diagnostic build, not a claimed repair of that remaining noise.
+
+User corrected startup clamp request from50 to60. requestedMode now Override60;
+compiled clamp remains60, Native/Bypass remain available and effective tracking
+still reports actual admission. The existing suite policy verifies default60,
+explicit Native, Bypass and capture overrides. The historical baseline guard
+reverses only this exact authorized initializer change before checking old hashes.
+
+TEST JESSE now compares R353 stable / shadow Y neutral / shadow W neutral / skin
+translucency off / surface normal instead of bent normal / rig off / diffuse and
+specular buffers off / stable repeat. All phases retain EXACT R352 HQ volume
+reconstruction and R353 near-volume history. Sixteen full-client JPEG95 frames;
+no giant resource dump. Previous quality resumes on completion/cancel/failure.
+This is source isolation; altered lighting only exists during capture. The
+translucency phase is a documented no-op for cloth/hair (no such input); the
+normal phase is a documented no-op for hair (no bent-normal input).
+
+The six diagnostic insertions are derived independently for all12 audited shaders.
+Each insertion is reversible back to the byte-identical HQ shader. Original alpha,
+coverage, depth, output writes and descriptor bindings are retained. Unknown
+shaders are never patched. Group metadata moves to GUID index16 to avoid collision
+with new variant index6. There are8 replacement PSOs per native family instead
+of2; startup PSO preparation/memory grows, ordinary gameplay remains the same
+single selected shader. Capture phase counters now cover0..11. All capture phases
+require history replacement binds and all three character groups; unsupported
+input no-ops are explicit in the audit, not evidence that an input was changed.
+
+The short still sequence localizes visible mottling only if it reproduces during
+capture. It cannot guarantee full temporal diagnosis during arbitrary camera
+motion. No claim that this clip proves an additional defective shader is made.

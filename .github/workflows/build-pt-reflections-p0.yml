@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character rig sampling R353
+      - name: Validate character rig sampling R354
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -136,6 +136,8 @@ jobs:
           if errorlevel 1 exit /b 1
           python -m pip install numpy
           if errorlevel 1 exit /b 1
+          python tools/test-neck-isolation.py
+          if errorlevel 1 exit /b 1
           python tools/test-character-rig-filter.py
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-character-surface-gpu.cpp /Febuild\test-character-surface-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
@@ -143,7 +145,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R353
+      - name: Validate near volume history R354
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1239,11 +1241,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R353
+      - name: Package owned GI integration R354
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R353'
+          $out='ControlTOH-R354'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1283,12 +1285,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R353 - Owned GI integration test
+          R354 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
-          Enable RT indirect lighting. GI RAW BYPASS and CLAMP NATIVE are the defaults.
-          R353 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
+          Enable RT indirect lighting. GI RAW BYPASS and REF CLAMP 60% are the defaults.
+          R354 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
           Supports twelve audited native skin/cloth/hair variants including the captured in-game shaders and stripped reflection metadata.
           Failure packages a bounded shader report instead of ineffective comparison shots.
           The R345 owned participating-media integration remains unchanged.
@@ -1299,7 +1301,7 @@ jobs:
           HQ uses weighted cubic reconstruction of the rig volume, preserving lights, materials, shadows and fog.
           HQ uses27 trilinear reads per volume; R351 uses8. No new rendering pass or texture allocation. STABLE adds guarded near-slice reuse in the existing native history pass.
           Near history is capped at0.75, rejects invalid previous coordinates and fades out at25% coefficient change. Global history reset and far-slice behavior are preserved. This also affects other near-field consumers of the shared volume. In-game stability/performance need validation.
-          TEST JESSE automatically compares native / R352 / STABLE / native, eight full-screen JPEGs total.
+          TEST JESSE automatically isolates neck inputs with STABLE retained: stable / shadow Y / shadow W / skin translucency / surface normal / rig off / lighting buffers off / stable repeat. Sixteen full-screen JPEGs, no resource dump.
           Keep Jesse visible and hold the camera still. Packaging and restoration are automatic. Keep VL High.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
@@ -1328,10 +1330,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R353
+          name: ControlTOH-R354
           path: |
-            ControlTOH-R353.zip
-            ControlTOH-R353.sha256
+            ControlTOH-R354.zip
+            ControlTOH-R354.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
