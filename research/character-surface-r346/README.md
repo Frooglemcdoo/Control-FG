@@ -52,3 +52,12 @@ R348 replaces the six TEST JESSE phases with:
 Both audited shader families receive separately generated patches. Basic-family offsets after the material-detail section are57 dwords earlier, including609=>552. The generator verifies target instructions and lossless recovery of the original instruction stream. All overrides are temporary, preserve bindings, and use R347's readiness checks.
 
 Interpretation: noise persisting on flat final points beyond the replaced character RGB/alpha (later processing, coverage/overlays or output), not specifically RR. A clean flat final but noisy flat-before-fog implicates fog composition inputs. Clean unlit albedo but noisy lit variants keeps lighting/normal reconstruction in scope. Idle animation and changed brightness prevent exact per-pixel comparisons. User observation is needed for flicker; stills alone cannot prove temporal stability.
+
+## R349 full-character scope correction
+R348 matched only the skin path. Its clean gray skin and cleaner rig-off face do not establish a result for clothing or hair. R349 admits six separately audited shaders (two skin, two cloth, two hair) by exact executable/signature matching. Alpha and depth outputs, including hair depth offset, are retained in every phase.
+
+TEST JESSE now runs both shadow-mask channels neutral together, rig off, rig only (remove the existing diffuse/specular-buffer contribution), gray before fog, gray final, and fog off. Every phase requires nonzero recorded binds for each of skin/cloth/hair and nonzero substitutions for each override phase. Counts are recorded PSO binds, not executed draw proof; visual gray coverage remains essential. Missing coverage stops and packages shader candidates.
+
+These shaders use the same Y/W shadow mask channels but different material/light accumulation registers. The generator derives insertion boundaries only from SHA-verified originals, asserts the complete local composition sequence, preserves all original instructions, verifies reversible recovery and resource bindings, and creates a separate replacement set for every shader. Windows checks create native and stripped PSOs with all six replacements for each family.
+
+This is full-character localization, not a claimed repair or a shipping shadow-disable workaround. Preserving the authored lighting while fixing its unstable source remains the goal.

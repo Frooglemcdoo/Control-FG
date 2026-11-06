@@ -6,6 +6,7 @@ namespace character_surface {
 inline constexpr unsigned kind=0x73460000;
 inline std::atomic<unsigned> phase{0},matched{0},ready{0};
 inline std::atomic<uint64_t> binds[9]{},applied[9]{};
+inline std::atomic<uint64_t> groupBinds[3][9]{},groupApplied[3][9]{};
 inline GUID VariantGuid(unsigned index) noexcept {
     return GUID{0xf2713460+index,0x71b4,0x4aea,{0xa7,0x31,0xe6,0x31,0x44,0xc2,0x12,0x54}};
 }
@@ -36,8 +37,7 @@ inline bool Equivalent(const D3D12_SHADER_BYTECODE& b,const D3D12_SHADER_BYTECOD
     return true;
 }
 inline int Family(const D3D12_SHADER_BYTECODE& b) noexcept {
-    if(Equivalent(b,{kCharacterSurface0,sizeof(kCharacterSurface0)}))return 0;
-    if(Equivalent(b,{kCharacterSurface7,sizeof(kCharacterSurface7)}))return 1;
+    for(unsigned i=0;i<6;++i)if(Equivalent(b,kCharacterOriginals[i]))return int(i);
     return -1;
 }
 // Bounded startup-only CPU evidence; no capture readbacks or per-frame copies.
@@ -88,15 +88,17 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     ID3D12PipelineState* variants[6]{};
     HRESULT hr=S_OK;
     for(unsigned i=0;i<6 && SUCCEEDED(hr);++i){
-        auto copy=*desc;copy.PS=family?kCharacterSurfaceBasicVariants[i]:kCharacterSurfaceVariants[i];copy.CachedPSO={nullptr,0};
+        auto copy=*desc;copy.PS=kCharacterVariants[family][i];copy.CachedPSO={nullptr,0};
         hr=create(device,&copy,IID_PPV_ARGS(&variants[i]));
     }
     for(unsigned i=0;i<6 && SUCCEEDED(hr);++i)hr=owner->SetPrivateDataInterface(VariantGuid(i),variants[i]);
+    const unsigned group=unsigned(family)/2;
+    if(SUCCEEDED(hr))hr=owner->SetPrivateData(VariantGuid(6),sizeof(group),&group);
     if(SUCCEEDED(hr))hr=owner->SetPrivateData(kKindGuid,sizeof(kind),&kind);
     if(SUCCEEDED(hr))++ready;
     else for(unsigned i=0;i<6;++i)owner->SetPrivateDataInterface(VariantGuid(i),nullptr);
     for(auto* p:variants)if(p)p->Release();
-    Trace("CHARACTER_SURFACE_R348 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
+    Trace("CHARACTER_SURFACE_R349 matched=%u ready=%u hr=0x%08lX",matched.load(),ready.load(),static_cast<unsigned long>(hr));
     owner->Release();
 }
 }

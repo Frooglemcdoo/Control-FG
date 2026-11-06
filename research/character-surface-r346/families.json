@@ -1,0 +1,26 @@
+[
+  {
+    "name": "skin-detail",
+    "sha": "bbdd044d5f91b2296297ce4b9efeb5ef72169906299084984595bd9c896b4cd9"
+  },
+  {
+    "name": "skin-basic",
+    "sha": "0cd8a4b8144f1add1eac28edb815477ad7e3b42291735aa361e2f8e77b20bb96"
+  },
+  {
+    "name": "cloth-basic",
+    "sha": "2a0b109b76ad73e01cd3e2b18b2db5de815bbeae9b3360140101355049c4bbdf"
+  },
+  {
+    "name": "cloth-detail",
+    "sha": "e5c814aa9dbb976529c42a8bd483d97f4b0c3add7a143843a02055ca3aa6f0ac"
+  },
+  {
+    "name": "hair-basic",
+    "sha": "b75f0d16e4b8d3c8a0c878ce42f641685d89515527490c3640e87bdee2effd10"
+  },
+  {
+    "name": "hair-depth",
+    "sha": "23481e845d85fa31917b410631a445d484a6952f76574af23db15685e0c9126d"
+  }
+]

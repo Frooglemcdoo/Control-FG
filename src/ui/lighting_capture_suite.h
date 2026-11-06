@@ -7,6 +7,7 @@ namespace native_lighting::capture_suite {
 enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character, Volume };
 inline bool character=false,volume=false;
 inline uint64_t initialBinds=0,initialApplied=0;
+inline uint64_t initialGroupBinds[3]{},initialGroupApplied[3]{};
 inline bool preserveSettings=false,savedRR=false,savedDistance=false;
 inline unsigned savedSamples=0,savedEffects=0;
 inline uint64_t preservedSelection=0;
@@ -150,9 +151,9 @@ inline bool Start(Kind kind=Kind::Stationary) noexcept {
         return true;
     }
     if(character){
-        Note("R348 character stage isolation. Native / surface normal / rig off / unlit albedo / flat before fog / flat final / fog off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
-        Note("audited_families=2 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
-        Note("flat_views_expected=1 alpha_one_in_unlit_and_gray=1 lighting_quality_unchanged=1 post_processing_not_bypassed=1");
+        Note("R349 whole-character isolation. Native / both shadow channels neutral / rig off / rig only / flat before fog / flat final / fog off / native repeat. Full-client JPEGs. No gameplay changes persist after capture. Counters are recorded PSO binds, not executed draws.");
+        Note("audited_families=6 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
+        Note("flat_views_expected=1 native_alpha_depth_coverage_preserved=1 lighting_quality_unchanged=1 post_processing_not_bypassed=1");
         lastFailure=native_blend_capture::Failure::None;
         return true;
     }
@@ -186,11 +187,12 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
         rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
     if(character){
-        static constexpr const wchar_t* names[]={L"native",L"surface-normal",L"rig-off",L"unlit-albedo",L"flat-before-fog",L"flat-final",L"fog-off",L"native-repeat"};
+        static constexpr const wchar_t* names[]={L"native",L"both-shadows-neutral",L"rig-off",L"rig-only",L"flat-before-fog",L"flat-final",L"fog-off",L"native-repeat"};
         if(step>=8){Finish(game,failures?"incomplete":"complete");return;}
         const unsigned phase=step+1;
         if(!entered){
             initialBinds=character_surface::binds[phase].load();initialApplied=character_surface::applied[phase].load();
+            for(unsigned g=0;g<3;++g){initialGroupBinds[g]=character_surface::groupBinds[g][phase].load();initialGroupApplied[g]=character_surface::groupApplied[g][phase].load();}
             character_surface::phase.store(phase);began=now;firstPresent=presentCount.load();imageIndex=0;entered=true;
             nextImage=now+(step==0?5000:2500);
         }
@@ -198,10 +200,17 @@ inline void Tick(HWND game,uint64_t now) noexcept {
         if(now<nextImage || presentCount.load()-firstPresent<2)return;
         const auto currentBinds=character_surface::binds[phase].load()-initialBinds;
         const auto currentApplied=character_surface::applied[phase].load()-initialApplied;
-        if(!character_surface::ready.load() || !currentBinds || (phase>=2 && phase<=7 && !currentApplied)){
+        bool wholeCharacter=true;
+        for(unsigned g=0;g<3;++g){
+            const auto b=character_surface::groupBinds[g][phase].load()-initialGroupBinds[g];
+            const auto a=character_surface::groupApplied[g][phase].load()-initialGroupApplied[g];
+            if(imageIndex==0)Note("step=%u group=%s recorded_binds=%llu replacement_binds=%llu",step,g==0?"skin":g==1?"cloth":"hair",b,a);
+            if(!b || (phase>=2 && phase<=7 && !a))wholeCharacter=false;
+        }
+        if(!wholeCharacter || !character_surface::ready.load() || !currentBinds || (phase>=2 && phase<=7 && !currentApplied)){
             Note("step=%u preflight_failed=1 matched=%u ready=%u binds=%llu applied=%llu screenshots_skipped=1",step,character_surface::matched.load(),character_surface::ready.load(),currentBinds,currentApplied);
             ++failures;Finish(game,"shader_not_active");
-            MessageBoxW(game,L"The character override is not active. No comparison images were taken for this phase. A small shader report was packaged instead; send that ZIP.",L"TEST JESSE: shader report saved",MB_OK);
+            MessageBoxW(game,L"Skin, clothing or hair coverage is missing. No comparison images were taken for this phase. A small shader report was packaged instead; send that ZIP.",L"TEST JESSE: shader report saved",MB_OK);
             return;
         }
         wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.jpg",folder,step,names[step],imageIndex);

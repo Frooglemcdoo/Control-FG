@@ -16,9 +16,13 @@ int main(){try{
     ComPtr<ID3D12Debug> debug;
     if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
     std::cout<<"Create WARP device\n";Device gpu(false);
+    for(unsigned family=0;family<6;++family){
+    const auto native=surface::kCharacterOriginals[family];
+    const unsigned before=surface::matched.load();
+    std::cout<<"Family "<<family<<"\n";
     std::cout<<"Reflect native character shader\n";
     ComPtr<ID3D12ShaderReflection> reflect;
-    Check(D3DReflect(surface::kCharacterSurface0,sizeof(surface::kCharacterSurface0),IID_PPV_ARGS(&reflect)));
+    Check(D3DReflect(native.pShaderBytecode,native.BytecodeLength,IID_PPV_ARGS(&reflect)));
     D3D12_SHADER_DESC info{};Check(reflect->GetDesc(&info));
     std::ostringstream source;source<<"struct Output {";
     std::vector<std::pair<UINT,bool>> fields;
@@ -47,7 +51,7 @@ int main(){try{
     std::cout<<"Create compatible root signature\n";
     ComPtr<ID3DBlob> rootBytes;Check(D3D12SerializeRootSignature(&rs,D3D_ROOT_SIGNATURE_VERSION_1,&rootBytes,&error));
     ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),IID_PPV_ARGS(&root)));
-    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.VS={vs->GetBufferPointer(),vs->GetBufferSize()};desc.PS={surface::kCharacterSurface0,sizeof(surface::kCharacterSurface0)};
+    D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};desc.pRootSignature=root.Get();desc.VS={vs->GetBufferPointer(),vs->GetBufferSize()};desc.PS=native;
     auto& blend=desc.BlendState.RenderTarget[0];blend.SrcBlend=D3D12_BLEND_ONE;blend.DestBlend=D3D12_BLEND_ZERO;blend.BlendOp=D3D12_BLEND_OP_ADD;
     blend.SrcBlendAlpha=D3D12_BLEND_ONE;blend.DestBlendAlpha=D3D12_BLEND_ZERO;blend.BlendOpAlpha=D3D12_BLEND_OP_ADD;blend.LogicOp=D3D12_LOGIC_OP_NOOP;blend.RenderTargetWriteMask=D3D12_COLOR_WRITE_ENABLE_ALL;
     desc.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO;desc.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_LESS;
@@ -63,20 +67,19 @@ int main(){try{
         }
     }Check(createHr);
     surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);
-    Require(surface::matched.load()==1 && surface::ready.load()==1,"Surface variants not admitted");
+    Require(surface::matched.load()==before+1 && surface::ready.load()==before+1,"Surface variants not admitted");
     unsigned tag=0;UINT size=sizeof(tag);Check(original->GetPrivateData(kKindGuid,&size,&tag));Require(tag==surface::kind,"Surface tag mismatch");
     for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(original->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing owned variant");p->Release();}
-    surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==1,"Duplicate preparation");
+    surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);Require(surface::matched.load()==before+1,"Duplicate preparation");
     // Stripped reflection must still resolve to the same exact executable family.
-    for(unsigned family=0;family<2;++family){
-        const D3D12_SHADER_BYTECODE native=family?D3D12_SHADER_BYTECODE{surface::kCharacterSurface7,sizeof(surface::kCharacterSurface7)}:D3D12_SHADER_BYTECODE{surface::kCharacterSurface0,sizeof(surface::kCharacterSurface0)};
+    {
         Require(surface::Family(native)==int(family),"Native family mismatch");
         ComPtr<ID3DBlob> stripped;Check(D3DStripShader(native.pShaderBytecode,native.BytecodeLength,D3DCOMPILER_STRIP_REFLECTION_DATA|D3DCOMPILER_STRIP_DEBUG_INFO,&stripped));
         desc.PS={stripped->GetBufferPointer(),stripped->GetBufferSize()};
         Require(surface::Family(desc.PS)==int(family),"Stripped executable not recognized");
         ComPtr<ID3D12PipelineState> live;Check(gpu.device->CreateGraphicsPipelineState(&desc,IID_PPV_ARGS(&live)));
         surface::Observe(gpu.device.Get(),&desc,live.Get(),&Create);
-        Require(surface::matched.load()==2+family && surface::ready.load()==2+family,"Stripped variant creation failed");
+        Require(surface::matched.load()==before+2 && surface::ready.load()==before+2,"Stripped variant creation failed");
         for(UINT i=0;i<6;++i){ID3D12PipelineState* p=nullptr;size=sizeof(p);Check(live->GetPrivateData(surface::VariantGuid(i),&size,&p));Require(p!=nullptr,"Missing stripped variant");p->Release();}
         auto changed=std::vector<unsigned char>(static_cast<const unsigned char*>(native.pShaderBytecode),static_cast<const unsigned char*>(native.pShaderBytecode)+native.BytecodeLength);
         const auto chunk=surface::Chunk(native,"SHEX");
@@ -84,5 +87,6 @@ int main(){try{
         Require(surface::Family({changed.data(),changed.size()})==-1,"Changed instructions admitted");
         changed.resize(31);Require(surface::Family({changed.data(),changed.size()})==-1,"Truncated container admitted");
     }
-    std::cout<<"PASS both native character families and stripped containers; all six variants each on WARP; changed instructions rejected\n";
+    }
+    std::cout<<"PASS all six skin/cloth/hair families and stripped containers; all six variants each on WARP; changed instructions rejected\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
