@@ -39,6 +39,7 @@ static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory
  gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
  gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
  D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&outputDesc,0,1,0,&footprint,nullptr,nullptr,&bytes);
+ rt_surface_source::giScope=3;const auto sourceBefore=rt_surface_source::Read(3)[unsigned(rt_surface_source::Event::GISteady)];
  // Missing bounded PSO must report native fallback, never silently select R259.
  if(bounded||steady){
   auto*& optional=steady?bundle->steady:bundle->bounded;auto* saved=optional;optional=nullptr;bool used=false;unsigned forwarded=0;
@@ -76,6 +77,7 @@ static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory
   gpu.Transition(history.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  }
+ Require(rt_surface_source::Read(3)[unsigned(rt_surface_source::Event::GISteady)]==sourceBefore+(patched&&steady?8u:0u),"steady dispatch coverage/fallback attribution incorrect");rt_surface_source::giScope=0;
  gpu.Submit();float expected=initialHistory;unsigned frame=0;float firstAlternating=0;
  for(auto& result:results){
   const float weight=((!patched||bounded)&&lastPass&&!cut&&!rejectDepth)?.7f*std::max(0.f,1.f-40.f*std::sqrt(2.f)*std::abs(velocity)):0.f;

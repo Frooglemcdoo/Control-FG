@@ -1,0 +1,24 @@
+{
+  "src/rr_native_frame.h": [
+    [
+      "#include \"rr_diffuse_source_policy.h\"",
+      "#include \"rr_diffuse_source_policy.h\"\n#include \"rt_surface_source_capture.h\""
+    ],
+    [
+      " const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering();",
+      " const unsigned sourceCapture=rt_surface_source::request.load(std::memory_order_acquire);\n rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactEntry);\n const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering() || rt_surface_source::PreserveContact(sourceCapture);"
+    ],
+    [
+      "  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);return;",
+      "  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);\n  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNative);return;"
+    ],
+    [
+      " rrNativeContactShadowFilterOriginal(color,history,auxiliary,policy.temporal,policy.spatialSize,policy.spatialStep);",
+      " rrNativeContactShadowFilterOriginal(color,history,auxiliary,policy.temporal,policy.spatialSize,policy.spatialStep);\n rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNeutral);"
+    ],
+    [
+      "  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNative);return;",
+      "  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNative);\n  if(temporal)rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactTemporal);\n  if(spatialSize>0 && spatialStep>0)rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactSpatial);\n  return;"
+    ]
+  ]
+}

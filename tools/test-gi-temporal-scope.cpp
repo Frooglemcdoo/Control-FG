@@ -56,5 +56,19 @@ int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer
   if(fault>=4&&fault<=10)assert(invokes==0);
   if(!caught)assert(spatials==1&&GetLastError()==20);
  }
+ fault=0;rrNativeFrame={};rrNativeGIKeepThisFrame=true;rrNativeGIHistoryZeroThisFrame=true;
+ control_rr_gi::stageMode.store(control_rr_gi::StageMode::RawBypass);
+ control_rr_gi::viewRequested.store(control_rr_gi::DiagnosticView::Normal);
+ for(unsigned phase=1;phase<7;++phase){
+  rt_surface_source::request.store(phase);const auto before=rt_surface_source::Read(phase);
+  expectedPasses=(phase==3||phase==5)?6:0;
+  expectedHistoryDisabled=phase!=3&&phase!=5;expectedView=phase==2?2:0;
+  RRNativeRunGIFilter(verifiedRenderer,history,6);
+  const auto after=rt_surface_source::Read(phase);
+  assert(after[unsigned(rt_surface_source::Event::GIEligible)]==before[unsigned(rt_surface_source::Event::GIEligible)]+1);
+  assert(after[unsigned(rt_surface_source::Event::GITemporal)]==before[unsigned(rt_surface_source::Event::GITemporal)]+1);
+  assert(rt_surface_source::giScope==0 && control_rr_gi::stageMode.load()==control_rr_gi::StageMode::RawBypass);
+ }
+ rt_surface_source::request.store(0);
  puts("PASS R215 all GI stages, cleanup and diagnostic views, scoped history flag restoration, original-record forwarding, scoped pipeline invocation, context/frame gates, native fallback and exception cleanup");
 }

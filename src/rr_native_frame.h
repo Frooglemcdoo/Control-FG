@@ -14,6 +14,7 @@
 #include "rr_contact_shadow_policy.h"
 #include "rr_broad_diffuse_policy.h"
 #include "rr_diffuse_source_policy.h"
+#include "rt_surface_source_capture.h"
 #include "rr_gi_sample_control.h"
 #include "rr_sample_diagnostic.h"
 #include "rr_specular_sample_windows.h"
@@ -713,17 +714,24 @@ static void RRNativeHookContactShadowFilter(void* color,void* history,void* auxi
  }
  const bool full=rrNativeFrame.Selected()&&!rrNativeFrame.Stopped();
  const bool contact=(rrNativeRTFrame.effects&control_rr::RTContactShadow)!=0;
- const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering();
+ const unsigned sourceCapture=rt_surface_source::request.load(std::memory_order_acquire);
+ rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactEntry);
+ const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering() || rt_surface_source::PreserveContact(sourceCapture);
  const DWORD filterError=GetLastError();
  native_lighting::rt_spot_runtime::ReportShadowFiltering(full,contact,temporal,spatialSize,spatialStep);
  SetLastError(filterError);
  const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep,fullSpot);
  if(!policy.neutralized){
-  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);return;
+  rrNativeContactShadowFilterOriginal(color,history,auxiliary,temporal,spatialSize,spatialStep);
+  rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNative);
+  if(temporal)rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactTemporal);
+  if(spatialSize>0 && spatialStep>0)rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactSpatial);
+  return;
  }
  const DWORD saved=GetLastError();
  SetLastError(saved);
  rrNativeContactShadowFilterOriginal(color,history,auxiliary,policy.temporal,policy.spatialSize,policy.spatialStep);
+ rt_surface_source::Record(sourceCapture,rt_surface_source::Event::ContactNeutral);
  const DWORD nativeError=GetLastError();
  const auto count=rrNativeContactShadowBypasses.fetch_add(1,std::memory_order_relaxed)+1;
  const auto frame=rrNativeFrame.Key().frame;

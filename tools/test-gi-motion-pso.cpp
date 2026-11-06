@@ -59,10 +59,12 @@ int main(){try{
  control_rr_gi::outlierEnabled=true;expected=bundle->smooth;
  Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"smooth scope not applied");
  Require(dispatched==3&&observed==native.Get(),"smooth native restore");
+ rt_surface_source::giScope=2;const auto zeroBefore=rt_surface_source::Read(2)[unsigned(rt_surface_source::Event::GIZero)];
  for(unsigned view=1;view<=2;++view){control_rr_gi::activeView=static_cast<control_rr_gi::DiagnosticView>(view);expected=view==1?bundle->mask:bundle->zero;
   Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"diagnostic scope not applied");
   Require(observed==native.Get(),"diagnostic native restore");
  }
+ Require(rt_surface_source::Read(2)[unsigned(rt_surface_source::Event::GIZero)]==zeroBefore+1,"zero diagnostic dispatch coverage incorrect");rt_surface_source::giScope=0;
  control_rr_gi::activeView=control_rr_gi::DiagnosticView::Normal;
  auto* savedSmooth=bundle->smooth;bundle->smooth=nullptr;expected=bundle->noHistory;
  Require(control_rr_clamp::InvokeGI(NativeDispatch,nullptr,nullptr,currentList),"missing smooth must retain no-history baseline");

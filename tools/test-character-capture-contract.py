@@ -4,13 +4,14 @@ import re
 root=Path(__file__).resolve().parents[1]
 s=(root/'src/ui/lighting_capture_suite.h').read_text()
 assert not re.search(r'\b(?:RRUserSetMode|RRUserRequest|RRSetDiagnosticBypass)\s*\(|rrUserMode\s*\.\s*store',s),'Capture must not change RR mode'
-x=s[s.index('static constexpr const wchar_t* names[]={L"r360-legacy"'):]
+x=s[s.index('static constexpr const wchar_t* names[]={L"baseline"'):]
 names=re.findall(r'L"([^"]+)"',x[:x.index(';')])
 phases=[int(v) for v in re.search(r'phases\[\]=\{([^}]+)\}',x)[1].split(',')]
-assert len(names)==len(phases)==4 and phases[0]==10 and phases[-1]==10
-assert phases==[10,10,4,10] and 'stable-rr-off' not in names
+assert len(names)==len(phases)==6 and phases[0]==10 and phases[-1]==10
+assert phases==[10,10,10,10,10,10] and 'stable-rr-off' not in names
 assert 'control_rr_diffuse_source::legacyBypass.store(false,std::memory_order_release)' in s[s.index('inline void Finish('):s.index('inline bool Start(')]
-assert 'source_a_calls=%llu source_b_calls=%llu native_filter_calls=%llu bypass_calls=%llu' in s
+assert 'rt_surface_source::request.store(0,std::memory_order_release)' in s[s.index('inline void Finish('):s.index('inline bool Start(')]
+assert 'source_coverage_missing=1 images_skipped=1' in s
 assert 'rr_runtime_stopped_restart_required'  in s and 'CopyLog(path,65536)' in s
 start=s.index('inline bool CopyLog(');end=s.index('inline bool PackageCharacter(',start)
 copier=s[start:end]
@@ -39,4 +40,4 @@ int main(){try{
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
 '''
 (root/'build/test-character-log.cpp').write_text(harness)
-print('PASS RR read-only capture invariant; four phases/eight images; generated actual Win32 copier tests')
+print('PASS RR read-only capture invariant; six phases/twelve images; generated actual Win32 copier tests')

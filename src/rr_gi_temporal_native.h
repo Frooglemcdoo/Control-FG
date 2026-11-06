@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_gi_stage_policy.h"
+#include "rt_surface_source_capture.h"
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
 #include "rr_gi_boundary.h"
 static std::uintptr_t RRNativeGIColorIdentity(void* color) noexcept {
@@ -34,7 +35,7 @@ static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
  const bool previous=control_rr_gi::spatialDispatch;
  __try {
   control_rr_gi::spatialDispatch=true;
-  if(control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list)))++rrNativeGISpatialApplied;
+  if(control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list))){++rrNativeGISpatialApplied;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GISpatial);}
  }__finally {control_rr_gi::spatialDispatch=previous;}
 }
 static void RRNativeHookGITemporalBind(void* record){
@@ -57,17 +58,21 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
   SetLastError(captureSaved);
  }
 #endif
- if(used){++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
+ if(used){rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GITemporal);++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
  else rrNativeGIHistoryReason="native_pipeline_fallback";
 }
 static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
+ const unsigned capture=rt_surface_source::request.load(std::memory_order_acquire);
+ rt_surface_source::Record(capture,rt_surface_source::Event::GIEntry);
  const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&
   rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting&&color&&passes&&
   reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
  if(!eligible||rrNativeGIHistoryScope){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
- const auto mode=control_rr_gi::stageMode.load(std::memory_order_acquire);
+ const auto mode=rt_surface_source::Stage(capture,control_rr_gi::stageMode.load(std::memory_order_acquire));
+ const unsigned previousCapture=rt_surface_source::giScope;rt_surface_source::giScope=capture;
+ rt_surface_source::Record(capture,rt_surface_source::Event::GIEligible);
  const unsigned effectivePasses=control_rr_gi::SpatialPasses(mode,passes);
- const auto view=control_rr_gi::EffectiveView(mode,control_rr_gi::viewRequested.load(std::memory_order_acquire));
+ const auto view=rt_surface_source::View(capture,mode,control_rr_gi::viewRequested.load(std::memory_order_acquire));
  const bool previousRaw=control_rr_gi::rawBypass;
  control_rr_gi::rawBypass=mode==control_rr_gi::StageMode::RawBypass;
  rrNativeGISpatialObserved=0;
@@ -100,6 +105,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  __finally {
   const DWORD saved=GetLastError();
   const bool okay=rrNativeGIHistoryDispatches==1;
+  rt_surface_source::giScope=previousCapture;
   control_rr_gi::historyDisabled=previousHistoryDisabled;
   control_rr_gi::outlierEnabled=previousOutlier;
   control_rr_gi::activeView=previousView;

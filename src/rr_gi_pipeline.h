@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include "rr_gi_stage_policy.h"
+#include "rt_surface_source_capture.h"
 #include <cstring>
 #include <new>
 #include "../build/gi_motion_history.generated.h"
@@ -101,7 +102,13 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&rawBypass)replacement=b->bypass;
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
- __try {set(list,replacement);dispatch(list,x,y,z);used=true;}
+ __try {set(list,replacement);dispatch(list,x,y,z);used=true;
+  // Count the selected PSO only after recording the actual dispatch. A null
+  // optional PSO/native fallback cannot claim diagnostic coverage.
+  if(!b->spatial && replacement==b->zero)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIZero);
+  if(!b->spatial && replacement==b->bypass)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIRaw);
+  if(b->spatial && replacement==b->steady)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GISteady);
+ }
  __finally {set(list,observed);}
 }
 }
