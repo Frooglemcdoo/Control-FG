@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character rig sampling R355
+      - name: Validate character rig sampling R356
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -145,7 +145,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R355
+      - name: Validate near volume history R356
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1241,11 +1241,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R355
+      - name: Package owned GI integration R356
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R355'
+          $out='ControlTOH-R356'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1285,12 +1285,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R355 - Owned GI integration test
+          R356 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and REF CLAMP 60% are the defaults.
-          R355 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
+          R356 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
           Supports twelve audited native skin/cloth/hair variants including the captured in-game shaders and stripped reflection metadata.
           Failure packages a bounded shader report instead of ineffective comparison shots.
           The R345 owned participating-media integration remains unchanged.
@@ -1301,7 +1301,7 @@ jobs:
           HQ uses weighted cubic reconstruction of the rig volume, preserving lights, materials, shadows and fog.
           HQ uses27 trilinear reads per volume; R351 uses8. No new rendering pass or texture allocation. STABLE adds guarded near-slice reuse in the existing native history pass.
           Near history is capped at0.75, rejects invalid previous coordinates and fades out at25% coefficient change. Global history reset and far-slice behavior are preserved. This also affects other near-field consumers of the shared volume. In-game stability/performance need validation.
-          TEST JESSE separates diffuse and specular inputs: stable / diffuse buffer off / specular buffer off / diffuse input view / specular input view / stable repeat. Twelve full-screen JPEGs, no resource dump.
+          TEST JESSE uses fixed darker input-view exposures: stable / diffuse 1:64 / diffuse 1:16 / diffuse 1:4 / specular 1:16 / stable repeat. Twelve full-screen JPEGs, no resource dump.
           Input views temporarily replace character RGB with a fixed compressed lighting-buffer view; they are diagnostic, not a shadow-removal fix. Keep Jesse visible and hold the camera still. Packaging and restoration are automatic. Keep VL High.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
@@ -1330,10 +1330,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R355
+          name: ControlTOH-R356
           path: |
-            ControlTOH-R355.zip
-            ControlTOH-R355.sha256
+            ControlTOH-R356.zip
+            ControlTOH-R356.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

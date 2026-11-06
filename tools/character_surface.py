@@ -6,7 +6,8 @@ from dxbc_checksum import checksum
 root=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(root/'research/native-integration-audit/tools'))
 from decode_dxbc import decode
-NAMES=['hq-cubic','r351-filter','diffuse-buffer-off','specular-buffer-off','diffuse-buffer-view','specular-buffer-view']
+NAMES=['hq-cubic','r351-filter','diffuse-view-dark','diffuse-view-mid','diffuse-view-bright','specular-view-mid']
+VIEWS=[('g_tLightBufferDiffuse',1/64),('g_tLightBufferDiffuse',1/16),('g_tLightBufferDiffuse',1/4),('g_tLightBufferSpecular',1/16)]
 def dst(r,mask):return [0x100002|(mask<<4),r]
 def imm(v):return [0x4001,struct.unpack('<I',struct.pack('<f',v))[0]]
 def mov(d,s):return [((1+len(d)+len(s))<<24)|54]+d+s
@@ -125,15 +126,17 @@ def buffer_site(info,name):
 def buffer_off(data,info,name):
  r,offset=buffer_site(info,name)
  return insert_verified(data,{offset:mov(dst(r,7),imm(0))})
-def buffer_view(data,info,name):
+def buffer_view(data,info,name,gain):
  # Save the exact input before material/rig composition, then display RGB only.
- # Fixed monotonic compression 4*max(x,0)/(1+4*max(x,0)); no automatic normalization.
+ # Fixed monotonic compression gain*max(x,0)/(1+gain*max(x,0)).
+ # Exposure brackets are fixed, not selected from image content.
+ assert gain in (1/64,1/16,1/4)
  r,offset=buffer_site(info,name);w=words(data)
  decl=next(i['dword'] for i in info['instructions'] if i['name']=='dcl_temps');count=w[decl+1]
  end=info['instructions'][-1];assert end['name']=='ret'
  assert sum(i['name']=='ret' for i in info['instructions'])==1
  keep=mov(dst(count,7),src(r));out=op(52,dst(count,7),src(count),imm(0))
- out+=op(56,dst(count,7),src(count),imm(4))
+ out+=op(56,dst(count,7),src(count),imm(gain))
  out+=op(0,dst(count+1,7),src(count),imm(1))
  out+=op(14,dst(count,7),src(count),src(count+1))
  out+=mov([0x102072,0],src(count)) # o0.xyz only, native alpha/depth unchanged
@@ -163,14 +166,14 @@ def main():
   data=base64.b64decode((research/(family['name']+'.dxbc.b64')).read_text());assert hashlib.sha256(data).hexdigest()==family['sha']
   p=folder/('character-'+family['name']+'.dxbc');p.write_bytes(data);old=decode(p);shaders.append(data)
   hq=cubic_volume(data,old);hp=folder/'neck-hq-temporary.dxbc';hp.write_bytes(hq)
-  info=decode(hp);buffers=['g_tLightBufferDiffuse','g_tLightBufferSpecular']
-  results=[hq,filtered_volume(data,old)]+[buffer_off(hq,info,n) for n in buffers]+[buffer_view(hq,info,n) for n in buffers]
+  info=decode(hp)
+  results=[hq,filtered_volume(data,old)]+[buffer_view(hq,info,n,gain) for n,gain in VIEWS]
   for index,result in enumerate(results):
    assert result[4:20]==checksum(result)
    p=folder/('character-'+family['name']+'-'+NAMES[index]+'.dxbc');p.write_bytes(result);new=decode(p)
    assert old['bindings']==new['bindings'] and old['constant_buffers']==new['constant_buffers']
    shaders.append(result)
-  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'buffer_display':'4*max(x,0)/(1+4*max(x,0))'})
+  audit.append({'family':family,'variants':NAMES,'reads_per_volume_per_variant':[27,8,27,27,27,27],'buffer_display':'gain*max(x,0)/(1+gain*max(x,0))','view_inputs_and_gains':VIEWS})
  lines=['#pragma once','// Generated whole-character diagnostics. Alpha, depth and coverage stay native.']
  for i,b in enumerate(shaders):
   lines+=['inline constexpr unsigned char kCharacterSurface'+str(i)+'[] = {']
