@@ -9,6 +9,7 @@ inline thread_local bool spatialDispatch=false;
 inline thread_local bool spatialHistoryBounded=false;
 inline thread_local bool spatialSteady=false;
 inline thread_local bool rawBypass=false;
+inline thread_local bool ownedDenoise=false;
 inline std::atomic<bool> outlierRequested{true};
 inline thread_local bool outlierEnabled=false;
 inline bool UseOutlier(StageMode mode,bool requested){return mode==StageMode::ClampOnly&&requested;}

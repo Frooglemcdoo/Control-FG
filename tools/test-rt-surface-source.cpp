@@ -10,6 +10,7 @@ int main(){
  request.store(1);assert(EffectiveRequest()==1 && !ManualContactUnfiltered());
  manualContact.store(1);assert(!ManualContactPreserved());
  request.store(0);assert(EffectiveRequest()==3 && ManualContactPreserved());
+ manualGI.store(3);assert(EffectiveRequest()==7 && Stage(7,StageMode::RawBypass)==StageMode::TemporalOnly && SpatialPasses(Stage(7,StageMode::RawBypass),6)==0);
  ResetManual();assert(EffectiveRequest()==0 && !ManualContactPreserved() && !ManualContactUnfiltered());
  for(unsigned phase=0;phase<7;++phase)for(unsigned mode=0;mode<8;++mode)for(unsigned v=0;v<3;++v){
   auto saved=StageMode(mode);auto view=DiagnosticView(v);auto result=Stage(phase,saved);
@@ -19,7 +20,7 @@ int main(){
   assert(PreserveContact(phase)==(phase==4||phase==5));
  }
  Snapshot empty{};for(unsigned p:{2u,3u,4u,5u})assert(!Covered(p,empty));
- for(unsigned p:{0u,7u,100u})assert(!Covered(p,empty));
+ for(unsigned p:{0u,8u,100u})assert(!Covered(p,empty));
  Snapshot gi{};gi[unsigned(Event::GIEligible)]=gi[unsigned(Event::GITemporal)]=gi[unsigned(Event::GISteady)]=1;
  assert(Covered(3,gi) && !Covered(5,gi));
  gi[unsigned(Event::ContactEntry)]=gi[unsigned(Event::ContactNative)]=1;assert(!Covered(5,gi));

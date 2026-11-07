@@ -31,9 +31,17 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  auto cpu=gpu.views->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=static_cast<SIZE_T>(index)*gpu.descriptorSize;
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
-static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;};
+static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned) {
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;};
  const Case cases[]={
+  {"owned offscreen reprojection",.8f,.01f,100.f,.5f,false,false,.8f,false,false,0,0,false,false,false,true,2.f},
+  {"owned preserves bright uniform despite dark mip",10.f,.01f,10.f,.5f,false,false,10,false,false,0,0,false,false,false,true},
+  {"owned rejects stale bright light",.2f,.01f,100.f,.5f,false,false,.2f,false,false,0,0,false,false,false,true},
+  {"owned rejects stale dark light",.8f,.01f,0.f,.5f,false,false,.8f,false,false,0,0,false,false,false,true},
+  {"owned camera cut",.8f,.01f,100.f,.5f,true,false,.8f,false,false,0,0,false,false,false,true},
+  {"owned disocclusion",.8f,.01f,100.f,.7f,false,false,.8f,false,false,0,0,false,false,false,true},
+  {"owned depth silhouette",10.f,.01f,100.f,.5f,true,false,0,false,false,4,0,false,true,false,true},
+  {"owned reduces checker without darkening mean",.4f,.01f,.3f,.5f,false,false,0,false,false,5,0,false,false,false,true},
   {"R262 raw bright peak, dark mip/history",10.f,.01f,0.f,.5f,false,false,0,false,false,1,0,false,false,true},
   {"R262 raw checker, bright history",.4f,.01f,100.f,.5f,false,false,0,false,false,5,0,false,false,true},
   {"R262 raw step with depth edge and cut",10.f,.01f,100.f,.8f,true,false,0,false,false,4,0,false,true,true},
@@ -70,13 +78,13 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   {"smooth depth edge and camera cut",10.f,.5f,100.f,.5f,true,false,0,true,false,4,0,true,true},
  };
  D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};heapDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
- heapDesc.NumDescriptors=256;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+ heapDesc.NumDescriptors=512;heapDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
  auto previousViews=gpu.views; // Keep previously recorded heap state alive through Submit.
  gpu.views.Reset();Check(gpu.device->CreateDescriptorHeap(&heapDesc,IID_PPV_ARGS(&gpu.views)));
  ID3D12DescriptorHeap* heaps[]={gpu.views.Get()};gpu.list->SetDescriptorHeaps(1,heaps);
  std::vector<ComPtr<ID3D12Resource>> outputs;std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts;
  for(UINT i=0;i<sizeof(cases)/sizeof(cases[0]);++i){auto c=cases[i];UINT first=6*i;
-  HistoryInput(gpu,c.depthEdge?.8f:.5f,.5f,first,1,c.depthEdge?4:0);HistoryInput(gpu,c.depth,c.depth,first+1);HistoryInput(gpu,0,0,first+2);
+  HistoryInput(gpu,c.depthEdge?.8f:.5f,.5f,first,1,c.depthEdge?4:0);HistoryInput(gpu,c.depth,c.depth,first+1);HistoryInput(gpu,c.motion,c.motion,first+2);
   HistoryInput(gpu,c.current,c.filtered,first+3,4,c.pattern);HistoryInput(gpu,c.history,c.history,first+4);
   std::array<float,192> sys{};sys[0]=16;sys[1]=8;sys[2]=1.f/16;sys[3]=1.f/8;
   sys[4]=16;sys[5]=8;sys[6]=1.f/16;sys[7]=1.f/8;
@@ -92,7 +100,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   auto srv=gpu.views->GetGPUDescriptorHandleForHeapStart();srv.ptr+=static_cast<UINT64>(first)*gpu.descriptorSize;auto target=srv;target.ptr+=5*gpu.descriptorSize;
   gpu.list->SetComputeRootSignature(root);gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
   gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
-  gpu.list->SetPipelineState(c.bypass?bypass:c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
+  gpu.list->SetPipelineState(c.owned?owned:c.bypass?bypass:c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -120,7 +128,12 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;
    if(cases[i].bypass)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
-   for(UINT ch=0;ch<((cases[i].smooth||cases[i].bypass)?4u:3u);++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
+   if(cases[i].owned && cases[i].depthEdge)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
+   if(cases[i].owned && cases[i].pattern==5){
+    Require(pixel[0]>.28f && pixel[0]<.32f,"owned checker noise reduction");
+    Require(std::abs(pixel[0]-pixel[3])<1e-5f,"owned alpha ABI");continue;
+   }
+   for(UINT ch=0;ch<((cases[i].smooth||cases[i].bypass||cases[i].owned)?4u:3u);++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
     Require(std::isfinite(pixel[ch])&&std::abs(pixel[ch]-channelExpected)<.0001f,cases[i].name);
    }
   }

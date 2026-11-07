@@ -21,7 +21,7 @@ inline constexpr int kCaptureStatusY = kCameraY + 254;
 inline constexpr int kFooterY = kCaptureStatusY + 50;
 inline constexpr int kHeight = kFooterY + 72;
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 25;
+inline constexpr unsigned kButtonCount = kModeCount + 26;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
@@ -31,6 +31,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+22)return rt_surface_source::manualGI.load()==2?L"GI STABLE: ON":L"GI STABLE: OFF";
     if(index==kModeCount+23){const auto c=rt_surface_source::manualContact.load();return c==1?L"CONTACT: FILTERED":c==2?L"CONTACT: RAW":L"CONTACT: AUTO";}
     if(index==kModeCount+24)return L"RESET COMPARE";
+    if(index==kModeCount+25)return !control_rr_gi::ownedReady.load()?L"GI FILTER: WAIT":rt_surface_source::manualGI.load()==3?L"GI FILTER: OWNED":L"GI FILTER: OFF";
     if(index==kModeCount+20){
         const unsigned quality=character_surface::quality.load();
         return !quality?L"RIG: NATIVE":!character_surface::filteredBinds.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::applied.load()?L"RIG: WAIT":L"RIG: STABLE";
@@ -158,7 +159,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R363", {14,8,kWidth-12,34}, theme::kAccent);
+    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R364", {14,8,kWidth-12,34}, theme::kAccent);
     const auto state = selection.Read();
     const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
     const auto mode = LiveSelection::GetMode(state);
@@ -368,7 +369,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         const bool active=(index<kModeCount && (selected==kModeChoices[index].mode || (IsNativeBlend(kModeChoices[index].mode) && IsNativeBlend(selected)))) ||
             (index==kModeCount+21 && rt_surface_source::manualGI.load()==1) ||
             (index==kModeCount+22 && rt_surface_source::manualGI.load()==2) ||
-            (index==kModeCount+23 && rt_surface_source::manualContact.load()!=0);
+            (index==kModeCount+23 && rt_surface_source::manualContact.load()!=0) || (index==kModeCount+25 && rt_surface_source::manualGI.load()==3);
         HBRUSH brush=CreateSolidBrush(active?theme::kAccent:RGB(35,35,35)); FillRect(item->hDC,&item->rcItem,brush); DeleteObject(brush);
         HBRUSH border=CreateSolidBrush(theme::kBorder); FrameRect(item->hDC,&item->rcItem,border); DeleteObject(border);
         const auto previous=SelectObject(item->hDC,bodyFont); SetBkMode(item->hDC,TRANSPARENT); SetTextColor(item->hDC,theme::kText);
@@ -394,8 +395,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                     MessageBoxW(window, L"This mode has not applied yet. Press F10 to return to the game, wait for the image to settle, then reopen the panel and record your result.", L"Wait for mode to apply", MB_OK);
             }
 #ifdef CONTROL_GI_LONG_SEQUENCE
-            else if(index>=kModeCount+21 && index<=kModeCount+24 && !capture_suite::active && !control_gi_button::Active()){
-                if(index==kModeCount+24)rt_surface_source::ResetManual();
+            else if(index>=kModeCount+21 && index<=kModeCount+25 && !capture_suite::active && !control_gi_button::Active()){
+                if(index==kModeCount+25){if(control_rr_gi::ownedReady.load())rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==3?0:3);}
+                else if(index==kModeCount+24)rt_surface_source::ResetManual();
                 else if(index==kModeCount+23)rt_surface_source::manualContact.store((rt_surface_source::manualContact.load()+1)%3);
                 else {const unsigned target=index==kModeCount+21?1:2;rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==target?0:target);}
                 Trace("manual_rt_compare gi=%u contact=%u",rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load());

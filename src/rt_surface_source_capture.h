@@ -7,19 +7,19 @@ namespace rt_surface_source {
 // Transient diagnostic request. No saved setting is changed. Zero is gameplay.
 inline std::atomic<unsigned> request{0};
 // Session-only manual comparisons; automated capture has priority.
-inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized
+inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
 inline std::atomic<unsigned> manualContact{0}; // 0 auto, 1 preserved, 2 unfiltered
 inline unsigned EffectiveRequest() noexcept {
  const unsigned capture=request.load(std::memory_order_acquire);
  if(capture)return capture;
  const unsigned gi=manualGI.load();
- return gi==1?2:gi==2?3:0;
+ return gi==1?2:gi==2?3:gi==3?7:0;
 }
 inline bool ManualContactUnfiltered() noexcept {return !request.load() && manualContact.load()==2;}
 inline bool ManualContactPreserved() noexcept {return !request.load() && manualContact.load()==1;}
 inline void ResetManual() noexcept {manualGI.store(0);manualContact.store(0);}
 inline thread_local unsigned giScope=0;
-inline constexpr unsigned phases=7;
+inline constexpr unsigned phases=8;
 enum class Event : unsigned {GIEntry,GIEligible,GITemporal,GISpatial,GIZero,GIRaw, GISteady,
     ContactEntry,ContactNative,ContactNeutral,ContactTemporal,ContactSpatial,Count};
 inline constexpr const char* names[]={"gi_entry","gi_eligible","gi_temporal","gi_spatial","gi_zero","gi_raw","gi_steady",
@@ -39,7 +39,7 @@ inline Snapshot Read(unsigned phase) noexcept {
 inline bool StabilizeGI(unsigned phase) noexcept {return phase==3 || phase==5;}
 inline bool PreserveContact(unsigned phase) noexcept {return phase==4 || phase==5;}
 inline control_rr_gi::StageMode Stage(unsigned phase,control_rr_gi::StageMode saved) noexcept {
-    return phase==2?control_rr_gi::StageMode::ClampOnly:
+    return phase==7?control_rr_gi::StageMode::TemporalOnly:phase==2?control_rr_gi::StageMode::ClampOnly:
         StabilizeGI(phase)?control_rr_gi::StageMode::BothSteadySpatial:saved;
 }
 inline control_rr_gi::DiagnosticView View(unsigned phase,control_rr_gi::StageMode mode,control_rr_gi::DiagnosticView saved) noexcept {

@@ -73,6 +73,8 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEligible);
  const unsigned effectivePasses=control_rr_gi::SpatialPasses(mode,passes);
  const auto view=rt_surface_source::View(capture,mode,control_rr_gi::viewRequested.load(std::memory_order_acquire));
+ const bool previousOwned=control_rr_gi::ownedDenoise;
+ control_rr_gi::ownedDenoise=capture==7;
  const bool previousRaw=control_rr_gi::rawBypass;
  control_rr_gi::rawBypass=mode==control_rr_gi::StageMode::RawBypass;
  rrNativeGISpatialObserved=0;
@@ -120,6 +122,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
     Log("GI_BYPASS_R262 frame=%llu mode=raw_bypass copy_applied=%u spatial_requested=%u spatial_observed=%u complete=%u calls=%llu",rrNativeFrame.Key().frame,rrNativeGIHistoryDispatches,effectivePasses,rrNativeGISpatialObserved,unsigned(okay&&rrNativeGISpatialObserved==0),bypassCalls);
   }
   control_rr_gi::rawBypass=previousRaw;
+  control_rr_gi::ownedDenoise=previousOwned;
   control_rr_gi::spatialSteady=previousSteady;
   control_rr_gi::spatialHistoryBounded=previousBounded;
   rrNativeGISingleHistory=false;

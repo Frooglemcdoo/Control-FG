@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character rig sampling R363
+      - name: Validate character rig sampling R364
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -167,7 +167,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R363
+      - name: Validate near volume history R364
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -876,6 +876,10 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/gi_spot_pcf.py
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-gi-owned.exe
+          if errorlevel 1 exit /b 1
           python tools/gi_motion_history.py
           if errorlevel 1 exit /b 1
           python tools/prepare-owned-volume.py
@@ -1263,11 +1267,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R363
+      - name: Package owned GI integration R364
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R363'
+          $out='ControlTOH-R364'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1307,12 +1311,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R363 - Owned GI integration test
+          R364 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and REF CLAMP 60% are the defaults.
-          R363 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
+          R364 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
           Supports twelve audited native skin/cloth/hair variants including the captured in-game shaders and stripped reflection metadata.
           Failure packages a bounded shader report instead of ineffective comparison shots.
           The R345 owned participating-media integration remains unchanged.
@@ -1324,9 +1328,11 @@ jobs:
           HQ uses27 trilinear reads per volume; R351 uses8. No new rendering pass or texture allocation. STABLE adds guarded near-slice reuse in the existing native history pass.
           Near history is capped at0.75, rejects invalid previous coordinates and fades out at25% coefficient change. Global history reset and far-slice behavior are preserved. This also affects other near-field consumers of the shared volume. In-game stability/performance need validation.
           TEST JESSE compares original stable / diffuse reconstruction / original base diffuse / reconstructed base diffuse / quarter-gain reconstructed diffuse / reconstructed full repeat. Twelve full-screen JPEGs, no resource dump.
+          R364 adds GI FILTER: OWNED, a new full-resolution depth-guided temporal filter replacing the existing temporal dispatch with zero following spatial passes. Native depth/motion/history/output bindings retained. No mip brightness cap. Raw and Stable remain available. Surface normals are not bound at this boundary. This is a candidate implementation requiring in-game visual confirmation.
+
           R363 adds session-only F10 GI REMOVE, GI STABLE, CONTACT AUTO/FILTERED/RAW and RESET COMPARE buttons. GI REMOVE and GI STABLE are mutually exclusive; contact can combine with either. RAW disables contact temporal/spatial filtering, not the shadows. Automated capture temporarily takes priority then manual selections resume. Reset restores saved gameplay settings.
 
-          R363 TEST JESSE isolates the active RT paths without changing saved settings: baseline / GI removed for diagnosis / stabilized GI / preserved contact filtering / both / baseline repeat. Twelve full-screen JPEGs with actual selected-PSO dispatch and contact-filter call counters; missing candidate coverage skips the affected images and is reported. GI removal is not a fix. Stabilized GI uses the existing motion-adaptive temporal and steady spatial variants only during the comparison. No new default rendering fix is claimed. RR and RT remain on; Owned GI, GI RAW BYPASS, HQ rig/near history and clamp60 remain gameplay defaults. Overrides restore automatically on finish, cancellation or focus loss. Keep VL High.
+          R364 TEST JESSE isolates the active RT paths without changing saved settings: baseline / GI removed for diagnosis / stabilized GI / preserved contact filtering / both / baseline repeat. Twelve full-screen JPEGs with actual selected-PSO dispatch and contact-filter call counters; missing candidate coverage skips the affected images and is reported. GI removal is not a fix. Stabilized GI uses the existing motion-adaptive temporal and steady spatial variants only during the comparison. No new default rendering fix is claimed. RR and RT remain on; Owned GI, GI RAW BYPASS, HQ rig/near history and clamp60 remain gameplay defaults. Overrides restore automatically on finish, cancellation or focus loss. Keep VL High.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
@@ -1354,10 +1360,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R363
+          name: ControlTOH-R364
           path: |
-            ControlTOH-R363.zip
-            ControlTOH-R363.sha256
+            ControlTOH-R364.zip
+            ControlTOH-R364.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
