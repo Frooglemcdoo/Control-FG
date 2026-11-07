@@ -132,6 +132,11 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
     energy_filter+=ins(50,dst(9),src(12),src(14,0),src(9))
     energy_filter+=ins(0,dst(9,8),src(9,0xff),src(14,0))
    energy_filter+=ins(14,dst(3),src(9),src(9,0xff))+ins(54,dst(3,8),src(3,0))
+  if preserve_current:
+   # Native lerp subtracts its original raw center (r2 * r0.z), not r3.
+   # Once r3 is filtered, both sides must use that same current estimate.
+   # Otherwise output = filtered + weight * (history - raw), amplifying noise.
+   w[393:403]=ins(0,dst(1,15),src(1,0x24),[0x80100e46,0x41,3])
   # Insert backwards to preserve original audited dword positions.
   w[393:393]=clip
   w[204:204]=energy_filter+pad
