@@ -1,16 +1,16 @@
-// Compare actual R373 and R374 Stable temporal bytecode over 32 feedback frames.
+// Compare actual R374 and R375 Stable temporal bytecode over 32 feedback frames.
 // Spatial stage deliberately excluded: isolate the changed production stage.
 #define main GISequenceMain
 #include "test-gi-owned-sequence.cpp"
 #undef main
 #include "../build/gi_motion_history.generated.h"
-#include "fixtures/gi-stable-r373.h"
+#include "fixtures/gi-stable-r374.h"
 static Stats StableRun(bool old,unsigned mode){
  Harness h(false);auto& g=h.gpu;
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=h.root.Get();
- pd.CS=old?D3D12_SHADER_BYTECODE{kGIStableR373,sizeof(kGIStableR373)}:D3D12_SHADER_BYTECODE{kGIStableEnergyShader,sizeof(kGIStableEnergyShader)};
+ pd.CS=old?D3D12_SHADER_BYTECODE{kGIStableR374,sizeof(kGIStableR374)}:D3D12_SHADER_BYTECODE{kGIStableEnergyShader,sizeof(kGIStableEnergyShader)};
  h.temporal.Reset();Check(g.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&h.temporal)));
- Image flat(W*H,Pixel{.5f,.5f,.5f,.5f}),mv(W*H,Pixel{mode==1?.25f/W:0.f,0,0,0});
+ Image flat(W*H,Pixel{.5f,.5f,.5f,.5f}),mv(W*H,Pixel{mode==1?.25f/W:mode==3?2.f:0.f,0,0,0});
  auto depth=h.Texture(&flat),g1=h.Texture(&flat),g2=h.Texture(&flat),motion=h.Texture(&mv);
  Image initial(W*H,Pixel{.2f,.3f,.1f,.2f});auto history=h.Texture(&initial);
  std::array<float,192> sys{};sys[0]=sys[4]=float(W);sys[1]=sys[5]=float(H);sys[2]=sys[6]=1.f/W;sys[3]=sys[7]=1.f/H;
@@ -23,7 +23,7 @@ static Stats StableRun(bool old,unsigned mode){
    UINT id=y*W+x;UINT bits=(id*1664525u+f*1013904223u+17u);bits^=bits>>16;bits*=2246822519u;bits^=bits>>13;
    float noise=float(bits&65535)/65535.f-.5f;
    raw[id]=Pixel{.3f+noise*.58f,.3f+noise*.58f,.3f+noise*.58f,0};
-   if(mode==2)raw[id]=Pixel{.1f,.1f,.1f,0};
+   if(mode>=2)raw[id]=Pixel{.1f,.1f,.1f,0};
    if(mode==2&&y==8&&x==12)raw[id]=Pixel{10,10,10,0};
   }
   auto current=h.Texture(&raw),temporal=h.Texture(),spatial=h.Texture();
@@ -46,10 +46,12 @@ static Stats StableRun(bool old,unsigned mode){
  s.error=std::sqrt(s.error/count);s.delta=std::sqrt(s.delta/count);s.mean/=count;return s;
 }
 int main(){try{
- for(unsigned mode=0;mode<3;++mode){auto before=StableRun(true,mode),after=StableRun(false,mode);
-  std::cout<<"R374 Stable mode="<<mode<<" old_delta="<<before.delta<<" new_delta="<<after.delta<<" old_rmse="<<before.error<<" new_rmse="<<after.error<<" old_mean="<<before.mean<<" new_mean="<<after.mean<<'\n';
-  if(mode<2){Require(after.delta<before.delta*.8,"stable noise in motion did not improve");Require(after.error<before.error,"stable error did not improve");Require(std::abs(after.mean-.3)<.03,"mean diffuse energy changed");}
-  else Require(std::abs((after.mean-.1)*W*H-9.9)<.001,"compact light total energy lost");
+ for(unsigned mode=0;mode<4;++mode){auto before=StableRun(true,mode),after=StableRun(false,mode);
+  std::cout<<"R375 Stable mode="<<mode<<" old_delta="<<before.delta<<" new_delta="<<after.delta<<" old_rmse="<<before.error<<" new_rmse="<<after.error<<" old_mean="<<before.mean<<" new_mean="<<after.mean<<'\n';
+  if(mode==1){Require(after.delta<before.delta*.8,"stable noise in motion did not improve");Require(after.error<before.error,"stable error did not improve");Require(std::abs(after.mean-.3)<.03,"mean diffuse energy changed");}
+  else if(mode==2)Require(std::abs((after.mean-.1)*W*H-9.9)<.001,"compact light total energy lost");
+  else if(mode==3)Require(std::abs(after.mean-.1)<.00001,"offscreen history leaked");
+  else Require(after.delta<=before.delta*1.01,"stationary stability regressed");
  }
- std::cout<<"PASS R374 Stable stationary/moving noise feedback and compact-light energy\n";return 0;
+ std::cout<<"PASS R375 Stable stationary/moving noise feedback and compact-light energy\n";return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

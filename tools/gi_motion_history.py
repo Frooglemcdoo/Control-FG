@@ -39,7 +39,7 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
   neg7=[0x80100e46,0x41,7]
   pad+=ins(0,dst(5),src(5),neg7)+ins(52,dst(5),src(5),imm(0))
   clip=ins(52,dst(1),src(1),src(5))+ins(51,dst(1),src(1),src(6))
-  for start,end,old,new in [(311,318,.03,.01),(356,366,40.,400.)]+([] if history else [(219,226,.7,0.)]):
+  for start,end,old,new in [(311,318,.03,.01),(356,366,40.,0. if preserve_current else 400.)]+([] if history else [(219,226,.7,0.)]):
    bits=struct.unpack('<I',struct.pack('<f',old))[0]
    matches=[i for i in range(start+1,end) if w[i]==bits]
    if len(matches)!=1:raise ValueError('Unexpected GI immediate layout')
@@ -133,12 +133,21 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
     energy_filter+=ins(0,dst(9,8),src(9,0xff),src(14,0))
    energy_filter+=ins(14,dst(3),src(9),src(9,0xff))+ins(54,dst(3,8),src(3,0))
   if preserve_current:
+   # R375: screen velocity is not a visibility test. Keep the existing depth
+   # rejection and current-radiance history bounds; reject offscreen UVs.
+   onscreen=ins(29,dst(9,3),src(4,0x44),imm(0))
+   onscreen+=ins(29,dst(10,3),imm(1),src(4,0x44))
+   onscreen+=ins(1,dst(9,3),src(9),src(10))
+   onscreen+=ins(1,dst(9,1),src(9,0),src(9,0x55))
+   onscreen+=ins(1,dst(9,1),src(9,0),imm(1))
+   onscreen+=ins(56,dst(0,8),src(0,0xff),src(9,0))
    # Native lerp subtracts its original raw center (r2 * r0.z), not r3.
    # Once r3 is filtered, both sides must use that same current estimate.
    # Otherwise output = filtered + weight * (history - raw), amplifying noise.
    w[393:403]=ins(0,dst(1,15),src(1,0x24),[0x80100e46,0x41,3])
   # Insert backwards to preserve original audited dword positions.
   w[393:393]=clip
+  if preserve_current:w[380:380]=onscreen
   w[204:204]=energy_filter+pad
   w[144:144]=bounds
  return transform_shex(data,patch)

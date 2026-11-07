@@ -34,6 +34,12 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
 static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned,ID3D12PipelineState* stableEnergy) {
  struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;};
  const Case cases[]={
+  []{Case c{"R375 valid moving history retained",.2f,.2f,.22f,.5f,false,false,.214f};c.stable=true;c.motion=.02f;return c;}(),
+  []{Case c{"R375 moving disocclusion rejects history",.2f,.2f,2.f,.7f,false,false,.2f};c.stable=true;c.motion=.02f;return c;}(),
+  []{Case c{"R375 offscreen history rejected",.2f,.2f,2.f,.5f,false,false,.2f};c.stable=true;c.motion=2.f;return c;}(),
+  []{Case c{"R375 camera cut rejects history",.2f,.2f,2.f,.5f,true,false,.2f};c.stable=true;c.motion=.02f;return c;}(),
+  []{Case c{"R375 removed light bounded to near black",0.f,0.f,10.f,.5f,false,false,.0007f};c.stable=true;c.motion=.02f;return c;}(),
+
   {"R373 old temporal loses current light to dark mip",10.f,.01f,10.f,.5f,true,false,.01f},
   []{Case c{"R373 stable uniform light despite dark mip/history",10.f,.01f,10.f,.5f,false,false,10.f};c.stable=true;return c;}(),
   []{Case c{"R374 stable compact light normalized gather",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=1;return c;}(),
