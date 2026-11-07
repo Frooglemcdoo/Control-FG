@@ -145,14 +145,16 @@ assert all(ec[k]==b[k] for k in b if k!=b'SHEX')
 with tempfile.TemporaryDirectory() as d:
  p=Path(d)/'stable.dxbc';p.write_bytes(energy);ej=decode(p)
 assert ej['bindings']==j['bindings']
-assert sum(i['name']=='sample_l' for i in ej['instructions'])==sum(i['name']=='sample_l' for i in j['instructions'])+17
+assert sum(i['name']=='sample_l' for i in ej['instructions'])==sum(i['name']=='sample_l' for i in j['instructions'])+13
 assert sum(i['name']=='store_uav_typed' for i in ej['instructions'])==1
 print('PASS R374 same-surface current gather, unchanged bindings and one output dispatch')
 
-# R379 current gather must use native t0.y, even when the packed X channel differs.
+
+# Native effective component = source swizzle at the destination's written lane.
+native_depth=next(i for i in old if i['dword']==259)
+assert native_depth['operands'][2].split('.')[-1]['xyzw'.index(native_depth['operands'][0].split('.')[-1])]=='x'
 depth_samples=[i for i in ej['instructions'] if i['name']=='sample_l' and i['operands'][2].startswith('t[0][0]')]
 assert len(depth_samples)==10
-assert all(i['operands'][2]=='t[0][0].yyyy' for i in depth_samples if i['operands'][0] in ('r[10].x','r[13].x'))
-assert sum(i['operands'][2]=='t[0][0].yyyy' for i in depth_samples)==9
-assert any(i['operands'][2]=='t[0][0].yzxw' for i in depth_samples)
-print('PASS R379 gather uses native Y depth; unrelated packed X channel excluded')
+assert sum(i['operands'][2]=='t[0][0].xxxx' for i in depth_samples)==9
+assert sum(i['name']=='movc' and i['operands'][0]=='r[15].xyz' for i in ej['instructions'])==8
+print('PASS R380 native effective X depth and eight surface-gated history-bound taps')

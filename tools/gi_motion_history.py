@@ -117,11 +117,14 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
    def sample_energy(r,mask,uv,texture):
     code=list(w[131:144]);code[1:3]=dst(r,mask);code[3:5]=uv
     code[6]=code[7]=texture;code[-1]=imm(0)[1]
-    # Native temporal t0.y is the surface depth. t0.x is not interchangeable:
-    # using x here makes the current gather disagree with native reprojection.
-    if texture==0:code[5]=0x207556;code[9:11]=[0,6]
+    # Native t0.yzxw written to r1.z selects X (swizzle THEN destination mask).
+    # Replicate X explicitly so the destination scratch component cannot change it.
+    if texture==0:code[5]=0x207006;code[9:11]=[0,6]
     return code
-   energy_filter=ins(56,dst(9),src(3),imm(4))+ins(54,dst(9,8),imm(4))
+   # R380: current/history bounds share the same accepted surface taps.
+   # Unguarded mip bounds can admit bright history from across a silhouette.
+   energy_filter=ins(54,dst(5),src(3))+ins(54,dst(6),src(3))
+   energy_filter+=ins(56,dst(9),src(3),imm(4))+ins(54,dst(9,8),imm(4))
    energy_filter+=sample_energy(10,1,src(1,0xae),0)
    energy_filter+=ins(52,dst(10,2),src(10,0),imm(.000001))
    energy_filter+=ins(56,dst(10,2),src(10,0x55),imm(.005))
@@ -130,6 +133,8 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
     energy_filter+=sample_energy(12,7,src(11),3)+sample_energy(13,1,src(11),0)
     energy_filter+=ins(0,dst(13,1),src(13,0),[0x80100006,0x41,10])
     energy_filter+=ins(29,dst(14,1),src(10,0x55),[0x80100006,0x81,13])
+    energy_filter+=ins(55,dst(15),src(14,0),src(12),src(3))
+    energy_filter+=ins(51,dst(5),src(5),src(15))+ins(52,dst(6),src(6),src(15))
     energy_filter+=ins(1,dst(14,1),src(14,0),imm(weight))
     energy_filter+=ins(50,dst(9),src(12),src(14,0),src(9))
     energy_filter+=ins(0,dst(9,8),src(9,0xff),src(14,0))
@@ -151,7 +156,7 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
   w[393:393]=clip
   if preserve_current:w[380:380]=onscreen
   w[204:204]=energy_filter+pad
-  w[144:144]=bounds
+  if not preserve_current:w[144:144]=bounds
  return transform_shex(data,patch)
 def generate_bypass(data):
  # R262: preserve native dispatch coordinates and output ABI, copy only t3 mip0.

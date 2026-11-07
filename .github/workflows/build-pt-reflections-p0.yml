@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate owned GI feedback sequence R379
+      - name: Validate owned GI feedback sequence R380
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -151,7 +151,7 @@ jobs:
           build\test-gi-owned-edge.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate character rig sampling R379
+      - name: Validate character rig sampling R380
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -205,7 +205,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R379
+      - name: Validate near volume history R380
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -940,6 +940,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-stable-sequence.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-surface-history.cpp /Febuild\test-gi-surface-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-surface-history.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-path-capture.cpp /Febuild\test-gi-path-capture.exe
           if errorlevel 1 exit /b 1
           build\test-gi-path-capture.exe
@@ -1325,11 +1329,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R379
+      - name: Package owned GI integration R380
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R379'
+          $out='ControlTOH-R380'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1369,10 +1373,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R379 - GI Stable uses the native surface-depth channel
-          Corrects GI Stable current-frame surface rejection to read native depth from t0.y, matching native temporal reprojection. The previous gather read t0.x. Windows GPU regression cases separate X and Y to check both true depth-edge rejection and same-surface light preservation.
-          RAW + RR, Owned GI ray generation, clamp settings, six spatial passes, the F10 panel and on-demand captures remain unchanged. This targets cross-surface light mixing; in-game boiling improvement still requires visual verification.
-          For the visual comparison, use the same scene and toggle GI Stable OFF/ON with the other settings unchanged. No capture is required for this first visual check. The capture instructions below are optional.
+          R380 - Surface-matched GI Stable history bounds
+          GI Stable now derives history color bounds from the same depth-accepted current-frame neighbors used by its gather. Blurred neighboring surfaces no longer expand the allowed history range across an object edge. Normalized current lighting and existing spatial passes are retained.
+          Corrects the R379 depth-channel audit: native t0.yzxw written to destination Z selects X. R379 incorrectly changed the gather to Y. The new tests use independent channels and archived pre-R379 bytecode as a control.
+          RAW + RR, GI ray generation, clamp settings and on-demand capture behavior are unchanged. This addresses a reproduced shader failure; the remaining in-game flicker still needs visual verification.
+          Compare GI Stable OFF/ON at the desk books and plant with other settings unchanged. No capture is required initially. The instructions below are optional.
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
           Enable RR and RT indirect lighting. Turn FG OFF. Select Native Blend and the GI producer you want to diagnose (Owned for the reported issue).
@@ -1380,7 +1385,7 @@ jobs:
           The tool temporarily compares RAW GI and GI Stable, preserving the selected producer and clamp. One beep starts each condition. Two beeps mean the ZIP is packaged and selected in Explorer.
           Four evaluated frames total: two per condition. Includes pre-filter GI, GI at RR input, scene HDR before RR, RR output, and matching guides/metadata. Whole-screen stride-4 point samples reduce disk/ZIP size; they do not establish full-resolution image quality. Raw GPU readbacks still use native resolution and add temporary capture cost.
           A full-resolution RGB byte comparison verifies whether pre-filter and post-filter GI are identical. Dispatch counters verify requested RAW/Stable coverage. No intermediate temporal-only output is captured. This is diagnosis, not a claimed visual correction or performance test.
-          Settings restore on completion, failure or focus loss. Files are retained under LOCALAPPDATA/ControlFGProbe/GI-Path-R379-*. Existing RR capture budget is four pairs per launch; this comparison needs two unused pairs. Restart after failed/incomplete GPU captures.
+          Settings restore on completion, failure or focus loss. Files are retained under LOCALAPPDATA/ControlFGProbe/GI-Path-R380-*. Existing RR capture budget is four pairs per launch; this comparison needs two unused pairs. Restart after failed/incomplete GPU captures.
           Rendering shaders are unchanged from R376. No diagnostic work begins until a capture button is clicked.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
@@ -1407,7 +1412,7 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R379 - Original F10 panel restored, grouped by feature and capture.
+          R380 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
           Native GI, true raw bypass and clamp60 are defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
@@ -1419,10 +1424,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R379
+          name: ControlTOH-R380
           path: |
-            ControlTOH-R379.zip
-            ControlTOH-R379.sha256
+            ControlTOH-R380.zip
+            ControlTOH-R380.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

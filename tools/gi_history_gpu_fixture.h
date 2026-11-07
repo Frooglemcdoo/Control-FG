@@ -20,7 +20,7 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  for(UINT mip=0;mip<mips;++mip){auto& f=layouts[mip];
   for(UINT y=0;y<f.Footprint.Height;++y)for(UINT x=0;x<f.Footprint.Width*4;++x){
    float v=mip?filtered:PatternValue(base,pattern,x/4,y);
-   if(x%4==0 && depthChannels)v=depthChannels==1?.5f:PatternValue(.8f,4,x/4,y);
+   if(x%4==1 && depthChannels)v=depthChannels==1?.5f:PatternValue(.8f,4,x/4,y);
    std::memcpy(data.data()+f.Offset+y*f.Footprint.RowPitch+x*sizeof(float),&v,sizeof(v));
   }
  }
@@ -36,8 +36,8 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
 static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned,ID3D12PipelineState* stableEnergy) {
  struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;UINT depthChannels=0;};
  const Case cases[]={
-  []{Case c{"R379 Y-depth edge with constant X rejects cross-surface light",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthEdge=true;c.depthChannels=1;return c;}(),
-  []{Case c{"R379 X edge with flat Y retains same-surface gather",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthChannels=2;return c;}(),
+  []{Case c{"R380 X-depth edge with constant Y rejects cross-surface light",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthEdge=true;c.depthChannels=1;return c;}(),
+  []{Case c{"R380 Y edge with flat X retains same-surface gather",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthChannels=2;return c;}(),
   []{Case c{"R375 valid moving history retained",.2f,.2f,.22f,.5f,false,false,.214f};c.stable=true;c.motion=.02f;return c;}(),
   []{Case c{"R375 moving disocclusion rejects history",.2f,.2f,2.f,.7f,false,false,.2f};c.stable=true;c.motion=.02f;return c;}(),
   []{Case c{"R375 offscreen history rejected",.2f,.2f,2.f,.5f,false,false,.2f};c.stable=true;c.motion=2.f;return c;}(),
