@@ -52,7 +52,7 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
  if(!eligible){rrNativeDispatchOriginal(state,groups);return;}
  const bool used=control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
 #ifdef CONTROL_RR_GI_SEQUENCE
- if(used&&control_rr_gi::rawBypass){
+ if(used&&(control_rr_gi::rawBypass||gi_path_capture::enabled.load())){
   const DWORD captureSaved=GetLastError();
   RRInputCaptureAtGI(context.frame,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
   SetLastError(captureSaved);

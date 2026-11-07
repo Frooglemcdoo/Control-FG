@@ -10,6 +10,7 @@
 // R10 diagnostics: two prepared slots capture successive evaluated frames.
 // Inputs and post-RR output are copied on the original list, with exact restoration.
 struct RRInputCaptureJob {
+ unsigned exportStride=1,pathCondition=0;wchar_t exportRoot[260]{};
  control_rr::InputCapturePolicy policy{};
  GIBatchCapture giHits{};
  unsigned copySubresource[kRRInputCaptureMaxResources]{};
@@ -64,7 +65,7 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
   desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   hr=c->bytes[i]?c->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&c->readback[i])):E_INVALIDARG;
  }
- if(SUCCEEDED(hr))hr=GIBatchCapturePrepare(c->giHits,c->device);
+ if(SUCCEEDED(hr)&&!c->pathCondition)hr=GIBatchCapturePrepare(c->giHits,c->device);
  c->policy.Prepared(SUCCEEDED(hr));
  if(FAILED(hr))RRInputCaptureRelease(c); // No commands recorded during allocation.
  Log("RR_INPUT_CAPTURE_C1_PREPARED success=%u width=%u height=%u buffers=%u",unsigned(SUCCEEDED(hr)),c->width,c->height,c->count);
@@ -86,7 +87,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   wchar_t env[32768]{};const DWORD length=GetEnvironmentVariableW(L"LOCALAPPDATA",env,32768);
   if(!length||length>=32768)okay=false;
   std::wstring directory;
-  if(okay){directory=std::wstring(env,length)+L"\\ControlFGProbe\\rr-input-c1-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(c->frame);
+  if(okay){directory=(c->pathCondition?std::wstring(c->exportRoot):std::wstring(env,length)+L"\\ControlFGProbe")+L"\\rr-input-c1-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(c->frame);
    okay=CreateDirectoryW(directory.c_str(),nullptr)!=FALSE;}
   for(unsigned i=0;i<c->count&&okay;++i){
    if(i==c->outputIndex&&!c->outputCaptured)continue;
@@ -96,19 +97,62 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    okay=SUCCEEDED(c->readback[i]->Map(0,&range,&mapped[i]))&&mapped[i];
    const auto writeStarted=GetTickCount64();
    Log("RR_INPUT_CAPTURE_EXPORT_MAP_END frame=%llu index=%u success=%u elapsed_ms=%llu",c->frame,i,unsigned(okay),writeStarted-mapStarted);
-   if(okay)okay=RRGuideExportDetail::WriteRaw(directory+L"\\"+c->names[i],static_cast<unsigned char*>(mapped[i])+c->footprint[i].Offset,c->footprint[i].Footprint.RowPitch,size_t(c->descriptions[i].Width)*c->pixelBytes[i],c->descriptions[i].Height);
+   if(okay){
+    const auto* pixels=static_cast<unsigned char*>(mapped[i])+c->footprint[i].Offset;
+    if(c->exportStride==1)okay=RRGuideExportDetail::WriteRaw(directory+L"\\"+c->names[i],pixels,c->footprint[i].Footprint.RowPitch,size_t(c->descriptions[i].Width)*c->pixelBytes[i],c->descriptions[i].Height);
+    else {
+     // Full-screen point samples, never a manually aimed crop. Native capture
+     // remains full resolution; only worker-side disk payload is reduced.
+     RRGuideExportDetail::File file(directory+L"\\"+c->names[i]);
+     const unsigned w=static_cast<unsigned>(c->descriptions[i].Width),h=c->descriptions[i].Height,b=c->pixelBytes[i],s=c->exportStride;
+     std::vector<unsigned char> row(size_t(gi_path_capture::Extent(w,s))*b);
+     for(unsigned y=0;y<h&&okay;y+=s){
+      for(unsigned x=0;x<w;x+=s)memcpy(row.data()+size_t(x/s)*b,pixels+size_t(y)*c->footprint[i].Footprint.RowPitch+size_t(x)*b,b);
+      okay=file.Write(row.data(),row.size());
+     }
+     okay=okay&&file.Finish();
+    }
+   }
    if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);mapped[i]=nullptr;}
    Log("RR_INPUT_CAPTURE_EXPORT_WRITE_END frame=%llu index=%u success=%u elapsed_ms=%llu",c->frame,i,unsigned(okay),GetTickCount64()-writeStarted);
   }
+  unsigned long long giCompared=0,giDifferent=0;
+#ifdef CONTROL_RR_GI_SEQUENCE
+  if(okay&&c->pathCondition&&c->preGICaptured){
+   const unsigned a=c->preGIIndex,b=c->nativeIndex+5;
+   if(c->descriptions[a].Width==c->descriptions[b].Width&&c->descriptions[a].Height==c->descriptions[b].Height){
+    D3D12_RANGE ra{0,static_cast<SIZE_T>(c->bytes[a])},rb{0,static_cast<SIZE_T>(c->bytes[b])};
+    okay=SUCCEEDED(c->readback[a]->Map(0,&ra,&mapped[a]))&&mapped[a]&&SUCCEEDED(c->readback[b]->Map(0,&rb,&mapped[b]))&&mapped[b];
+    if(okay)for(unsigned y=0;y<c->descriptions[a].Height;++y){
+     auto* pa=static_cast<unsigned char*>(mapped[a])+c->footprint[a].Offset+size_t(y)*c->footprint[a].Footprint.RowPitch;
+     auto* pb=static_cast<unsigned char*>(mapped[b])+c->footprint[b].Offset+size_t(y)*c->footprint[b].Footprint.RowPitch;
+     for(size_t x=0;x<c->descriptions[a].Width;++x){++giCompared;if(memcmp(pa+x*8,pb+x*8,6)!=0)++giDifferent;}
+    }
+    for(unsigned i:{a,b})if(mapped[i]){D3D12_RANGE wr{0,0};c->readback[i]->Unmap(0,&wr);mapped[i]=nullptr;}
+   }
+  }
+#endif
+#if defined(CONTROL_RR_GI_SEQUENCE) && defined(CONTROL_GI_BOUNDARY_CAPTURE)
+  if(c->pathCondition){
+   const auto& b=c->giBoundary;
+   const bool verified=okay&&c->preGICaptured&&c->preGIFrame==c->frame&&c->outputCaptured&&c->evaluationResult==1&&
+    b.valid&&b.applied&&b.frame==c->frame&&giCompared&&
+    (c->pathCondition==1?(b.stage==control_rr_gi::StageMode::RawBypass&&b.spatialObserved==0&&giDifferent==0):
+      (b.stage==control_rr_gi::StageMode::BothSteadySpatial&&b.spatialObserved==b.spatialPasses&&b.spatialPasses>0));
+   (verified?gi_path_capture::validFrames[c->pathCondition]:gi_path_capture::invalidFrames[c->pathCondition]).fetch_add(1);
+  }
+#endif
   if(okay)okay=GIBatchCaptureExport(c->giHits,directory);
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
-   out<<"{\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
+   out<<"{\"full_resolution_gi_rgb_pixels_compared\":"<<giCompared<<",\"full_resolution_gi_rgb_pixels_different\":"<<giDifferent<<",";
+   out<<"\"path_capture_condition\":"<<c->pathCondition<<",\"export_stride\":"<<c->exportStride<<",\"point_samples_not_filtered\":true,";
+   out<<"\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
 #ifdef CONTROL_RR_GI_SEQUENCE
 #ifdef CONTROL_GI_LONG_SEQUENCE
    out<<"\"gi_sampling_experiment\":\"R264_current_frame_256_creation\",";
 #endif
-   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":4,\"gi_signal_boundary\":\"after_filter_at_rr_input\","
+   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":"bounded_by_controller",\"gi_signal_boundary\":\"after_filter_at_rr_input\","
       <<"\"pre_gi_frame\":"<<c->preGIFrame<<",\"pre_gi_captured\":"<<(c->preGICaptured?"true":"false")
       <<",\"pre_gi_tick_ms\":"<<c->preGITick<<",\"evaluation_tick_ms\":"<<c->evaluationTick<<",";
 #endif
@@ -130,9 +174,10 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    for(unsigned i=0;i<c->count;++i){if(i)out<<',';std::string name;for(const wchar_t* p=c->names[i];*p;++p)name+=static_cast<char>(*p);
     out<<"{";
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
+    out<<"\"source_width\":"<<c->descriptions[i].Width<<",\"source_height\":"<<c->descriptions[i].Height<<",";
     out<<"\"resource_identity\":"<<reinterpret_cast<std::uintptr_t>(c->sources[i])<<",";
 #endif
-    out<<"\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<c->descriptions[i].Width<<",\"height\":"<<c->descriptions[i].Height<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
+    out<<"\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<gi_path_capture::Extent(static_cast<unsigned>(c->descriptions[i].Width),c->exportStride)<<",\"height\":"<<gi_path_capture::Extent(c->descriptions[i].Height,c->exportStride)<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
    out<<"],\"pair_index\":"<<c->pairIndex<<",\"previous_frame\":"<<c->previousFrame<<",\"consecutive\":"<<((c->pairIndex==1&&c->frame==c->previousFrame+1)?"true":"false")<<",\"reset\":"<<c->reset<<",\"rr_result\":"<<c->evaluationResult<<",\"output_captured\":"<<(c->outputCaptured?"true":"false")<<"}\n";
    const auto bytes=out.str();RRGuideExportDetail::File file(directory+L"\\metadata.pending");
    okay=file.Write(bytes.data(),bytes.size())&&file.Finish();
@@ -256,6 +301,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #ifdef CONTROL_RR_GI_SEQUENCE
    c->preGIIndex=outputIndex+1;c->names[c->preGIIndex]=L"pre-filter-gi.rgba16f";c->pixelBytes[c->preGIIndex]=8;
 #endif
+   c->exportStride=gi_path_capture::enabled.load()?gi_path_capture::stride:1;
+   c->pathCondition=gi_path_capture::enabled.load()?gi_path_capture::condition.load():0;
+   c->exportRoot[0]=0;if(c->pathCondition)wcscpy_s(c->exportRoot,gi_path_capture::directory);
    c->policy.BeginPrepare();
    if(!QueueUserWorkItem(&RRInputCapturePrepare,c,WT_EXECUTEDEFAULT)){RRInputCaptureRelease(c);c->policy.phase=Policy::Failed;}
    __leave;

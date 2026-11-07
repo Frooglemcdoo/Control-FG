@@ -25,11 +25,11 @@ inline bool ManualContactUnfiltered() noexcept {return !request.load() && manual
 inline bool ManualContactPreserved() noexcept {return !request.load() && manualContact.load()==1;}
 inline void ResetManual() noexcept {manualGI.store(0);manualContact.store(0);}
 inline thread_local unsigned giScope=0;
-inline constexpr unsigned phases=8;
+inline constexpr unsigned phases=9;
 enum class Event : unsigned {GIEntry,GIEligible,GITemporal,GISpatial,GIZero,GIRaw, GISteady,
-    ContactEntry,ContactNative,ContactNeutral,ContactTemporal,ContactSpatial,Count};
+    ContactEntry,ContactNative,ContactNeutral,ContactTemporal,ContactSpatial,GIStableTemporal,Count};
 inline constexpr const char* names[]={"gi_entry","gi_eligible","gi_temporal","gi_spatial","gi_zero","gi_raw","gi_steady",
-    "contact_entry","contact_native","contact_neutral","contact_temporal","contact_spatial"};
+    "contact_entry","contact_native","contact_neutral","contact_temporal","contact_spatial","gi_stable_temporal"};
 inline constexpr unsigned count=unsigned(Event::Count);
 static_assert(sizeof(names)/sizeof(names[0])==count);
 using Snapshot=std::array<uint64_t,count>;
@@ -48,6 +48,7 @@ inline Snapshot Read(unsigned phase) noexcept {
 inline unsigned SpatialPasses(unsigned phase,control_rr_gi::StageMode mode,unsigned native) noexcept {return phase==7?1:control_rr_gi::SpatialPasses(mode,native);}
 // Report the active override instead of an unrelated saved stage selection.
 inline const wchar_t* FilterLabel(unsigned phase,control_rr_gi::StageMode saved) noexcept {
+ if(phase==8)return L"GI: RAW BYPASS";
  if(phase==7)return L"GI: OWNED FILTER";
  if(phase==2)return L"GI: REMOVED";
  if(phase==3||phase==5)return L"GI: STABLE FILTER";
@@ -59,7 +60,7 @@ inline void SelectSavedStage(control_rr_gi::StageMode stage) noexcept {
 inline bool StabilizeGI(unsigned phase) noexcept {return phase==3 || phase==5;}
 inline bool PreserveContact(unsigned phase) noexcept {return phase==4 || phase==5;}
 inline control_rr_gi::StageMode Stage(unsigned phase,control_rr_gi::StageMode saved) noexcept {
-    return phase==7?control_rr_gi::StageMode::TemporalOnly:phase==2?control_rr_gi::StageMode::ClampOnly:
+    return phase==8?control_rr_gi::StageMode::RawBypass:phase==7?control_rr_gi::StageMode::TemporalOnly:phase==2?control_rr_gi::StageMode::ClampOnly:
         StabilizeGI(phase)?control_rr_gi::StageMode::BothSteadySpatial:saved;
 }
 inline control_rr_gi::DiagnosticView View(unsigned phase,control_rr_gi::StageMode mode,control_rr_gi::DiagnosticView saved) noexcept {
@@ -67,8 +68,9 @@ inline control_rr_gi::DiagnosticView View(unsigned phase,control_rr_gi::StageMod
         StabilizeGI(phase)?control_rr_gi::DiagnosticView::Normal:control_rr_gi::EffectiveView(mode,saved);
 }
 inline bool Covered(unsigned phase,const Snapshot& delta) noexcept {
+    if(phase==8 && (!delta[unsigned(Event::GIRaw)] || !delta[unsigned(Event::GIEligible)] || delta[unsigned(Event::GISpatial)]))return false;
     if(phase==2 && (!delta[unsigned(Event::GIZero)] || !delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)]))return false;
-    if(StabilizeGI(phase) && (!delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)] || !delta[unsigned(Event::GISteady)]))return false;
+    if(StabilizeGI(phase) && (!delta[unsigned(Event::GIStableTemporal)] || !delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)] || !delta[unsigned(Event::GISteady)]))return false;
     if(PreserveContact(phase) && (!delta[unsigned(Event::ContactEntry)] || !delta[unsigned(Event::ContactNative)] || (!delta[unsigned(Event::ContactTemporal)] && !delta[unsigned(Event::ContactSpatial)])))return false;
     return phase>0 && phase<phases;
 }

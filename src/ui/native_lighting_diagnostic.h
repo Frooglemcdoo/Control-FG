@@ -8,30 +8,32 @@
 #include "lighting_capture_suite.h"
 #include "lighting_performance_capture.h"
 #include "rr_reflection_suite.h"
+#include "gi_path_capture.h"
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
 inline constexpr int kWidth = 490, kButtonFirst = 5400;
 inline constexpr int kModeRows = (kModeCount + 2) / 3;
-inline constexpr int kStatusY=704,kCaptureStatusY=724,kFooterY=770,kHeight=816;
+inline constexpr int kStatusY=746,kCaptureStatusY=766,kFooterY=812,kHeight=858;
 // Preserve the original three-column controls and theme; group actions by purpose.
 inline RECT ButtonRect(unsigned index) noexcept {
  if(index<kModeCount)return {14+int(index%3)*156,56+int(index/3)*42,162+int(index%3)*156,92+int(index/3)*42};
  constexpr unsigned features[]={7,8,11,9,10,20,12,13,14,15,16,17};
  constexpr unsigned comparisons[]={21,22,23,24,25,26};
- constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19};
+ constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19,27};
  const unsigned local=index-kModeCount;unsigned row=0,col=0;int top=0;
  for(unsigned i=0;i<12;++i)if(features[i]==local){row=i/3;col=i%3;top=220;}
  for(unsigned i=0;i<6;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
- for(unsigned i=0;i<9;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
+ for(unsigned i=0;i<10;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
  return {14+int(col)*156,top+int(row)*42,162+int(col)*156,top+int(row)*42+36};
 }
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 27;
+inline constexpr unsigned kButtonCount = kModeCount + 28;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if(index==kModeCount+27)return path_capture::active?L"GI PATH: RECORDING":L"CAPTURE GI PATH";
     if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+21)return rt_surface_source::manualGI.load()==1?L"GI REMOVE: ON":L"GI REMOVE: OFF";
@@ -166,7 +168,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R376",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R377",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"FEATURE SETTINGS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
@@ -373,6 +375,12 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+            if(path_capture::active)return 0;
+            if(index==kModeCount+27){
+                if(path_capture::Start(GetTickCount64()))ClosePanel(window);
+                else MessageBoxW(window,L"Use Native Blend, RR ON and FG OFF. Finish other captures first. After two earlier RR pairs or a failed capture, restart the game. Hold still for both conditions; two beeps mean the ZIP is ready.",L"GI path capture",MB_OK);
+                return 0;
+            }
             if(index==kModeCount+26){render_fps::enabled=!render_fps::enabled;InvalidateRect(GetDlgItem(window,kButtonFirst+index),nullptr,FALSE);return 0;}
             if((index>=kModeCount&&index<=kModeCount+6)||index==kModeCount+18||index==kModeCount+19)control_diagnostics::captureActive=true;
             const bool traceAction=index==kModeCount+3&&gi_spot_trace::Enabled();
@@ -476,7 +484,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 inline void UpdateCaptureActivity() noexcept {
  const auto tracePhase=gi_spot_trace::phase.load();
  const bool traceActive=tracePhase!=gi_spot_trace::Phase::Idle && tracePhase!=gi_spot_trace::Phase::Complete && tracePhase!=gi_spot_trace::Phase::Failed;
- const bool active=traceActive||capture_suite::active||performance_capture::Active()||control_gi_button::Active()||control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load()
+ const bool active=path_capture::active||traceActive||capture_suite::active||performance_capture::Active()||control_gi_button::Active()||control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load()
 #ifdef CONTROL_RR_F9_SUITE
  ||reflection_suite::active
 #endif
@@ -555,7 +563,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         const bool foreground=panel && lighting_panel::Foreground(game,panel,foregroundWindow);
         if(foreground && !f10Registered)f10Registered=RegisterHotKey(nullptr,f10Id,MOD_NOREPEAT,VK_F10)!=FALSE;
         if(!foreground && f10Registered){UnregisterHotKey(nullptr,f10Id);f10Registered=false;}
-        if(!panel){if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
+        if(!panel){path_capture::Tick(nullptr,now);if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
         if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kNativeBlendDefaultMode,readyMask.load()))SelectMode(kNativeBlendDefaultMode);
 #ifndef CONTROL_ON_DEMAND_DIAGNOSTICS
         static bool f9Held=false;
@@ -581,6 +589,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
 #ifdef CONTROL_RR_F9_SUITE
         reflection_suite::Tick(game,now);
 #endif
+        path_capture::Tick(game,now);
         capture_suite::Tick(game,now);
         performance_capture::Tick(game,now);
 

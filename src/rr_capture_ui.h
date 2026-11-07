@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include "gi_stack_capture.h"
+#include "gi_path_capture.h"
 #include "rr_input_capture_policy.h"
 #include "rr_suite_policy.h"
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
@@ -17,6 +18,7 @@ namespace control_rr_capture_ui {
 enum class State { Idle, Queued, Preparing, Capturing, Saving, Complete, Failed };
 inline std::atomic<State> state{State::Idle};
 inline std::atomic<bool> requested{false};
+inline std::atomic<bool> automaticPairs{true};
 inline std::atomic<unsigned> completedPairs{0};
 #ifdef CONTROL_RR_GI_SEQUENCE
 inline std::atomic<const wchar_t*> detail{L"Select GI RAW BYPASS. CAPTURE RR records 4 stationary pairs automatically."};
@@ -36,6 +38,7 @@ inline bool Request() noexcept {
     auto current=state.load();
     if(completedPairs.load()>=PairLimit() || (current!=State::Idle && current!=State::Complete))return false;
     if(!state.compare_exchange_strong(current,State::Queued))return false;
+    automaticPairs.store(!gi_path_capture::enabled.load());
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
     control_rr_gi::boundaryRequested.store(true);
 #endif
@@ -49,7 +52,7 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
     if(first==P::Failed || second==P::Failed || (first==P::Idle && second==P::Idle
 #ifdef CONTROL_RR_GI_SEQUENCE
-     && (requests>=PairLimit()||!outputsValid)
+     && (requests>=PairLimit()||!outputsValid||!automaticPairs.load())
 #endif
     ))control_rr_gi::boundaryRequested.store(false);
 #endif
@@ -57,7 +60,7 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
     if(first==P::Idle && second==P::Idle){
         if(outputsValid){completedPairs.store(requests);
 #ifdef CONTROL_RR_GI_SEQUENCE
- if(requests<PairLimit()){
+ if(requests<PairLimit() && automaticPairs.load()){
   detail.store(L"Pair saved. Next stationary pair queued automatically; hold still.");
   state.store(State::Queued);requested.store(true,std::memory_order_release);return;
  }

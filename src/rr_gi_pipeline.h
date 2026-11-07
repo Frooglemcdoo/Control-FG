@@ -140,6 +140,7 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
 #endif
   // Count the selected PSO only after recording the actual dispatch. A null
   // optional PSO/native fallback cannot claim diagnostic coverage.
+  if(!b->spatial && replacement==b->stableEnergy)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIStableTemporal);
   if(!b->spatial && replacement==b->zero)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIZero);
   if(!b->spatial && replacement==b->bypass)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIRaw);
   if(b->spatial && replacement==b->steady)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GISteady);

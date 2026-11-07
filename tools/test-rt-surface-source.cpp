@@ -27,11 +27,14 @@ int main(){
  }
  Snapshot empty{};for(unsigned p:{2u,3u,4u,5u})assert(!Covered(p,empty));
  for(unsigned p:{0u,8u,100u})assert(!Covered(p,empty));
- Snapshot gi{};gi[unsigned(Event::GIEligible)]=gi[unsigned(Event::GITemporal)]=gi[unsigned(Event::GISteady)]=1;
+ Snapshot gi{};gi[unsigned(Event::GIEligible)]=gi[unsigned(Event::GITemporal)]=gi[unsigned(Event::GISteady)]=gi[unsigned(Event::GIStableTemporal)]=1;
  assert(Covered(3,gi) && !Covered(5,gi));
  gi[unsigned(Event::ContactEntry)]=gi[unsigned(Event::ContactNative)]=1;assert(!Covered(5,gi));
  gi[unsigned(Event::ContactTemporal)]=1;assert(Covered(5,gi));
  auto partial=gi;partial[unsigned(Event::GISteady)]=0;assert(!Covered(5,partial));
+ Snapshot raw{};raw[unsigned(Event::GIRaw)]=raw[unsigned(Event::GIEligible)]=1;
+ assert(Covered(8,raw));raw[unsigned(Event::GISpatial)]=1;assert(!Covered(8,raw));
+ auto fallback=gi;fallback[unsigned(Event::GIStableTemporal)]=0;assert(!Covered(3,fallback));
  Snapshot zero{};zero[unsigned(Event::GITemporal)]=1;assert(!Covered(2,zero));
  zero[unsigned(Event::GIZero)]=1;assert(!Covered(2,zero));
  zero[unsigned(Event::GIEligible)]=1;assert(Covered(2,zero));

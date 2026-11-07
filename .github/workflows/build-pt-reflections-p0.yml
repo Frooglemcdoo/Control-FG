@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate owned GI feedback sequence R376
+      - name: Validate owned GI feedback sequence R377
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -151,7 +151,7 @@ jobs:
           build\test-gi-owned-edge.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate character rig sampling R376
+      - name: Validate character rig sampling R377
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -205,7 +205,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R376
+      - name: Validate near volume history R377
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -940,6 +940,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-stable-sequence.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-path-capture.cpp /Febuild\test-gi-path-capture.exe
+          if ($LASTEXITCODE -ne 0) { throw 'GI path controller compile failed' }
+          build\test-gi-path-capture.exe
+          if ($LASTEXITCODE -ne 0) { throw 'GI path controller failed' }
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-full-chain.exe
@@ -1321,11 +1325,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R376
+      - name: Package owned GI integration R377
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R376'
+          $out='ControlTOH-R377'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1365,15 +1369,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R376 - GI Stable: stabilize spatial weights across ray-hit changes
+          R377 - On-demand GI path diagnosis (rendering unchanged)
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
-          Enable RR and RT indirect lighting. For this comparison select GI: OWNED, GI STABLE: ON, GI FILTER: OFF. Use clamp60 or native as in your video.
-          Startup stays Native Blend / GI Native / Raw Bypass / clamp60 / Rig Stable. Keep VL High.
-          The supplied video showed GI STABLE toggling while GI FILTER stayed OFF. These are separate filters.
-          R376 keeps R375 temporal handling and makes the GI Stable spatial footprint independent of stochastic ray-hit distance. Depth, normal and material weights remain native. No extra taps, passes or monitoring are added. Full temporal plus both spatial variants feed back over 32 frames in a synthetic GPU test; this does not establish in-game quality or performance.
-          R372 Owned-filter edge correction is unchanged. No new pass, texture, ray count or runtime monitoring.
-          Actual-bytecode tests include 32-frame stationary/moving noisy feedback against R373, compact-light total energy, uniform light with dark mips, dark current and production pipeline selection. Synthetic tests cannot establish full in-game stability. In-game projector/jaw verification remains required.
+          Enable RR and RT indirect lighting. Turn FG OFF. Select Native Blend and the GI producer you want to diagnose (Owned for the reported issue).
+          F10 > Capture > CAPTURE GI PATH. Hold still throughout both conditions.
+          The tool temporarily compares RAW GI and GI Stable, preserving the selected producer and clamp. One beep starts each condition. Two beeps mean the ZIP is packaged and selected in Explorer.
+          Four evaluated frames total: two per condition. Includes pre-filter GI, GI at RR input, scene HDR before RR, RR output, and matching guides/metadata. Whole-screen stride-4 point samples reduce disk/ZIP size; they do not establish full-resolution image quality. Raw GPU readbacks still use native resolution and add temporary capture cost.
+          A full-resolution RGB byte comparison verifies whether pre-filter and post-filter GI are identical. Dispatch counters verify requested RAW/Stable coverage. No intermediate temporal-only output is captured. This is diagnosis, not a claimed visual correction or performance test.
+          Settings restore on completion, failure or focus loss. Files are retained under LOCALAPPDATA/ControlFGProbe/GI-Path-R377-*. Existing RR capture budget is four pairs per launch; this comparison needs two unused pairs. Restart after failed/incomplete GPU captures.
+          Rendering shaders are unchanged from R376. No diagnostic work begins until a capture button is clicked.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
           GI FILTER: OWNED toggles the new filter. GI STABLE remains a separate legacy comparison; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
@@ -1399,7 +1404,7 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R376 - Original F10 panel restored, grouped by feature and capture.
+          R377 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
           Native GI, true raw bypass and clamp60 are defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
@@ -1411,10 +1416,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R376
+          name: ControlTOH-R377
           path: |
-            ControlTOH-R376.zip
-            ControlTOH-R376.sha256
+            ControlTOH-R377.zip
+            ControlTOH-R377.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
