@@ -137,3 +137,13 @@ assert rj['bindings']==original['bindings']
 try:generate_bypass(source[:-1]);raise AssertionError('Unknown bypass source accepted')
 except ValueError:pass
 print('PASS R262 exact mip0 current pixel copy, RGB/red ABI, no history/depth/motion/mip/clamp/filter reads')
+
+# R373 stable variant changes exactly one source register swizzle. All original
+# bindings, geometry rejection, reprojection and history bounds are unchanged.
+energy=generate(source,preserve_current=True);ec=chunks(energy)
+assert energy[4:20]==checksum(energy)
+assert all(ec[k]==b[k] for k in b if k!=b'SHEX')
+ew=struct.unpack('<'+'I'*(len(ec[b'SHEX'])//4),ec[b'SHEX'])
+bw=struct.unpack('<'+'I'*(len(b[b'SHEX'])//4),b[b'SHEX'])
+assert [(x,y) for x,y in zip(bw,ew) if x!=y]==[(0x0010002a,0x0010003a)]
+print('PASS R373 stable current-light preservation changes only mip/raw luminance selector')

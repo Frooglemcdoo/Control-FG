@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate owned GI feedback sequence R372
+      - name: Validate owned GI feedback sequence R373
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -151,7 +151,7 @@ jobs:
           build\test-gi-owned-edge.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate character rig sampling R372
+      - name: Validate character rig sampling R373
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -205,7 +205,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R372
+      - name: Validate near volume history R373
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1313,11 +1313,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R372
+      - name: Package owned GI integration R373
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R372'
+          $out='ControlTOH-R373'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1357,18 +1357,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R372 - Owned GI filter: preserve validated foreground-edge history
+          R373 - GI Stable: preserve current GI brightness before smoothing
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
-          Launch Control DX12 normally. Enable RR and RT indirect lighting.
-          Defaults: Native Blend, GI: NATIVE, GI FILTER: OFF, GI: RAW BYPASS, REF CLAMP 60%, RIG: STABLE. Keep VL High.
-          Native Blend is the lighting mode; GI: NATIVE selects the original GI producer independently.
-          The raw GI reference bypasses the selected GI temporal/spatial denoiser before RR. It does not disable unrelated composition, character, shadow or volumetric passes.
-          The GI stage button displays active manual overrides. Choosing a saved GI stage clears the manual filter override; automated captures retain priority.
-          RR history resets once when the GI producer, filter selection, or lighting mode changes. No brightness-based reset was added.
-          R372 removes the blanket history veto at depth silhouettes and excludes unrelated background motion from foreground confidence. Per-history-tap depth validation, illumination response, camera cuts and same-depth motion rejection remain.
-          Candidate correction for jaw boiling with GI: OWNED and GI FILTER: OWNED. Tested with stationary/subpixel edges and existing compact-light/ghosting regressions; in-game verification is still required. No new pass, texture, monitoring or capture overhead.
-          To reproduce the confirmed improved user setup, select GI: OWNED and GI FILTER: OWNED. Startup remains the R371 native/raw reference; other controls are unchanged.
+          Enable RR and RT indirect lighting. For this comparison select GI: OWNED, GI STABLE: ON, GI FILTER: OFF. Use clamp60 or native as in your video.
+          Startup stays Native Blend / GI Native / Raw Bypass / clamp60 / Rig Stable. Keep VL High.
+          The supplied video showed GI STABLE toggling while GI FILTER stayed OFF. These are separate filters.
+          GI Stable now retains raw current-frame luminance instead of capping it against blurred mip luminance. Existing temporal bounds, depth/motion checks and Stable spatial smoothing remain.
+          R372 Owned-filter edge correction is unchanged. No new pass, texture, ray count or runtime monitoring.
+          Actual-bytecode tests compare the old loss against uniform and compact light preservation, dark current, pipeline selection and existing regressions. In-game projector/jaw verification remains required.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
           GI FILTER: OWNED toggles the new filter. GI STABLE remains a separate legacy comparison; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
@@ -1394,7 +1391,7 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R372 - Original F10 panel restored, grouped by feature and capture.
+          R373 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
           Native GI, true raw bypass and clamp60 are defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
@@ -1406,10 +1403,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R372
+          name: ControlTOH-R373
           path: |
-            ControlTOH-R372.zip
-            ControlTOH-R372.sha256
+            ControlTOH-R373.zip
+            ControlTOH-R373.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

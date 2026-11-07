@@ -3,7 +3,8 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data,history=True,outliers=False,view=0,smooth=False):
+def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_current=False):
+ if preserve_current and (not history or outliers or view or smooth):raise ValueError("Energy preservation requires the stable temporal path")
  if smooth and (history or outliers or view):raise ValueError("Smoothing requires a normal zero-history path")
  if view not in (0,1,2) or (view and (history or not outliers)):raise ValueError("Diagnostic requires zero-history outlier path")
  if outliers and history:raise ValueError("Outlier variant must have zero history")
@@ -106,6 +107,12 @@ def generate(data,history=True,outliers=False,view=0,smooth=False):
     w[412:412]=ins(54,dst(1,15),imm(0))
    w[197:197]=guard
    return
+  if preserve_current:
+   # R373: Stable must not cap current lighting against a blurred mip.
+   # Keep the native normalization/output ABI and history clipping; substitute
+   # raw luminance for the mip luminance in min(mipLuma, rawLuma).
+   assert w[190:197]==[0x07000033,0x00100042,0,0x0010002a,0,0x0010003a,0]
+   w[193]=0x0010003a
   # Insert backwards to preserve original audited dword positions.
   w[393:393]=clip
   w[204:204]=pad
@@ -145,3 +152,6 @@ if __name__=='__main__':
 
  with (out/'gi_motion_history.generated.h').open('a') as f:
   f.write('inline constexpr unsigned char kGIBypassShader[]={\n'+','.join(map(str,generate_bypass(source)))+'\n};\n')
+
+ with (out/'gi_motion_history.generated.h').open('a') as f:
+  f.write('inline constexpr unsigned char kGIStableEnergyShader[]={\n'+','.join(map(str,generate(source,preserve_current=True)))+'\n};\n')

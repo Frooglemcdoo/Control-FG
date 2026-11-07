@@ -31,9 +31,13 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  auto cpu=gpu.views->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=static_cast<SIZE_T>(index)*gpu.descriptorSize;
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
-static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;};
+static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned,ID3D12PipelineState* stableEnergy) {
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;};
  const Case cases[]={
+  {"R373 old temporal loses current light to dark mip",10.f,.01f,10.f,.5f,true,false,.01f},
+  []{Case c{"R373 stable uniform light despite dark mip/history",10.f,.01f,10.f,.5f,false,false,10.f};c.stable=true;return c;}(),
+  []{Case c{"R373 stable compact light camera cut",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=1;return c;}(),
+  []{Case c{"R373 stable dark current",0.f,.3f,0.f,.5f,false,false,0.f};c.stable=true;return c;}(),
   {"owned offscreen reprojection",.8f,.01f,100.f,.5f,false,false,.8f,false,false,0,0,false,false,false,true,2.f},
   {"owned preserves bright uniform despite dark mip",10.f,.01f,10.f,.5f,false,false,10,false,false,0,0,false,false,false,true},
   {"owned rejects stale bright light",.2f,.01f,100.f,.5f,false,false,.2f,false,false,0,0,false,false,false,true},
@@ -100,7 +104,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   auto srv=gpu.views->GetGPUDescriptorHandleForHeapStart();srv.ptr+=static_cast<UINT64>(first)*gpu.descriptorSize;auto target=srv;target.ptr+=5*gpu.descriptorSize;
   gpu.list->SetComputeRootSignature(root);gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
   gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
-  gpu.list->SetPipelineState(c.owned?owned:c.bypass?bypass:c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
+  gpu.list->SetPipelineState(c.stable?stableEnergy:c.owned?owned:c.bypass?bypass:c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -127,6 +131,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
    }
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;
+   if(cases[i].stable && cases[i].pattern)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
    if(cases[i].bypass)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
    if(cases[i].owned && cases[i].depthEdge)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
    if(cases[i].owned && cases[i].pattern==5){
