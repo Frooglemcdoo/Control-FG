@@ -3,6 +3,7 @@
 // Called AFTER the native temporal dispatch has committed SRV states, BEFORE
 // the enclosing filter copies/composes its output. R262 only reads this source.
 static void RRInputCaptureAtGI(unsigned long long frame,ID3D12GraphicsCommandList* list) noexcept {
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
  if(!control_rr_gi::boundaryRequested.load()||!rrInputCaptureSettledFrame||frame!=rrInputCaptureSettledFrame+1)return;
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  RRInputCaptureJob* active=nullptr;
@@ -41,4 +42,5 @@ static void RRInputCaptureAtGI(unsigned long long frame,ID3D12GraphicsCommandLis
   Log("RR_INPUT_CAPTURE_R263_EARLY_GI frame=%llu pair=%u slot=%u source=%p state=%u",frame,c->policy.requests,slot,input.resource,input.trackedState);
  }__except(EXCEPTION_EXECUTE_HANDLER){if(active)active->policy.phase=control_rr::InputCapturePolicy::Failed;}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
+#endif
 }

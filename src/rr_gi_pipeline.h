@@ -7,6 +7,7 @@
 #include "../build/gi_motion_history.generated.h"
 #include "../build/gi_spatial_history.generated.h"
 #include "../build/gi_owned_denoise.generated.h"
+#include "../build/gi_owned_spatial.generated.h"
 // Immutable GPU objects, never copies of the engine's shader/lock/cache records.
 namespace control_rr_gi {
 inline std::atomic<unsigned> ownedReady{0};
@@ -35,9 +36,7 @@ inline bool Target(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
 }
 template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* result,Create create) noexcept {
  const int spatial=SpatialVariant(desc);
-#ifdef CONTROL_PERFORMANCE_BUILD
- if(spatial>=0)return;
-#endif
+
  if(!device||!result||!create||(!Target(desc)&&spatial<0))return;
  ID3D12PipelineState* native=nullptr;
  if(FAILED(result->QueryInterface(IID_PPV_ARGS(&native)))||!native)return;
@@ -47,6 +46,15 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  auto* b=new(std::nothrow) Bundle{};
  if(!b){native->Release();return;}
  b->native=native;
+ if(spatial>=0){
+  b->spatial=true;auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIOwnedSpatial,sizeof(kGIOwnedSpatial)};
+  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->owned));
+  if(FAILED(hr)||!b->owned){if(b->owned)b->owned->Release();native->Release();delete b;++failed;return;}
+#ifdef CONTROL_PERFORMANCE_BUILD
+  bundles[index].store(b,std::memory_order_release);++ready;return;
+#endif
+ }
+
 #ifdef CONTROL_PERFORMANCE_BUILD
  auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIBypassShader,sizeof(kGIBypassShader)};
  HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->bypass));
@@ -119,7 +127,7 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&historyDisabled&&activeView==DiagnosticView::Zero)replacement=b->zero;
  if(b&&b->spatial&&spatialDispatch)replacement=spatialSteady?b->steady:spatialHistoryBounded?b->bounded:b->adaptive;
  if(b&&!b->spatial&&!spatialDispatch&&rawBypass)replacement=b->bypass;
- if(b&&!b->spatial&&!spatialDispatch&&ownedDenoise)replacement=b->owned?b->owned:b->bypass;
+ if(b && b->spatial==spatialDispatch && ownedDenoise)replacement=b->owned?b->owned:b->bypass;
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;

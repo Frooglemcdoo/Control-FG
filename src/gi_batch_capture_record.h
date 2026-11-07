@@ -2,6 +2,7 @@
 // Called synchronously immediately after the audited native GI shading dispatch.
 static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommandList* list,
  unsigned batch,unsigned batches,unsigned rays,bool constantsValid) noexcept {
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
  if(!GIBatchCaptureEnabled()||!control_rr_gi::boundaryRequested.load()||!rrInputCaptureSettledFrame||frame!=rrInputCaptureSettledFrame+1)return;
  // Losing a batch to lock contention is detected by the contiguous batch ledger.
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
@@ -60,4 +61,5 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
   Log("GI_HITS_R271_RECORDED frame=%llu batch=%u batches=%u rays=%u slices=%u bytes=%llu gpu_complete=0",frame,batch,batches,rays,input[0].desc.DepthOrArraySize,end);
  }__except(EXCEPTION_EXECUTE_HANDLER){if(active){active->giHits.ledger.failed=true;active->policy.phase=control_rr::InputCapturePolicy::Failed;}Log("GI_HITS_R271_FAILED reason=exception resources_retained=1");}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
+#endif
 }

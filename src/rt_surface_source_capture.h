@@ -42,6 +42,7 @@ inline Snapshot Read(unsigned phase) noexcept {
     for(unsigned i=0;i<count;++i)result[i]=counters[phase][i].load(std::memory_order_relaxed);
     return result;
 }
+inline unsigned SpatialPasses(unsigned phase,control_rr_gi::StageMode mode,unsigned native) noexcept {return phase==7?1:control_rr_gi::SpatialPasses(mode,native);}
 inline bool StabilizeGI(unsigned phase) noexcept {return phase==3 || phase==5;}
 inline bool PreserveContact(unsigned phase) noexcept {return phase==4 || phase==5;}
 inline control_rr_gi::StageMode Stage(unsigned phase,control_rr_gi::StageMode saved) noexcept {

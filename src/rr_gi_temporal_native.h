@@ -71,7 +71,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const auto mode=rt_surface_source::Stage(capture,control_rr_gi::stageMode.load(std::memory_order_acquire));
  const unsigned previousCapture=rt_surface_source::giScope;rt_surface_source::giScope=capture;
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEligible);
- const unsigned effectivePasses=control_rr_gi::SpatialPasses(mode,passes);
+ const unsigned effectivePasses=rt_surface_source::SpatialPasses(capture,mode,passes);
  const auto view=rt_surface_source::View(capture,mode,control_rr_gi::viewRequested.load(std::memory_order_acquire));
  const bool previousOwned=control_rr_gi::ownedDenoise;
  control_rr_gi::ownedDenoise=capture==7;
@@ -88,7 +88,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  control_rr_gi::spatialSteady=mode==control_rr_gi::StageMode::BothSteadySpatial;
  const bool previousBounded=control_rr_gi::spatialHistoryBounded;
  control_rr_gi::spatialHistoryBounded=mode==control_rr_gi::StageMode::BothBoundedHistory;
- rrNativeGISingleHistory=mode==control_rr_gi::StageMode::BothSingleHistory||control_rr_gi::spatialHistoryBounded||control_rr_gi::spatialSteady;rrNativeGISpatialApplied=0;
+ rrNativeGISingleHistory=capture==7||mode==control_rr_gi::StageMode::BothSingleHistory||control_rr_gi::spatialHistoryBounded||control_rr_gi::spatialSteady;rrNativeGISpatialApplied=0;
  rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;rrNativeGIHistoryReason="no_temporal_bind";
  __try {
   rrNativeDiffuseFilterOriginal(color,history,effectivePasses);
@@ -156,6 +156,7 @@ static bool RRNativeGIProducerProviders() noexcept {
 }
 static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
  rrNativeDispatchOriginal(state,groups);
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
  if(!GIBatchCaptureEnabled()||!control_rr_gi::boundaryRequested.load())return;
  const DWORD saved=GetLastError();
  control_rr_reflection::Context context{};
@@ -167,6 +168,7 @@ static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
   RRInputCaptureGIBatch(context.frame,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),values[0],values[1],values[2],valid);
  }
  SetLastError(saved);
+#endif
 }
 static void RRNativeInstallGIProducerCapture(unsigned char* base) noexcept {
  if(!GIBatchCaptureEnabled())return;

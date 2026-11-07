@@ -61,7 +61,7 @@ int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer
  control_rr_gi::viewRequested.store(control_rr_gi::DiagnosticView::Normal);
  for(unsigned phase=1;phase<8;++phase){
   rt_surface_source::request.store(phase);const auto before=rt_surface_source::Read(phase);
-  expectedPasses=(phase==3||phase==5)?6:0;
+  expectedPasses=phase==7?1:(phase==3||phase==5)?6:0;
   expectedHistoryDisabled=phase!=3&&phase!=5&&phase!=7;expectedView=phase==2?2:0;
   RRNativeRunGIFilter(verifiedRenderer,history,6);
   const auto after=rt_surface_source::Read(phase);

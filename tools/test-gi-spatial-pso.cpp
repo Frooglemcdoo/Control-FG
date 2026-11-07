@@ -3,7 +3,7 @@
 static void Log(const char*,...) {}
 #include "../src/rr_gi_pipeline.h"
 #include "gi_history_gpu_fixture.h"
-static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory,float velocity,bool cut,bool bounded=false,bool varying=false,bool rejectDepth=false,float currentValue=.2f,bool steady=false,unsigned pattern=0,bool materialEdge=false,bool depthEdge=false){
+static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory,float velocity,bool cut,bool bounded=false,bool varying=false,bool rejectDepth=false,float currentValue=.2f,bool steady=false,unsigned pattern=0,bool materialEdge=false,bool depthEdge=false,bool owned=false,bool normalEdge=false){
  Device gpu(false);
  D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,8,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,0}};
  D3D12_ROOT_PARAMETER params[4]{};
@@ -21,8 +21,11 @@ static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory
  auto create=+[](ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* x,REFIID iid,void** out)->HRESULT{return d->CreateComputePipelineState(x,iid,out);};
  // Separate fixture devices: retire each fixture's cache after its Submit below.
  control_rr_gi::Capture(gpu.device.Get(),&p,native.Get(),create);
- auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->spatial&&bundle->adaptive&&bundle->bounded&&bundle->steady,"spatial capture failed");
- HistoryInput(gpu,.5f,.5f,0);HistoryInput(gpu,materialEdge?.6f:.5f,.5f,1,1,materialEdge?4:0);
+ auto* bundle=control_rr_gi::Find(native.Get());Require(bundle&&bundle->spatial&&bundle->owned,"owned spatial capture failed");
+#ifndef CONTROL_PERFORMANCE_BUILD
+ Require(bundle->adaptive&&bundle->bounded&&bundle->steady,"legacy spatial capture failed");
+#endif
+ HistoryInput(gpu,normalEdge?.8f:.5f,.5f,0,1,normalEdge?4:0);HistoryInput(gpu,materialEdge?.6f:.5f,.5f,1,1,materialEdge?4:0);
  HistoryInput(gpu,depthEdge?.8f:.5f,.5f,2,1,depthEdge?4:0);HistoryInput(gpu,rejectDepth?.8f:.5f,.5f,3);
  HistoryInput(gpu,velocity,velocity,4);auto current=HistoryInput(gpu,currentValue,currentValue,5,1,pattern);
  auto history=HistoryInput(gpu,initialHistory,initialHistory,6);HistoryInput(gpu,1.f,1.f,7);
@@ -60,12 +63,12 @@ static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory
    gpu.list->CopyResource(current.resource.Get(),next.resource.Get());
    gpu.Transition(current.resource.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
   }
-  gpu.list->SetPipelineState(native.Get());bool used=false;control_rr_gi::spatialDispatch=patched;
+  gpu.list->SetPipelineState(native.Get());bool used=false;control_rr_gi::spatialDispatch=patched;control_rr_gi::ownedDenoise=owned;
   control_rr_gi::spatialHistoryBounded=bounded;control_rr_gi::spatialSteady=steady;
   control_rr_gi::Dispatch(native.Get(),1,used,gpu.list.Get(),2,1,1,
    [](ID3D12GraphicsCommandList* l,ID3D12PipelineState* ps){l->SetPipelineState(ps);},
    [](ID3D12GraphicsCommandList* l,UINT x,UINT y,UINT z){l->Dispatch(x,y,z);});
-  Require(used==patched,"scope selected wrong spatial pipeline");control_rr_gi::spatialDispatch=false;control_rr_gi::spatialHistoryBounded=false;control_rr_gi::spatialSteady=false;
+  Require(used==patched,"scope selected wrong spatial pipeline");control_rr_gi::ownedDenoise=false;control_rr_gi::spatialDispatch=false;control_rr_gi::spatialHistoryBounded=false;control_rr_gi::spatialSteady=false;
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
   D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=readback.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=footprint;
@@ -89,6 +92,15 @@ static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory
   ++frame;void* mapped=nullptr;Check(result->Map(0,nullptr,&mapped));
   for(unsigned y=3;y<5;++y)for(unsigned x=3;x<13;++x){
    const auto* pixel=reinterpret_cast<const float*>(static_cast<const unsigned char*>(mapped)+footprint.Offset+y*footprint.Footprint.RowPitch)+4*x;
+   if(owned){
+    float center=PatternValue(value,pattern,x,y);
+    for(unsigned c=0;c<4;++c){Require(std::isfinite(pixel[c]),"owned nonfinite");
+     if(!pattern||materialEdge||depthEdge||normalEdge)Require(std::abs(pixel[c]-center)<.001f,"owned boundary or constant brightness changed");
+     else if(pattern==5)Require(std::abs(pixel[c]-(value+.2f)*.5f)<.001f,"owned checker noise remains");
+     else if(pattern==1)Require(pixel[c]>=.199f && pixel[c]<2.f,"owned isolated speckle not reduced");
+    }
+    continue;
+   }
    float pixelExpected=expected;
    if(pattern){
     const auto val=[&](int sx,int sy){return PatternValue(value,pattern,sx,sy);};
@@ -111,10 +123,20 @@ static void Run(unsigned variant,bool patched,bool lastPass,float initialHistory
   }
   result->Unmap(0,nullptr);
  }
- for(auto& slot:control_rr_gi::bundles){auto* b=slot.exchange(nullptr);if(b){b->native->Release();b->adaptive->Release();if(b->bounded)b->bounded->Release();if(b->steady)b->steady->Release();delete b;}}
+ for(auto& slot:control_rr_gi::bundles){auto* b=slot.exchange(nullptr);if(b){b->native->Release();if(b->owned)b->owned->Release();if(b->adaptive)b->adaptive->Release();if(b->bounded)b->bounded->Release();if(b->steady)b->steady->Release();delete b;}}
  control_rr_gi::reserved=0;control_rr_gi::ready=0;
 }
 int main(){try{
+ for(unsigned variant=0;variant<2;++variant){
+  Run(variant,true,true,100.f,0.f,false,false,false,false,10.f,false,0,false,false,true);
+  Run(variant,true,true,100.f,0.f,false,false,false,false,.4f,false,5,false,false,true);
+  Run(variant,true,true,100.f,0.f,false,false,false,false,10.f,false,1,false,false,true);
+  Run(variant,true,true,100.f,0.f,false,false,false,false,10.f,false,4,true,false,true);
+  Run(variant,true,true,100.f,0.f,false,false,false,false,10.f,false,4,false,true,true);
+  Run(variant,true,true,100.f,0.f,false,false,false,false,10.f,false,4,false,false,true,true);
+ }
+ std::cout<<"PASS R366 owned spatial production dispatch: uniform brightness, checker noise, isolated speckle, material/depth/normal boundaries and no extra history blend\n";
+#ifndef CONTROL_PERFORMANCE_BUILD
  for(unsigned variant=0;variant<2;++variant)for(bool patched:{false,true}){
   Run(variant,patched,true,2.f,0.f,false);Run(variant,patched,true,.02f,.001f,false);
   Run(variant,patched,false,2.f,0.f,false);Run(variant,patched,true,2.f,0.f,true);
@@ -139,4 +161,5 @@ int main(){try{
  std::cout<<"PASS R261 actual steady spatial shaders: low-contrast checker noise, changing current input, history independence, material boundaries, native depth weights, black input and optional-PSO fallback\n";
  std::cout<<"PASS R260 bounded spatial history: bright/dark stale history, stable history, alternating input stabilization, depth rejection, camera cut, non-final pass and black input\n";
  std::cout<<"PASS R259 actual spatial shaders: eight-frame bright/dark feedback, nonzero motion, non-final pass, camera cut, RGBA ABI and scoped production selection\n";
+#endif
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
