@@ -38,7 +38,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+22)return rt_surface_source::manualGI.load()==2?L"GI STABLE: ON":L"GI STABLE: OFF";
     if(index==kModeCount+23){const auto c=rt_surface_source::manualContact.load();return c==1?L"CONTACT: FILTERED":c==2?L"CONTACT: RAW":L"CONTACT: AUTO";}
     if(index==kModeCount+24)return L"RESET COMPARE";
-    if(index==kModeCount+25)return !control_rr_gi::ownedReady.load()?L"GI FILTER: WAIT":rt_surface_source::manualGI.load()==3?L"GI FILTER: OWNED":L"GI FILTER: OFF";
+    if(index==kModeCount+25)return rt_surface_source::manualGI.load()!=3?L"GI FILTER: OFF":!control_rr_gi::ownedReady.load()?L"GI FILTER: WAIT":L"GI FILTER: OWNED";
     if(index==kModeCount+20){
         const unsigned quality=character_surface::quality.load();
         return !quality?L"RIG: NATIVE":!character_surface::ready.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::ready.load()?L"RIG: WAIT":L"RIG: STABLE";
@@ -65,7 +65,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #endif
     if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
     if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"SMOOTH: N/A":control_rr_gi::outlierRequested.load()?L"SMOOTH: ON":L"SMOOTH: OFF";
-    if(index==kModeCount+12)return control_rr_gi::StageLabel(control_rr_gi::stageMode.load());
+    if(index==kModeCount+12)return rt_surface_source::FilterLabel(rt_surface_source::EffectiveRequest(),control_rr_gi::stageMode.load());
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
         const auto mode=LiveSelection::GetMode(selection.Read());
@@ -166,7 +166,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R370",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R371",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"FEATURE SETTINGS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
@@ -453,7 +453,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             }
             else if(index==kModeCount+12 && !capture_suite::active) {
                 const auto next=control_rr_gi::NextStage(control_rr_gi::stageMode.load());
-                control_rr_gi::stageMode.store(next,std::memory_order_release);
+                rt_surface_source::SelectSavedStage(next);
                 Trace("gi_stage_request build=R217 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
                 savedNotice=0;
             }

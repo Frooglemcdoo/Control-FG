@@ -16,6 +16,8 @@
 #include "rr_diffuse_source_policy.h"
 #include "rt_surface_source_capture.h"
 #include "rr_gi_sample_control.h"
+#include "rr_gi_signal_history.h"
+#include "gi_reuse/owned_request.h"
 #include "rr_sample_diagnostic.h"
 #include "rr_specular_sample_windows.h"
 static control_rr::RRFrameCoordinator rrNativeFrame;
@@ -437,6 +439,13 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
 #endif
  // Snapshot diagnostic selection before either producer allocates hit arrays.
  const auto lightingMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
+ // A source/filter switch changes RR's input even when GI remains enabled.
+ // Reset once on that transition, never on brightness fluctuations.
+ static control_rr::GISignalHistory giSignalHistory;
+ const unsigned giPhase=rt_surface_source::EffectiveRequest();
+ const auto giStage=rt_surface_source::Stage(giPhase,control_rr_gi::stageMode.load());
+ if(giSignalHistory.Update(selected,gi_reuse::ownedRequested.load(),giPhase,unsigned(giStage),unsigned(lightingMode)))
+  rrNativeFrame.ResetForSignalChange();
  const unsigned specularRequest=selected&&rrNativeSpecularSamplesAvailable?
 #ifdef CONTROL_RR_F9_SUITE
  (rr_suite::Current()?rr_suite::Current()->samples:native_lighting::SpecularSampleRequest(lightingMode))

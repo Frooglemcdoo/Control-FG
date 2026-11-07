@@ -1,6 +1,12 @@
 #pragma once
 #include <atomic>
-namespace gi_reuse {inline std::atomic<bool> ownedRequested{true};}
+namespace gi_reuse {inline std::atomic<bool> ownedRequested{
+#ifdef CONTROL_ON_DEMAND_DIAGNOSTICS
+false // R371: native GI is the default comparison reference.
+#else
+true
+#endif
+};}
 #ifdef _WIN32
 #include <windows.h>
 namespace gi_reuse {

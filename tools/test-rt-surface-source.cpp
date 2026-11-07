@@ -1,6 +1,7 @@
 #include "../src/rt_surface_source_capture.h"
 #include <cassert>
 #include <iostream>
+#include <cwchar>
 int main(){
  using namespace rt_surface_source;using namespace control_rr_gi;
  assert(request.load()==0 && giScope==0);
@@ -11,6 +12,11 @@ int main(){
  manualContact.store(1);assert(!ManualContactPreserved());
  request.store(0);assert(EffectiveRequest()==3 && ManualContactPreserved());
  manualGI.store(3);assert(EffectiveRequest()==7 && Stage(7,StageMode::RawBypass)==StageMode::TemporalOnly && SpatialPasses(Stage(7,StageMode::RawBypass),6)==0);
+ SelectSavedStage(StageMode::RawBypass);assert(EffectiveRequest()==0);
+ assert(std::wcscmp(FilterLabel(0,StageMode::RawBypass),L"GI: RAW BYPASS")==0);
+ assert(std::wcscmp(FilterLabel(7,StageMode::RawBypass),L"GI: OWNED FILTER")==0);
+ assert(rt_surface_source::SpatialPasses(0,StageMode::RawBypass,6)==0);
+ manualGI=3;request=3;SelectSavedStage(StageMode::RawBypass);assert(EffectiveRequest()==3);request=0;
  ResetManual();assert(EffectiveRequest()==0 && !ManualContactPreserved() && !ManualContactUnfiltered());
  for(unsigned phase=0;phase<7;++phase)for(unsigned mode=0;mode<8;++mode)for(unsigned v=0;v<3;++v){
   auto saved=StageMode(mode);auto view=DiagnosticView(v);auto result=Stage(phase,saved);

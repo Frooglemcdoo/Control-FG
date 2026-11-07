@@ -8,13 +8,7 @@ namespace rt_surface_source {
 // Transient diagnostic request. No saved setting is changed. Zero is gameplay.
 inline std::atomic<unsigned> request{0};
 // Session-only manual comparisons; automated capture has priority.
-inline std::atomic<unsigned> manualGI{
-#ifdef CONTROL_ON_DEMAND_DIAGNOSTICS
-3
-#else
-0
-#endif
-}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
+inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
 inline std::atomic<unsigned> manualContact{0}; // 0 auto, 1 preserved, 2 unfiltered
 inline std::atomic<bool> ownedFilterEnabled{true};
 inline unsigned EffectiveRequest() noexcept {
@@ -52,6 +46,16 @@ inline Snapshot Read(unsigned phase) noexcept {
     return result;
 }
 inline unsigned SpatialPasses(unsigned phase,control_rr_gi::StageMode mode,unsigned native) noexcept {return phase==7?1:control_rr_gi::SpatialPasses(mode,native);}
+// Report the active override instead of an unrelated saved stage selection.
+inline const wchar_t* FilterLabel(unsigned phase,control_rr_gi::StageMode saved) noexcept {
+ if(phase==7)return L"GI: OWNED FILTER";
+ if(phase==2)return L"GI: REMOVED";
+ if(phase==3||phase==5)return L"GI: STABLE FILTER";
+ return control_rr_gi::StageLabel(saved);
+}
+inline void SelectSavedStage(control_rr_gi::StageMode stage) noexcept {
+ manualGI.store(0);control_rr_gi::stageMode.store(stage,std::memory_order_release);
+}
 inline bool StabilizeGI(unsigned phase) noexcept {return phase==3 || phase==5;}
 inline bool PreserveContact(unsigned phase) noexcept {return phase==4 || phase==5;}
 inline control_rr_gi::StageMode Stage(unsigned phase,control_rr_gi::StageMode saved) noexcept {
