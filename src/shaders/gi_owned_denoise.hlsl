@@ -1,4 +1,4 @@
-// R370. Preserve current lighting; reject stale history before blending.
+// R372. Keep validated surface history beside unrelated depth/motion edges.
 // Depth and velocity are verified native inputs. No normal/material guide is bound here.
 cbuffer Sys : register(b0) { float4 sys[38]; }
 cbuffer Filtering : register(b1) { float4 filtering[2]; }
@@ -22,16 +22,17 @@ void main(uint3 tid : SV_DispatchThreadID) {
  // a small real light from an isolated Monte Carlo sample: never delete either.
  float3 sum=0,moment=0,lo=1e30,hi=0;float total=0;
  float2 centerMotion=Velocity.SampleLevel(LinearClamp,(float2(p)+.5)*sys[1].zw,0).xy;
- float motionDiscontinuity=0;float depthDiscontinuity=0;
+ float motionDiscontinuity=0;
  [unroll] for(int y=-1;y<=1;++y) [unroll] for(int x=-1;x<=1;++x) {
   int2 q=p+int2(x,y);if(any(q<0)||any(q>=int2(w,h)))continue;
   float3 c=Current.Load(int3(q,0)).rgb;
   float dz=Depth.SampleLevel(LinearClamp,(float2(q)+.5)*sys[0].zw,0).x;
   float2 mv=Velocity.SampleLevel(LinearClamp,(float2(q)+.5)*sys[1].zw,0).xy;
+  if(!Valid(c)||!isfinite(dz)||!isfinite(z)||abs(dz-z)>max(abs(z)*.005,1e-5))continue;
+  // Background motion is not evidence against this surface's history. Only
+  // admitted same-depth neighbors contribute to its motion discontinuity.
   if(all(isfinite(mv)) && all(isfinite(centerMotion)))
    motionDiscontinuity=max(motionDiscontinuity,length((mv-centerMotion)*float2(w,h)));
-  if(isfinite(dz)&&isfinite(z))depthDiscontinuity=max(depthDiscontinuity,abs(dz-z)/max(abs(z),1e-5));
-  if(!Valid(c)||!isfinite(dz)||!isfinite(z)||abs(dz-z)>max(abs(z)*.005,1e-5))continue;
   float weight=(x==0?2.:1.)*(y==0?2.:1.);
   sum+=c*weight;moment+=c*c*weight;total+=weight;lo=min(lo,c);hi=max(hi,c);
  }
@@ -72,7 +73,9 @@ void main(uint3 tid : SV_DispatchThreadID) {
    float illuminationChange=abs(a-b)/max(max(a,b),.001);
    float reactive=max(saturate(disagreement-1.),saturate((illuminationChange-.05)/.15));
    float pixels=length(motion*float2(w,h));
-   float edgeConfidence=1.-saturate(max(motionDiscontinuity*2.,depthDiscontinuity*200.));
+   // Each history tap has already passed its own depth test. A current
+   // silhouette alone must not veto those validated foreground taps.
+   float edgeConfidence=1.-saturate(motionDiscontinuity*2.);
    float blend=.9*validWeight*(1.-reactive)*edgeConfidence/(1.+pixels*.5);
    history=clamp(history,lower,upper);
    result=lerp(current,history,blend);
