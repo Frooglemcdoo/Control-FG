@@ -17,7 +17,8 @@ struct Harness{
   D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,6,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,0}};
   D3D12_ROOT_PARAMETER params[4]{};for(UINT i=0;i<2;++i){params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;params[i].Descriptor.ShaderRegister=i;params[i+2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i+2].DescriptorTable={1,&ranges[i]};}
   D3D12_STATIC_SAMPLER_DESC sm{};sm.Filter=D3D12_FILTER_MIN_MAG_MIP_LINEAR;sm.AddressU=sm.AddressV=sm.AddressW=D3D12_TEXTURE_ADDRESS_MODE_CLAMP;sm.MaxLOD=D3D12_FLOAT32_MAX;sm.ComparisonFunc=D3D12_COMPARISON_FUNC_ALWAYS;sm.MaxAnisotropy=1;sm.ShaderRegister=6;sm.RegisterSpace=1;
-  D3D12_ROOT_SIGNATURE_DESC rd{4,params,1,&sm,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob>b,e;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&b,&e));Check(gpu.device->CreateRootSignature(0,b->GetBufferPointer(),b->GetBufferSize(),IID_PPV_ARGS(&root)));
+  D3D12_STATIC_SAMPLER_DESC samplers[2]={sm,sm};samplers[1].ShaderRegister=11;
+  D3D12_ROOT_SIGNATURE_DESC rd{4,params,2,samplers,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob>b,e;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&b,&e));Check(gpu.device->CreateRootSignature(0,b->GetBufferPointer(),b->GetBufferSize(),IID_PPV_ARGS(&root)));
   D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={kGIOwnedDenoise,sizeof(kGIOwnedDenoise)};
   ComPtr<ID3DBlob> oldCode;
   if(old){Check(D3DCompileFromFile(L"tools/fixtures/gi-owned-r368.hlsl",nullptr,nullptr,"main","cs_5_1",D3DCOMPILE_OPTIMIZATION_LEVEL3,0,&oldCode,&e));pd.CS={oldCode->GetBufferPointer(),oldCode->GetBufferSize()};}

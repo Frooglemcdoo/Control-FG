@@ -36,7 +36,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
  const Case cases[]={
   {"R373 old temporal loses current light to dark mip",10.f,.01f,10.f,.5f,true,false,.01f},
   []{Case c{"R373 stable uniform light despite dark mip/history",10.f,.01f,10.f,.5f,false,false,10.f};c.stable=true;return c;}(),
-  []{Case c{"R373 stable compact light camera cut",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=1;return c;}(),
+  []{Case c{"R374 stable compact light normalized gather",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=1;return c;}(),
   []{Case c{"R373 stable dark current",0.f,.3f,0.f,.5f,false,false,0.f};c.stable=true;return c;}(),
   {"owned offscreen reprojection",.8f,.01f,100.f,.5f,false,false,.8f,false,false,0,0,false,false,false,true,2.f},
   {"owned preserves bright uniform despite dark mip",10.f,.01f,10.f,.5f,false,false,10,false,false,0,0,false,false,false,true},
@@ -131,7 +131,11 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
    }
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;
-   if(cases[i].stable && cases[i].pattern)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
+   if(cases[i].stable && cases[i].pattern){
+    float sum=0;for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx)
+     sum+=float((dx==0?2:1)*(dy==0?2:1))*PatternValue(cases[i].current,cases[i].pattern,int(x)+dx,int(y)+dy);
+    expected=sum/16.f;
+   }
    if(cases[i].bypass)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
    if(cases[i].owned && cases[i].depthEdge)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
    if(cases[i].owned && cases[i].pattern==5){

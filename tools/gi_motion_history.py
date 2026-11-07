@@ -107,15 +107,34 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
     w[412:412]=ins(54,dst(1,15),imm(0))
    w[197:197]=guard
    return
+  energy_filter=[]
   if preserve_current:
-   # R373: Stable must not cap current lighting against a blurred mip.
-   # Keep the native normalization/output ABI and history clipping; substitute
-   # raw luminance for the mip luminance in min(mipLuma, rawLuma).
+   # R374: unbiased same-surface current gather, not raw passthrough or
+   # min(raw,mip). This lowers variance while retaining spatial light energy.
    assert w[190:197]==[0x07000033,0x00100042,0,0x0010002a,0,0x0010003a,0]
    w[193]=0x0010003a
+   w[76]=16
+   def sample_energy(r,mask,uv,texture):
+    code=list(w[131:144]);code[1:3]=dst(r,mask);code[3:5]=uv
+    code[6]=code[7]=texture;code[-1]=imm(0)[1]
+    if texture==0:code[5]=0x207006;code[9:11]=[0,6]
+    return code
+   energy_filter=ins(56,dst(9),src(3),imm(4))+ins(54,dst(9,8),imm(4))
+   energy_filter+=sample_energy(10,1,src(1,0xae),0)
+   energy_filter+=ins(52,dst(10,2),src(10,0),imm(.000001))
+   energy_filter+=ins(56,dst(10,2),src(10,0x55),imm(.005))
+   for x,y,weight in ((-1,0,2),(1,0,2),(0,-1,2),(0,1,2),(-1,-1,1),(1,-1,1),(-1,1,1),(1,1,1)):
+    energy_filter+=ins(50,dst(11,3),vec((x,y,0,0)),inv,src(1,0xae))
+    energy_filter+=sample_energy(12,7,src(11),3)+sample_energy(13,1,src(11),0)
+    energy_filter+=ins(0,dst(13,1),src(13,0),[0x80100006,0x41,10])
+    energy_filter+=ins(29,dst(14,1),src(10,0x55),[0x80100006,0x81,13])
+    energy_filter+=ins(1,dst(14,1),src(14,0),imm(weight))
+    energy_filter+=ins(50,dst(9),src(12),src(14,0),src(9))
+    energy_filter+=ins(0,dst(9,8),src(9,0xff),src(14,0))
+   energy_filter+=ins(14,dst(3),src(9),src(9,0xff))+ins(54,dst(3,8),src(3,0))
   # Insert backwards to preserve original audited dword positions.
   w[393:393]=clip
-  w[204:204]=pad
+  w[204:204]=energy_filter+pad
   w[144:144]=bounds
  return transform_shex(data,patch)
 def generate_bypass(data):

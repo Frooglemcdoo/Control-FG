@@ -138,12 +138,13 @@ try:generate_bypass(source[:-1]);raise AssertionError('Unknown bypass source acc
 except ValueError:pass
 print('PASS R262 exact mip0 current pixel copy, RGB/red ABI, no history/depth/motion/mip/clamp/filter reads')
 
-# R373 stable variant changes exactly one source register swizzle. All original
-# bindings, geometry rejection, reprojection and history bounds are unchanged.
+# R374 current average retains bindings, native output ABI and temporal contract.
 energy=generate(source,preserve_current=True);ec=chunks(energy)
 assert energy[4:20]==checksum(energy)
 assert all(ec[k]==b[k] for k in b if k!=b'SHEX')
-ew=struct.unpack('<'+'I'*(len(ec[b'SHEX'])//4),ec[b'SHEX'])
-bw=struct.unpack('<'+'I'*(len(b[b'SHEX'])//4),b[b'SHEX'])
-assert [(x,y) for x,y in zip(bw,ew) if x!=y]==[(0x0010002a,0x0010003a)]
-print('PASS R373 stable current-light preservation changes only mip/raw luminance selector')
+with tempfile.TemporaryDirectory() as d:
+ p=Path(d)/'stable.dxbc';p.write_bytes(energy);ej=decode(p)
+assert ej['bindings']==j['bindings']
+assert sum(i['name']=='sample_l' for i in ej['instructions'])==sum(i['name']=='sample_l' for i in j['instructions'])+17
+assert sum(i['name']=='store_uav_typed' for i in ej['instructions'])==1
+print('PASS R374 same-surface current gather, unchanged bindings and one output dispatch')
