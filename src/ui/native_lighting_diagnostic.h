@@ -1,5 +1,6 @@
 #pragma once
 #include "theme.h"
+#include "render_fps.h"
 #include "lighting_panel_window.h"
 #include "gi_button_capture.h"
 #include "../rr_gi_stage_policy.h"
@@ -12,20 +13,26 @@ namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
 inline constexpr int kWidth = 490, kButtonFirst = 5400;
 inline constexpr int kModeRows = (kModeCount + 2) / 3;
-inline constexpr int kStatusY = 40 + kModeRows * 46 - 2;
-inline constexpr int kActionsY = kStatusY + 28;
-inline constexpr int kCaptureY = kActionsY + 46;
-inline constexpr int kPerformanceY = kCaptureY + 46;
-inline constexpr int kCameraY = kPerformanceY + 46;
-inline constexpr int kCaptureStatusY = kCameraY + 254;
-inline constexpr int kFooterY = kCaptureStatusY + 50;
-inline constexpr int kHeight = kFooterY + 72;
+inline constexpr int kStatusY=704,kCaptureStatusY=724,kFooterY=770,kHeight=816;
+// Preserve the original three-column controls and theme; group actions by purpose.
+inline RECT ButtonRect(unsigned index) noexcept {
+ if(index<kModeCount)return {14+int(index%3)*156,56+int(index/3)*42,162+int(index%3)*156,92+int(index/3)*42};
+ constexpr unsigned features[]={7,8,11,9,10,20,12,13,14,15,16,17};
+ constexpr unsigned comparisons[]={21,22,23,24,25,26};
+ constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19};
+ const unsigned local=index-kModeCount;unsigned row=0,col=0;int top=0;
+ for(unsigned i=0;i<12;++i)if(features[i]==local){row=i/3;col=i%3;top=220;}
+ for(unsigned i=0;i<6;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
+ for(unsigned i=0;i<9;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
+ return {14+int(col)*156,top+int(row)*42,162+int(col)*156,top+int(row)*42+36};
+}
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 26;
+inline constexpr unsigned kButtonCount = kModeCount + 27;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+21)return rt_surface_source::manualGI.load()==1?L"GI REMOVE: ON":L"GI REMOVE: OFF";
     if(index==kModeCount+22)return rt_surface_source::manualGI.load()==2?L"GI STABLE: ON":L"GI STABLE: OFF";
@@ -34,7 +41,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+25)return !control_rr_gi::ownedReady.load()?L"GI FILTER: WAIT":rt_surface_source::manualGI.load()==3?L"GI FILTER: OWNED":L"GI FILTER: OFF";
     if(index==kModeCount+20){
         const unsigned quality=character_surface::quality.load();
-        return !quality?L"RIG: NATIVE":!character_surface::filteredBinds.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::applied.load()?L"RIG: WAIT":L"RIG: STABLE";
+        return !quality?L"RIG: NATIVE":!character_surface::ready.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::ready.load()?L"RIG: WAIT":L"RIG: STABLE";
     }
     if(index==kModeCount+19)return L"TEST VOLUME";
     if(index==kModeCount+18)return L"TEST JESSE";
@@ -159,33 +166,20 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc, headingFont, L"LIGHTING DIAGNOSTIC R364", {14,8,kWidth-12,34}, theme::kAccent);
-    const auto state = selection.Read();
-    const unsigned ready = readyMask.load(), observed = LiveSelection::Observed(state);
-    const auto mode = LiveSelection::GetMode(state);
-    const unsigned required = RequiredBinding(mode);
-    wchar_t status[160]{};
-    swprintf_s(status, L"Selected mode: %s   %s", ModeAvailable(mode,ready) ? L"ready" : L"waiting",
-        (observed & required) == required && (mode != Mode::SpotResolution2x || spot_resolution_runtime::Observed(state)) ? (IsRtSpotMode(mode) ? L"RT pair recorded" : L"native bindings recorded") : L"Waiting: return to game");
-    DrawLabel(dc, detailFont, status, {14,kStatusY,kWidth-12,kStatusY+24}, theme::kMutedText);
-
-#ifndef CONTROL_GI_LONG_SEQUENCE
-    DrawLabel(dc, detailFont, free_camera::Status(), {14,kCameraY+36,kWidth-12,kCameraY+64}, theme::kMutedText);
-#endif
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R368",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
+    DrawLabel(dc,detailFont,L"FEATURE SETTINGS",{14,192,kWidth-12,216},theme::kAccent);
+    DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
+    DrawLabel(dc,detailFont,L"CAPTURE",{14,524,kWidth-12,548},theme::kAccent);
+    const auto mode=LiveSelection::GetMode(selection.Read());
+    DrawLabel(dc,detailFont,ModeAvailable(mode,readyMask.load())?L"Selected lighting mode: ready":L"Selected lighting mode: waiting for shader setup",{14,kStatusY,kWidth-12,kStatusY+20},theme::kMutedText);
     wchar_t captureStatus[128]{};
     swprintf_s(captureStatus,L"RR capture: %s   Saved pairs: %u",control_rr_capture_ui::Label(control_rr_capture_ui::state.load()),control_rr_capture_ui::completedPairs.load());
     if(gi_spot_trace::Enabled())swprintf_s(captureStatus,L"GI trace: %s",gi_spot_trace::Status());
     DrawLabel(dc,detailFont,captureStatus,{14,kCaptureStatusY,kWidth-12,kCaptureStatusY+22},theme::kText);
     DrawLabel(dc,detailFont,performance_capture::Active()?performance_capture::Status():control_rr_capture_ui::detail.load(),{14,kCaptureStatusY+22,kWidth-12,kCaptureStatusY+46},theme::kMutedText);
-    wchar_t shortcuts[128]{};
-#ifdef CONTROL_GI_BOUNDARY_CAPTURE
-    swprintf_s(shortcuts, L"F9: capture buffers   F10: close   Ctrl+Shift+1..%u", kModeCount);
-#else
-    swprintf_s(shortcuts, L"F9: reflection sequence / cancel   F10: close   Ctrl+Shift+1..%u", kModeCount);
-#endif
-    if(gi_spot_trace::Enabled())wcscpy_s(shortcuts,L"F7: arm GI trace   F10: close   Mouse zoom supported");
-    DrawLabel(dc, detailFont, shortcuts, {14,kFooterY,kWidth-12,kFooterY+24}, theme::kMutedText);
-    DrawLabel(dc, detailFont, selectionRejected ? L"Mode unavailable. Save Log exports shader evidence for diagnosis." : savedNotice.load() == 2 ? L"Log write failed. Save Log shows the Windows error." : savedNotice.load() == 1 ? L"Log saved. See the folder shown in the confirmation." : ModeHint(mode), {14,kFooterY+26,kWidth-12,kFooterY+56}, theme::kText);
+    DrawLabel(dc,detailFont,L"F10: close    Captures start from buttons",{14,kFooterY,kWidth-12,kFooterY+20},theme::kMutedText);
+    DrawLabel(dc,detailFont,selectionRejected?L"Mode is not ready yet; current lighting is unchanged.":L"Render FPS excludes generated frames.",{14,kFooterY+20,kWidth-12,kFooterY+40},theme::kText);
     EndPaint(window, &ps);
 }
 inline void ReportSpecIsolation(const char* reason) noexcept {
@@ -355,9 +349,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_PAINT: Paint(window); return 0;
     case WM_CREATE:
         for (unsigned i=0;i<kButtonCount;++i) {
-            const int row=i<kModeCount ? i/3 : kModeRows, col=i<kModeCount ? i%3 : (i-kModeCount)%3;
+            const RECT bounds=ButtonRect(i);
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
-                i==kModeCount+20?14:i==kModeCount+19?170:i==kModeCount+18?326:14+col*156,i>=kModeCount+21?kCameraY+162+int((i-kModeCount-21)/3)*46:i>=kModeCount+18?kCameraY+36:i<kModeCount ? 40+row*46 : i<kModeCount+3 ? kActionsY : i<kModeCount+6 ? kCaptureY : i<kModeCount+9 ? kPerformanceY : i<kModeCount+12 ? kCameraY : i<kModeCount+15 ? kCameraY+70 : kCameraY+116,148,i>=kModeCount+18?32:36,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
+                bounds.left,bounds.top,bounds.right-bounds.left,bounds.bottom-bounds.top,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
@@ -369,7 +363,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         const bool active=(index<kModeCount && (selected==kModeChoices[index].mode || (IsNativeBlend(kModeChoices[index].mode) && IsNativeBlend(selected)))) ||
             (index==kModeCount+21 && rt_surface_source::manualGI.load()==1) ||
             (index==kModeCount+22 && rt_surface_source::manualGI.load()==2) ||
-            (index==kModeCount+23 && rt_surface_source::manualContact.load()!=0) || (index==kModeCount+25 && rt_surface_source::manualGI.load()==3);
+            (index==kModeCount+23 && rt_surface_source::manualContact.load()!=0) || (index==kModeCount+25 && rt_surface_source::manualGI.load()==3) || (index==kModeCount+26 && render_fps::enabled);
         HBRUSH brush=CreateSolidBrush(active?theme::kAccent:RGB(35,35,35)); FillRect(item->hDC,&item->rcItem,brush); DeleteObject(brush);
         HBRUSH border=CreateSolidBrush(theme::kBorder); FrameRect(item->hDC,&item->rcItem,border); DeleteObject(border);
         const auto previous=SelectObject(item->hDC,bodyFont); SetBkMode(item->hDC,TRANSPARENT); SetTextColor(item->hDC,theme::kText);
@@ -379,6 +373,8 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
+            if(index==kModeCount+26){render_fps::enabled=!render_fps::enabled;InvalidateRect(GetDlgItem(window,kButtonFirst+index),nullptr,FALSE);return 0;}
+            if((index>=kModeCount&&index<=kModeCount+6)||index==kModeCount+18||index==kModeCount+19)control_diagnostics::captureActive=true;
             const bool traceAction=index==kModeCount+3&&gi_spot_trace::Enabled();
             if(traceAction){if(gi_spot_trace::Request("overlay_button"))ClosePanel(window);InvalidateRect(window,nullptr,FALSE);return 0;}
             const bool recoveryAction=index==kModeCount+2||index==kModeCount+4;
@@ -477,6 +473,15 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     }
     return DefWindowProcW(window,message,wParam,lParam);
 }
+inline void UpdateCaptureActivity() noexcept {
+ const bool active=capture_suite::active||performance_capture::Active()||control_gi_button::Active()||control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load()
+#ifdef CONTROL_RR_F9_SUITE
+ ||reflection_suite::active
+#endif
+ ;
+ if(!active&&control_diagnostics::captureActive.load())DrainDiagnosticLog(true);
+ control_diagnostics::captureActive.store(active,std::memory_order_relaxed);
+}
 inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     const HRESULT comResult=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     namespace theme=control_ui::theme;
@@ -519,17 +524,19 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
-        gi_spot_trace::InputTick();
+        if(control_diagnostics::Active())gi_spot_trace::InputTick();
         if(cameraRequestedAt && now-cameraRequestedAt>=3000 && free_camera::commands.Timeout())
             Trace("free_camera_request_expired reason=no_camera_update target_not_applied=1");
-        if(now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
-        if(now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+((capture_suite::active||performance_capture::Active())?100:500);}
+        if(control_diagnostics::Active() && now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
+        if(control_diagnostics::Active() && now>=nextLogDrain){DrainDiagnosticLog();nextLogDrain=now+((capture_suite::active||performance_capture::Active())?100:500);}
         if(cachedGame&&!IsWindow(cachedGame))cachedGame=nullptr;
         if(now>=nextWindowSearch){
             cachedGame=FindFGGameWindow();
             nextWindowSearch=now+1000;
         }
         HWND game=cachedGame;
+        render_fps::Tick(game,now);
+        UpdateCaptureActivity();
         gi_trace_status::Tick(game);
         if(panel && (owner!=game || !lighting_panel::Valid(panel,owner,kClass))){
             if(lighting_panel::Valid(panel,owner,kClass))DestroyWindow(panel);
@@ -548,6 +555,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(!foreground && f10Registered){UnregisterHotKey(nullptr,f10Id);f10Registered=false;}
         if(!panel){if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
         if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kNativeBlendDefaultMode,readyMask.load()))SelectMode(kNativeBlendDefaultMode);
+#ifndef CONTROL_ON_DEMAND_DIAGNOSTICS
         static bool f9Held=false;
         const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;
         const bool capturePress=f9Down&&!f9Held && !(GetAsyncKeyState(VK_CONTROL)&0x8000) && !(GetAsyncKeyState(VK_MENU)&0x8000);
@@ -567,6 +575,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
                 if(!capture_suite::Start())MessageBoxW(game,L"Could not start capture. Return to gameplay and wait for Default and GPU capture readiness. If a previous capture was cancelled, let its export finish. Use Save Log for details.",L"F9 capture",MB_OK|MB_ICONERROR);}
 #endif
         }
+#endif
 #ifdef CONTROL_RR_F9_SUITE
         reflection_suite::Tick(game,now);
 #endif

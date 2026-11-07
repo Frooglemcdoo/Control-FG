@@ -35,11 +35,18 @@ queue_boundary_exceptions=json.loads((root/'tools/fixtures/r317-baseline-excepti
 diffuse_source_exceptions=json.loads((root/'tools/fixtures/r361-baseline-exceptions.json').read_text())
 source_capture_exceptions=json.loads((root/'tools/fixtures/r362-baseline-exceptions.json').read_text())
 performance_exceptions=json.loads((root/'tools/fixtures/r365-baseline-exceptions.json').read_text())
+demand_exceptions=json.loads((root/'tools/fixtures/r368-baseline-exceptions.json').read_text())
 for name, expected in manifest['files'].items():
     if name == 'src/fg_overlay.h':
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in demand_exceptions:
+        text=data.decode()
+        for before,after in reversed(demand_exceptions[name]):
+            assert text.count(after)==1,(name,'R368 on-demand scope changed')
+            text=text.replace(after,before,1)
+        data=text.encode()
     if name in source_capture_exceptions:
         text=data.decode()
         for before,after in reversed(source_capture_exceptions[name]):

@@ -41,12 +41,14 @@ inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcep
         static_cast<unsigned long long>(desc->CS.BytecodeLength), desc->pRootSignature);
 }
 inline void RecordComputeBinding(size_t bytes, const char* sha) noexcept {
+    if(!control_diagnostics::Active())return;
     const unsigned bit = ComputeCandidateBit(bytes, sha);
     if (bit && !(computeBoundMask.fetch_or(bit) & bit))
         Trace("rt_compute_bound bit=%u sha=%s gpu_confirmed=0", bit, sha);
 }
 
 inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
+    if(!control_diagnostics::Active())return;
     Blob("direct_cs",desc->CS.pShaderBytecode,desc->CS.BytecodeLength);
     static std::atomic<unsigned> reports{0};
     if(reports.fetch_add(1)<32) Trace("rt_direct_root object=%p",desc->pRootSignature);
@@ -54,7 +56,7 @@ inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept
 inline HRESULT STDMETHODCALLTYPE RootHook(ID3D12Device* device,UINT node,const void* bytes,SIZE_T size,REFIID iid,void** out) {
     const HRESULT hr=originalRoot(device,node,bytes,size,iid,out);
     if(SUCCEEDED(hr) && out && *out) if (const auto observer = onRoot.load()) observer(static_cast<IUnknown*>(*out),bytes,size);
-    if(SUCCEEDED(hr) && out && *out && rootReports.fetch_add(1)<256) {
+    if(control_diagnostics::Active() && SUCCEEDED(hr) && out && *out && rootReports.fetch_add(1)<256) {
         char sha[65]{};PTReflectionSha256(static_cast<const unsigned char*>(bytes),size,sha);
         Trace("rt_root object=%p sha=%s bytes=%llu",*out,sha,static_cast<unsigned long long>(size));
         Blob("root_signature",bytes,size);
@@ -63,13 +65,13 @@ inline HRESULT STDMETHODCALLTYPE RootHook(ID3D12Device* device,UINT node,const v
 }
 inline void STDMETHODCALLTYPE SrvHook(ID3D12Device* device,ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE destination) {
     originalSrv(device,resource,desc,destination);
-    if(desc && desc->ViewDimension==D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE && sceneReports.fetch_add(1)<128)
+    if(control_diagnostics::Active() && desc && desc->ViewDimension==D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE && sceneReports.fetch_add(1)<128)
         Trace("rt_scene_srv cpu=%llu gpu_va=%llu sample_only=1",static_cast<unsigned long long>(destination.ptr),desc->RaytracingAccelerationStructure.Location);
 }
 inline HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
     const auto replacement = replacementState.load();
     const HRESULT hr=(replacement ? replacement : originalState)(device,desc,iid,out);
-    if(!desc || FAILED(hr) || !out || !*out || stateReports.fetch_add(1)>=128) return hr;
+    if(!control_diagnostics::Active() || !desc || FAILED(hr) || !out || !*out || stateReports.fetch_add(1)>=128) return hr;
     Trace("rt_state object=%p type=%u subobjects=%u",*out,unsigned(desc->Type),desc->NumSubobjects);
     for(UINT i=0;i<desc->NumSubobjects;++i) {
         const auto& object=desc->pSubobjects[i];
@@ -122,7 +124,7 @@ inline void STDMETHODCALLTYPE SetStateHook(ID3D12GraphicsCommandList4* list,ID3D
     const auto hooks=Lookup(list);
     hooks.set(list,state);
     if (const auto observer = onState.load()) observer(list,state);
-    if(stateBindings.fetch_add(1)<128) Trace("rt_state_bound list=%p state=%p",list,state);
+    if(control_diagnostics::Active() && stateBindings.fetch_add(1)<128) Trace("rt_state_bound list=%p state=%p",list,state);
 }
 using BeginTiming = unsigned (*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*) noexcept;
 using EndTiming = void (*)(unsigned) noexcept;
@@ -135,7 +137,7 @@ inline void STDMETHODCALLTYPE DispatchHook(ID3D12GraphicsCommandList4* list,cons
     const auto timing=timer?timer(list,desc):~0u;
     if (!replacement || !replacement(list,desc)) hooks.dispatch(list,desc);
     if(const auto end=endTiming.load())end(timing);
-    if(desc && rayReports.fetch_add(1)<128)
+    if(control_diagnostics::Active() && desc && rayReports.fetch_add(1)<128)
         Trace("rt_dispatch list=%p extent=%ux%ux%u raygen=%llu hit_start=%llu hit_bytes=%llu hit_stride=%llu miss_start=%llu miss_bytes=%llu miss_stride=%llu gpu_confirmed=0",
             list,desc->Width,desc->Height,desc->Depth,desc->RayGenerationShaderRecord.StartAddress,
             desc->HitGroupTable.StartAddress,desc->HitGroupTable.SizeInBytes,desc->HitGroupTable.StrideInBytes,

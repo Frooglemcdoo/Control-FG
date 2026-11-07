@@ -1,4 +1,5 @@
 #pragma once
+#include "diagnostic_activity.h"
 #include "gi_stack_capture.h"
 #include "gi_native_submission_hooks.h"
 #include "gi_owned_pipeline_runtime.h"
@@ -101,6 +102,7 @@ inline const GUID& VariantGuid(Mode mode) noexcept {
 inline const GUID kKindGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x02}};
 
 inline bool Trace(const char* format, ...) noexcept {
+ if(!control_diagnostics::Active())return true;
 #ifdef CONTROL_PERFORMANCE_BUILD
  return true;
 #else
@@ -176,6 +178,7 @@ inline void IdentifyPipeline(IUnknown* object, const D3D12_SHADER_BYTECODE& shad
 }
 namespace rt_shadow_capture { inline void RecordComputeBinding(size_t, const char*) noexcept; }
 inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
+ if(!control_diagnostics::Active())return;
 #ifdef CONTROL_PERFORMANCE_BUILD
  return;
 #else
@@ -375,7 +378,7 @@ struct Binding {
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
         if(LiveSelection::Sequence(state)==0){selection.EnsureDefault(readyMask.load(std::memory_order_acquire));state=selection.Read();}
 #ifndef CONTROL_PERFORMANCE_BUILD
-        bindingsSeen.fetch_add(1);
+        if(control_diagnostics::Active())bindingsSeen.fetch_add(1);
 #endif
         ReportBoundIdentity(native);
         UINT size=sizeof(kind);
@@ -415,6 +418,7 @@ struct Binding {
     }
     unsigned volumePhase = 0,surfacePhase=0,surfaceGroup=3;
     void Recorded() const noexcept {
+        if(!control_diagnostics::Active())return;
 #ifdef CONTROL_PERFORMANCE_BUILD
         if(kind==volume_temporal::kind || kind==character_surface::kind)return;
 #else

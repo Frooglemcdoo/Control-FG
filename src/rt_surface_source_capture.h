@@ -1,4 +1,5 @@
 #pragma once
+#include "diagnostic_activity.h"
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -7,7 +8,13 @@ namespace rt_surface_source {
 // Transient diagnostic request. No saved setting is changed. Zero is gameplay.
 inline std::atomic<unsigned> request{0};
 // Session-only manual comparisons; automated capture has priority.
-inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
+inline std::atomic<unsigned> manualGI{
+#ifdef CONTROL_ON_DEMAND_DIAGNOSTICS
+3
+#else
+0
+#endif
+}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
 inline std::atomic<unsigned> manualContact{0}; // 0 auto, 1 preserved, 2 unfiltered
 inline std::atomic<bool> ownedFilterEnabled{true};
 inline unsigned EffectiveRequest() noexcept {
@@ -34,6 +41,7 @@ static_assert(sizeof(names)/sizeof(names[0])==count);
 using Snapshot=std::array<uint64_t,count>;
 inline std::array<std::array<std::atomic<uint64_t>,count>,phases> counters{};
 inline void Record(unsigned phase,Event e) noexcept {
+    if(!control_diagnostics::Active())return;
 #ifndef CONTROL_PERFORMANCE_BUILD
     if(phase && phase<phases)counters[phase][unsigned(e)].fetch_add(1,std::memory_order_relaxed);
 #endif

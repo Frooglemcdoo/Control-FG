@@ -8,6 +8,7 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <atomic>
+#include "diagnostic_activity.h"
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -69,6 +70,7 @@ static bool ReleaseLogSuppressed(const char* body) noexcept {
 }
 
 static void Log(const char* format, ...) noexcept {
+ if(!control_diagnostics::Active())return;
 #ifdef CONTROL_PERFORMANCE_BUILD
  return;
 #else

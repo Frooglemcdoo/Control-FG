@@ -1,4 +1,5 @@
 #pragma once
+#include "diagnostic_activity.h"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -26,6 +27,7 @@ class Counters {
     std::array<std::atomic<std::uint64_t>, kCount> values_{};
 public:
     void Record(Event event) noexcept {
+        if(!control_diagnostics::Active())return;
 #ifndef CONTROL_PERFORMANCE_BUILD
         values_[static_cast<std::size_t>(event)].fetch_add(1, std::memory_order_relaxed);
 #endif
