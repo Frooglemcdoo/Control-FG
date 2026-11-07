@@ -64,7 +64,7 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
   detail.store(L"Pair saved. Next stationary pair queued automatically; hold still.");
   state.store(State::Queued);requested.store(true,std::memory_order_release);return;
  }
- detail.store(gi_stack_capture::enabled.load()?L"Full-screen RR pair saved. GI sequence continues automatically.":L"All 4 pairs saved. Click PACKAGE RR and send every ZIP.");
+ detail.store(!automaticPairs.load()?L"GI path pair saved. The comparison packages automatically.":gi_stack_capture::enabled.load()?L"Full-screen RR pair saved. GI sequence continues automatically.":L"All 4 pairs saved. Click PACKAGE RR and send every ZIP.");
 #elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
  detail.store(requests<2?L"Clamp pair saved. Select GI BOTH at the same view and capture again.":L"Both pairs saved. Click PACKAGE RR to collect the ZIPs.");
 #elif defined(CONTROL_RR_F9_SUITE)

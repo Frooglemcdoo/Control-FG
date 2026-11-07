@@ -136,9 +136,8 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
   if(c->pathCondition){
    const auto& b=c->giBoundary;
    const bool verified=okay&&c->preGICaptured&&c->preGIFrame==c->frame&&c->outputCaptured&&c->evaluationResult==1&&
-    b.valid&&b.applied&&b.frame==c->frame&&giCompared&&
-    (c->pathCondition==1?(b.stage==control_rr_gi::StageMode::RawBypass&&b.spatialObserved==0&&giDifferent==0):
-      (b.stage==control_rr_gi::StageMode::BothSteadySpatial&&b.spatialObserved==b.spatialPasses&&b.spatialPasses>0));
+    gi_path_capture::BoundaryMatches(c->pathCondition,b.valid,b.applied,b.frame,c->frame,b.stage,b.spatialPasses,b.spatialObserved)&&
+    giCompared&&(c->pathCondition!=1||giDifferent==0);
    (verified?gi_path_capture::validFrames[c->pathCondition]:gi_path_capture::invalidFrames[c->pathCondition]).fetch_add(1);
   }
 #endif
@@ -350,7 +349,11 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
   c->giBoundary=control_rr_gi::ReadBoundary(frame);
 #ifdef CONTROL_RR_GI_SEQUENCE
-  if(!c->giBoundary.valid||!c->giBoundary.applied||c->giBoundary.stage!=control_rr_gi::StageMode::RawBypass||c->giBoundary.spatialPasses||c->giBoundary.spatialObserved){
+  if(!gi_path_capture::BoundaryMatches(c->pathCondition,c->giBoundary.valid,c->giBoundary.applied,
+     c->giBoundary.frame,frame,c->giBoundary.stage,c->giBoundary.spatialPasses,c->giBoundary.spatialObserved)){
+   Log("GI_PATH_R378_REJECT condition=%u frame=%llu boundary_frame=%llu valid=%u applied=%u stage=%s spatial_requested=%u spatial_observed=%u",
+    c->pathCondition,frame,c->giBoundary.frame,unsigned(c->giBoundary.valid),unsigned(c->giBoundary.applied),
+    control_rr_gi::StageName(c->giBoundary.stage),c->giBoundary.spatialPasses,c->giBoundary.spatialObserved);
    c->policy.phase=Policy::Failed;__leave;
   }
 #endif
