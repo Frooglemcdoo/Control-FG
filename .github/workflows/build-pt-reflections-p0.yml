@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate owned GI feedback sequence R369
+      - name: Validate owned GI feedback sequence R370
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -142,8 +142,12 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-gi-owned-sequence.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-regressions.cpp /Febuild\test-gi-owned-regressions.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-owned-regressions.exe
+          if errorlevel 1 exit /b 1
 
-      - name: Validate character rig sampling R369
+      - name: Validate character rig sampling R370
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -193,7 +197,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R369
+      - name: Validate near volume history R370
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1301,11 +1305,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R369
+      - name: Package owned GI integration R370
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R369'
+          $out='ControlTOH-R370'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1345,13 +1349,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R369 - Owned GI denoiser: firefly rejection and stable reprojection
+          R370 - Owned GI denoiser: current-light preservation and responsive history
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Enable RR and RT indirect lighting.
           Defaults: Native Blend, Owned GI, GI FILTER: OWNED, GI RAW BYPASS, REF CLAMP 60%, RIG: STABLE. Keep VL High.
           The owned filter replaces the native temporal dispatch and uses one surface-guided spatial dispatch. It retains native buffers, motion vectors, history copies and output layout.
-          R369 rejects unsupported one/two-sample bright peaks before accumulation and clips history against cleaned neighborhood statistics. Valid reprojected history retains its weight during camera movement. Camera cuts, depth rejection and off-screen rejection remain active. No global brightness cap, extra render pass or additional history allocation.
+          R370 removes the R369 current-sample deletion that could erase small real lights. History is rejected at motion/depth discontinuities and responds to changed shading before clipping. Camera cuts and off-screen rejection remain active. No added render pass or history allocation. This corrective build prioritizes light preservation and ghost rejection; isolated bright noise may remain.
           This is a candidate visual fix. Automated tests exercise actual temporal/spatial shader feedback for 32 frames, colored fireflies, movement and light removal; in-game results still require verification.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
@@ -1378,7 +1382,7 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R369 - Original F10 panel restored, grouped by feature and capture.
+          R370 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
           Owned GI and clamp60 remain defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
@@ -1390,10 +1394,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R369
+          name: ControlTOH-R370
           path: |
-            ControlTOH-R369.zip
-            ControlTOH-R369.sha256
+            ControlTOH-R370.zip
+            ControlTOH-R370.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
