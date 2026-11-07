@@ -370,10 +370,10 @@ inline void BindPerformance(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noe
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
-    selection.EnsureDefault(readyMask.load(std::memory_order_acquire));
     uint64_t state = selection.Read();
     unsigned kind = 0;
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
+        if(LiveSelection::Sequence(state)==0){selection.EnsureDefault(readyMask.load(std::memory_order_acquire));state=selection.Read();}
 #ifndef CONTROL_PERFORMANCE_BUILD
         bindingsSeen.fetch_add(1);
 #endif
