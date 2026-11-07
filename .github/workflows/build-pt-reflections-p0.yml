@@ -125,6 +125,24 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Validate owned GI feedback sequence R369
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not exist build mkdir build
+          cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-gi-owned.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned-spatial.cpp /Febuild\compile-gi-owned-spatial.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-gi-owned-spatial.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-sequence.cpp /Febuild\test-gi-owned-sequence.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-owned-sequence.exe
+          if errorlevel 1 exit /b 1
+
       - name: Validate character rig sampling R369
         shell: cmd
         run: |
@@ -899,10 +917,6 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-owned-volume-gpu.cpp /Febuild\test-owned-volume-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-owned-volume-gpu.exe
-          if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-sequence.cpp /Febuild\test-gi-owned-sequence.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
-          build\test-gi-owned-sequence.exe
           if errorlevel 1 exit /b 1
           python tools/test-gi-motion-history.py
           if errorlevel 1 exit /b 1

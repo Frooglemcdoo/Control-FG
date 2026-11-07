@@ -22,6 +22,7 @@ void main(uint3 tid : SV_DispatchThreadID) {
  // In R368 a firefly increased its own filter weight and history bounds.
  float3 samples[9]; float weights[9];
  float peak=0,second=0,third=0,lumaSum=0,count=0;
+ float3 colorSum=0,peakColor=0,secondColor=0;
  [unroll] for(int y=-1;y<=1;++y) [unroll] for(int x=-1;x<=1;++x) {
   int i=(y+1)*3+x+1;int2 q=p+int2(x,y);
   samples[i]=0;weights[i]=0;
@@ -30,20 +31,23 @@ void main(uint3 tid : SV_DispatchThreadID) {
   float dz=Depth.SampleLevel(LinearClamp,(float2(q)+.5)*sys[0].zw,0).x;
   if(!Valid(c)||!isfinite(dz)||!isfinite(z)||abs(dz-z)>max(abs(z)*.005,1e-5))continue;
   samples[i]=c;weights[i]=(x==0?2.:1.)*(y==0?2.:1.);
-  float lum=Luma(c);third=max(third,min(second,lum));
+  float lum=Luma(c);
+  if(lum>=peak){secondColor=peakColor;peakColor=c;}else if(lum>second)secondColor=c;
+  colorSum+=c;third=max(third,min(second,lum));
   second=max(second,min(peak,lum));peak=max(peak,lum);
   lumaSum+=lum;count+=1;
  }
  // Only suppress unsupported one/two-sample peaks. Broad bright regions and thin
  // lines with multiple supporting samples retain their energy; no mip cap.
  float otherMean=max(0,lumaSum-peak-second)/max(1,count-2);
+ float3 otherColor=max(0,colorSum-peakColor-secondColor)/max(1,count-2);
  float peakThreshold=max(third*4.,otherMean*6.)+.002;
  bool isolated=count>=6 && peak>peakThreshold;
  float3 sum=0,moment=0,lo=1e30,hi=0;float total=0;
  [unroll] for(int i=0;i<9;++i) {
   if(weights[i]==0)continue;
   float3 c=samples[i];float lum=Luma(c);
-  if(isolated && lum>peakThreshold)c*=otherMean/max(lum,1e-8);
+  if(isolated && lum>peakThreshold)c=otherColor;
   sum+=c*weights[i];moment+=c*c*weights[i];total+=weights[i];
   lo=min(lo,c);hi=max(hi,c);
  }
