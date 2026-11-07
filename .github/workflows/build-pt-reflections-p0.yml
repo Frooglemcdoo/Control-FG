@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character rig sampling R366
+      - name: Validate character rig sampling R367
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -171,7 +171,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R366
+      - name: Validate near volume history R367
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1137,7 +1137,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_PERFORMANCE_BUILD /DCONTROL_LIGHTING_NO_OVERLAY /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_PERFORMANCE_BUILD /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -1279,11 +1279,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R366
+      - name: Package owned GI integration R367
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R366'
+          $out='ControlTOH-R367'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1323,12 +1323,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R366 - Owned GI integration test
+          R367 - Owned GI integration test
 
           Copy all package contents beside Control_DX12.exe, preserving folders.
           Launch Control DX12 normally. Owned GI is selected at startup.
           Enable RT indirect lighting. GI RAW BYPASS and REF CLAMP 60% are the defaults.
-          R366 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
+          R367 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
           Supports twelve audited native skin/cloth/hair variants including the captured in-game shaders and stripped reflection metadata.
           Failure packages a bounded shader report instead of ineffective comparison shots.
           The R345 owned participating-media integration remains unchanged.
@@ -1340,11 +1340,11 @@ jobs:
           HQ uses27 trilinear reads per volume; R351 uses8. No new rendering pass or texture allocation. STABLE adds guarded near-slice reuse in the existing native history pass.
           Near history is capped at0.75, rejects invalid previous coordinates and fades out at25% coefficient change. Global history reset and far-slice behavior are preserved. This also affects other near-field consumers of the shared volume. In-game stability/performance need validation.
           TEST JESSE compares original stable / diffuse reconstruction / original base diffuse / reconstructed base diffuse / quarter-gain reconstructed diffuse / reconstructed full repeat. Twelve full-screen JPEGs, no resource dump.
-          R366 adds GI FILTER: OWNED, a new full-resolution depth-guided temporal filter replacing the existing temporal dispatch with zero following spatial passes. Native depth/motion/history/output bindings retained. No mip brightness cap. Raw and Stable remain available. Surface normals are not bound at this boundary. This is a candidate implementation requiring in-game visual confirmation.
+          R367 adds GI FILTER: OWNED, a new full-resolution depth-guided temporal filter replacing the existing temporal dispatch with zero following spatial passes. Native depth/motion/history/output bindings retained. No mip brightness cap. Raw and Stable remain available. Surface normals are not bound at this boundary. This is a candidate implementation requiring in-game visual confirmation.
 
           R363 adds session-only F10 GI REMOVE, GI STABLE, CONTACT AUTO/FILTERED/RAW and RESET COMPARE buttons. GI REMOVE and GI STABLE are mutually exclusive; contact can combine with either. RAW disables contact temporal/spatial filtering, not the shadows. Automated capture temporarily takes priority then manual selections resume. Reset restores saved gameplay settings.
 
-          R366 TEST JESSE isolates the active RT paths without changing saved settings: baseline / GI removed for diagnosis / stabilized GI / preserved contact filtering / both / baseline repeat. Twelve full-screen JPEGs with actual selected-PSO dispatch and contact-filter call counters; missing candidate coverage skips the affected images and is reported. GI removal is not a fix. Stabilized GI uses the existing motion-adaptive temporal and steady spatial variants only during the comparison. No new default rendering fix is claimed. RR and RT remain on; Owned GI, GI RAW BYPASS, HQ rig/near history and clamp60 remain gameplay defaults. Overrides restore automatically on finish, cancellation or focus loss. Keep VL High.
+          R367 TEST JESSE isolates the active RT paths without changing saved settings: baseline / GI removed for diagnosis / stabilized GI / preserved contact filtering / both / baseline repeat. Twelve full-screen JPEGs with actual selected-PSO dispatch and contact-filter call counters; missing candidate coverage skips the affected images and is reported. GI removal is not a fix. Stabilized GI uses the existing motion-adaptive temporal and steady spatial variants only during the comparison. No new default rendering fix is claimed. RR and RT remain on; Owned GI, GI RAW BYPASS, HQ rig/near history and clamp60 remain gameplay defaults. Overrides restore automatically on finish, cancellation or focus loss. Keep VL High.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
@@ -1369,9 +1369,10 @@ jobs:
           Get-ChildItem $tools -File | Where-Object { $_.Name -ne 'ControlFG-Restart.exe' } | Remove-Item -Force
           Remove-Item "$out/ControlTOH/DIAGNOSTIC-NOTES.md" -Force
           @'
-          R366 PERFORMANCE BUILD
-          Owned GI and the authored GI denoiser are active. R366 adds one normalized 5x5 spatial pass using native normal, material, object-mask and depth guides. No additional history blend or brightness cap. Visual noise reduction remains to be confirmed in-game. Clamp60 and HQ character shading are retained.
-          F10 diagnostic overlay, its polling/capture thread, F9 suites, material audit, shader snapshots, per-draw character/near-volume counters, RT source counters, diagnostic shader identification and periodic VRAM queries are excluded.
+          R367 PERFORMANCE BUILD
+          R367 fixes R366 startup staying in Native mode when the diagnostic UI was removed. Owned GI and the authored GI denoiser are enabled by default. The filter uses one normalized 5x5 spatial pass using native normal, material, object-mask and depth guides. No additional history blend or brightness cap. Visual noise reduction remains to be confirmed in-game. Clamp60 and HQ character shading are retained.
+          F10 opens a lightweight rendering-control panel. No recording, telemetry, shader reports or capture actions. Only F10 is registered; Alt+Z and Alt+R are untouched. Startup Native Blend projection selection now occurs in the renderer independently of the UI.
+          The old diagnostic overlay, its polling/capture thread, F9 suites, material audit, shader snapshots, per-draw character/near-volume counters, RT source counters, diagnostic shader identification and periodic VRAM queries are excluded.
           Runtime diagnostic logging is disabled. No capture tools are shipped. Existing old capture files are inert and need not be launched.
           This measures the mod with its actual rendering cost, not a pure-native game baseline. Use identical graphics settings and Frame Generation off for render-performance comparisons.
           '@ | Set-Content "$out/ControlTOH/README.txt" -Encoding ASCII
@@ -1382,10 +1383,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R366
+          name: ControlTOH-R367
           path: |
-            ControlTOH-R366.zip
-            ControlTOH-R366.sha256
+            ControlTOH-R367.zip
+            ControlTOH-R367.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

@@ -372,6 +372,15 @@ public:
     static Mode GetMode(uint64_t state) noexcept { return static_cast<Mode>(state & kModeMask); }
     static uint64_t Sequence(uint64_t state) noexcept { return state >> kSequenceShift; }
     static unsigned Observed(uint64_t state) noexcept { return unsigned((state >> kObservedShift) & kBindingBits); }
+    bool EnsureDefault(unsigned ready) noexcept {
+        auto current=Read();
+        if(Sequence(current)!=0 || !ModeAvailable(kNativeBlendDefaultMode,ready))return false;
+        const uint64_t next=(uint64_t(1)<<kSequenceShift)|static_cast<unsigned>(kNativeBlendDefaultMode);
+        while(Sequence(current)==0){
+            if(state_.compare_exchange_weak(current,next,std::memory_order_acq_rel))return true;
+        }
+        return false;
+    }
     uint64_t Select(Mode mode) noexcept {
         auto old = Read();
         uint64_t next;

@@ -411,6 +411,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);
  const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;
  const bool known=ReadEngineFrameSafe(&frame,&fault)&&RRNativeReadMode(&supported,&active);
+ native_lighting::selection.EnsureDefault(native_lighting::readyMask.load(std::memory_order_acquire));
  const auto diagnosticMode=native_lighting::LiveSelection::GetMode(native_lighting::selection.Read());
  const bool diagnosticBypass=native_lighting::BypassesRR(diagnosticMode);
  control_rr::RRSetDiagnosticBypass(diagnosticBypass);

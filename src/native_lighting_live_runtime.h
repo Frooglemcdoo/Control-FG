@@ -370,6 +370,7 @@ inline void BindPerformance(ID3D12GraphicsCommandList*,ID3D12PipelineState*) noe
 struct Binding {
     ID3D12PipelineState* selected;
     ID3D12PipelineState* alternate = nullptr;
+    selection.EnsureDefault(readyMask.load(std::memory_order_acquire));
     uint64_t state = selection.Read();
     unsigned kind = 0;
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
@@ -705,7 +706,9 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     StartOverlay();
 }
 } // namespace native_lighting
-#ifndef CONTROL_LIGHTING_NO_OVERLAY
+#if defined(CONTROL_PERFORMANCE_BUILD)
+#include "ui/lighting_controls.h"
+#elif !defined(CONTROL_LIGHTING_NO_OVERLAY)
 #include "ui/native_lighting_diagnostic.h"
 #else
 namespace native_lighting { inline void StartOverlay() noexcept {} }
