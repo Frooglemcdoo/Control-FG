@@ -474,7 +474,9 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     return DefWindowProcW(window,message,wParam,lParam);
 }
 inline void UpdateCaptureActivity() noexcept {
- const bool active=capture_suite::active||performance_capture::Active()||control_gi_button::Active()||control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load()
+ const auto tracePhase=gi_spot_trace::phase.load();
+ const bool traceActive=tracePhase!=gi_spot_trace::Phase::Idle && tracePhase!=gi_spot_trace::Phase::Complete && tracePhase!=gi_spot_trace::Phase::Failed;
+ const bool active=traceActive||capture_suite::active||performance_capture::Active()||control_gi_button::Active()||control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load()
 #ifdef CONTROL_RR_F9_SUITE
  ||reflection_suite::active
 #endif
