@@ -941,9 +941,9 @@ jobs:
           build\test-gi-stable-sequence.exe
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-path-capture.cpp /Febuild\test-gi-path-capture.exe
-          if ($LASTEXITCODE -ne 0) { throw 'GI path controller compile failed' }
+          if errorlevel 1 exit /b 1
           build\test-gi-path-capture.exe
-          if ($LASTEXITCODE -ne 0) { throw 'GI path controller failed' }
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-full-chain.exe
