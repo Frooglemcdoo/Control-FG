@@ -9,7 +9,7 @@ static float PatternValue(float value,UINT pattern,int x,int y) {
  const bool bright=pattern==1?(x==8&&y==4):pattern==2?((x==8||x==9)&&y==4):pattern==3?x==8:x>=8;
  return bright?value:.2f;
 }
-static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT index,UINT mips=1,UINT pattern=0) {
+static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT index,UINT mips=1,UINT pattern=0,UINT depthChannels=0) {
  D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
  D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;desc.Width=16;desc.Height=8;
  desc.DepthOrArraySize=1;desc.MipLevels=static_cast<UINT16>(mips);desc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;desc.SampleDesc.Count=1;
@@ -19,7 +19,9 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  std::vector<unsigned char> data(static_cast<size_t>(bytes));
  for(UINT mip=0;mip<mips;++mip){auto& f=layouts[mip];
   for(UINT y=0;y<f.Footprint.Height;++y)for(UINT x=0;x<f.Footprint.Width*4;++x){
-   float v=mip?filtered:PatternValue(base,pattern,x/4,y);std::memcpy(data.data()+f.Offset+y*f.Footprint.RowPitch+x*sizeof(float),&v,sizeof(v));
+   float v=mip?filtered:PatternValue(base,pattern,x/4,y);
+   if(x%4==0 && depthChannels)v=depthChannels==1?.5f:PatternValue(.8f,4,x/4,y);
+   std::memcpy(data.data()+f.Offset+y*f.Footprint.RowPitch+x*sizeof(float),&v,sizeof(v));
   }
  }
  auto upload=gpu.Upload(data);
@@ -32,8 +34,10 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
 static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned,ID3D12PipelineState* stableEnergy) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;};
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;UINT depthChannels=0;};
  const Case cases[]={
+  []{Case c{"R379 Y-depth edge with constant X rejects cross-surface light",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthEdge=true;c.depthChannels=1;return c;}(),
+  []{Case c{"R379 X edge with flat Y retains same-surface gather",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthChannels=2;return c;}(),
   []{Case c{"R375 valid moving history retained",.2f,.2f,.22f,.5f,false,false,.214f};c.stable=true;c.motion=.02f;return c;}(),
   []{Case c{"R375 moving disocclusion rejects history",.2f,.2f,2.f,.7f,false,false,.2f};c.stable=true;c.motion=.02f;return c;}(),
   []{Case c{"R375 offscreen history rejected",.2f,.2f,2.f,.5f,false,false,.2f};c.stable=true;c.motion=2.f;return c;}(),
@@ -94,7 +98,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
  ID3D12DescriptorHeap* heaps[]={gpu.views.Get()};gpu.list->SetDescriptorHeaps(1,heaps);
  std::vector<ComPtr<ID3D12Resource>> outputs;std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> layouts;
  for(UINT i=0;i<sizeof(cases)/sizeof(cases[0]);++i){auto c=cases[i];UINT first=6*i;
-  HistoryInput(gpu,c.depthEdge?.8f:.5f,.5f,first,1,c.depthEdge?4:0);HistoryInput(gpu,c.depth,c.depth,first+1);HistoryInput(gpu,c.motion,c.motion,first+2);
+  HistoryInput(gpu,c.depthEdge?.8f:.5f,.5f,first,1,c.depthEdge?4:0,c.depthChannels);HistoryInput(gpu,c.depth,c.depth,first+1);HistoryInput(gpu,c.motion,c.motion,first+2);
   HistoryInput(gpu,c.current,c.filtered,first+3,4,c.pattern);HistoryInput(gpu,c.history,c.history,first+4);
   std::array<float,192> sys{};sys[0]=16;sys[1]=8;sys[2]=1.f/16;sys[3]=1.f/8;
   sys[4]=16;sys[5]=8;sys[6]=1.f/16;sys[7]=1.f/8;
@@ -138,9 +142,12 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;
    if(cases[i].stable && cases[i].pattern){
-    float sum=0;for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx)
-     sum+=float((dx==0?2:1)*(dy==0?2:1))*PatternValue(cases[i].current,cases[i].pattern,int(x)+dx,int(y)+dy);
-    expected=sum/16.f;
+    float sum=0,weights=0;for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){
+     if(cases[i].depthEdge && ((std::max(0,std::min(15,int(x)+dx))>=8)!=(x>=8)))continue;
+     const float weight=float((dx==0?2:1)*(dy==0?2:1));
+     sum+=weight*PatternValue(cases[i].current,cases[i].pattern,int(x)+dx,int(y)+dy);weights+=weight;
+    }
+    expected=sum/weights;
    }
    if(cases[i].bypass)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);
    if(cases[i].owned && cases[i].depthEdge)expected=PatternValue(cases[i].current,cases[i].pattern,x,y);

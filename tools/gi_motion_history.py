@@ -117,7 +117,9 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
    def sample_energy(r,mask,uv,texture):
     code=list(w[131:144]);code[1:3]=dst(r,mask);code[3:5]=uv
     code[6]=code[7]=texture;code[-1]=imm(0)[1]
-    if texture==0:code[5]=0x207006;code[9:11]=[0,6]
+    # Native temporal t0.y is the surface depth. t0.x is not interchangeable:
+    # using x here makes the current gather disagree with native reprojection.
+    if texture==0:code[5]=0x207556;code[9:11]=[0,6]
     return code
    energy_filter=ins(56,dst(9),src(3),imm(4))+ins(54,dst(9,8),imm(4))
    energy_filter+=sample_energy(10,1,src(1,0xae),0)

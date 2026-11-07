@@ -148,3 +148,11 @@ assert ej['bindings']==j['bindings']
 assert sum(i['name']=='sample_l' for i in ej['instructions'])==sum(i['name']=='sample_l' for i in j['instructions'])+17
 assert sum(i['name']=='store_uav_typed' for i in ej['instructions'])==1
 print('PASS R374 same-surface current gather, unchanged bindings and one output dispatch')
+
+# R379 current gather must use native t0.y, even when the packed X channel differs.
+depth_samples=[i for i in ej['instructions'] if i['name']=='sample_l' and i['operands'][2].startswith('t[0][0]')]
+assert len(depth_samples)==10
+assert all(i['operands'][2]=='t[0][0].yyyy' for i in depth_samples if i['operands'][0] in ('r[10].x','r[13].x'))
+assert sum(i['operands'][2]=='t[0][0].yyyy' for i in depth_samples)==9
+assert any(i['operands'][2]=='t[0][0].yzxw' for i in depth_samples)
+print('PASS R379 gather uses native Y depth; unrelated packed X channel excluded')
