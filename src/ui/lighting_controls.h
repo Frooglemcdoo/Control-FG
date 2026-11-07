@@ -30,6 +30,7 @@ inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
   CreateWindowW(L"STATIC",L"F10 closes. No capture or monitoring is running.",WS_CHILD|WS_VISIBLE,12,216,396,24,window,nullptr,selfModule,nullptr);
   Refresh(window);return 0;
  }
+ if(message==WM_MOUSEACTIVATE)return MA_NOACTIVATE;
  if(message==WM_CLOSE){Close(window);return 0;}
  if(message==WM_COMMAND && HIWORD(wp)==BN_CLICKED){
   const unsigned id=LOWORD(wp);const auto mode=LiveSelection::GetMode(selection.Read());
@@ -71,7 +72,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
   if(!foreground&&registered){UnregisterHotKey(nullptr,hotkey);registered=false;}
   if(!panel)continue;
   if(!foreground){Close(panel);continue;}
-  if(open){RECT r{};GetClientRect(game,&r);POINT p{r.right>432?r.right-432:0,16};ClientToScreen(game,&p);SetWindowPos(panel,HWND_TOP,p.x,p.y,416,250,SWP_NOACTIVATE|SWP_SHOWWINDOW);ClipCursor(nullptr);}
+  if(open){RECT r{};GetClientRect(game,&r);POINT p{r.right>432?r.right-432:0,16};ClientToScreen(game,&p);RECT previous{};GetWindowRect(panel,&previous);const bool visible=IsWindowVisible(panel)!=FALSE;if(!visible||previous.left!=p.x||previous.top!=p.y)SetWindowPos(panel,HWND_TOP,p.x,p.y,416,250,SWP_NOACTIVATE|SWP_SHOWWINDOW|(visible?SWP_NOZORDER:0));if(GetForegroundWindow()==game||GetForegroundWindow()==panel)ClipCursor(nullptr);}
  }
  if(registered)UnregisterHotKey(nullptr,hotkey);KillTimer(nullptr,timer);if(panel){Close(panel);DestroyWindow(panel);}started=false;return 0;
 }
