@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate character rig sampling R368
+      - name: Validate character rig sampling R369
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -175,7 +175,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if errorlevel 1 exit /b 1
 
-      - name: Validate near volume history R368
+      - name: Validate near volume history R369
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -900,6 +900,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-owned-volume-gpu.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-sequence.cpp /Febuild\test-gi-owned-sequence.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-owned-sequence.exe
+          if errorlevel 1 exit /b 1
           python tools/test-gi-motion-history.py
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-motion-pso.cpp /Febuild\test-gi-motion-pso.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
@@ -1283,11 +1287,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R368
+      - name: Package owned GI integration R369
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R368'
+          $out='ControlTOH-R369'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1327,28 +1331,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R368 - Owned GI integration test
+          R369 - Owned GI denoiser: firefly rejection and stable reprojection
 
-          Copy all package contents beside Control_DX12.exe, preserving folders.
-          Launch Control DX12 normally. Owned GI is selected at startup.
-          Enable RT indirect lighting. GI RAW BYPASS and REF CLAMP 60% are the defaults.
-          R368 TEST JESSE covers skin, clothing and hair together; individual coverage is required.
-          Supports twelve audited native skin/cloth/hair variants including the captured in-game shaders and stripped reflection metadata.
-          Failure packages a bounded shader report instead of ineffective comparison shots.
-          The R345 owned participating-media integration remains unchanged.
-          Native lights, density, atmosphere, output texture and producer sampling remain. Use High VL.
-          F10 TEST VOLUME captures native / fog-isolation / owned-scattering / native-repeat full-resolution JPEGs and packages them automatically.
-          Owned scattering resumes after completion or cancellation. This is the first integration stage; dedicated fog history is not yet implemented. In-game appearance and performance need validation.
-          RIG: STABLE starts enabled. F10 RIG cycles STABLE / NATIVE / R351 / R352.
-          HQ uses weighted cubic reconstruction of the rig volume, preserving lights, materials, shadows and fog.
-          HQ uses27 trilinear reads per volume; R351 uses8. No new rendering pass or texture allocation. STABLE adds guarded near-slice reuse in the existing native history pass.
-          Near history is capped at0.75, rejects invalid previous coordinates and fades out at25% coefficient change. Global history reset and far-slice behavior are preserved. This also affects other near-field consumers of the shared volume. In-game stability/performance need validation.
-          TEST JESSE compares original stable / diffuse reconstruction / original base diffuse / reconstructed base diffuse / quarter-gain reconstructed diffuse / reconstructed full repeat. Twelve full-screen JPEGs, no resource dump.
-          R368 adds GI FILTER: OWNED, a new full-resolution depth-guided temporal filter replacing the existing temporal dispatch with zero following spatial passes. Native depth/motion/history/output bindings retained. No mip brightness cap. Raw and Stable remain available. Surface normals are not bound at this boundary. This is a candidate implementation requiring in-game visual confirmation.
-
-          R363 adds session-only F10 GI REMOVE, GI STABLE, CONTACT AUTO/FILTERED/RAW and RESET COMPARE buttons. GI REMOVE and GI STABLE are mutually exclusive; contact can combine with either. RAW disables contact temporal/spatial filtering, not the shadows. Automated capture temporarily takes priority then manual selections resume. Reset restores saved gameplay settings.
-
-          R368 TEST JESSE isolates the active RT paths without changing saved settings: baseline / GI removed for diagnosis / stabilized GI / preserved contact filtering / both / baseline repeat. Twelve full-screen JPEGs with actual selected-PSO dispatch and contact-filter call counters; missing candidate coverage skips the affected images and is reported. GI removal is not a fix. Stabilized GI uses the existing motion-adaptive temporal and steady spatial variants only during the comparison. No new default rendering fix is claimed. RR and RT remain on; Owned GI, GI RAW BYPASS, HQ rig/near history and clamp60 remain gameplay defaults. Overrides restore automatically on finish, cancellation or focus loss. Keep VL High.
+          Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
+          Launch Control DX12 normally. Enable RR and RT indirect lighting.
+          Defaults: Native Blend, Owned GI, GI FILTER: OWNED, GI RAW BYPASS, REF CLAMP 60%, RIG: STABLE. Keep VL High.
+          The owned filter replaces the native temporal dispatch and uses one surface-guided spatial dispatch. It retains native buffers, motion vectors, history copies and output layout.
+          R369 rejects unsupported one/two-sample bright peaks before accumulation and clips history against cleaned neighborhood statistics. Valid reprojected history retains its weight during camera movement. Camera cuts, depth rejection and off-screen rejection remain active. No global brightness cap, extra render pass or additional history allocation.
+          This is a candidate visual fix. Automated tests exercise actual temporal/spatial shader feedback for 32 frames, colored fireflies, movement and light removal; in-game results still require verification.
+          The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
+          Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
+          GI FILTER: OWNED toggles the new filter. GI STABLE remains a separate legacy comparison; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
+          TEST JESSE and TEST VOLUME run their existing full-screen comparison sequences and package the result. Missing shader coverage is reported instead of claiming a successful comparison.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
           OWNED WAIT means admission has not succeeded; native output remains.
@@ -1370,7 +1364,7 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R368 - Original F10 panel restored, grouped by feature and capture.
+          R369 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
           Owned GI and clamp60 remain defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
@@ -1382,10 +1376,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R368
+          name: ControlTOH-R369
           path: |
-            ControlTOH-R368.zip
-            ControlTOH-R368.sha256
+            ControlTOH-R369.zip
+            ControlTOH-R369.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
