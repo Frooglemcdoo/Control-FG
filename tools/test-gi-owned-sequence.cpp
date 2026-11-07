@@ -9,10 +9,10 @@ using Pixel=std::array<float,4>;
 using Image=std::vector<Pixel>;
 struct Tex{ComPtr<ID3D12Resource> r;D3D12_PLACED_SUBRESOURCE_FOOTPRINT f{};UINT64 bytes=0;};
 struct Harness{
- Device gpu{false};ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> temporal,spatial;
+ Device gpu{false};ComPtr<ID3D12DescriptorHeap> initialViews;ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> temporal,spatial;
  UINT slot=0;
  Harness(bool old){
-  gpu.views.Reset();D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=2048;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  initialViews=gpu.views;gpu.views.Reset();D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=2048;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
   Check(gpu.device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&gpu.views)));ID3D12DescriptorHeap* heaps[]={gpu.views.Get()};gpu.list->SetDescriptorHeaps(1,heaps);
   D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,6,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,0}};
   D3D12_ROOT_PARAMETER params[4]{};for(UINT i=0;i<2;++i){params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;params[i].Descriptor.ShaderRegister=i;params[i+2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i+2].DescriptorTable={1,&ranges[i]};}
