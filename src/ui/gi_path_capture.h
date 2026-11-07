@@ -17,7 +17,7 @@ inline void Finish(HWND game,const char* reason) noexcept {
  Note(reason);Note("\r\n");
  if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
  active=false;
- if(control_rr_capture_ui::Busy()){
+ if(control_rr_capture_ui::Busy()||control_rr_capture_ui::state.load()==control_rr_capture_ui::State::Failed){
   ShellExecuteW(game,L"open",gi_path_capture::directory,nullptr,nullptr,SW_SHOWNORMAL);
   MessageBoxW(game,L"Capture stopped before completion. Settings restored. Pending GPU copies are retained safely; files may still be saving. See manifest.txt.",L"GI path capture incomplete",MB_OK);return;
  }
