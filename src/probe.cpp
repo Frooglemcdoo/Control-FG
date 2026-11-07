@@ -69,6 +69,9 @@ static bool ReleaseLogSuppressed(const char* body) noexcept {
 }
 
 static void Log(const char* format, ...) noexcept {
+#ifdef CONTROL_PERFORMANCE_BUILD
+ return;
+#else
     DWORD savedError = GetLastError();
     if (logFile != INVALID_HANDLE_VALUE) {
         char body[2048], line[2304];
@@ -88,6 +91,8 @@ static void Log(const char* format, ...) noexcept {
         }
     }
     SetLastError(savedError);
+#endif
+
 }
 
 #include "gi_frame_capture.h"
@@ -619,8 +624,10 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     // RR diagnostic only: preserve production AA/FG ordering, then give a
     // joined material capture one later same-frame copy opportunity.
     // r20x: disable diagnostic joined capture in performance branch.
+#ifndef CONTROL_PERFORMANCE_BUILD
     if(call==1||call==8||(call%60)==0||resetFrame||resumeGap)
         ProbeVideoMemory(call,currentPresent,t1,resetFrame?"reset":(resumeGap?"resume_gap":((call<=8)?"startup":"periodic")));
+#endif
     return result;
 }
 

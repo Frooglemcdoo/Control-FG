@@ -35,6 +35,9 @@ inline bool Target(const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc) noexcept {
 }
 template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* result,Create create) noexcept {
  const int spatial=SpatialVariant(desc);
+#ifdef CONTROL_PERFORMANCE_BUILD
+ if(spatial>=0)return;
+#endif
  if(!device||!result||!create||(!Target(desc)&&spatial<0))return;
  ID3D12PipelineState* native=nullptr;
  if(FAILED(result->QueryInterface(IID_PPV_ARGS(&native)))||!native)return;
@@ -44,6 +47,13 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  auto* b=new(std::nothrow) Bundle{};
  if(!b){native->Release();return;}
  b->native=native;
+#ifdef CONTROL_PERFORMANCE_BUILD
+ auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIBypassShader,sizeof(kGIBypassShader)};
+ HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->bypass));
+ if(SUCCEEDED(hr)){replacement.CS={kGIOwnedDenoise,sizeof(kGIOwnedDenoise)};hr=create(device,&replacement,IID_PPV_ARGS(&b->owned));}
+ if(FAILED(hr)||!b->bypass||!b->owned){if(b->bypass)b->bypass->Release();if(b->owned)b->owned->Release();native->Release();delete b;++failed;return;}
+ ++ownedReady;bundles[index].store(b,std::memory_order_release);++ready;return;
+#else
  if(spatial>=0){
   b->spatial=true;auto replacement=*desc;replacement.CachedPSO={};
   replacement.CS=spatial==0?D3D12_SHADER_BYTECODE{kGISingleHistorySpatial0,sizeof(kGISingleHistorySpatial0)}:D3D12_SHADER_BYTECODE{kGISingleHistorySpatial1,sizeof(kGISingleHistorySpatial1)};
@@ -98,6 +108,7 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  Log("GI_DIAGNOSTIC_R217 mask_ready=%u zero_ready=%u",unsigned(b->mask!=nullptr),unsigned(b->zero!=nullptr));
  bundles[index].store(b,std::memory_order_release);++ready;
  Log("GI_PIPELINE_R217 ready=1 native=%p adaptive=%p native_root_preserved=1 engine_record_copy=0",native,b->adaptive);
+#endif
 }
 template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed,unsigned count,bool& used,
  ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,Set set,DispatchFn dispatch) {
@@ -112,7 +123,9 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;
+#ifndef CONTROL_PERFORMANCE_BUILD
   if(replacement==b->owned && b->owned)++ownedApplied;
+#endif
   // Count the selected PSO only after recording the actual dispatch. A null
   // optional PSO/native fallback cannot claim diagnostic coverage.
   if(!b->spatial && replacement==b->zero)rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIZero);

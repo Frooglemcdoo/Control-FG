@@ -26,7 +26,9 @@ class Counters {
     std::array<std::atomic<std::uint64_t>, kCount> values_{};
 public:
     void Record(Event event) noexcept {
+#ifndef CONTROL_PERFORMANCE_BUILD
         values_[static_cast<std::size_t>(event)].fetch_add(1, std::memory_order_relaxed);
+#endif
     }
     std::array<std::uint64_t, kCount> Snapshot() const noexcept {
         std::array<std::uint64_t, kCount> result{};

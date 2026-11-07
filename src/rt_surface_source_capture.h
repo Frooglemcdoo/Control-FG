@@ -10,10 +10,14 @@ inline std::atomic<unsigned> request{0};
 inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
 inline std::atomic<unsigned> manualContact{0}; // 0 auto, 1 preserved, 2 unfiltered
 inline unsigned EffectiveRequest() noexcept {
+#ifdef CONTROL_PERFORMANCE_BUILD
+ return 7; // Owned denoiser, no manual or automatic comparisons.
+#else
  const unsigned capture=request.load(std::memory_order_acquire);
  if(capture)return capture;
  const unsigned gi=manualGI.load();
  return gi==1?2:gi==2?3:gi==3?7:0;
+#endif
 }
 inline bool ManualContactUnfiltered() noexcept {return !request.load() && manualContact.load()==2;}
 inline bool ManualContactPreserved() noexcept {return !request.load() && manualContact.load()==1;}
@@ -29,7 +33,9 @@ static_assert(sizeof(names)/sizeof(names[0])==count);
 using Snapshot=std::array<uint64_t,count>;
 inline std::array<std::array<std::atomic<uint64_t>,count>,phases> counters{};
 inline void Record(unsigned phase,Event e) noexcept {
+#ifndef CONTROL_PERFORMANCE_BUILD
     if(phase && phase<phases)counters[phase][unsigned(e)].fetch_add(1,std::memory_order_relaxed);
+#endif
 }
 inline Snapshot Read(unsigned phase) noexcept {
     Snapshot result{};if(phase>=phases)return result;

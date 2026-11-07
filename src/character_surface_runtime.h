@@ -85,7 +85,9 @@ template<class Create>
 inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc,
                     IUnknown* native,Create create) noexcept {
     if(!create || !native || !desc)return;
+#ifndef CONTROL_PERFORMANCE_BUILD
     Remember(desc->PS);
+#endif
     const int family=Family(desc->PS);if(family<0)return;
     ID3D12PipelineState* owner=nullptr;
     if(FAILED(native->QueryInterface(IID_PPV_ARGS(&owner))))return;
@@ -95,6 +97,9 @@ inline void Observe(ID3D12Device* device,const D3D12_GRAPHICS_PIPELINE_STATE_DES
     ID3D12PipelineState* variants[kCharacterVariantCount]{};
     HRESULT hr=S_OK;
     for(unsigned i=0;i<kCharacterVariantCount && SUCCEEDED(hr);++i){
+#ifdef CONTROL_PERFORMANCE_BUILD
+        if(i!=6)continue; // Only the selected gameplay shader; no test PSOs.
+#endif
         auto copy=*desc;copy.PS=kCharacterVariants[family][i];copy.CachedPSO={nullptr,0};
         hr=create(device,&copy,IID_PPV_ARGS(&variants[i]));
     }

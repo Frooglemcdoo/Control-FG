@@ -101,12 +101,17 @@ inline const GUID& VariantGuid(Mode mode) noexcept {
 inline const GUID kKindGuid = {0x822329d7,0x3614,0x4f73,{0xa6,0x14,0xd0,0x8c,0x94,0xf2,0x54,0x02}};
 
 inline bool Trace(const char* format, ...) noexcept {
+#ifdef CONTROL_PERFORMANCE_BUILD
+ return true;
+#else
     char detail[768]{};
     va_list args; va_start(args, format); vsnprintf_s(detail, sizeof(detail), _TRUNCATE, format, args); va_end(args);
     char line[960]{};
     const int length = snprintf(line, sizeof(line), "ms=%llu present=%llu %s\r\n",
         GetTickCount64(), presentCount.load(), detail);
     return length > 0 && diagnosticLog.Push(line, size_t(length < int(sizeof(line)) ? length : sizeof(line)-1));
+#endif
+
 }
 #include "free_camera_runtime.h"
 // UI-thread snapshots: totals are independent atomic observations, not one GPU frame.
@@ -148,6 +153,9 @@ struct PipelineIdentity { unsigned stage = 0; unsigned logged = 0; unsigned long
 inline SRWLOCK identityLock = SRWLOCK_INIT;
 inline std::atomic<unsigned> identityReports{0};
 inline void IdentifyPipeline(IUnknown* object, const D3D12_SHADER_BYTECODE& shader, unsigned stage) noexcept {
+#ifdef CONTROL_PERFORMANCE_BUILD
+ return;
+#else
     if (!object || !shader.pShaderBytecode || !shader.BytecodeLength) return;
     ID3D12PipelineState* pso = nullptr;
     if (FAILED(object->QueryInterface(IID_PPV_ARGS(&pso)))) return;
@@ -163,9 +171,14 @@ inline void IdentifyPipeline(IUnknown* object, const D3D12_SHADER_BYTECODE& shad
         }
     }
     pso->Release();
+#endif
+
 }
 namespace rt_shadow_capture { inline void RecordComputeBinding(size_t, const char*) noexcept; }
 inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
+#ifdef CONTROL_PERFORMANCE_BUILD
+ return;
+#else
     if (!pso) return;
     PipelineIdentity identity{}; UINT size = sizeof(identity);
     const HRESULT read = pso->GetPrivateData(kIdentityGuid, &size, &identity);
@@ -183,6 +196,8 @@ inline void ReportBoundIdentity(ID3D12PipelineState* pso) noexcept {
                 identity.bytes, identity.sha);
     }
     ReleaseSRWLockExclusive(&identityLock);
+#endif
+
 }
 inline bool SelectMode(Mode mode) noexcept {
     if (!ModeAvailable(mode,readyMask.load())) { Trace("selection_rejected mode=%s reason=shader_or_sample_hook_not_ready ready_mask=%u required_mask=%u missing_mask=%u", ModeName(mode),readyMask.load(),RequiredVariant(mode),RequiredVariant(mode)&~readyMask.load()); return false; }
@@ -298,17 +313,27 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 }
 }
 inline void ObserveCompute(ID3D12Device* device, const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc, IUnknown* native, CreateCompute original) noexcept {
+#ifndef CONTROL_PERFORMANCE_BUILD
     computeSeen.fetch_add(1);
+#endif
+#ifndef CONTROL_PERFORMANCE_BUILD
     volume_test::Observe(device,desc,native,original);
+#endif
     volume_temporal::Observe(device,desc,native,original);
     gi_evaluator::Observe(device,desc,native,original);
     control_rr_gi::Capture(device,desc,native,original);
     gi_source_probe::Observe(device,desc,native,original);
+#ifndef CONTROL_PERFORMANCE_BUILD
     gi_binding_audit::Observe(desc,native);
+#endif
+#ifndef CONTROL_PERFORMANCE_BUILD
     gi_spot_trace::Observe(device,desc,native,original);
+#endif
     gi_spot_pcf_probe::Observe(device,desc,native,original);
     IdentifyPipeline(native, desc->CS, 2);
+#ifndef CONTROL_PERFORMANCE_BUILD
     rt_shadow_capture::RecordCompute(desc);
+#endif
     rt_spot_runtime::ObserveCompute(device,desc,native,original);
     for(unsigned i=0;i<2;++i) {
         const auto& patch=*kRtBakedGiPatches[i];
@@ -348,7 +373,9 @@ struct Binding {
     uint64_t state = selection.Read();
     unsigned kind = 0;
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
+#ifndef CONTROL_PERFORMANCE_BUILD
         bindingsSeen.fetch_add(1);
+#endif
         ReportBoundIdentity(native);
         UINT size=sizeof(kind);
         if(!native || FAILED(native->GetPrivateData(kKindGuid,&size,&kind)) || size!=sizeof(kind)){kind=0;return;}
@@ -387,6 +414,9 @@ struct Binding {
     }
     unsigned volumePhase = 0,surfacePhase=0,surfaceGroup=3;
     void Recorded() const noexcept {
+#ifdef CONTROL_PERFORMANCE_BUILD
+        if(kind==volume_temporal::kind || kind==character_surface::kind)return;
+#else
         if(kind==volume_temporal::kind){++volume_temporal::binds;if(alternate)++volume_temporal::applied;return;}
         if(kind==character_surface::kind){
             if(surfacePhase==0 && alternate)++character_surface::filteredBinds;
@@ -397,6 +427,7 @@ struct Binding {
             }
             return;
         }
+#endif
         if(kind==volume_test::filterKind){
             if(volumePhase){
                 ++volume_test::binds[volumePhase];
@@ -581,7 +612,9 @@ using CreateList = HRESULT (STDMETHODCALLTYPE*)(ID3D12Device*, UINT, D3D12_COMMA
 inline CreateGraphics originalGraphics = nullptr;
 inline CreateList originalCreateList = nullptr;
 inline void ObserveGraphics(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, IUnknown* native) noexcept {
+#ifndef CONTROL_PERFORMANCE_BUILD
     graphicsSeen.fetch_add(1);
+#endif
     character_surface::Observe(device,desc,native,originalGraphics);
     IdentifyPipeline(native, desc->PS, 1);
     std::vector<unsigned char> bytes;
