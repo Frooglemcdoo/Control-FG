@@ -6,7 +6,7 @@
 #include <new>
 #include "../build/gi_motion_history.generated.h"
 #include "../build/gi_spatial_history.generated.h"
-#include "../build/gi_owned.generated.h"
+#include "../build/gi_owned_denoise.generated.h"
 // Immutable GPU objects, never copies of the engine's shader/lock/cache records.
 namespace control_rr_gi {
 inline std::atomic<unsigned> ownedReady{0};
