@@ -27,6 +27,10 @@ def generate(data, bounded=False, steady=False):
                                        0x0010002a, 0, 0x4001, 0x3f800000]
                 # Replace only the radiance-variance multiplier. Existing
                 # geometry/material/hit weights and stencil remain intact.
+                # R376: retain a fixed footprint on the same surface. The
+                # native hit-distance factor fluctuates with stochastic rays.
+                assert w[1496:1503] == [0x07000038,0x001000f2,1,0x00100aa6,0,0x00100e46,1]
+                w[1499:1501] = [0x4001,0x3f800000]
                 w[1807:1814] = [0x05000036, 0x00100042, 0, 0x4001, 0x3f800000]
             return
         # Bound the history sample against the final current spatial result,

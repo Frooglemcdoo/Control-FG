@@ -65,6 +65,8 @@ for variant in range(2):
     assert len(sj['instructions']) == len(audit['instructions'])
     for old_instruction, new_instruction in zip(audit['instructions'], sj['instructions']):
         expected = {k:v for k,v in old_instruction.items() if k != 'dword'}
+        if old_instruction['dword'] == 1496:
+            expected = {'name':'mul', 'operands':['r[1].xyzw','l(1)','r[1].xyzw']}
         if old_instruction['dword'] == 1807:
             expected = {'name':'mov', 'operands':['r[0].z','l(1)']}
         if old_instruction['dword'] == 1956:
@@ -85,4 +87,4 @@ for variant in range(2):
         raise AssertionError('unknown bytecode accepted')
 print('PASS R259 both spatial variants: only final history coefficient changes; spatial math, descriptors, control flow and output ABI unchanged')
 print('PASS R260 both bounded variants: five RGB-bound instructions; all original instructions preserved except scratch register count; no new samples or bindings')
-print('PASS R261 both steady variants: fixed variance multiplier and zero final history only; geometry/material/hit weights, stencil, bindings and ABI preserved')
+print('PASS R261 both steady variants: fixed hit-distance and variance multipliers, zero final history; geometry/material weights, stencil, bindings and ABI preserved')
