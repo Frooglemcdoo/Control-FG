@@ -36,7 +36,7 @@ static Stats RunChain(bool old,unsigned mode){
  ComPtr<ID3D12Resource> cbS[2];for(UINT p=0;p<2;++p){filter[4]=p;cbS[p]=g.Buffer(sizeof(filter),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,filter.data());}
  std::vector<Tex> frames;std::vector<ComPtr<ID3D12Resource>> reads;
  for(UINT f=0;f<N;++f){
-  Image raw(W*H),hits(W*H,Pixel{0,f%2?1.f:0.f,0,0});
+  Image raw(W*H),hits(W*H,Pixel{f%2?1.f:0.f,0,0,0});
   for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){float v=.3f+.15f*std::cos(float(x)*.78539816f)*std::cos(float(y)*.78539816f);if(mode==2)v=.4f;if(mode==3)v=(x==12&&y==8)?10.f:.1f;raw[y*W+x]={v,v,v,v};}
   auto current=h.Texture(&raw),hit=h.Texture(&hits),temp=h.Texture(),a=h.Texture(),b=h.Texture();
   h.Dispatch8(h.temporal.Get(),{depth.r.Get(),depth.r.Get(),motion.r.Get(),current.r.Get(),history.r.Get(),current.r.Get(),history.r.Get(),hit.r.Get()},temp,cb0.Get(),cbT.Get());
