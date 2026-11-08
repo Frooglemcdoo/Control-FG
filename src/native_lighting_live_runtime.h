@@ -1,5 +1,6 @@
 #pragma once
 #include "visual_settings_policy.h"
+#include "performance_compare_state.h"
 #include "diagnostic_activity.h"
 #include "gi_stack_capture.h"
 #include "gi_native_submission_hooks.h"
@@ -581,6 +582,7 @@ inline HRESULT STDMETHODCALLTYPE CreateLightingState(ID3D12Device5* device,const
 }
 inline performance::Stage PerformanceRayStage() noexcept {return rt_spot_runtime::active?performance::Stage::ShadowRays:performance::Stage::OtherRays;}
 inline performance::Stage PerformanceStage(ID3D12PipelineState* pso) noexcept {
+    if(pso&&control_compare::enabled.load()){UINT mode=0,n=sizeof(mode);if(SUCCEEDED(pso->GetPrivateData(gi_evaluator::kMode,&n,&mode))&&mode)return performance::Stage::GIEvaluator;}
     unsigned kind=0;UINT size=sizeof(kind);
     if(!pso)return performance::Stage::None;
     if(FAILED(pso->GetPrivateData(rt_spot_runtime::kKind,&size,&kind))){
@@ -675,7 +677,19 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     performance::RememberDevice(device);
     rt_shadow_capture::endTiming=&performance::End;
     rt_shadow_capture::beginTiming=+[](ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept -> unsigned {
-        return desc?performance::Begin(list,PerformanceRayStage(),desc->Width,desc->Height,desc->Depth,desc->HitGroupTable.SizeInBytes,nullptr,desc):performance::kInvalid;
+        auto stage=PerformanceRayStage();
+
+#ifdef CONTROL_GI_LONG_SEQUENCE
+        if(desc&&control_compare::enabled.load()){
+            Microsoft::WRL::ComPtr<ID3D12StateObject> state;UINT size=sizeof(ID3D12StateObject*);
+            if(SUCCEEDED(list->GetPrivateData(gi_live_toggle::kState,&size,state.GetAddressOf()))&&state){
+                Microsoft::WRL::ComPtr<ID3D12Resource> record;size=sizeof(ID3D12Resource*);
+                if(SUCCEEDED(state->GetPrivateData(gi_live_toggle::kRecord,&size,record.GetAddressOf()))&&record)stage=performance::Stage::GICombinedRays;
+            }
+        }
+
+#endif
+        return desc?performance::Begin(list,stage,desc->Width,desc->Height,desc->Depth,desc->HitGroupTable.SizeInBytes,nullptr,desc):performance::kInvalid;
     };
     rt_spot_table_audit::endTiming=&performance::AfterExecute;
     rt_spot_table_audit::instanceObserver=&gi_geometry_probe::BeforeExecute;

@@ -190,6 +190,7 @@ static void ProducerDispatch() noexcept {
   if(r->epoch&&r->epoch!=epoch){Reason("producer_epoch_change");return;}
   r->epoch=epoch;PTGlass::DescriptorRange fresh;if(!PTGlassRuntime::Fresh(c,&fresh)){Reason("producer_heap");return;}
   r->exports.emplace_back();
+  native_lighting::performance::Scope timing(c.list,native_lighting::performance::Stage::ReceiverExport,w,h,1,0);
   if(!epoch->receiver->Record(c.list,b.pipeline.Get(),c.gpu,*pass.shadow,sequence,fresh,r->exports.back())){r->exports.pop_back();Reason("producer_descriptors");return;}
   settings_check::Record(settings_check::ReceiverExport);
   r->exported=true;guideFrame=pass.frame;guideView=pass.view;guideList=c.list;guideGeneration=generation;guideProducer=mode;
@@ -223,6 +224,7 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   inputs.output={target.resource,target.state};
   PTGlass::DescriptorRange arena;if(!PTGlassRuntime::FreshCount(c,epoch->filter->MaxDescriptors(),&arena)){Reason("filter_heap");return false;}
   record=GetRecording(c.rays,generation);if(!record||record->filtered||(record->epoch&&record->epoch!=epoch)){Reason("filter_recording");return false;}
+  native_lighting::performance::Scope timing(list,native_lighting::performance::Stage::RelaxTotal,w,h,1,1);
   record->epoch=epoch;record->work=std::make_unique<control_nrd::NativeTransaction::Work>();
   if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {arena.heap,arena.first,arena.count},*record->work)){
    if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}

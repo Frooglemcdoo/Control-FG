@@ -41,6 +41,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const auto perfEntry=RRPerfClock();
     const auto call=rrEvaluationCalls[branch].fetch_add(1,std::memory_order_relaxed)+1;
     const auto in=RRReadEvaluationInputs(parameters);
+    if(control_compare::running.load()&&in.output){const auto d=in.output->GetDesc();
+        control_compare::geometry.store((uint64_t(in.width)<<48)|(uint64_t(in.height)<<32)|(uint64_t(d.Width&65535)<<16)|(d.Height&65535));}
     // The gateway does not own these borrowed resources. Nothing escapes this
     // invocation; the separate live pass acquires its own source references.
     const control_rr::LiveFrameInput frameInput{in.frame,in.jitterX,in.jitterY,in.reset,in.valid,in.fault,in.width,in.height};
@@ -132,8 +134,13 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const auto perfNativeStart=RRPerfClock();
     SetLastError(incomingError);
     if(rrAttempt)control_rr_diagnostic::Record(control_rr_diagnostic::Event::RRAttempt);
+    const unsigned comparePhase=control_compare::phase.load();
+    const auto compareTiming=control_compare::enabled.load()?native_lighting::performance::Begin(list,native_lighting::performance::Stage::RREvaluation,0,0,0):native_lighting::performance::kInvalid;
+    const bool compareCPU=control_compare::enabled.load();
     const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);
     const DWORD nativeError=GetLastError();
+    native_lighting::performance::End(compareTiming);
+    if(compareCPU)control_compare::CPU(comparePhase,2,RRPerfClock()-perfNativeStart);
     control_rr_diagnostic::lastEvaluationResult.store(result,std::memory_order_relaxed);
     if(rrAttempt)control_rr_diagnostic::Record((result&0xFFF00000u)!=0xBAD00000u
         ?control_rr_diagnostic::Event::RRSuccess:control_rr_diagnostic::Event::RRFailure);

@@ -5,6 +5,7 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <atomic>
+#include "../src/performance_compare_state.h"
 #include <cstdio>
 #include <stdexcept>
 static std::atomic<unsigned long long> presentCount{16};

@@ -1,0 +1,28 @@
+{
+  "src/probe.cpp": [
+    [
+      "    auto count = ++presentCount;\n    const bool windowTrace = ShouldPathTrace(count);\n",
+      "    auto count = ++presentCount;\n    if(control_compare::enabled.load(std::memory_order_relaxed)){LARGE_INTEGER q{};QueryPerformanceCounter(&q);control_compare::Present(q.QuadPart,count);}\n    const bool windowTrace = ShouldPathTrace(count);\n"
+    ]
+  ],
+  "src/rr_user_control.h": [
+    [
+      "#include \"settings_check_state.h\"\n#include <cstring>\n",
+      "#include \"settings_check_state.h\"\n#include \"performance_compare_state.h\"\n#include <cstring>\n"
+    ]
+  ],
+  "src/rr_evaluation_entry.h": [
+    [
+      "    const auto in=RRReadEvaluationInputs(parameters);\n    // The gateway does not own these borrowed resources. Nothing escapes this\n",
+      "    const auto in=RRReadEvaluationInputs(parameters);\n    if(control_compare::running.load()&&in.output){const auto d=in.output->GetDesc();\n        control_compare::geometry.store((uint64_t(in.width)<<48)|(uint64_t(in.height)<<32)|(uint64_t(d.Width&65535)<<16)|(d.Height&65535));}\n    // The gateway does not own these borrowed resources. Nothing escapes this\n"
+    ],
+    [
+      "    if(rrAttempt)control_rr_diagnostic::Record(control_rr_diagnostic::Event::RRAttempt);\n    const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);\n",
+      "    if(rrAttempt)control_rr_diagnostic::Record(control_rr_diagnostic::Event::RRAttempt);\n    const unsigned comparePhase=control_compare::phase.load();\n    const auto compareTiming=control_compare::enabled.load()?native_lighting::performance::Begin(list,native_lighting::performance::Stage::RREvaluation,0,0,0):native_lighting::performance::kInvalid;\n    const bool compareCPU=control_compare::enabled.load();\n    const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);\n"
+    ],
+    [
+      "    const DWORD nativeError=GetLastError();\n    control_rr_diagnostic::lastEvaluationResult.store(result,std::memory_order_relaxed);\n",
+      "    const DWORD nativeError=GetLastError();\n    native_lighting::performance::End(compareTiming);\n    if(compareCPU)control_compare::CPU(comparePhase,2,RRPerfClock()-perfNativeStart);\n    control_rr_diagnostic::lastEvaluationResult.store(result,std::memory_order_relaxed);\n"
+    ]
+  ]
+}

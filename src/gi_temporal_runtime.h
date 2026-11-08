@@ -110,7 +110,8 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state,con
     D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;
     list->ResourceBarrier(1,&barrier);
     auto temporal=desc;temporal.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),64};
-    rt_shadow_capture::Lookup(list).dispatch(list,&temporal);
+    {performance::Scope timing(list,performance::Stage::GITemporalReuse,temporal.Width,temporal.Height,temporal.Depth);
+    rt_shadow_capture::Lookup(list).dispatch(list,&temporal);}
     list->ResourceBarrier(1,&barrier);
     settings_check::Record(settings_check::GIReuse);
     ++gi_reuse::temporalDispatches;

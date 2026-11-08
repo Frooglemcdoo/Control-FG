@@ -3,14 +3,15 @@
 // retained for the process lifetime: a native list may be submitted again.
 // Query indices are never recycled, including after a cancelled capture.
 namespace performance {
-enum class Stage : unsigned { None, ShadowRays, OtherRays, Selector, History, Spatial0, Spatial1, Composition, OtherCompute, Count };
+enum class Stage : unsigned { None, ShadowRays, OtherRays, Selector, History, Spatial0, Spatial1, Composition, OtherCompute, GICombinedRays, GITemporalReuse, GIEvaluator, ReceiverExport, RelaxTotal, RREvaluation, Count };
 inline constexpr unsigned kStageCount=static_cast<unsigned>(Stage::Count);
 inline const char* Name(Stage s) noexcept {
-    constexpr const char* names[]={"none","shadow_rays","other_rays","selector","history","spatial0","spatial1","composition","other_compute"};
+    constexpr const char* names[]={"none","shadow_rays","other_rays","selector","history","spatial0","spatial1","composition","other_compute","gi_rays_including_reuse","gi_temporal_visibility","gi_evaluator","relax_receiver_export","relax_including_conversion","rr_evaluation"};
     return names[static_cast<unsigned>(s)];
 }
 enum class State : unsigned { Recording, Recorded, Submitting, Submitted, Read, Discarded };
 inline constexpr unsigned kCapacity=16384,kSampleInterval=128,kInvalid=~0u;
+inline std::atomic<unsigned> sampleInterval{kSampleInterval};
 struct Sample {
     ID3D12GraphicsCommandList* list=nullptr;
     State state=State::Recording;Stage stage=Stage::None;
@@ -55,7 +56,7 @@ inline bool Prepare() noexcept {
 }
 inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,UINT z,UINT64 tableBytes=0,const char* sourceShader=nullptr,const D3D12_DISPATCH_RAYS_DESC* rays=nullptr) noexcept {
     if(!enabled.load(std::memory_order_acquire) || fault.load() || stage==Stage::None || !list)return kInvalid;
-    const auto present=presentCount.load();if(present%kSampleInterval)return kInvalid;
+    const auto present=presentCount.load();const auto interval=sampleInterval.load();if(present%(interval?interval:1u))return kInvalid;
     if(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)return kInvalid;
     if(!TryAcquireSRWLockExclusive(&lock)){++skipped;return kInvalid;}
     if(!enabled.load(std::memory_order_acquire)){ReleaseSRWLockExclusive(&lock);return kInvalid;}
@@ -84,6 +85,19 @@ inline void End(unsigned index) noexcept {
     s.list->ResolveQueryData(queries,D3D12_QUERY_TYPE_TIMESTAMP,index*2,2,readback,UINT64(index)*16);
     AcquireSRWLockExclusive(&lock);s.state=State::Recorded;ReleaseSRWLockExclusive(&lock);
 }
+// Fine scopes are active only for the automatic comparison. CPU time is
+// command-recording time, not whole-frame CPU time or GPU duration.
+struct Scope {
+ unsigned ticket=kInvalid,phase=0,cpuStage=3;LONGLONG start=0;
+ Scope(ID3D12GraphicsCommandList* list,Stage stage,UINT x=0,UINT y=0,UINT z=0,unsigned cpu=3) noexcept {
+  if(!control_compare::enabled.load())return;
+  phase=control_compare::phase.load();cpuStage=cpu;
+  if(cpu<3){LARGE_INTEGER q{};QueryPerformanceCounter(&q);start=q.QuadPart;}
+  ticket=Begin(list,stage,x,y,z);
+ }
+ ~Scope(){End(ticket);if(start){LARGE_INTEGER q{};QueryPerformanceCounter(&q);control_compare::CPU(phase,cpuStage,q.QuadPart-start);}}
+ Scope(const Scope&)=delete;Scope& operator=(const Scope&)=delete;
+};
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
     if(!watch.load())return;
     AcquireSRWLockExclusive(&lock); // Metadata only; UI never holds this lock during file I/O.

@@ -823,6 +823,7 @@ static void NativeCpuPoll(unsigned long long present) noexcept;
 static void HookPresent() {
     control_gi_frames::Present();
     auto count = ++presentCount;
+    if(control_compare::enabled.load(std::memory_order_relaxed)){LARGE_INTEGER q{};QueryPerformanceCounter(&q);control_compare::Present(q.QuadPart,count);}
     const bool windowTrace = ShouldPathTrace(count);
     const bool periodicTrace = false; // r20x lean performance branch: no periodic swap capture
     const bool captureSwap = aaCount.load() > 0 && (windowTrace || periodicTrace) && swapSamples.load() < 160;

@@ -41,6 +41,13 @@ for name, expected in manifest['files'].items():
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    perf_compare_exceptions = json.loads((root/'tools/fixtures/r387-baseline-exceptions.json').read_text())
+    if name in perf_compare_exceptions:
+        text = data.decode()
+        for before, after in reversed(perf_compare_exceptions[name]):
+            assert text.count(after) == 1, (name, 'R387 gated timings changed')
+            text = text.replace(after, before, 1)
+        data = text.encode()
     # R386 adds only gated observation hooks to these baseline files.
     settings_check_hooks = {
         'src/rr_native_frame.h': ' settings_check::RecordGISamples(effective);\n',
