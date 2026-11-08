@@ -17,9 +17,9 @@ struct NativeTransaction {
                     const gi_reuse::ComputeBindingSnapshot& native,
                     const Frame& frame,std::uint64_t queue,
                     DiffusePipeline::Bindings& bindings,DiffusePipeline::Constants conversion,
-                    D3D12Backend::Arena arena,Work& work) {
+                    D3D12Backend::Arena arena,Work& work,DiffusePipeline::ReserveArena reserve=nullptr,const void* reserveContext=nullptr) {
   if(!list||list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT||!native.Ready()||
-     !arena.heap||native.heaps[0].Get()!=arena.heap||arena.count<pipeline.MaxDescriptors()||
+     !arena.heap||native.heaps[0].Get()!=arena.heap||
      work.native.root||work.diffuse.heap)return false;
   work.native=native;
   struct Restore {
@@ -29,7 +29,7 @@ struct NativeTransaction {
   } restore{list,work.native};
   // Exceptions propagate after restoring state. The owner must keep Work and
   // retire/reset the failed recording; it must not release recorded resources.
-  return pipeline.Record(list,frame,queue,bindings,conversion,work.diffuse,arena);
+  return pipeline.Record(list,frame,queue,bindings,conversion,work.diffuse,arena,reserve,reserveContext);
  }
 };
 }

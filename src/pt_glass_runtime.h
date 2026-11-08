@@ -75,29 +75,34 @@ static bool ReadContext(Context* out) noexcept {
 }
 // Allocate once for the whole injected transaction, before recording commands.
 // A heap rollover cannot preserve the native graphics/material tables: reject it.
-static bool FreshCount(const Context& context,UINT count,PTGlass::DescriptorRange* out) noexcept {
-    if(!out)return false;*out={};
-    if(!verifiedD3d||!device||!context.manager||!context.table.heap||!count)return false;
+static bool DescriptorFailure(const char** reason,const char* value) noexcept {
+    if(reason)*reason=value;return false;
+}
+static bool FreshCount(const Context& context,UINT count,PTGlass::DescriptorRange* out,const char** reason=nullptr) noexcept {
+    if(reason)*reason=nullptr;
+    if(!out)return DescriptorFailure(reason,"filter_heap_output");*out={};
+    if(!verifiedD3d||!device||!context.manager||!context.table.heap||!count)return DescriptorFailure(reason,"filter_heap_context");
     __try {
         const auto hd=context.table.heap->GetDesc();
         if(hd.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||
-           !(hd.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||count>hd.NumDescriptors)return false;
+           !(hd.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||count>hd.NumDescriptors)return DescriptorFailure(reason,"filter_heap_capacity_or_type");
         D3D12_GPU_DESCRIPTOR_HANDLE gpu{};D3D12_CPU_DESCRIPTOR_HANDLE cpu{};unsigned char* provider=nullptr;
         using Allocate=void(*)(void*,UINT64,D3D12_GPU_DESCRIPTOR_HANDLE*,D3D12_CPU_DESCRIPTOR_HANDLE*,unsigned char**);
         auto fn=reinterpret_cast<Allocate>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x1aa00);
         fn(context.manager,count,&gpu,&cpu,&provider);
-        if(!provider||*reinterpret_cast<ID3D12DescriptorHeap**>(provider)!=context.table.heap)return false;
+        if(!provider)return DescriptorFailure(reason,"filter_heap_provider_missing");
+        if(*reinterpret_cast<ID3D12DescriptorHeap**>(provider)!=context.table.heap)return DescriptorFailure(reason,"filter_heap_rollover");
         const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         const UINT64 base=context.table.heap->GetGPUDescriptorHandleForHeapStart().ptr;
         const SIZE_T cpuBase=context.table.heap->GetCPUDescriptorHandleForHeapStart().ptr;
         if(!step||*reinterpret_cast<UINT64*>(provider+0x10)!=base||gpu.ptr<base||cpu.ptr<cpuBase||
-           (gpu.ptr-base)%step||(cpu.ptr-cpuBase)%step)return false;
+           (gpu.ptr-base)%step||(cpu.ptr-cpuBase)%step)return DescriptorFailure(reason,"filter_heap_handle_alignment");
         const UINT64 first=(gpu.ptr-base)/step;
-        if(first!=(cpu.ptr-cpuBase)/step||first>hd.NumDescriptors||count>hd.NumDescriptors-first||
-           first<PTGlass::LightingTableLayout::NativeMaterialPrefix||
-           (first<UINT64(context.table.first)+context.table.count&&context.table.first<first+count))return false;
+        if(first!=(cpu.ptr-cpuBase)/step||first>hd.NumDescriptors||count>hd.NumDescriptors-first)return DescriptorFailure(reason,"filter_heap_range");
+        if(first<PTGlass::LightingTableLayout::NativeMaterialPrefix)return DescriptorFailure(reason,"filter_heap_reserved_prefix");
+        if(first<UINT64(context.table.first)+context.table.count&&context.table.first<first+count)return DescriptorFailure(reason,"filter_heap_native_overlap");
         *out={context.table.heap,static_cast<UINT>(first),count};return true;
-    }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+    }__except(EXCEPTION_EXECUTE_HANDLER){return DescriptorFailure(reason,"filter_heap_exception");}
 }
 static bool Fresh(const Context& context,PTGlass::DescriptorRange* out) noexcept {
     return FreshCount(context,PTGlass::LightingTableLayout::Count,out);

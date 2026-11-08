@@ -76,6 +76,8 @@ int main(){try{
 #ifdef CONTROL_NRD_PIPELINE_TEST
  control_nrd::NativeTransaction::Work transaction;
  ID3D12Resource* previousRelax=nullptr;ID3D12Resource* previousConversion=nullptr;
+ UINT restartDescriptors=0,normalDescriptors=0;
+ control_nrd::Session descriptorContract;
 #endif
  for(UINT frame=1;frame<=128;++frame){
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
@@ -129,7 +131,38 @@ int main(){try{
   gi_reuse::ComputeBindingTracker tracker;tracker.Reset(probePipeline.Get());tracker.Root(probeRoot.Get());tracker.Heaps(1,&boundHeap);
   const std::uint32_t expected[]={frame,17,93,421};tracker.Constants(0,0,4,expected);tracker.Descriptor(1,gi_reuse::RootArgumentKind::UAV,probeOutput->GetGPUVirtualAddress());
   gi_reuse::ComputeBindingSnapshot snapshot;Require(tracker.Capture(snapshot),"native state snapshot rejected");Require(snapshot.Restore(list.Get()),"initial native bindings");
-  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction),"complete native transaction rejected");
+  struct Reservation {control_nrd::D3D12Backend::Arena available;UINT* requested;unsigned mode;};
+  UINT requested=0;Reservation reservation{arena,&requested,0};
+  auto reserve=[](const void* context,UINT count,control_nrd::D3D12Backend::Arena& result)->const char* {
+   const auto& r=*static_cast<const Reservation*>(context);*r.requested=count;
+   if(r.mode==1)return "test_reservation_unavailable";
+   if(count>r.available.count)return "test_reservation_capacity";
+   result={r.available.heap,r.available.first,count};
+   if(r.mode==2)--result.count;
+   if(r.mode==3)result.heap=nullptr;
+   return nullptr;
+  };
+  if(frame==1){
+   const char* reasons[]={"test_reservation_unavailable","filter_descriptor_arena_bounds","filter_heap_changed"};
+   for(unsigned mode=1;mode<=3;++mode){
+    control_nrd::NativeTransaction::Work rejected;reservation.mode=mode;
+    Require(!control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,rejected,reserve,&reservation),"invalid descriptor reservation accepted");
+    Require(std::strcmp(pipeline.LastFailure(),reasons[mode-1])==0,"descriptor failure mislabeled");
+    Require(!rejected.diffuse.commandsRecorded&&!rejected.diffuse.heap&&!rejected.diffuse.constants,"failed reservation recorded or allocated GPU work");
+    Require(!pipeline.Submitted(1,1),"failed reservation left pending history");
+    for(UINT i=0;i<InputCount;++i)Require(input(i).state==D3D12_RESOURCE_STATE_COPY_DEST,"failed reservation altered resource states");
+   }
+   reservation.mode=0;
+  }
+  // Once the normal plan is known, expose exactly that many descriptors.
+  // A regression to worst-case reservation fails here instead of silently
+  // relying on a large test heap. Restart at frame 64 retains full capacity.
+  if(frame>2&&frame<64)reservation.available.count=normalDescriptors;
+  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction,reserve,&reservation),"complete native transaction rejected");
+  Require(requested==22+UINT(pipeline.DispatchCount())*(descriptorContract.Description().descriptorPoolDesc.perSetTexturesMaxNum+descriptorContract.Description().descriptorPoolDesc.perSetStorageTexturesMaxNum),"reservation did not match dispatch plan");
+  if(frame==1)restartDescriptors=requested;
+  if(frame==2){normalDescriptors=requested;Require(normalDescriptors<restartDescriptors&&normalDescriptors<pipeline.MaxDescriptors(),"steady frame retained worst-case reservation");std::printf("Descriptor reservation: restart %u, normal %u, maximum %u\n",restartDescriptors,normalDescriptors,pipeline.MaxDescriptors());}
+  if(frame==64)Require(requested==restartDescriptors,"scale restart did not reserve clear passes");
   if(frame>1){Require(recording.constants.Get()==previousConversion,"conversion upload buffer was not reused");Require(recording.relax.constants.Get()==previousRelax,"NRD upload buffer was not reused");}
   previousConversion=recording.constants.Get();previousRelax=recording.relax.constants.Get();
   // Dispatch without rebinding: only the transaction's restoration can supply

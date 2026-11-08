@@ -71,10 +71,11 @@ public:
  void BeginAttempt()noexcept{rejection="native_transaction_contract";}
  const char* LastFailure()const noexcept{return rejection;}
  size_t DispatchCount()const noexcept{return session.Plan().size();}
+ using ReserveArena=const char*(*)(const void*,UINT,D3D12Backend::Arena&);
  UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
- bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0}){
+ bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0},ReserveArena reserve=nullptr,const void* reserveContext=nullptr){
   if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return Reject("filter_owner_or_extent_contract");
-  if(arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_descriptor_arena_bounds");
+  if(!reserve&&arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_descriptor_arena_bounds");
   for(float v:conversion.motionScale)if(!std::isfinite(v))return Reject("filter_conversion_motion_scale");
   for(float v:conversion.motionBias)if(!std::isfinite(v))return Reject("filter_conversion_motion_bias");
   // Motion has already been converted to normalized unjittered screen units.
@@ -101,6 +102,21 @@ public:
   bool commands=false;
   std::array<D3D12_RESOURCE_STATES,7> original{};for(unsigned i=0;i<7;++i)original[i]=all[i]->state;
   try {
+   const UINT relaxCount=backend->RequiredDescriptors(session.Plan());
+   if(relaxCount>UINT32_MAX-22){session.CancelAfterReset();return Reject("filter_descriptor_count_overflow");}
+   const UINT required=22+relaxCount;
+   // Prepare first: normal frames need fewer descriptors than restart frames.
+   // The callback must reserve fresh space in the already-bound heap, never
+   // switch heaps or recycle descriptors still referenced by recorded work.
+   if(reserve){
+    auto* expectedHeap=arena.heap;D3D12Backend::Arena allocated{};
+    if(const char* why=reserve(reserveContext,required,allocated)){session.CancelAfterReset();return Reject(why);}
+    if(!expectedHeap||allocated.heap!=expectedHeap){session.CancelAfterReset();return Reject("filter_heap_changed");}
+    arena=allocated;
+   }
+   if(arena.heap&&(arena.count<required||arena.first>UINT32_MAX-required)){
+    session.CancelAfterReset();return Reject("filter_descriptor_arena_bounds");
+   }
    D3D12Backend::Inputs inputs;
    const nrd::ResourceType kinds[]={nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,nrd::ResourceType::IN_NORMAL_ROUGHNESS,nrd::ResourceType::IN_VIEWZ,nrd::ResourceType::IN_MV,nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST};
    const unsigned slots[]={0,1,2,3,5};

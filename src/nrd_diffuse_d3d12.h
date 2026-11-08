@@ -92,6 +92,11 @@ public:
  // Use one owner/queue and record only after the previous session was submitted.
  // This class deliberately does not signal fences or decide native list lifetime.
  UINT MaxDescriptors()const noexcept{return maxSets*(srvCount+uavCount);}
+ UINT RequiredDescriptors(const std::vector<Dispatch>& plan)const {
+  const UINT stride=srvCount+uavCount;
+  if(!stride||plan.empty()||plan.size()>UINT32_MAX/stride)throw std::runtime_error("NRD descriptor count overflow");
+  return UINT(plan.size())*stride;
+ }
  void AllocateRecording(const std::vector<Dispatch>& plan,const Inputs& inputs,Recording& recording,Arena arena={nullptr,0,0}){
   if(poisoned||plan.empty()||recording.heap)throw std::runtime_error("Invalid NRD recording");
   // Complete validation before touching the command list.
@@ -106,7 +111,7 @@ public:
    }
    if(reads>srvCount||writes>uavCount)throw std::runtime_error("NRD descriptor bounds");
   }
-  D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=UINT(plan.size())*(srvCount+uavCount);hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=RequiredDescriptors(plan);hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
   if(arena.heap){
    const auto d=arena.heap->GetDesc();Ptr<ID3D12Device> owner;
    if(d.Type!=hd.Type||!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||arena.first>d.NumDescriptors||arena.count>d.NumDescriptors-arena.first||arena.count<hd.NumDescriptors||
