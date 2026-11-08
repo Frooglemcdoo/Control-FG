@@ -1,0 +1,20 @@
+name: Validate NRD diffuse integration
+on:
+  push:
+    branches: [work/gi-modernization]
+    paths: ['src/nrd_diffuse*', 'src/shaders/nrd_diffuse*', 'tools/nrd/**', '.github/workflows/nrd-diffuse.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gpu:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure actual NRD with D3D12 shaders
+        run: cmake -S tools/nrd -B nrd-build -DCONTROL_NRD_GPU=ON
+      - name: Build actual NRD and D3D12 adapter
+        run: cmake --build nrd-build --config Release --parallel 4
+      - name: Validate contracts and WARP output
+        run: ctest --test-dir nrd-build -C Release --output-on-failure
