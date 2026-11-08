@@ -36,7 +36,10 @@ static Result Sequence(bool old,unsigned mode){
   if(mode==1&&frame>=40)value=.02f;
   if(mode==2&&frame>=40)value=4.f;
   if(mode==4&&frame>=40)value=.1f;
-  Image raw(W*H,Pixel{value,value,value,value});auto current=h.Texture(&raw),out=h.Texture(),nf=h.Texture(),nm=h.Texture();
+  Image raw(W*H,Pixel{value,value,value,value});
+  if(mode==6)for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){UINT bits=(y*W+x)*1664525u+frame*1013904223u;bits^=bits>>16;bits*=2246822519u;float n=float(bits&65535)/65535.f-.5f;float v=.4f+n*.6f;raw[y*W+x]={v,v,v,v};}
+  if(mode==7)for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){float v=x>=W/2-2&&x<=W/2+2&&y>=H/2-2&&y<=H/2+2?4.f:.1f;raw[y*W+x]={v,v,v,v};}
+  auto current=h.Texture(&raw),out=h.Texture(),nf=h.Texture(),nm=h.Texture();
   auto previousDepth=depth;
   if(mode==4&&frame==40){Image different(W*H,Pixel{.9f,0,0,0});previousDepth=h.Texture(&different);}
   h.Run(old,{depth.r.Get(),previousDepth.r.Get(),motion.r.Get(),current.r.Get(),history.r.Get(),fast.r.Get(),moments.r.Get()},out,nf,nm,cb0.Get(),frame==0||mode==5&&frame==40?cut.Get():cb.Get());
@@ -49,10 +52,11 @@ static Result Sequence(bool old,unsigned mode){
   if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==40)r.reveal=v;if(frame>=42)r.off=std::max(r.off,std::abs(v-(mode==1?.02f:mode==2?4.f:mode==4?.1f:.4f)));previous=v;
  }r.delta=std::sqrt(r.delta/16.);return r;
 }
-int main(){try{for(unsigned mode=0;mode<6;++mode){auto old=Sequence(true,mode),next=Sequence(false,mode);std::cout<<"Dual mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" mean="<<next.mean<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
- if(mode==0||mode==3){Require(next.delta<old.delta*.25,"fluctuating-input suppression");Require(std::abs(next.mean-.4)<.015,"mean brightness drift");}
+int main(){try{for(unsigned mode=0;mode<8;++mode){auto old=Sequence(true,mode),next=Sequence(false,mode);std::cout<<"Dual mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" mean="<<next.mean<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
+ if(mode==0||mode==3||mode==6){Require(next.delta<old.delta*.25,"fluctuating-input suppression");Require(std::abs(next.mean-.4)<.015,"mean brightness drift");}
  if(mode==1||mode==2)Require(next.off<.005,"light transition lag");
  if(mode==4)Require(std::abs(next.reveal-.1)<1e-5,"revealed surface retained old light");
+ if(mode==7)Require(std::abs(next.mean-4.)<.005,"compact light centre lost brightness");
  if(mode==5)Require(std::abs(next.reveal-.4)<1e-5,"camera cut altered current light");
  }std::cout<<"PASS dual history candidate; runtime integration not enabled\n";return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -8,6 +8,8 @@ on:
       - 'tools/gi_motion_history.py'
       - 'src/shaders/gi_dual_history.hlsl'
       - 'tools/compile-gi-dual-history.cpp'
+      - 'tools/test-gi-dual-history-policy.cpp'
+      - 'src/gi_dual_history_policy.h'
       - 'tools/test-gi-dual-history.cpp'
       - 'tools/gi_spatial_history.py'
       - '.github/workflows/gi-filter-feedback.yml'
@@ -52,4 +54,8 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-history.cpp /Febuild\test-gi-dual-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-dual-history.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-dual-history-policy.cpp /Febuild\test-gi-dual-history-policy.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-dual-history-policy.exe
           if errorlevel 1 exit /b 1
