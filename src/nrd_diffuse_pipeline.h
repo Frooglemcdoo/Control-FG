@@ -36,6 +36,7 @@ public:
  static_assert(sizeof(Constants)==36);
  struct Work {
   D3D12Backend::Recording relax;
+  bool commandsRecorded=false;
   Ptr<ID3D12DescriptorHeap> heap;Ptr<ID3D12Resource> constants;
   Ptr<ID3D12RootSignature> root;
   Ptr<ID3D12PipelineState> prepare,finish;
@@ -90,6 +91,7 @@ public:
   if(!session.Prepare(actual,queue))return false;
   conversion.extent[0]=width;conversion.extent[1]=height;conversion.denoisingRange=actual.settings.denoisingRange;
   bool commands=false;
+  std::array<D3D12_RESOURCE_STATES,7> original{};for(unsigned i=0;i<7;++i)original[i]=all[i]->state;
   try {
    D3D12Backend::Inputs inputs;
    const nrd::ResourceType kinds[]={nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,nrd::ResourceType::IN_NORMAL_ROUGHNESS,nrd::ResourceType::IN_VIEWZ,nrd::ResourceType::IN_MV,nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST};
@@ -117,9 +119,8 @@ public:
    for(UINT i=0;i<5;++i)uav(textures[i].Get(),6+i);
    srv(textures[5].Get(),11);srv(textures[4].Get(),12);srv(bindings.input[RawGI].resource,13);
    for(UINT i=14;i<17;++i)srv(nullptr,i);uav(bindings.output.resource,17);for(UINT i=18;i<22;++i)uav(nullptr,i);
-   std::array<D3D12_RESOURCE_STATES,7> original{};for(unsigned i=0;i<7;++i)original[i]=all[i]->state;
    auto bind=[&](ID3D12PipelineState* ps,UINT base){auto* heap=work.heap.Get();if(!arena.heap)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());list->SetPipelineState(ps);list->SetComputeRootConstantBufferView(0,work.constants->GetGPUVirtualAddress());list->SetComputeRootDescriptorTable(1,gh(base));list->SetComputeRootDescriptorTable(2,gh(base+6));};
-   commands=true;
+   commands=true;work.commandsRecorded=true;
    for(auto& input:bindings.input)Transition(list,input,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
    for(unsigned i=0;i<5;++i){External t{textures[i].Get(),states[i]};Transition(list,t,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);states[i]=t.state;}
    bind(prepare.Get(),0);list->Dispatch((width+7)/8,(height+7)/8,1);
@@ -135,7 +136,12 @@ public:
    historyScale=conversion.radianceScale;return true;
   }catch(...){
    session.CancelAfterReset();
-   if(commands){failed=true;backend->AbandonAfterReset();throw;}
+   if(commands){
+    // The caller retains Work through submission/reset even on failure. Restore
+    // engine-owned states so the verified RAW fallback may overwrite output.
+    for(unsigned i=0;i<7;++i)Transition(list,*all[i],original[i]);
+    failed=true;backend->AbandonAfterReset();
+   }
    return false;
   }
  }

@@ -76,7 +76,11 @@ inline control_rr_gi::DiagnosticView View(unsigned phase,control_rr_gi::StageMod
 inline bool Covered(unsigned phase,const Snapshot& delta) noexcept {
     if(phase==8 && (!delta[unsigned(Event::GIRaw)] || !delta[unsigned(Event::GIEligible)] || delta[unsigned(Event::GISpatial)]))return false;
     if(phase==2 && (!delta[unsigned(Event::GIZero)] || !delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)]))return false;
+    #ifdef CONTROL_NRD_GI
+    if((StabilizeGI(phase)||phase==7) && (!delta[unsigned(Event::GIStableTemporal)] || !delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)]))return false;
+#else
     if(StabilizeGI(phase) && (!delta[unsigned(Event::GIStableTemporal)] || !delta[unsigned(Event::GIEligible)] || !delta[unsigned(Event::GITemporal)] || !delta[unsigned(Event::GISteady)]))return false;
+#endif
     if(PreserveContact(phase) && (!delta[unsigned(Event::ContactEntry)] || !delta[unsigned(Event::ContactNative)] || (!delta[unsigned(Event::ContactTemporal)] && !delta[unsigned(Event::ContactSpatial)])))return false;
     return phase>0 && phase<phases;
 }

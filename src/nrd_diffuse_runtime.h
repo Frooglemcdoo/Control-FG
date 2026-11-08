@@ -31,12 +31,15 @@ static ComPtr<ID3D12Fence> fence;
 static UINT64 nextFence=0,serial=0,guideFrame=0,guideView=0,guideGeneration=0;
 static ID3D12GraphicsCommandList* guideList=nullptr;
 static unsigned guideProducer=0;
+static LONGLONG lastFilterTicks=0;static UINT64 lastFilterFrame=0;
 static std::atomic<bool> active{false};
 struct Pass {UINT64 frame=0,view=0,serial=0;bool failed=false,producer=false;
  PTGlassRuntime::Context context{};std::unique_ptr<PTGlass::LightingTableShadow> shadow;};
 static thread_local Pass pass;
 struct Mute {bool observing=gi_dual_bridge::observing;hooks::Mute bindings;
- Mute(){gi_dual_bridge::observing=false;}~Mute(){gi_dual_bridge::observing=observing;}};
+ control_rr_clamp::Request* nativeRequest=control_rr_clamp::active;
+ Mute(){gi_dual_bridge::observing=false;control_rr_clamp::active=nullptr;}
+ ~Mute(){control_rr_clamp::active=nativeRequest;gi_dual_bridge::observing=observing;}};
 static void Reason(const char* reason) noexcept {
  gi_dual_bridge::status=2;
  static const char* last=nullptr;if(last!=reason){last=reason;Log("NRD_R384 admission=%s",reason);}
@@ -54,7 +57,7 @@ static void Poll() {
  if(complete==UINT64_MAX){Invalidate(epoch);Reason("device_removed");return;}
  for(auto i=recordings.begin();i!=recordings.end();){auto& r=**i;
   if(r.reset&&(!r.submitted||r.fence<=complete)){
-   if(!r.submitted&&(r.filtered||r.exported))Invalidate(r.epoch);
+   if(!r.submitted&&(r.filtered||r.exported||(r.work&&r.work->diffuse.commandsRecorded)))Invalidate(r.epoch);
    i=recordings.erase(i);
   }else ++i;
  }
@@ -199,15 +202,22 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   f.sameFrameGuides=f.worldNormals=f.linearViewDepth=f.unjitteredMotion=f.radianceContract=f.hitDistanceContract=true;
   std::memcpy(f.settings.worldToViewMatrix,camera.worldToView.data(),64);std::memcpy(f.settings.viewToClipMatrix,camera.viewToClip.data(),64);
   f.settings.cameraJitter[0]=jitter[0];f.settings.cameraJitter[1]=jitter[1];f.settings.timeDeltaBetweenFrames=16.6667f;
+  LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+  if(lastFilterTicks&&lastFilterFrame+1==f.frame&&frequency.QuadPart>0&&now.QuadPart>lastFilterTicks)
+   f.settings.timeDeltaBetweenFrames=float(std::fmax(1.0,std::fmin(250.0,1000.0*(now.QuadPart-lastFilterTicks)/frequency.QuadPart)));
   control_nrd::DiffusePipeline::Bindings inputs;using E=control_nrd::D3D12Backend::External;
   inputs.input={E{in.raw.resource,in.raw.state},E{epoch->receiver->Resource(0),epoch->receiver->State(0)},E{epoch->receiver->Resource(2),epoch->receiver->State(2)},E{in.motion.resource,in.motion.state},E{in.hit.resource,in.hit.state},E{epoch->receiver->Resource(1),epoch->receiver->State(1)}};
   inputs.output={target.resource,target.state};
   PTGlass::DescriptorRange arena;if(!PTGlassRuntime::FreshCount(c,epoch->filter->MaxDescriptors(),&arena)){Reason("filter_heap");return false;}
   record=GetRecording(c.rays,generation);if(!record||record->filtered||(record->epoch&&record->epoch!=epoch)){Reason("filter_recording");return false;}
   record->epoch=epoch;record->work=std::make_unique<control_nrd::NativeTransaction::Work>();
-  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {arena.heap,arena.first,arena.count},*record->work)){record->work.reset();Reason("filter_contract");return false;}
-  record->filtered=true;guideFrame=0;Reason("active");gi_dual_bridge::status=1;return true;
- }catch(...){Invalidate(epoch);Reason("filter_exception");return record&&record->work&&record->work->diffuse.heap;}
+  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {arena.heap,arena.first,arena.count},*record->work)){
+   if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}
+   else record->work.reset();
+   Reason("filter_contract");return false;
+  }
+  record->filtered=true;lastFilterTicks=now.QuadPart;lastFilterFrame=f.frame;guideFrame=0;Reason("active");gi_dual_bridge::status=1;return true;
+ }catch(...){Invalidate(epoch);Reason("filter_exception");return false;}
 }
 static const gi_dual_bridge::Callbacks callbacks{&Begin,&End,&Copy,&Constant,&Dispatch,&Reset,&Before,&After};
 static const control_nrd_bridge::Producer producer{&ProducerBegin,&End,&ProducerDispatch};
