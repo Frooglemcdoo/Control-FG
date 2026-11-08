@@ -56,5 +56,22 @@ int main(){
  f.frame+=3;Require(session.Prepare(f,1),"gap accepted with reset");Require(session.Plan().size()==restartCount,"gap clears history");
  Require(session.Submitted(1,3),"gap submitted");
  ++f.frame;++f.view;Require(session.Prepare(f,1),"new view");Require(session.Plan().size()==restartCount,"view switch clears history");
+ // Exercise actual Prepare/Submit/Cancel camera ownership, including a caller
+ // passing a stale previous camera. Reset history uses the new current camera.
+ control_nrd::Session cameras;auto moving=f;moving.frame=1;moving.settings.worldToViewMatrix[12]=1;
+ Require(cameras.Prepare(moving,7),"first camera");
+ Require(cameras.PreparedFrame()->settings.worldToViewMatrixPrev[12]==1,"first camera resets to current");
+ Require(cameras.Submitted(7,1),"first camera submitted");
+ moving.frame=2;moving.settings.worldToViewMatrix[12]=2;moving.settings.cameraJitter[0]=.25f;
+ moving.settings.worldToViewMatrixPrev[12]=999;
+ Require(cameras.Prepare(moving,7),"second camera");
+ Require(cameras.PreparedFrame()->settings.worldToViewMatrixPrev[12]==1,"history uses submitted camera");
+ cameras.CancelAfterReset();moving.settings.worldToViewMatrix[12]=3;
+ Require(cameras.Prepare(moving,7),"cancelled camera retry");
+ Require(cameras.PreparedFrame()->settings.worldToViewMatrixPrev[12]==3,"cancelled history restarts at current camera");
+ Require(cameras.Submitted(7,2),"retry camera submitted");
+ moving.frame=3;moving.settings.worldToViewMatrix[12]=4;moving.settings.cameraJitter[0]=-.25f;
+ Require(cameras.Prepare(moving,7),"third camera");
+ Require(cameras.PreparedFrame()->settings.worldToViewMatrixPrev[12]==3&&cameras.PreparedFrame()->settings.cameraJitterPrev[0]==.25f,"camera and jitter follow same submitted history");
  std::printf("PASS actual NRD RELAX_DIFFUSE: %u pipelines, %u permanent / %u transient textures; %zu restart / %zu continuous dispatches; input guards, submission and reset lifecycle\n",desc.pipelinesNum,desc.permanentPoolSize,desc.transientPoolSize,restartCount,continuousCount);
 }
