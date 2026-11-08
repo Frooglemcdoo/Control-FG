@@ -1095,6 +1095,7 @@ static bool RRNativeVramReleaseCachedRRFeaturesForPresetSwitch(unsigned long lon
 static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
 #include "rr_native_frame.h"
+#include "nrd_diffuse_native_inputs.h"
 #include "pt_reflection_diffuse_bridge_runtime.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"
