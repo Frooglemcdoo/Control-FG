@@ -40,7 +40,7 @@ if(CONTROL_NRD_GPU)
  target_compile_options(control_nrd_d3d12 PRIVATE /W4)
  add_test(NAME control_nrd_d3d12 COMMAND control_nrd_d3d12)
  set(conversion_headers)
- foreach(shader prepare finish)
+ foreach(shader prepare finish receiver)
   set(header "${CMAKE_CURRENT_BINARY_DIR}/nrd_${shader}.h")
   add_custom_command(OUTPUT "${header}"
    COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -HV 2018 -E main -WX
@@ -48,6 +48,8 @@ if(CONTROL_NRD_GPU)
     -Fh "${header}" -Vn "kNrd_${shader}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_${shader}.hlsl"
    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_${shader}.hlsl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/gi_evaluator_secondary.generated.hlsl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/ControlPrimaryGuideDecode.hlsli"
    VERBATIM)
   list(APPEND conversion_headers "${header}")
  endforeach()

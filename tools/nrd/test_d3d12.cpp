@@ -4,8 +4,11 @@
 #include "../../src/nrd_diffuse_d3d12.h"
 #ifdef CONTROL_NRD_PIPELINE_TEST
 #include "../../src/nrd_diffuse_pipeline.h"
+#include "../../src/nrd_diffuse_receiver_d3d12.h"
 #include "nrd_prepare.h"
 #include "nrd_finish.h"
+#include "nrd_receiver.h"
+#include "../pt-glass-native-root-fixture.h"
 #endif
 #include <cstdio>
 #include <array>
@@ -35,6 +38,10 @@ int main(){try{
  D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;device->GetCopyableFootprints(&td,0,1,0,&footprint,nullptr,nullptr,&bytes);
  auto readback=buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
 #ifdef CONTROL_NRD_PIPELINE_TEST
+ // Compile the real receiver decoder against the audited native root ABI.
+ // This checks PSO compatibility, not in-game receiver values.
+ ComPtr<ID3D12RootSignature> nativeRoot;Check(CreateGlassNativeRootFixture(device.Get(),&nativeRoot));
+ control_nrd::NativeReceiver receiver(device.Get(),nativeRoot.Get(),{kNrd_receiver,sizeof(kNrd_receiver)},W,H);
  control_nrd::DiffusePipeline pipeline(device.Get(),W,H,{kNrd_prepare,sizeof(kNrd_prepare)},{kNrd_finish,sizeof(kNrd_finish)});
  control_nrd::DiffusePipeline::Bindings bindings;
  for(UINT i=0;i<InputCount;++i)bindings.input[i]={textures[i].Get(),D3D12_RESOURCE_STATE_COMMON};

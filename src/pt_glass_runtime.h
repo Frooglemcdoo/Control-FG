@@ -73,19 +73,34 @@ static bool ReadContext(Context* out) noexcept {
         return out->list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT&&out->queue->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT;
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
-static bool Fresh(const Context& context,PTGlass::DescriptorRange* out) noexcept {
-    *out={};
+// Allocate once for the whole injected transaction, before recording commands.
+// A heap rollover cannot preserve the native graphics/material tables: reject it.
+static bool FreshCount(const Context& context,UINT count,PTGlass::DescriptorRange* out) noexcept {
+    if(!out)return false;*out={};
+    if(!verifiedD3d||!device||!context.manager||!context.table.heap||!count)return false;
     __try {
+        const auto hd=context.table.heap->GetDesc();
+        if(hd.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV||
+           !(hd.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||count>hd.NumDescriptors)return false;
         D3D12_GPU_DESCRIPTOR_HANDLE gpu{};D3D12_CPU_DESCRIPTOR_HANDLE cpu{};unsigned char* provider=nullptr;
         using Allocate=void(*)(void*,UINT64,D3D12_GPU_DESCRIPTOR_HANDLE*,D3D12_CPU_DESCRIPTOR_HANDLE*,unsigned char**);
         auto fn=reinterpret_cast<Allocate>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x1aa00);
-        fn(context.manager,49,&gpu,&cpu,&provider);
+        fn(context.manager,count,&gpu,&cpu,&provider);
         if(!provider||*reinterpret_cast<ID3D12DescriptorHeap**>(provider)!=context.table.heap)return false;
         const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        const UINT64 base=*reinterpret_cast<UINT64*>(provider+0x10);
-        if(gpu.ptr<base||(gpu.ptr-base)%step||(gpu.ptr-base)/step>UINT32_MAX)return false;
-        *out={context.table.heap,static_cast<UINT>((gpu.ptr-base)/step),49};return true;
+        const UINT64 base=context.table.heap->GetGPUDescriptorHandleForHeapStart().ptr;
+        const SIZE_T cpuBase=context.table.heap->GetCPUDescriptorHandleForHeapStart().ptr;
+        if(!step||*reinterpret_cast<UINT64*>(provider+0x10)!=base||gpu.ptr<base||cpu.ptr<cpuBase||
+           (gpu.ptr-base)%step||(cpu.ptr-cpuBase)%step)return false;
+        const UINT64 first=(gpu.ptr-base)/step;
+        if(first!=(cpu.ptr-cpuBase)/step||first>hd.NumDescriptors||count>hd.NumDescriptors-first||
+           first<PTGlass::LightingTableLayout::NativeMaterialPrefix||
+           (first<UINT64(context.table.first)+context.table.count&&context.table.first<first+count))return false;
+        *out={context.table.heap,static_cast<UINT>(first),count};return true;
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
+static bool Fresh(const Context& context,PTGlass::DescriptorRange* out) noexcept {
+    return FreshCount(context,PTGlass::LightingTableLayout::Count,out);
 }
 static bool Patch(void* object,UINT index,void* hook,void** original) noexcept {
     if(!object)return false;auto** slot=&(*reinterpret_cast<void***>(object))[index];
