@@ -26,6 +26,13 @@ claiming an NRD quality fix. The existing build workflow still builds R383.
 - Native compute transaction restores root arguments and PSO even on exceptions.
   Its state tracker can be enabled independently of legacy scene/shadow inventory;
   this opt-in is not enabled in the live game yet.
+- Previous camera/jitter are selected inside Session from submitted history.
+  Cancelled recordings restart with the current camera; callers cannot inject
+  a stale previous camera into a continuous history.
+- Read-only native input reader resolves current GI/motion/hit providers through
+  the existing authenticated TLS API. It checks viewport mapping, frame/view,
+  native state mode, resource dimensions and provider stability. It is compiled
+  into the proxy source but has no live caller yet; it installs no hooks.
 - Tests reject mismatched guides, invalid transforms, duplicate/pending frames,
   wrong queues; cancellation, frame gaps and view changes clear history.
 
@@ -37,6 +44,12 @@ Windows run 42446954107 additionally passed a shader dispatched immediately afte
 RELAX without rebinding: the restored PSO, root signature, constants and root UAV
 produced the expected per-frame values. All 96 frames passed with a clean D3D12
 debug layer. Native graphics-table preservation still needs live verification.
+
+Windows run 42447203821 extended both GPU paths to 128 frames with a moving
+foreground surface, nonzero motion and changing depth. Foreground target 0.8
+produced 0.79880905; the worst just-exposed background was 0.09242249 against a
+0.05 target (test bound 0.14). This is not proof of zero edge leakage or zero
+in-game ghosting. Run 42447324564 also passed after submitted-camera ownership.
 
 Full-pipeline synthetic measurements: uniform target 0.4 → 0.39942307; persistent
 light target 0.8 → 0.79830933; removed light target 0.01 → 0.00997646. Sparse moving
@@ -76,9 +89,11 @@ evaluation runs in the receiver export. Sky/invalid receivers remain rejected.
    The existing "weight" globals 0x1297478 / 0x12974a0 are actually g_rwtHitInfo /
    g_tHitInfo, both referring to native IDHitInfo (raytracing-passes.asm). Acquire
    this native first-hit-distance texture directly with its tracked state.
-2. Acquire current native t2 motion at the temporal boundary and validate
-   sys[1].zw against the GI viewport. Use the audited jitter conversion and
-   previous SUBMITTED camera, not the last prepared or cancelled camera.
+2. Connect the implemented native input reader at the temporal boundary. Retain
+   resource objects before leaving that synchronous boundary, and verify the
+   CPU camera matches the bound GPU matrices. Its current viewport admission
+   rejects unequal native output/GI mapping rather than guessing scaling. Use
+   the audited jitter conversion; Session owns previous submitted camera data.
 3. Wire the tested NativeTransaction to that boundary with a complete compute
    snapshot and fresh arena in the already-bound heap. Disable native spatial
    history for
