@@ -1,8 +1,9 @@
 # NRD diffuse integration checkpoint — 2026-11-08
 
-Status: dedicated RELAX_DIFFUSE backend passes standalone Windows D3D12 WARP
-validation. It is not connected to the game. There is no new installable build
-claiming an NRD quality fix. The existing build workflow still builds R383.
+Status: R384 wires RELAX_DIFFUSE into the native GI6 producer and temporal
+filter boundary. The backend passes standalone Windows D3D12 WARP validation.
+The full Windows build packages the embedded backend; live game quality and
+RTX 5090 performance remain unverified.
 
 ## Implemented
 
@@ -25,14 +26,14 @@ claiming an NRD quality fix. The existing build workflow still builds R383.
   exports against the captured native root. It mirrors only exact GI6 bindings.
 - Native compute transaction restores root arguments and PSO even on exceptions.
   Its state tracker can be enabled independently of legacy scene/shadow inventory;
-  this opt-in is not enabled in the live game yet.
+  R384 enables this tracker without enabling scene/shadow inventory.
 - Previous camera/jitter are selected inside Session from submitted history.
   Cancelled recordings restart with the current camera; callers cannot inject
   a stale previous camera into a continuous history.
 - Read-only native input reader resolves current GI/motion/hit providers through
   the existing authenticated TLS API. It checks viewport mapping, frame/view,
   native state mode, resource dimensions and provider stability. It is compiled
-  into the proxy source but has no live caller yet; it installs no hooks.
+  into the proxy and called synchronously at the native temporal boundary.
 - Tests reject mismatched guides, invalid transforms, duplicate/pending frames,
   wrong queues; cancellation, frame gaps and view changes clear history.
 
@@ -81,30 +82,30 @@ rewritten material decoder. Its r7 contains world normal. Its r2 retains the
 homogeneous reconstructed view position with reciprocal W. No secondary
 evaluation runs in the receiver export. Sky/invalid receivers remain rejected.
 
-## Remaining live integration
+## Live R384 integration
 
-1. Connect the implemented private receiver export to the exact GI6 bind/dispatch
-   hooks. GI6 may dispatch more than once before filtering; keep the last matching
-   producer's guides with that frame, view, queue and command-list generation.
-   The existing "weight" globals 0x1297478 / 0x12974a0 are actually g_rwtHitInfo /
-   g_tHitInfo, both referring to native IDHitInfo (raytracing-passes.asm). Acquire
-   this native first-hit-distance texture directly with its tracked state.
-2. Connect the implemented native input reader at the temporal boundary. Retain
-   resource objects before leaving that synchronous boundary, and verify the
-   CPU camera matches the bound GPU matrices. Its current viewport admission
-   rejects unequal native output/GI mapping rather than guessing scaling. Use
-   the audited jitter conversion; Session owns previous submitted camera data.
-3. Wire the tested NativeTransaction to that boundary with a complete compute
-   snapshot and fresh arena in the already-bound heap. Disable native spatial
-   history for
-   that successfully admitted transaction, without double filtering.
-4. Connect queue submission/reset retirement and resize/view/producer changes.
-   Never advertise RELAX as active if admission or resource acquisition fails.
-5. Link NRD and embed conversion shaders in the actual mod build. Keep existing
-   F10 UI, FPS, RAW comparison, clamp60 and on-demand capture controls. Do not
-   enable scene/shadow inventory monitoring.
-6. Validate projector energy, character jaw/neck and desk/plant temporal detail
-   against RAW, then measure render-time cost with captures idle.
+- Exact GI6 bind/dispatch hooks mirror current descriptors and export the last
+  matching producer guides. Guides are keyed to frame, view, actual producer
+  PSO mode and command-list generation.
+- The temporal boundary reads current raw GI, hit distance, motion and output
+  providers; validates CPU camera against bound GPU matrices; records a complete
+  RELAX transaction in the already-bound descriptor heap.
+- Native spatial filtering is disabled for this path. Admission failure copies
+  RAW rather than silently reverting to the old denoiser. F10 reports RELAX only
+  when the transaction records successfully; otherwise it reports RAW FALLBACK.
+- Queue submission advances history. Fence completion plus command-list Reset
+  releases retained recordings. Abandoned work, size/root/producer/view changes
+  invalidate history. Failed recorded work is retained through retirement.
+- Injected dispatches temporarily suspend native single-dispatch accounting and
+  snapshot tracking, then restore compute state and the original request.
+- The existing panel, FPS, RAW comparison, clamp60 and on-demand captures remain.
+  No legacy scene/shadow inventory is enabled. NRD is embedded in the proxy;
+  its license accompanies the complete installable package.
 
-Do not ship the standalone validation executable or repackage R383 as the new
-denoiser. No game quality/performance result has been measured for this path.
+## Required live validation
+
+Compare projector energy, character jaw/neck, desk/plant detail and disocclusions
+against RAW, then measure render-time cost with captures idle. Automated WARP
+checks establish resource and signal contracts, not in-game image quality or
+hardware performance. No game quality/performance result has been measured for
+this path.

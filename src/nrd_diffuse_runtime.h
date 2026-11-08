@@ -162,7 +162,6 @@ static void ProducerDispatch() noexcept {
   Poll();PTGlassRuntime::Context c;gi_reuse::ComputeBindingSnapshot b;UINT64 generation=0;
   if(!Bindings(c,b,generation)||c.list!=pass.context.list||c.gpu.ptr!=pass.context.gpu.ptr){Reason("producer_bindings");return;}
   UINT mode=0,bytes=sizeof(mode);if(FAILED(b.pipeline->GetPrivateData(native_lighting::gi_evaluator::kMode,&bytes,&mode))||!mode){Reason("producer_variant");return;}
-  if(auto* alternate=native_lighting::gi_evaluator::Select(b.pipeline.Get()))b.pipeline.Attach(alternate);
   control_nrd_native::Texture raw;if(!NamedTexture("g_rwtDiffuseGIColorTarget",raw)){Reason("producer_target");return;}
   const UINT w=UINT(raw.desc.Width),h=raw.desc.Height;
   // Never overwrite guides/history referenced by an unsubmitted earlier list.
@@ -179,7 +178,7 @@ static void ProducerDispatch() noexcept {
   r->epoch=epoch;PTGlass::DescriptorRange fresh;if(!PTGlassRuntime::Fresh(c,&fresh)){Reason("producer_heap");return;}
   r->exports.emplace_back();
   if(!epoch->receiver->Record(c.list,b.pipeline.Get(),c.gpu,*pass.shadow,sequence,fresh,r->exports.back())){r->exports.pop_back();Reason("producer_descriptors");return;}
-  r->exported=true;guideFrame=pass.frame;guideView=pass.view;guideList=c.list;guideGeneration=generation;guideProducer=unsigned(gi_reuse::ownedRequested.load());
+  r->exported=true;guideFrame=pass.frame;guideView=pass.view;guideList=c.list;guideGeneration=generation;guideProducer=mode;
  }catch(...){Invalidate(epoch);Reason("producer_exception");}
 }
 static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12PipelineState*,UINT x,UINT y,UINT z,gi_dual_bridge::Dispatch) noexcept {
