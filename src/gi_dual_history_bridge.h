@@ -15,6 +15,8 @@ struct Callbacks {
  void (*after)(ID3D12CommandQueue*,UINT64) noexcept;
 };
 inline std::atomic<const Callbacks*> callbacks{nullptr};
+inline std::atomic<unsigned> status{0}; // 0 waiting, 1 dual history, 2 R382 fallback
+inline std::atomic<UINT64> applied{0};
 inline thread_local bool observing=false;
 inline std::atomic<bool(*)(ID3D12GraphicsCommandList*) noexcept> resetReady{nullptr};
 }

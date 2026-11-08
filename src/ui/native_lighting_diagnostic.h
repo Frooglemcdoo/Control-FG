@@ -37,7 +37,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+21)return rt_surface_source::manualGI.load()==1?L"GI REMOVE: ON":L"GI REMOVE: OFF";
-    if(index==kModeCount+22)return rt_surface_source::manualGI.load()==2?L"GI STABLE: ON":L"GI STABLE: OFF";
+    if(index==kModeCount+22)return rt_surface_source::manualGI.load()!=2?L"GI STABLE: OFF":gi_dual_bridge::status.load()==1?L"GI STABLE: DUAL":gi_dual_bridge::status.load()==2?L"GI STABLE: FALLBACK":L"GI STABLE: WAIT";
     if(index==kModeCount+23){const auto c=rt_surface_source::manualContact.load();return c==1?L"CONTACT: FILTERED":c==2?L"CONTACT: RAW":L"CONTACT: AUTO";}
     if(index==kModeCount+24)return L"RESET COMPARE";
     if(index==kModeCount+25)return rt_surface_source::manualGI.load()!=3?L"GI FILTER: OFF":!control_rr_gi::ownedReady.load()?L"GI FILTER: WAIT":L"GI FILTER: OWNED";

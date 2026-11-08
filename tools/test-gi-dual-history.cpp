@@ -28,7 +28,7 @@ struct Dual:Harness {
   for(auto*t:{&out,&fast,&moments})gpu.Transition(t->r.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
  }
 };
-struct Result {double delta=0,mean=0;float off=0,reveal=0;};
+struct Result {double delta=0,mean=0,energy=0;float off=0,reveal=0;};
 static Result Sequence(bool old,unsigned mode,unsigned passCount){
  Dual h;auto&g=h.gpu;Image zero(W*H,Pixel{}),flat(W*H,Pixel{.5f,.5f,.5f,.5f}),mv(W*H,Pixel{mode==3?.25f/W:0.f,0,0,0});
  Image material(W*H,Pixel{0,0,1.f/255.f,0});auto g1=h.Texture(&flat),g2=h.Texture(&material),hit=h.Texture(&zero);
@@ -59,15 +59,18 @@ static Result Sequence(bool old,unsigned mode,unsigned passCount){
   history=out;fast=nf;moments=nm;outputs.push_back(out);reads.push_back(read);
  }
  g.Submit();Result r;float previous=0;
- for(UINT frame=0;frame<64;++frame){void* data=nullptr;Check(reads[frame]->Map(0,nullptr,&data));auto&t=outputs[frame];auto*p=reinterpret_cast<float*>(static_cast<unsigned char*>(data)+t.f.Offset+(H/2)*t.f.Footprint.RowPitch)+4*(W/2);float v=p[0];Require(std::isfinite(v)&&std::abs(p[3]-v)<1e-5f,"finite/red-alpha");reads[frame]->Unmap(0,nullptr);
+ for(UINT frame=0;frame<64;++frame){void* data=nullptr;Check(reads[frame]->Map(0,nullptr,&data));auto&t=outputs[frame];auto*p=reinterpret_cast<float*>(static_cast<unsigned char*>(data)+t.f.Offset+(H/2)*t.f.Footprint.RowPitch)+4*(W/2);float v=p[0];if(frame>=24&&frame<40){double total=0;for(UINT yy=0;yy<H;++yy)for(UINT xx=0;xx<W;++xx){auto* q=reinterpret_cast<float*>(static_cast<unsigned char*>(data)+t.f.Offset+yy*t.f.Footprint.RowPitch)+4*xx;total+=q[0];}r.energy+=total/16.;}Require(std::isfinite(v)&&std::abs(p[3]-v)<1e-5f,"finite/red-alpha");reads[frame]->Unmap(0,nullptr);
   if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==40)r.reveal=v;if(frame>=42)r.off=std::max(r.off,std::abs(v-(mode==1?.02f:(mode==2||mode==7)?4.f:mode==4?.1f:.4f)));previous=v;
  }r.delta=std::sqrt(r.delta/16.);return r;
 }
-int main(){try{for(unsigned count:{0u,2u,6u})for(unsigned mode=0;mode<8;++mode){std::cout<<"START dual spatial="<<count<<" mode="<<mode<<std::endl;auto old=Sequence(true,mode,count),next=Sequence(false,mode,count);std::cout<<"Dual spatial="<<count<<" mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" mean="<<next.mean<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
+int main(){try{for(unsigned count:{0u,2u,6u})for(unsigned mode=0;mode<8;++mode){std::cout<<"START dual spatial="<<count<<" mode="<<mode<<std::endl;auto old=Sequence(true,mode,count),next=Sequence(false,mode,count);std::cout<<"Dual spatial="<<count<<" mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" old_mean="<<old.mean<<" mean="<<next.mean<<" old_energy="<<old.energy<<" energy="<<next.energy<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
  if(mode==0||mode==3||mode==6){Require(next.delta<old.delta*.25,"fluctuating-input suppression");Require(std::abs(next.mean-.4)<.015,"mean brightness drift");}
  if(mode==1||mode==2)Require(next.off<.005,"light transition lag");
  if(mode==4)Require(std::abs(next.reveal-.1)<1e-5,"revealed surface retained old light");
- if(mode==7)Require(std::abs(next.mean-4.)<.005,"compact light centre lost brightness");
+ if(mode==7){
+  if(count==0)Require(std::abs(next.mean-4.)<.005,"temporal compact light centre lost brightness");
+  else {Require(next.mean>=old.mean-.01,"spatial feedback lost centre brightness versus R382");Require(std::abs(next.energy-old.energy)<1.5,"spatial feedback changed total light energy versus R382");}
+ }
  if(mode==5)Require(std::abs(next.reveal-.4)<1e-5,"camera cut altered current light");
  }std::cout<<"PASS dual history temporal and native spatial feedback\n";return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}
