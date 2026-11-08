@@ -38,8 +38,8 @@ inline std::uint64_t Reset() noexcept {
 }
 inline std::uint64_t Begin() noexcept {const auto id=Reset();active=true;return id;}
 inline void End() noexcept {active=false;}
-inline const char* Verdict(bool requested,std::uint64_t evidence,std::uint64_t failures=0) noexcept {
+inline const char* Verdict(bool requested,std::uint64_t evidence,std::uint64_t failureEvents=0) noexcept {
  return !requested?(evidence?"UNEXPECTED_ACTIVITY":"OFF"):
- failures?"CHECK_FAILED":evidence?"OBSERVED":"NOT_OBSERVED";
+ failureEvents?"CHECK_FAILED":evidence?"OBSERVED":"NOT_OBSERVED";
 }
 }
