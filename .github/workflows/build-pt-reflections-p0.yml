@@ -960,13 +960,13 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-full-chain.exe
           if not "%errorlevel%"=="0" exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-history.cpp /Febuild\test-gi-dual-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if not "%errorlevel%"=="0" exit /b 1
-          build\test-gi-dual-history.exe
-          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-runtime.cpp /Febuild\test-gi-dual-runtime.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-dual-runtime.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-history.cpp /Febuild\test-gi-dual-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-gi-dual-history.exe
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-dual-history-policy.cpp /Febuild\test-gi-dual-history-policy.exe
           if not "%errorlevel%"=="0" exit /b 1
