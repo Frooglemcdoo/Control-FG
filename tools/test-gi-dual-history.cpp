@@ -49,7 +49,7 @@ static Result Sequence(bool old,unsigned mode){
  }
  g.Submit();Result r;float previous=0;
  for(UINT frame=0;frame<64;++frame){void* data=nullptr;Check(reads[frame]->Map(0,nullptr,&data));auto&t=outputs[frame];auto*p=reinterpret_cast<float*>(static_cast<unsigned char*>(data)+t.f.Offset+(H/2)*t.f.Footprint.RowPitch)+4*(W/2);float v=p[0];Require(std::isfinite(v)&&std::abs(p[3]-v)<1e-5f,"finite/red-alpha");reads[frame]->Unmap(0,nullptr);
-  if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==40)r.reveal=v;if(frame>=42)r.off=std::max(r.off,std::abs(v-(mode==1?.02f:mode==2?4.f:mode==4?.1f:.4f)));previous=v;
+  if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==40)r.reveal=v;if(frame>=42)r.off=std::max(r.off,std::abs(v-(mode==1?.02f:(mode==2||mode==7)?4.f:mode==4?.1f:.4f)));previous=v;
  }r.delta=std::sqrt(r.delta/16.);return r;
 }
 int main(){try{for(unsigned mode=0;mode<8;++mode){auto old=Sequence(true,mode),next=Sequence(false,mode);std::cout<<"Dual mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" mean="<<next.mean<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
