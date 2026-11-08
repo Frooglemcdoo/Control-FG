@@ -122,6 +122,8 @@ int main(int argc,char** argv)try{
  namespace evaluator=native_lighting::gi_evaluator;
  evaluator::Observe(d.Get(),&desc,original.Get(),&Create);
  Require(evaluator::ready.load(),"Runtime failed to prepare exact native shader");
+ // RR now enables Owned explicitly; the isolated test must request it too.
+ evaluator::requested.store(true);
  auto* selected=evaluator::Select(original.Get());Require(selected!=nullptr,"Translated selection unavailable");
  ComPtr<ID3D12CommandAllocator> allocator;Check(d->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
  ComPtr<ID3D12GraphicsCommandList> list;Check(d->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));
