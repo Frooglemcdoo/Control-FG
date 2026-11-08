@@ -36,6 +36,7 @@ inline std::string Snapshot() {
      <<" default="<<control_settings::Default(option)<<" available="<<control_settings::Enabled(option)<<'\n';
  }
  out<<"lighting_mode="<<unsigned(LiveSelection::GetMode(selection.Read()))<<"\nowned_requested="<<gi_reuse::ownedRequested.load()
+    <<"\nGI_single_producer_route="<<gi_reuse::SingleProducerEnabled()<<"\nlegacy_additive_GI_route_enabled="<<GIOwnedPipeline::Enabled()
     <<"\nGI_capture_override="<<rt_surface_source::request.load()<<"\nGI_manual_override="<<rt_surface_source::manualGI.load()
     <<"\ncontact_manual_override="<<rt_surface_source::manualContact.load()<<"\nreflection_sample_policy="<<specularSampleChoice.load()<<" (0=Native)"
     <<"\nclamp_requested_percent="<<control_rr_clamp::RuntimeRequested()<<"\nclamp_last_effective_percent="<<control_rr_clamp::effective.load()
@@ -81,6 +82,7 @@ inline void Finish(HWND game,const char* outcome,uint64_t now) {
  out<<" (31 means 31 or higher; empty means NOT_OBSERVED)\n";
  for(unsigned i=0;i<Count;++i)out<<names[i]<<'='<<counts[i].load()<<'\n';
  out<<"\nDUPLICATE-WORK AUDIT\n";
+ if(!gi_reuse::SingleProducerEnabled()||GIOwnedPipeline::Enabled())out<<"REVIEW: a legacy GI launch override is active. The default single-producer ownership audit does not cover that route.\n";
  if(filterRequest&&count(RelaxCompleted)&&(count(GINativeTemporal)||count(GINativeSpatial)||count(GINativeFilterFallback)))
   out<<"REVIEW: native GI filter work and RELAX were both observed in this window. This can be fallback/transition activity; totals alone do not prove both processed the same frame.\n";
  else if(filterRequest&&count(RelaxCompleted))out<<"No native GI temporal/spatial filtering observed alongside RELAX in this window.\n";
