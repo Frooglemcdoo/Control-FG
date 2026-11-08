@@ -1,4 +1,5 @@
 #pragma once
+#include "visual_settings_policy.h"
 #include "diagnostic_activity.h"
 #include "gi_stack_capture.h"
 #include "gi_native_submission_hooks.h"

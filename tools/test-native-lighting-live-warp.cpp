@@ -721,6 +721,8 @@ static void TestSpecParallelBinding(ID3D12Device* device,ID3D12PipelineState* ow
     puts("PASS SPEC16 binding, dispatch expansion, PSO restore, off/non-16/depth fallback and stale binding clearing");
 }
 int main() try {
+    control_visual::SetLighting(false);
+    native_lighting::ApplyVisualLightingSelection(); // Establish saved preference before diagnostic selections.
     TestCapturePipelineDescription();
     TestSpotCulling();
     TestSpotPassSelection();
