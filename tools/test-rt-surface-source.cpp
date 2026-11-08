@@ -3,6 +3,8 @@
 #include <iostream>
 #include <cwchar>
 int main(){
+ assert(control_rr_gi::SpatialPasses(control_rr_gi::StageMode::BothSteadySpatial,6)==2);
+ assert(control_rr_gi::SpatialPasses(control_rr_gi::StageMode::BothSteadySpatial,1)==1);
  using namespace rt_surface_source;using namespace control_rr_gi;
  assert(request.load()==0 && giScope==0);
  manualGI.store(1);assert(EffectiveRequest()==2);

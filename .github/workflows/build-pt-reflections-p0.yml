@@ -125,7 +125,7 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
-      - name: Validate owned GI feedback sequence R382
+      - name: Validate owned GI feedback sequence R383
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -155,7 +155,7 @@ jobs:
           build\test-gi-owned-edge.exe
           if not "%errorlevel%"=="0" exit /b 1
 
-      - name: Validate character rig sampling R382
+      - name: Validate character rig sampling R383
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -209,7 +209,7 @@ jobs:
           build\test-character-surface-gpu.exe
           if not "%errorlevel%"=="0" exit /b 1
 
-      - name: Validate near volume history R382
+      - name: Validate near volume history R383
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1349,11 +1349,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R382
+      - name: Package owned GI integration R383
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R382'
+          $out='ControlTOH-R383'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1393,11 +1393,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R382 - Preserve valid GI history on sloped surfaces
-          GI Stable now accounts for the local surface depth slope when validating reprojected history taps. R381 compared every tap to the centre depth, which could discard valid neighbouring samples as pixel phase changed. A limited depth gradient corrects that comparison; surface boundaries and camera cuts still reject invalid history.
-          The history footprint now uses queried texture dimensions instead of assuming output-resolution constants describe the history texture. Native normalized reprojection coordinates remain unchanged.
-          Windows shader execution reproduced R381 fluctuation on constant sloped lighting (0.365 / 0.400 / 0.365); R382 stays at 0.365. Diagonal slopes, unequal output/history grids, valid bright history, depth boundaries, camera cuts and the existing two/six-pass feedback checks pass. These synthetic checks do not establish an in-game flicker fix.
-          RAW + RR, GI ray generation, six spatial passes, clamp settings and on-demand capture behavior are unchanged. Compared with R381, this adds four current-depth sample instructions and two texture-dimension queries to the Stable temporal shader. No extra dispatch, history buffer, or background monitoring. In-game performance has not been measured.
+          R383 - Dual-history GI stability and detail preservation
+          GI Stable uses independent fast-history and temporal-variance sidecars to stabilize the longer lighting estimate. R382 slope-aware reprojection, per-tap depth rejection, native motion coordinates and the RGB/red-alpha interface are retained. The current light sample is not brightness-capped.
+          Stable now uses two native spatial passes instead of six. The six-pass regression spread small bright lights too broadly; temporal accumulation plus two passes preserves more local light detail while reducing fluctuations. RAW, ray generation, clamp settings, the RR composition path and the F10 panel layout are unchanged.
+          Sidecars use four fence-retired slots, pinned through writer and reader command-list Reset. Pool exhaustion returns to the R382 temporal shader without CPU/GPU waits. Allocation is capped at four pairs sized for at most 1 GiB total storage (allocation/resize overhead can temporarily add one pair). No scene/shadow inventory is enabled.
+          F10 reports GI STABLE: DUAL only after recording the new shader. WAIT means it has not recorded yet; FALLBACK means the R382 temporal shader was selected. This is CPU recording status, not proof of GPU completion or an in-game quality result.
+          Windows WARP regressions cover two-pass noise, compact-light energy, light changes, disocclusion, camera cuts, native descriptor/PSO restoration and delayed-fence retirement. In-game quality and RTX 5090 performance still require verification.
           Compare GI Stable OFF/ON at the desk books and plant with other settings unchanged. No capture is required initially. The instructions below are optional.
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
@@ -1406,7 +1407,7 @@ jobs:
           The tool temporarily compares RAW GI and GI Stable, preserving the selected producer and clamp. One beep starts each condition. Two beeps mean the ZIP is packaged and selected in Explorer.
           Four evaluated frames total: two per condition. Includes pre-filter GI, GI at RR input, scene HDR before RR, RR output, and matching guides/metadata. Whole-screen stride-4 point samples reduce disk/ZIP size; they do not establish full-resolution image quality. Raw GPU readbacks still use native resolution and add temporary capture cost.
           A full-resolution RGB byte comparison verifies whether pre-filter and post-filter GI are identical. Dispatch counters verify requested RAW/Stable coverage. No intermediate temporal-only output is captured. This is diagnosis, not a claimed visual correction or performance test.
-          Settings restore on completion, failure or focus loss. Files are retained under LOCALAPPDATA/ControlFGProbe/GI-Path-R382-*. Existing RR capture budget is four pairs per launch; this comparison needs two unused pairs. Restart after failed/incomplete GPU captures.
+          Settings restore on completion, failure or focus loss. Files are retained under LOCALAPPDATA/ControlFGProbe/GI-Path-R383-*. Existing RR capture budget is four pairs per launch; this comparison needs two unused pairs. Restart after failed/incomplete GPU captures.
           No diagnostic work begins until a capture button is clicked.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
@@ -1433,7 +1434,7 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R382 - Original F10 panel restored, grouped by feature and capture.
+          R383 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
           Native GI, true raw bypass and clamp60 are defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
@@ -1445,10 +1446,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R382
+          name: ControlTOH-R383
           path: |
-            ControlTOH-R382.zip
-            ControlTOH-R382.sha256
+            ControlTOH-R383.zip
+            ControlTOH-R383.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
@@ -1499,6 +1500,7 @@ jobs:
             build/rt_spot_band_colors.dxbc
             build/rt_spot_open.dxbc
             build/rr_clamp_temporal.h
+            build/gi_dual_history.dxbc
             build/exports.txt
             build/imports.txt
             build/pt_glass_raygen.dxil

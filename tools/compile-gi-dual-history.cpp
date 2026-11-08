@@ -14,5 +14,8 @@ int main(){
  FILE* f=nullptr;if(fopen_s(&f,"build/gi_dual_history.generated.h","wb")||!f)return 5;
  fprintf(f,"#pragma once\ninline constexpr unsigned char kGIDualHistory[]={\n");
  auto* bytes=static_cast<const unsigned char*>(code->GetBufferPointer());for(size_t i=0;i<code->GetBufferSize();++i)fprintf(f,"%u,",bytes[i]);
- fprintf(f,"\n};\n");bool good=!ferror(f);good=fclose(f)==0&&good;code->Release();return good?0:6;
+ fprintf(f,"\n};\n");bool good=!ferror(f);good=fclose(f)==0&&good;
+ FILE* binary=nullptr;if(fopen_s(&binary,"build/gi_dual_history.dxbc","wb")||!binary)good=false;
+ else {good=fwrite(code->GetBufferPointer(),1,code->GetBufferSize(),binary)==code->GetBufferSize()&&good;good=fclose(binary)==0&&good;}
+ code->Release();return good?0:6;
 }

@@ -1,5 +1,5 @@
-// Candidate temporal core. Not selected by the live runtime until sidecar
-// ownership, descriptor restore and queue retirement are integrated/validated.
+// R383 Stable temporal core. Sidecars are owned by the exact-dispatch adapter.
+// Native RGB/red-alpha output continues through two native spatial passes.
 cbuffer Sys : register(b0) { float4 sys[38]; }
 cbuffer Filtering : register(b1) { float4 filtering[2]; }
 Texture2D<float4> Depth : register(t0);
