@@ -73,27 +73,27 @@ public:
  size_t DispatchCount()const noexcept{return session.Plan().size();}
  UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
  bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0}){
-  if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return Reject("filter_input_contract");
-  if(arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_input_contract");
-  for(float v:conversion.motionScale)if(!std::isfinite(v))return Reject("filter_input_contract");
-  for(float v:conversion.motionBias)if(!std::isfinite(v))return Reject("filter_input_contract");
+  if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return Reject("filter_owner_or_extent_contract");
+  if(arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_descriptor_arena_bounds");
+  for(float v:conversion.motionScale)if(!std::isfinite(v))return Reject("filter_conversion_motion_scale");
+  for(float v:conversion.motionBias)if(!std::isfinite(v))return Reject("filter_conversion_motion_bias");
   // Motion has already been converted to normalized unjittered screen units.
   // Reject double scaling or world-space interpretation in NRD itself.
-  if(frame.settings.isMotionVectorInWorldSpace||frame.settings.motionVectorScale[0]!=1||frame.settings.motionVectorScale[1]!=1||frame.settings.motionVectorScale[2]!=0)return Reject("filter_input_contract");
-  for(float v:frame.settings.motionVectorBias)if(v!=0)return Reject("filter_input_contract");
+  if(frame.settings.isMotionVectorInWorldSpace||frame.settings.motionVectorScale[0]!=1||frame.settings.motionVectorScale[1]!=1||frame.settings.motionVectorScale[2]!=0)return Reject("filter_motion_units");
+  for(float v:frame.settings.motionVectorBias)if(v!=0)return Reject("filter_motion_bias");
   std::array<External*,7> all{};for(unsigned i=0;i<6;++i)all[i]=&bindings.input[i];all[6]=&bindings.output;
-  for(unsigned i=0;i<7;++i){if(!all[i]->resource)return Reject("filter_input_contract");auto d=all[i]->resource->GetDesc();
-   if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||d.DepthOrArraySize!=1||!d.MipLevels||d.SampleDesc.Count!=1)return Reject("filter_input_contract");
+  for(unsigned i=0;i<7;++i){if(!all[i]->resource)return Reject("filter_resource_missing");auto d=all[i]->resource->GetDesc();
+   if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||d.DepthOrArraySize!=1||!d.MipLevels||d.SampleDesc.Count!=1)return Reject("filter_resource_extent");
    const bool rgba=d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT||d.Format==DXGI_FORMAT_R32G32B32A32_FLOAT;
    const bool rg=d.Format==DXGI_FORMAT_R16G16_FLOAT||d.Format==DXGI_FORMAT_R32G32_FLOAT;
    const bool scalar=d.Format==DXGI_FORMAT_R16_FLOAT||d.Format==DXGI_FORMAT_R32_FLOAT;
-   if(!rgba&&!(i==Motion&&rg)&&!((i==ViewZ||i==HitDistance)&&(rg||scalar)))return Reject("filter_input_contract");
+   if(!rgba&&!(i==Motion&&rg)&&!((i==ViewZ||i==HitDistance)&&(rg||scalar)))return Reject("filter_resource_format");
    Ptr<ID3D12Device> resourceDevice;Ptr<IUnknown> ownerIdentity,deviceIdentity;
    if(FAILED(all[i]->resource->GetDevice(IID_PPV_ARGS(&resourceDevice)))||
-      FAILED(resourceDevice.As(&ownerIdentity))||FAILED(device.As(&deviceIdentity))||ownerIdentity.Get()!=deviceIdentity.Get())return Reject("filter_input_contract");
-   for(unsigned j=0;j<i;++j)if(all[i]->resource==all[j]->resource)return Reject("filter_input_contract");
+      FAILED(resourceDevice.As(&ownerIdentity))||FAILED(device.As(&deviceIdentity))||ownerIdentity.Get()!=deviceIdentity.Get())return Reject("filter_resource_device");
+   for(unsigned j=0;j<i;++j)if(all[i]->resource==all[j]->resource)return Reject("filter_resource_alias");
   }
-  if(!(bindings.output.resource->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return Reject("filter_input_contract");
+  if(!(bindings.output.resource->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return Reject("filter_output_uav_missing");
   Frame actual=frame;
   if(historyScale&&historyScale!=conversion.radianceScale)actual.settings.accumulationMode=nrd::AccumulationMode::CLEAR_AND_RESTART;
   if(!session.Prepare(actual,queue))return Reject(session.LastFailure());
