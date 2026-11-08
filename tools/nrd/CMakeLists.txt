@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.30)
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 project(ControlGIDenoiser LANGUAGES CXX)
 include(FetchContent)
 set(CMAKE_CXX_STANDARD 17)
@@ -25,6 +26,7 @@ FetchContent_Declare(nrd
  PATCH_COMMAND ${CMAKE_COMMAND} -DNRD_SOURCE=<SOURCE_DIR>
    -P ${CMAKE_CURRENT_SOURCE_DIR}/patch_nrd.cmake)
 FetchContent_MakeAvailable(nrd)
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/nrd_library_$<CONFIG>.txt" CONTENT "$<TARGET_FILE:NRD>")
 add_executable(control_nrd_contract test_contract.cpp)
 target_link_libraries(control_nrd_contract PRIVATE NRD)
 if(MSVC)

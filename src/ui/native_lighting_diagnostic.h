@@ -37,10 +37,10 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+21)return rt_surface_source::manualGI.load()==1?L"GI REMOVE: ON":L"GI REMOVE: OFF";
-    if(index==kModeCount+22)return rt_surface_source::manualGI.load()!=2?L"GI STABLE: OFF":gi_dual_bridge::status.load()==1?L"GI STABLE: DUAL":gi_dual_bridge::status.load()==2?L"GI STABLE: FALLBACK":L"GI STABLE: WAIT";
+    if(index==kModeCount+22)return rt_surface_source::manualGI.load()!=2?L"GI STABLE: OFF":gi_dual_bridge::status.load()==1?L"GI STABLE: RELAX":gi_dual_bridge::status.load()==2?L"GI STABLE: FALLBACK":L"GI STABLE: WAIT";
     if(index==kModeCount+23){const auto c=rt_surface_source::manualContact.load();return c==1?L"CONTACT: FILTERED":c==2?L"CONTACT: RAW":L"CONTACT: AUTO";}
     if(index==kModeCount+24)return L"RESET COMPARE";
-    if(index==kModeCount+25)return rt_surface_source::manualGI.load()!=3?L"GI FILTER: OFF":!control_rr_gi::ownedReady.load()?L"GI FILTER: WAIT":L"GI FILTER: OWNED";
+    if(index==kModeCount+25)return rt_surface_source::manualGI.load()!=3?L"GI FILTER: OFF":gi_dual_bridge::status.load()==1?L"GI FILTER: RELAX":gi_dual_bridge::status.load()==2?L"GI: RAW FALLBACK":L"GI FILTER: WAIT";
     if(index==kModeCount+20){
         const unsigned quality=character_surface::quality.load();
         return !quality?L"RIG: NATIVE":!character_surface::ready.load()?L"RIG: WAIT":quality==1?L"RIG: R351":quality==2?L"RIG: R352":!volume_temporal::ready.load()?L"RIG: WAIT":L"RIG: STABLE";
@@ -168,7 +168,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R383",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R384",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"FEATURE SETTINGS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);

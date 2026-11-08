@@ -125,6 +125,18 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           echo VSROOT=%VSROOT%>>%GITHUB_ENV%
 
+      - name: Build embedded RELAX diffuse backend
+        shell: pwsh
+        run: |
+          cmake -S tools/nrd -B nrd-build -DCONTROL_NRD_GPU=ON
+          if ($LASTEXITCODE -ne 0) { throw 'NRD configure failed' }
+          cmake --build nrd-build --config Release --parallel 4
+          if ($LASTEXITCODE -ne 0) { throw 'NRD build failed' }
+          ctest --test-dir nrd-build -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'NRD GPU validation failed' }
+          $library=(Get-Content nrd-build/nrd_library_Release.txt -Raw).Trim()
+          "NRD_LIBRARY=$library" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Validate owned GI feedback sequence R383
         shell: cmd
         run: |
@@ -1207,7 +1219,7 @@ jobs:
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -1349,16 +1361,18 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package owned GI integration R383
+      - name: Package RELAX GI integration R384
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R383'
+          $out='ControlTOH-R384'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
           New-Item -ItemType Directory -Force -Path $out,$shader,$tools,$diagnostics | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          New-Item -ItemType Directory -Force -Path "$out/ControlTOH/Licenses" | Out-Null
+          Copy-Item nrd-build/_deps/nrd-src/LICENSE.txt "$out/ControlTOH/Licenses/NVIDIA-NRD.txt"
           Copy-Item build/gi_index_snapshot.dxil $shader
           Copy-Item build/ControlFG-Restart.exe $tools
           Copy-Item build/rt_spot_selected_off.dxbc,build/rt_spot_selection.dxbc,build/rt_spot_visibility.dxbc,build/rt_spot_light_ids.dxbc,build/rt_spot_raw_history.dxbc,build/rt_spot_raw_spatial0.dxbc,build/rt_spot_raw_spatial1.dxbc,build/rt_spot_full.dxil,build/rt_spot_r94.dxil,build/rt_spot_light.dxbc,build/rt_spot_reset.dxbc,build/rt_spot_history.dxbc,build/rt_spot_spatial0.dxbc,build/rt_spot_spatial1.dxbc $shader
@@ -1393,13 +1407,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R383 - Dual-history GI stability and detail preservation
-          GI Stable uses independent fast-history and temporal-variance sidecars to stabilize the longer lighting estimate. R382 slope-aware reprojection, per-tap depth rejection, native motion coordinates and the RGB/red-alpha interface are retained. The current light sample is not brightness-capped.
-          Stable now uses two native spatial passes instead of six. The six-pass regression spread small bright lights too broadly; temporal accumulation plus two passes preserves more local light detail while reducing fluctuations. RAW, ray generation, clamp settings, the RR composition path and the F10 panel layout are unchanged.
-          Sidecars use four fence-retired slots, pinned through writer and reader command-list Reset. Pool exhaustion returns to the R382 temporal shader without CPU/GPU waits. Allocation is capped at four pairs sized for at most 1 GiB total storage (allocation/resize overhead can temporarily add one pair). No scene/shadow inventory is enabled.
-          F10 reports GI STABLE: DUAL only after recording the new shader. WAIT means it has not recorded yet; FALLBACK means the R382 temporal shader was selected. This is CPU recording status, not proof of GPU completion or an in-game quality result.
-          Windows WARP regressions cover two-pass noise, compact-light energy, light changes, disocclusion, camera cuts, native descriptor/PSO restoration and delayed-fence retirement. In-game quality and RTX 5090 performance still require verification.
-          Compare GI Stable OFF/ON at the desk books and plant with other settings unchanged. No capture is required initially. The instructions below are optional.
+          R384 - NVIDIA NRD RELAX diffuse integration
+          GI FILTER now selects RELAX for Owned or Native GI. It replaces the old temporal/spatial filter and uses current world normals, view depth, motion and native first-hit distances. Receiver shading is removed and reapplied using the same native throughput.
+          F10 reports RELAX after recording the path; RAW FALLBACK means inputs were rejected and RAW is preserved. Status is CPU recording coverage, not proof of GPU completion. The old R383 filter is not used as a fallback.
+          History advances only after actual queue submission. The existing black/red panel, FPS counter, clamp60 and on-demand capture tools remain. Scene/shadow inventory is not enabled. A small compute-binding tracker is required for rendering-state restoration.
+          WARP tests validate light preservation, moving surfaces, camera/history reset and compute-state restoration. In-game quality, compatibility and RTX performance still require verification.
+          Compare GI FILTER RELAX against OFF/RAW with other settings unchanged, especially projector light, Jesse's jaw and the desk plant/books. Initial resource and shader creation may cause a one-time hitch.
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
           Enable RR and RT indirect lighting. Turn FG OFF. Select Native Blend and the GI producer you want to diagnose (Owned for the reported issue).
@@ -1411,7 +1424,7 @@ jobs:
           No diagnostic work begins until a capture button is clicked.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
-          GI FILTER: OWNED toggles the new filter. GI STABLE remains a separate legacy comparison; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
+          GI FILTER toggles RELAX. GI STABLE selects the same replacement for existing capture comparisons; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
           TEST JESSE and TEST VOLUME run their existing full-screen comparison sequences and package the result. Missing shader coverage is reported instead of claiming a successful comparison.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
@@ -1434,10 +1447,10 @@ jobs:
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
           @'
-          R383 - Original F10 panel restored, grouped by feature and capture.
+          R384 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
-          Native GI, true raw bypass and clamp60 are defaults. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
+          The existing GI producer selection and clamp60 are preserved; RELAX is selected initially. OFF selects RAW. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
           '@ | Add-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -1446,10 +1459,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R383
+          name: ControlTOH-R384
           path: |
-            ControlTOH-R383.zip
-            ControlTOH-R383.sha256
+            ControlTOH-R384.zip
+            ControlTOH-R384.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

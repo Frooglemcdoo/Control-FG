@@ -139,12 +139,20 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&rawBypass)replacement=b->bypass;
  if(b && b->spatial==spatialDispatch && ownedDenoise)replacement=b->owned?b->owned:b->bypass;
  if constexpr(std::is_convertible_v<DispatchFn,gi_dual_bridge::Dispatch>){
- if(b&&replacement&&replacement==b->stableEnergy&&count==1){
+ if(b&&!b->spatial&&!spatialDispatch&&count==1&&
+#ifdef CONTROL_NRD_GI
+ (ownedDenoise||spatialSteady)){
+#else
+ replacement&&replacement==b->stableEnergy){
+#endif
   gi_dual_bridge::status=2;
-  if(const auto adapter=gi_dual_bridge::callbacks.load())if(b->dual&&adapter->dispatch(list,observed,b->dual,x,y,z,dispatch)){
+  if(const auto adapter=gi_dual_bridge::callbacks.load())if(adapter->dispatch(list,observed,b->dual,x,y,z,dispatch)){
    gi_dual_bridge::status=1;++gi_dual_bridge::applied;
    used=true;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIStableTemporal);return;
   }
+#ifdef CONTROL_NRD_GI
+  replacement=b->bypass; // Preserve RAW if RELAX admission fails; no old filter.
+#endif
  }
  }
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}

@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "nrd_diffuse_bridge.h"
 #include <d3d12.h>
 // Only exact GI binds and command-list lifetime events enter this adapter.
 namespace gi_dual_bridge {

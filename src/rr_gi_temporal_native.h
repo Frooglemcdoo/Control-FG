@@ -42,8 +42,8 @@ static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
 static void RRNativeHookGITemporalBind(void* record){
  const auto dual=gi_dual_bridge::callbacks.load();
  control_rr_reflection::Context context{};
- const bool observe=dual&&rrNativeGIHistoryScope&&control_rr_gi::spatialSteady&&!control_rr_gi::rawBypass&&
-  !control_rr_gi::ownedDenoise&&RRReflectionCurrent(nullptr,context)&&context.frame==rrNativeFrame.Key().frame;
+ const bool observe=dual&&rrNativeGIHistoryScope&&(control_rr_gi::spatialSteady||control_rr_gi::ownedDenoise)&&!control_rr_gi::rawBypass&&
+  RRReflectionCurrent(nullptr,context)&&context.frame==rrNativeFrame.Key().frame;
  if(observe)dual->begin(context.frame,context.view);
  __try {rrNativeTemporalBindOriginal(record);}
  __finally {if(observe)dual->end();}
@@ -78,7 +78,11 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const auto mode=rt_surface_source::Stage(capture,control_rr_gi::stageMode.load(std::memory_order_acquire));
  const unsigned previousCapture=rt_surface_source::giScope;rt_surface_source::giScope=capture;
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEligible);
- const unsigned effectivePasses=rt_surface_source::SpatialPasses(capture,mode,passes);
+ const unsigned effectivePasses=
+#ifdef CONTROL_NRD_GI
+  (capture==7||mode==control_rr_gi::StageMode::BothSteadySpatial)?0:
+#endif
+  rt_surface_source::SpatialPasses(capture,mode,passes);
  const auto view=rt_surface_source::View(capture,mode,control_rr_gi::viewRequested.load(std::memory_order_acquire));
  const bool previousOwned=control_rr_gi::ownedDenoise;
  control_rr_gi::ownedDenoise=capture==7;
@@ -147,6 +151,13 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
 
 #ifdef CONTROL_RR_GI_SEQUENCE
 static RRIndirectCallPatch rrNativeGIProducerDispatchPatch{};
+#ifdef CONTROL_NRD_GI
+static RRAlbedoCallPatch rrNrdProducerBindPatch{};
+static void RRNativeHookNrdProducerBind(void* record){
+ const auto cb=control_nrd_bridge::producer.load();if(cb)cb->begin();
+ __try {rrNativeTemporalBindOriginal(record);} __finally {if(cb)cb->end();}
+}
+#endif
 static int rrGIProducerProviderIds[3]{-1,-1,-1};
 static bool RRNativeGIProducerProviders() noexcept {
  const char* names[3]{"g_uDGIPass","g_uDGIPassCount","g_uRTDiffuseRayCount"};
@@ -163,6 +174,9 @@ static bool RRNativeGIProducerProviders() noexcept {
 }
 static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
  rrNativeDispatchOriginal(state,groups);
+#ifdef CONTROL_NRD_GI
+ if(const auto cb=control_nrd_bridge::producer.load())cb->dispatch();
+#endif
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
  if(!GIBatchCaptureEnabled()||!control_rr_gi::boundaryRequested.load())return;
  const DWORD saved=GetLastError();
@@ -178,7 +192,12 @@ static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
 #endif
 }
 static void RRNativeInstallGIProducerCapture(unsigned char* base) noexcept {
+#ifndef CONTROL_NRD_GI
  if(!GIBatchCaptureEnabled())return;
+#else
+ if(!RRAlbedoPrepareCallPatch(base+0x12cbd2,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookNrdProducerBind),&rrNrdProducerBindPatch)||
+    !RRAlbedoExchangeCall(&rrNrdProducerBindPatch,true)||!rrNrdProducerBindPatch.writeHealthy){Log("NRD producer bind install failed");return;}
+#endif
  bool ready=rrNativeGIProducerDispatchPatch.Prepare(base+0x12cc16,reinterpret_cast<void**>(base+0x5dfcc0),
    reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGIProducerDispatch));
  if(ready)ready=rrNativeGIProducerDispatchPatch.Exchange(true)&&rrNativeGIProducerDispatchPatch.healthy;
