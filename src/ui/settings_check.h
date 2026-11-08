@@ -71,14 +71,17 @@ inline void Finish(HWND game,const char* outcome,uint64_t now) {
  out<<"RR: "<<Verdict(rrRequest!=0,count(RRSuccess),count(RRFailure))<<" (NGX evaluation return status)\n"
     <<"Owned GI: "<<Verdict(ownedRequest!=0,count(OwnedGI))<<" (dispatch recording)\n"
     <<"RELAX: "<<Verdict(filterRequest!=0,count(RelaxCompleted),count(RelaxFallback))<<" (submitted work reached GPU fence)\n"
-    <<"Enhanced character: "<<Verdict(characterRequest!=0,count(CharacterEnhanced))<<" (draw recording; keep Jesse visible)\n"
+    <<"Enhanced character: "<<Verdict(characterRequest!=0,count(CharacterEnhanced))<<" (binding recording; keep Jesse visible)\n"
     <<"Enhanced lighting: "<<Verdict(lightingRequest!=0,count(LightingEnhanced))<<" (binding recording)\n"
     <<"Near-volume enhanced bindings: "<<count(VolumeEnhanced)<<"; native bindings: "<<count(VolumeNative)<<" (scene-dependent)\n"
     <<"Clamp60: "<<Verdict(clampRequest==60,count(Clamp60))<<" (scoped replacement invocation)\n"
     <<"FG: "<<(fgRequest==0?"OFF (see applied state below)":IsFGSelectionAppliedForOverlay()&&GetFGLastStatePresentForOverlay()>fgStateStart?"FRESH_RUNTIME_STATE_OBSERVED":"NOT_CONFIRMED")<<" (runtime report; not a display-latency measurement)\n\n";
+ out<<"GI effective sample counts observed at native allocation/shader query:";
+ for(unsigned i=0;i<32;++i)if(giSampleMask.load()&(1u<<i))out<<' '<<i;
+ out<<" (31 means 31 or higher; empty means NOT_OBSERVED)\n";
  for(unsigned i=0;i<Count;++i)out<<names[i]<<'='<<counts[i].load()<<'\n';
  out<<"last_RELAX_rejection="<<reason.load()<<"\n\nEND SNAPSHOT\n"<<Snapshot();
- out<<"\nInterpretation:\nOBSERVED verifies only the evidence described, not image quality or every frame.\nNOT_OBSERVED means coverage missing, not a proven defect. OFF does not prove native fallback works.\nCHECK_FAILED means the window included an error or rejected input; successful frames may also be present.\nSettings changes, focus loss, zero render presents or an incomplete outcome invalidate a whole-window comparison.\nCounts at the collection boundaries are approximate; RELAX completion excludes earlier generations.\nNative renderer.ini is saved configuration, not proof of live native graphics values. Missing files are reported in saved-files.txt.\nGI/reflection sample values, DLSS/HDR/native quality options, glass, DirectStorage transfers and VRAM monitoring are configuration-only unless runtime evidence is explicitly listed.\nNo universal ALL PASS is issued. This is not a performance benchmark. No textures, images, ETW/WPR or shadow inventory are captured.\n";
+ out<<"\nInterpretation:\nOBSERVED verifies only the evidence described, not image quality or every frame.\nNOT_OBSERVED means coverage missing, not a proven defect. OFF does not prove native fallback works.\nCHECK_FAILED means the window included an error or rejected input; successful frames may also be present.\nSettings changes, focus loss, zero render presents or an incomplete outcome invalidate a whole-window comparison.\nCounts at the collection boundaries are approximate; RELAX completion excludes earlier generations.\nNative renderer.ini is saved configuration, not proof of live native graphics values. Missing files are reported in saved-files.txt.\nReflection sample values, DLSS/HDR/native quality options, glass, DirectStorage transfers and VRAM monitoring are configuration-only unless runtime evidence is explicitly listed.\nNo universal ALL PASS is issued. This is not a performance benchmark. No textures, images, ETW/WPR or shadow inventory are captured.\n";
  Write(L"SUMMARY.txt",out.str());Write(L"settings-end.json",control_native_menu::Configuration());
  if(ioFailed){MessageBoxW(game,L"Some report files could not be written. The partial folder is retained under LOCALAPPDATA/ControlFGProbe.",L"Settings check incomplete",MB_OK);return;}
  wchar_t sys[MAX_PATH]{},exe[MAX_PATH]{};GetSystemDirectoryW(sys,MAX_PATH);swprintf_s(exe,L"%s\\tar.exe",sys);

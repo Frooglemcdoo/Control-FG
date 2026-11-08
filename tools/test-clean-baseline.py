@@ -43,6 +43,7 @@ for name, expected in manifest['files'].items():
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
     # R386 adds only gated observation hooks to these baseline files.
     settings_check_hooks = {
+        'src/rr_native_frame.h': ' settings_check::RecordGISamples(effective);\n',
         'src/rr_clamp_strength.h': ' settings_check::Record(changed&&strength==60?settings_check::Clamp60:settings_check::ClampOther);\n',
         'src/rr_clamp_strength_policy.h': '#include "settings_check_state.h"\n',
         'src/rr_user_control.h': '#include "settings_check_state.h"\n',

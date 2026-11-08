@@ -291,6 +291,7 @@ static unsigned RRNativeGISampleCount(void* option) {
  const DWORD saved=GetLastError();
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
  const unsigned effective=control_rr::GISampleComparison(nativeCount,rrNativeGISampleSelection.requested,full);
+ settings_check::RecordGISamples(effective);
  static thread_local unsigned lastNative=~0u,lastEffective=~0u;
  if(nativeCount!=lastNative||effective!=lastEffective||rrNativeFrame.Key().frame%240==0){
   Log("RR_GI_SAMPLES_R33 frame=%llu native=%u effective=%u requested=%u full_rr=%u allocation_and_shader=shared_native_local temporal_changes=0",
