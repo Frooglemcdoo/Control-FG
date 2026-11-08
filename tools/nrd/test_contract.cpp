@@ -45,9 +45,9 @@ int main(){
    if(r.type==nrd::ResourceType::TRANSIENT_POOL)Require(r.indexInPool<desc.transientPoolSize,"transient index");
   }
  }
- Require(!session.Prepare(f,1),"pending recording cannot advance NRD");
+ Require(!session.Prepare(f,1),"pending recording cannot advance NRD");Require(!std::strcmp(session.LastFailure(),"session_submission_pending"),"pending rejection reason");
  Require(!session.Submitted(2,1),"wrong queue rejected");Require(session.Submitted(1,1),"actual submission");
- Require(!session.Prepare(f,1),"duplicate frame rejected");
+ Require(!session.Prepare(f,1),"duplicate frame rejected");Require(!std::strcmp(session.LastFailure(),"session_frame_not_advancing"),"duplicate rejection reason");
  ++f.frame;Require(session.Prepare(f,1),"continuous plan");const auto continuousCount=session.Plan().size();
  Require(restartCount>continuousCount,"first frame includes pool clears");
  session.CancelAfterReset();Require(session.Prepare(f,1),"cancelled frame can be retried");

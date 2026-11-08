@@ -50,6 +50,13 @@ inline std::string Snapshot() {
     <<"\nbroad_diagnostics_active="<<control_diagnostics::Active()<<'\n';
  return out.str();
 }
+inline std::string Failures(const char* phase){
+ std::ostringstream out;std::lock_guard<std::mutex> lock(settings_check::failureMutex);
+ for(unsigned i=0;i<settings_check::failureCount;++i){const auto& f=settings_check::failures[i];
+  out<<phase<<','<<f.reason<<','<<f.frame<<','<<f.present<<','<<f.guideFrame<<','<<f.sameView<<','<<f.recordings<<','<<f.pending<<'\n';}
+ if(settings_check::failureDropped)out<<phase<<",DROPPED_"<<settings_check::failureDropped<<",0,0,0,0,0,0\n";
+ return out.str();
+}
 inline DWORD CopySaved(const std::wstring& source,const wchar_t* name) noexcept {
  if(source.empty())return ERROR_FILE_NOT_FOUND;
  if(CopyFileW(source.c_str(),(directory+L"\\"+name).c_str(),FALSE))return ERROR_SUCCESS;
@@ -90,6 +97,7 @@ inline void Finish(HWND game,const char* outcome,uint64_t now) {
  out<<"Owned ray generation replaces native ray generation; temporal visibility is a separate additional pass.\nRELAX replaces the GI filter, but receiver export, prepare/finish and NRD internal passes are additional work.\nNative shadow filtering is retained where it filters a separate shadow signal; it is not a second GI producer.\nNative specular/broad diffuse filters with RR should normally be zero in the default Native Blend mode. Diagnostic modes can intentionally preserve them.\nNo GPU duration is inferred from counts.\n";
  out<<"last_RELAX_rejection="<<reason.load()<<"\n\nEND SNAPSHOT\n"<<Snapshot();
  out<<"\nInterpretation:\nOBSERVED verifies only the evidence described, not image quality or every frame.\nNOT_OBSERVED means coverage missing, not a proven defect. OFF does not prove native fallback works.\nCHECK_FAILED means the window included an error or rejected input; successful frames may also be present.\nSettings changes, focus loss, zero render presents or an incomplete outcome invalidate a whole-window comparison.\nCounts at the collection boundaries are approximate; RELAX completion excludes earlier generations.\nNative renderer.ini is saved configuration, not proof of live native graphics values. Missing files are reported in saved-files.txt.\nReflection sample values, DLSS/HDR/native quality options, glass, DirectStorage transfers and VRAM monitoring are configuration-only unless runtime evidence is explicitly listed.\nNo universal ALL PASS is issued. This is not a performance benchmark. No textures, images, ETW/WPR or shadow inventory are captured.\n";
+ Write(L"relax-failures.csv",std::string("phase,reason,thread_frame,present,guide_frame,same_view,recordings,pending_recordings\n")+Failures("settings_check"));
  Write(L"SUMMARY.txt",out.str());Write(L"settings-end.json",control_native_menu::Configuration());
  if(ioFailed){MessageBoxW(game,L"Some report files could not be written. The partial folder is retained under LOCALAPPDATA/ControlFGProbe.",L"Settings check incomplete",MB_OK);return;}
  wchar_t sys[MAX_PATH]{},exe[MAX_PATH]{};GetSystemDirectoryW(sys,MAX_PATH);swprintf_s(exe,L"%s\\tar.exe",sys);

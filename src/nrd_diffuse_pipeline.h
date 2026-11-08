@@ -19,6 +19,8 @@ class DiffusePipeline {
  UINT width,height,increment;
  float historyScale=0;
  bool failed=false;
+ const char* rejection="native_transaction_contract";
+ bool Reject(const char* why){rejection=why;return false;}
  static void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("NRD conversion D3D12 failure");}
  static void Transition(ID3D12GraphicsCommandList* l,External& r,D3D12_RESOURCE_STATES next){
   D3D12_RESOURCE_BARRIER b{};
@@ -66,33 +68,35 @@ public:
  }
  // Live insertion uses a fresh range in the ALREADY BOUND native heap. Never
  // switch heaps there: doing so also invalidates the game's graphics tables.
+ void BeginAttempt()noexcept{rejection="native_transaction_contract";}
+ const char* LastFailure()const noexcept{return rejection;}
  size_t DispatchCount()const noexcept{return session.Plan().size();}
  UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
  bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0}){
-  if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return false;
-  if(arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return false;
-  for(float v:conversion.motionScale)if(!std::isfinite(v))return false;
-  for(float v:conversion.motionBias)if(!std::isfinite(v))return false;
+  if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return Reject("filter_input_contract");
+  if(arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_input_contract");
+  for(float v:conversion.motionScale)if(!std::isfinite(v))return Reject("filter_input_contract");
+  for(float v:conversion.motionBias)if(!std::isfinite(v))return Reject("filter_input_contract");
   // Motion has already been converted to normalized unjittered screen units.
   // Reject double scaling or world-space interpretation in NRD itself.
-  if(frame.settings.isMotionVectorInWorldSpace||frame.settings.motionVectorScale[0]!=1||frame.settings.motionVectorScale[1]!=1||frame.settings.motionVectorScale[2]!=0)return false;
-  for(float v:frame.settings.motionVectorBias)if(v!=0)return false;
+  if(frame.settings.isMotionVectorInWorldSpace||frame.settings.motionVectorScale[0]!=1||frame.settings.motionVectorScale[1]!=1||frame.settings.motionVectorScale[2]!=0)return Reject("filter_input_contract");
+  for(float v:frame.settings.motionVectorBias)if(v!=0)return Reject("filter_input_contract");
   std::array<External*,7> all{};for(unsigned i=0;i<6;++i)all[i]=&bindings.input[i];all[6]=&bindings.output;
-  for(unsigned i=0;i<7;++i){if(!all[i]->resource)return false;auto d=all[i]->resource->GetDesc();
-   if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||d.DepthOrArraySize!=1||!d.MipLevels||d.SampleDesc.Count!=1)return false;
+  for(unsigned i=0;i<7;++i){if(!all[i]->resource)return Reject("filter_input_contract");auto d=all[i]->resource->GetDesc();
+   if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||d.DepthOrArraySize!=1||!d.MipLevels||d.SampleDesc.Count!=1)return Reject("filter_input_contract");
    const bool rgba=d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT||d.Format==DXGI_FORMAT_R32G32B32A32_FLOAT;
    const bool rg=d.Format==DXGI_FORMAT_R16G16_FLOAT||d.Format==DXGI_FORMAT_R32G32_FLOAT;
    const bool scalar=d.Format==DXGI_FORMAT_R16_FLOAT||d.Format==DXGI_FORMAT_R32_FLOAT;
-   if(!rgba&&!(i==Motion&&rg)&&!((i==ViewZ||i==HitDistance)&&(rg||scalar)))return false;
+   if(!rgba&&!(i==Motion&&rg)&&!((i==ViewZ||i==HitDistance)&&(rg||scalar)))return Reject("filter_input_contract");
    Ptr<ID3D12Device> resourceDevice;Ptr<IUnknown> ownerIdentity,deviceIdentity;
    if(FAILED(all[i]->resource->GetDevice(IID_PPV_ARGS(&resourceDevice)))||
-      FAILED(resourceDevice.As(&ownerIdentity))||FAILED(device.As(&deviceIdentity))||ownerIdentity.Get()!=deviceIdentity.Get())return false;
-   for(unsigned j=0;j<i;++j)if(all[i]->resource==all[j]->resource)return false;
+      FAILED(resourceDevice.As(&ownerIdentity))||FAILED(device.As(&deviceIdentity))||ownerIdentity.Get()!=deviceIdentity.Get())return Reject("filter_input_contract");
+   for(unsigned j=0;j<i;++j)if(all[i]->resource==all[j]->resource)return Reject("filter_input_contract");
   }
-  if(!(bindings.output.resource->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return false;
+  if(!(bindings.output.resource->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return Reject("filter_input_contract");
   Frame actual=frame;
   if(historyScale&&historyScale!=conversion.radianceScale)actual.settings.accumulationMode=nrd::AccumulationMode::CLEAR_AND_RESTART;
-  if(!session.Prepare(actual,queue))return false;
+  if(!session.Prepare(actual,queue))return Reject(session.LastFailure());
   conversion.extent[0]=width;conversion.extent[1]=height;conversion.denoisingRange=actual.settings.denoisingRange;
   bool commands=false;
   std::array<D3D12_RESOURCE_STATES,7> original{};for(unsigned i=0;i<7;++i)original[i]=all[i]->state;
@@ -138,7 +142,7 @@ public:
    // Restore states as well as synchronizing writes when the native output
    // was already UAV. Engine state bookkeeping therefore remains accurate.
    for(unsigned i=0;i<7;++i)Transition(list,*all[i],original[i]);
-   historyScale=conversion.radianceScale;return true;
+   historyScale=conversion.radianceScale;rejection="none";return true;
   }catch(...){
    session.CancelAfterReset();
    if(commands){
@@ -147,7 +151,7 @@ public:
     for(unsigned i=0;i<7;++i)Transition(list,*all[i],original[i]);
     failed=true;backend->AbandonAfterReset();
    }
-   return false;
+   return Reject(commands?"filter_recording_exception":"filter_preparation_exception");
   }
  }
  bool Submitted(std::uint64_t queue,std::uint64_t fence){return !failed&&session.Submitted(queue,fence);}

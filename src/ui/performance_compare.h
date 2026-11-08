@@ -15,7 +15,7 @@ inline HANDLE packager=nullptr;
 inline bool ioFailed=false;
 inline std::string outcome="incomplete";
 struct Saved {Mode mode{};bool owned=false,lighting=false;unsigned rays=0,quality=0,volume=0,surface=0,request=0,manualGI=0,contact=0,spec=0;control_rr_gi::StageMode stage{};} saved;
-struct Result {uint64_t evidence[settings_check::Count]{};uint64_t skipped=0;unsigned sampleMask=0;bool observed=false;std::string settings;};
+struct Result {uint64_t evidence[settings_check::Count]{};uint64_t skipped=0;unsigned sampleMask=0;bool observed=false;std::string settings,failures;};
 inline Result results[phaseCount]{};
 struct GPU {unsigned phase;uint64_t present;unsigned stage;double ms;};
 inline std::vector<GPU> gpu;
@@ -63,7 +63,7 @@ inline void Summary(){
  for(const auto& s:gpu){raw<<conditions[s.phase].name<<','<<s.present<<','<<performance::Name(performance::Stage(s.stage))<<','<<s.ms<<'\n';perPresent[{s.phase,s.stage,s.present}]+=s.ms;}
  Write(L"gpu-timings.csv",raw.str());
  Statistics stats[phaseCount];std::ostringstream out,table,stage;
- out<<"R388 RR PERFORMANCE COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, 4 GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR, clamp, reflections sample policy (Native), FG OFF and unrelated Visual settings held fixed.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents; unrelated compute/rays excluded.\n\n";
+ out<<"R389 RR PERFORMANCE COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, 4 GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR, clamp, reflections sample policy (Native), FG OFF and unrelated Visual settings held fixed.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents; unrelated compute/rays excluded.\n\n";
  table<<"phase,intervals,mean_frame_ms,p50_ms,p95_ms,p99_ms,average_fps,one_percent_low_fps,coverage_ok,skipped_gpu_samples\n";
  for(unsigned p=0;p<phaseCount;++p){stats[p]=Summarize(intervals[p]);auto& s=stats[p];
   table<<conditions[p].name<<','<<s.count<<','<<s.mean<<','<<s.p50<<','<<s.p95<<','<<s.p99<<','<<(s.mean?1000/s.mean:0)<<','<<s.low1<<','<<results[p].observed<<','<<results[p].skipped<<'\n';
@@ -87,6 +87,7 @@ inline void Summary(){
   out<<results[p].settings<<'\n';
  }
  Write(L"gpu-stage-summary.csv",stage.str());
+ std::string failures="phase,reason,thread_frame,present,guide_frame,same_view,recordings,pending_recordings\n";for(const auto& r:results)failures+=r.failures;Write(L"relax-failures.csv",failures);
  out<<"\nGPU stages are selected spans, not total frame GPU time. GI rays INCLUDE temporal visibility; do not add the nested visibility span again. RELAX includes prepare/finish conversion. Other compute may overlap explicit scopes.\nCPU spans measure command recording/API work, not whole-frame CPU utilization. Frame intervals are application Present cadence with FG off; they include waits and are not GPU durations.\nNo textures, shader dumps or continuous shadow inventory. Counter/fence boundary differences are normal; failures and unobserved paths are not silently treated as successful measurements.\nProfiler fault="<<performance::fault.load()<<" dropped_frame_rows="<<control_compare::dropped.load()<<"\n";
  Write(L"SUMMARY.txt",out.str());
 }
@@ -107,7 +108,7 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return false;qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return false;
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-R388-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
+ folder=root+L"\\Performance-R389-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
@@ -148,6 +149,7 @@ inline void Tick(HWND game,uint64_t now){
   control_compare::enabled=false;performance::enabled=false;settings_check::End();
   for(unsigned e=0;e<settings_check::Count;++e)results[step].evidence[e]=settings_check::counts[e].load();
   results[step].sampleMask=settings_check::giSampleMask.load();
+  results[step].failures=settings_report::Failures(conditions[step].name);
   results[step].settings=settings_report::Snapshot();results[step].skipped=performance::skipped.load()-skippedStart;
   using namespace settings_check;const auto* e=results[step].evidence;
   results[step].observed=e[RRSuccess]>100&&!e[RRFailure]&&!e[RelaxFallback]&&

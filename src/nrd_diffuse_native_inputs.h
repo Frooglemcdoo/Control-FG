@@ -45,7 +45,9 @@ inline bool Read(const control_rr_native_clamp::Api& api,UINT64 frame,UINT64 vie
  if(!frame||!view||!api.ready)return false;
  __try {
   Inputs next{};DWORD fault=0;
-  if(!ReadCamera(&next.camera,&fault,&reason)||next.camera.engineFrame!=frame||reinterpret_cast<UINT64>(next.camera.view)!=view)return false;
+  if(!ReadCamera(&next.camera,&fault,&reason))return false;
+  if(next.camera.engineFrame!=frame){reason="native_camera_frame_changed";return false;}
+  if(reinterpret_cast<UINT64>(next.camera.view)!=view){reason="native_camera_view_changed";return false;}
   const control_rr_provider::Access access{nullptr,&RRProviderEntry,&RRProviderCompare};
   const char* names[]={"g_DLF_rwtColorSource","g_tGeometryVelocityTexture","g_tHitInfo","g_vInvScreenRes","g_vInvOutputRes"};
   int ids[5]{};for(unsigned i=0;i<5;++i)if(!Resolve(api,names[i],ids[i])){reason="native_provider_name";return false;}
@@ -72,7 +74,8 @@ inline bool Read(const control_rr_native_clamp::Api& api,UINT64 frame,UINT64 vie
   for(unsigned i=0;i<3;++i)if(!control_rr_provider::Authenticate(access,ids[i],values[i],check))return false;
   if(!control_rr_provider::Authenticate(access,ids[3],inverseScreen,vectorCheck)||
      !control_rr_provider::Authenticate(access,ids[4],inverseOutput,vectorCheck))return false;
-  UINT64 current=0;if(!ReadEngineFrameSafe(&current,&fault)||current!=frame)return false;
+  UINT64 current=0;if(!ReadEngineFrameSafe(&current,&fault)){reason="native_frame_read_failed";return false;}
+  if(current!=frame){reason="native_frame_changed_during_read";return false;}
   output=next;reason="ready";return true;
  }__except(EXCEPTION_EXECUTE_HANDLER){output={};reason="native_input_exception";return false;}
 }

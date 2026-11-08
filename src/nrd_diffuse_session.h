@@ -57,6 +57,7 @@ class Session {
  nrd::Instance* instance=nullptr;
  Frame last{},candidate{};
  bool pending=false,hasLast=false,needsReset=true;
+ const char* rejection="session_not_entered";
  std::uint32_t index=0;
  std::uint64_t lastFence=0,queue=0;
  std::vector<Dispatch> plan;
@@ -72,8 +73,11 @@ public:
  const nrd::InstanceDesc& Description()const{return *nrd::GetInstanceDesc(*instance);}
  const std::vector<Dispatch>& Plan()const{return plan;}
  const Frame* PreparedFrame()const noexcept{return pending?&candidate:nullptr;}
+ const char* LastFailure()const noexcept{return rejection;}
  bool Prepare(const Frame& f,std::uint64_t queueId){
-  if(pending||!queueId||(queue&&queue!=queueId)||(hasLast&&f.frame<=last.frame))return false;
+  if(pending){rejection="session_submission_pending";return false;}
+  if(!queueId||(queue&&queue!=queueId)){rejection="session_queue_changed";return false;}
+  if(hasLast&&f.frame<=last.frame){rejection="session_frame_not_advancing";return false;}
   const bool restart=needsReset||!hasLast||f.frame!=last.frame+1||f.view!=last.view||
    f.producer!=last.producer||f.width!=last.width||f.height!=last.height;
   Frame effective=f;
@@ -84,7 +88,7 @@ public:
   std::memcpy(s.worldToViewMatrixPrev,previous.worldToViewMatrix,sizeof(s.worldToViewMatrixPrev));
   std::memcpy(s.viewToClipMatrixPrev,previous.viewToClipMatrix,sizeof(s.viewToClipMatrixPrev));
   std::memcpy(s.cameraJitterPrev,previous.cameraJitter,sizeof(s.cameraJitterPrev));
-  if(!Valid(effective))return false;
+  if(!Valid(effective)){rejection="session_frame_contract";return false;}
   s.resourceSize[0]=s.rectSize[0]=f.width;s.resourceSize[1]=s.rectSize[1]=f.height;
   s.resourceSizePrev[0]=s.rectSizePrev[0]=hasLast?last.width:f.width;
   s.resourceSizePrev[1]=s.rectSizePrev[1]=hasLast?last.height:f.height;
@@ -108,7 +112,7 @@ public:
    plan.push_back(std::move(owned));
   }
   if(plan.empty())throw std::runtime_error("NRD returned no diffuse dispatches");
-  candidate=effective;queue=queueId;pending=true;needsReset=false;return true;
+  candidate=effective;queue=queueId;pending=true;needsReset=false;rejection="none";return true;
  }
  // The D3D12 adapter calls this only after actual Execute + successful Signal.
  bool Submitted(std::uint64_t queueId,std::uint64_t fence){

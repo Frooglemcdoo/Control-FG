@@ -51,7 +51,11 @@ struct Mute {bool observing=gi_dual_bridge::observing;hooks::Mute bindings;
  Mute(){gi_dual_bridge::observing=false;control_rr_clamp::active=nullptr;}
  ~Mute(){control_rr_clamp::active=nativeRequest;gi_dual_bridge::observing=observing;}};
 static void Reason(const char* reason) noexcept {
- if(settings_check::active.load()&&strcmp(reason,"active")){settings_check::reason=reason;settings_check::Record(settings_check::RelaxFallback);}
+ if(settings_check::active.load()&&strcmp(reason,"active")){
+  settings_check::reason=reason;settings_check::Record(settings_check::RelaxFallback);
+  unsigned pending=0;for(const auto& r:recordings)if(!r->reset&&!r->submitted)++pending;
+  settings_check::RecordFailure(reason,pass.frame,presentCount.load(),guideFrame,unsigned(recordings.size()),pending,pass.view==guideView);
+ }
  gi_dual_bridge::status=2;
  static const char* last=nullptr;if(last!=reason){last=reason;Log("NRD_R384 admission=%s",reason);}
 }
@@ -85,7 +89,7 @@ static bool Initialize(ID3D12CommandQueue* q) {
  auto* d=PTGlassRuntime::device.Get();if(!d||!q)return false;
  ComPtr<ID3D12Fence> f;if(FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&f)))||
     !native_lighting::rt_spot_table_audit::InstallGameQueue(q))return false;
- recordings.reserve(64);queue=q;fence=f;active=true;return true;
+ recordings.reserve(64);retiredWork.reserve(8);queue=q;fence=f;active=true;return true;
 }
 static Recording* GetRecording(ID3D12GraphicsCommandList4* list,UINT64 generation) {
  for(auto& r:recordings)if(r->list.Get()==list&&!r->reset){
@@ -217,7 +221,9 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   control_nrd_native::Texture target;if(!NamedTexture("g_DLF_rwtColorTarget",target)||target.state!=D3D12_RESOURCE_STATE_UNORDERED_ACCESS){Reason("filter_target");return false;}
   const UINT w=epoch->width,h=epoch->height;if(x!=(w+7)/8||y!=(h+7)/8){Reason("filter_extent");return false;}
   control_nrd::CameraMatrices camera;std::array<float,2> jitter;
-  if(!control_nrd::ConvertCamera(in.camera,camera)||!CameraMatches(in,camera)||!control_nrd::NativeClipShiftToNrdJitter(in.clipShift[0],in.clipShift[1],w,h,jitter)){Reason("camera_contract");return false;}
+  if(!control_nrd::ConvertCamera(in.camera,camera)){Reason("camera_matrix_contract");return false;}
+  if(!CameraMatches(in,camera)){Reason("camera_provider_mismatch");return false;}
+  if(!control_nrd::NativeClipShiftToNrdJitter(in.clipShift[0],in.clipShift[1],w,h,jitter)){Reason("camera_jitter_range");return false;}
   control_nrd::Frame f;f.frame=pass.frame;f.view=pass.view;f.producer=guideProducer;f.width=std::uint16_t(w);f.height=std::uint16_t(h);
   f.sameFrameGuides=f.worldNormals=f.linearViewDepth=f.unjitteredMotion=f.radianceContract=f.hitDistanceContract=true;
   std::memcpy(f.settings.worldToViewMatrix,camera.worldToView.data(),64);std::memcpy(f.settings.viewToClipMatrix,camera.viewToClip.data(),64);
@@ -234,10 +240,11 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   record->epoch=epoch;
   if(retiredWork.empty()){record->work=std::make_unique<control_nrd::NativeTransaction::Work>();settings_check::Record(settings_check::RelaxWorkCreated);}
   else {record->work=std::move(retiredWork.back());retiredWork.pop_back();settings_check::Record(settings_check::RelaxWorkReused);}
+  epoch->filter->BeginAttempt();
   if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {arena.heap,arena.first,arena.count},*record->work)){
    if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}
    else record->work.reset();
-   Reason("filter_contract");return false;
+   Reason(epoch->filter->LastFailure());return false;
   }
   settings_check::Record(settings_check::RelaxPasses,epoch->filter->DispatchCount());
   record->checkGeneration=settings_check::active.load()?settings_check::generation.load():0;settings_check::RecordFor(settings_check::RelaxRecorded,record->checkGeneration);
