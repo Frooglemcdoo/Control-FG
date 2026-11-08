@@ -1,0 +1,39 @@
+name: Validate GI filter feedback
+on:
+  push:
+    branches: [work/gi-modernization]
+    paths:
+      - 'tools/test-gi-full-chain.cpp'
+      - 'tools/gi_motion_history.py'
+      - 'tools/gi_spatial_history.py'
+      - '.github/workflows/gi-filter-feedback.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  feedback:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Execute production filter bytecode with six-pass history feedback
+        shell: cmd
+        run: |
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if errorlevel 1 exit /b 1
+          if not exist build mkdir build
+          python tools/gi_motion_history.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-gi-owned.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned-spatial.cpp /Febuild\compile-gi-owned-spatial.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-gi-owned-spatial.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-full-chain.exe
+          if errorlevel 1 exit /b 1
