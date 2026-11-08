@@ -15,7 +15,7 @@ class D3D12Backend {
  Ptr<ID3D12Device> device;Ptr<ID3D12RootSignature> root;
  std::vector<Ptr<ID3D12PipelineState>> pipelines;
  std::vector<Texture> permanent,transient;
- UINT increment=0,srvCount=0,uavCount=0,constantStride=0;
+ UINT increment=0,srvCount=0,uavCount=0,constantStride=0,maxSets=0;
  std::uint16_t width=0,height=0;
  bool poisoned=false;
  static void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("NRD D3D12 operation failed");}
@@ -44,6 +44,7 @@ class D3D12Backend {
   else if(next==D3D12_RESOURCE_STATE_UNORDERED_ACCESS){b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=resource;list->ResourceBarrier(1,&b);}
  }
 public:
+ struct Arena {ID3D12DescriptorHeap* heap=nullptr;UINT first=0,count=0;};
  struct External {ID3D12Resource* resource=nullptr;D3D12_RESOURCE_STATES state=D3D12_RESOURCE_STATE_COMMON;};
  using Inputs=std::map<nrd::ResourceType,External>;
  struct Recording {
@@ -53,6 +54,7 @@ public:
   Ptr<ID3D12RootSignature> root;
   std::vector<Ptr<ID3D12PipelineState>> pipelines;
   void* mapped=nullptr;
+  UINT first=0;bool borrowed=false;
   ~Recording(){if(mapped)constants->Unmap(0,nullptr);}
   Recording()=default;Recording(const Recording&)=delete;Recording&operator=(const Recording&)=delete;
  };
@@ -61,6 +63,7 @@ public:
   increment=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
   srvCount=(std::max)(1u,desc.descriptorPoolDesc.perSetTexturesMaxNum);uavCount=(std::max)(1u,desc.descriptorPoolDesc.perSetStorageTexturesMaxNum);
   constantStride=(desc.constantBufferMaxDataSize+255)&~255u;
+  maxSets=desc.descriptorPoolDesc.setsMaxNum;
   D3D12_DESCRIPTOR_RANGE ranges[2]{};
   ranges[0]={D3D12_DESCRIPTOR_RANGE_TYPE_SRV,srvCount,desc.resourcesBaseRegisterIndex,desc.resourcesSpaceIndex,0};
   ranges[1]={D3D12_DESCRIPTOR_RANGE_TYPE_UAV,uavCount,desc.resourcesBaseRegisterIndex,desc.resourcesSpaceIndex,0};
@@ -86,7 +89,8 @@ public:
  }
  // Use one owner/queue and record only after the previous session was submitted.
  // This class deliberately does not signal fences or decide native list lifetime.
- void AllocateRecording(const std::vector<Dispatch>& plan,const Inputs& inputs,Recording& recording){
+ UINT MaxDescriptors()const noexcept{return maxSets*(srvCount+uavCount);}
+ void AllocateRecording(const std::vector<Dispatch>& plan,const Inputs& inputs,Recording& recording,Arena arena={nullptr,0,0}){
   if(poisoned||plan.empty()||recording.heap)throw std::runtime_error("Invalid NRD recording");
   // Complete validation before touching the command list.
   for(const auto&d:plan){
@@ -101,7 +105,12 @@ public:
    if(reads>srvCount||writes>uavCount)throw std::runtime_error("NRD descriptor bounds");
   }
   D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=UINT(plan.size())*(srvCount+uavCount);hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-  Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&recording.heap)));
+  if(arena.heap){
+   const auto d=arena.heap->GetDesc();Ptr<ID3D12Device> owner;
+   if(d.Type!=hd.Type||!(d.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)||arena.first>d.NumDescriptors||arena.count>d.NumDescriptors-arena.first||arena.count<hd.NumDescriptors||
+      FAILED(arena.heap->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device.Get())throw std::runtime_error("Invalid native NRD descriptor arena");
+   recording.heap=arena.heap;recording.first=arena.first;recording.borrowed=true;
+  }else Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&recording.heap)));
   D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
   D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=UINT64(constantStride)*plan.size();bd.Height=1;bd.DepthOrArraySize=bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&recording.constants)));
@@ -116,9 +125,10 @@ public:
  void RecordPrepared(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
   if(poisoned||!list||!recording.heap||!recording.constants||!recording.mapped)throw std::runtime_error("NRD recording was not prepared");
   auto cpu=recording.heap->GetCPUDescriptorHandleForHeapStart();auto gpu=recording.heap->GetGPUDescriptorHandleForHeapStart();
+  cpu.ptr+=SIZE_T(recording.first)*increment;gpu.ptr+=UINT64(recording.first)*increment;
   auto ch=[&](UINT i){return D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr+SIZE_T(i)*increment};};
   auto gh=[&](UINT i){return D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr+UINT64(i)*increment};};
-  auto*heap=recording.heap.Get();list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());
+  auto*heap=recording.heap.Get();if(!recording.borrowed)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());
   for(UINT i=0;i<plan.size();++i){const auto&d=plan[i];const UINT base=i*(srvCount+uavCount);
    // Deterministic null descriptors for unused entries of the shared layout.
    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;

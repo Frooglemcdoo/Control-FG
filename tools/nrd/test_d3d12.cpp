@@ -83,12 +83,19 @@ int main(){try{
 #ifdef CONTROL_NRD_PIPELINE_TEST
   control_nrd::DiffusePipeline::Work recording;
   control_nrd::DiffusePipeline::Constants conversion;
+  // Mimic the native renderer's already-bound heap with a reserved prefix.
+  ComPtr<ID3D12DescriptorHeap> nativeHeap;D3D12_DESCRIPTOR_HEAP_DESC arenaDesc{};
+  arenaDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;arenaDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  arenaDesc.NumDescriptors=31+pipeline.MaxDescriptors();Check(device->CreateDescriptorHeap(&arenaDesc,IID_PPV_ARGS(&nativeHeap)));
+  ID3D12DescriptorHeap* boundHeap=nativeHeap.Get();list->SetDescriptorHeaps(1,&boundHeap);
+  control_nrd::D3D12Backend::Arena arena{nativeHeap.Get(),31,pipeline.MaxDescriptors()};
   conversion.radianceScale=frame<64?2.f:1.f; // exercise scale-epoch restart
   if(frame==1){
    auto alias=bindings;alias.output=alias.input[0];control_nrd::DiffusePipeline::Work rejected;
    Require(!pipeline.Record(list.Get(),f,1,alias,conversion,rejected),"aliased native output accepted");
   }
-  Require(pipeline.Record(list.Get(),f,1,bindings,conversion,recording),"complete pipeline rejected");
+  Require(pipeline.Record(list.Get(),f,1,bindings,conversion,recording,arena),"complete pipeline rejected");
+  Require(recording.relax.borrowed&&recording.relax.heap.Get()==nativeHeap.Get(),"native descriptor heap not retained");
   {control_nrd::DiffusePipeline::Work duplicate;Require(!pipeline.Record(list.Get(),f,1,bindings,conversion,duplicate),"pending frame accepted twice");}
   for(UINT i=0;i<InputCount;++i)Require(input(i).state==D3D12_RESOURCE_STATE_COPY_DEST,"input state not restored");
 #else

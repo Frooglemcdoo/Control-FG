@@ -60,8 +60,12 @@ public:
   }
   backend=std::make_unique<D3D12Backend>(d,session.Description(),std::uint16_t(w),std::uint16_t(h));
  }
- bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work){
+ // Live insertion uses a fresh range in the ALREADY BOUND native heap. Never
+ // switch heaps there: doing so also invalidates the game's graphics tables.
+ UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
+ bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0}){
   if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return false;
+  if(arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return false;
   for(float v:conversion.motionScale)if(!std::isfinite(v))return false;
   for(float v:conversion.motionBias)if(!std::isfinite(v))return false;
   // Motion has already been converted to normalized unjittered screen units.
@@ -93,16 +97,18 @@ public:
    for(unsigned i=0;i<5;++i)inputs[kinds[i]]={textures[slots[i]].Get(),states[slots[i]]};
    // Every allocation precedes any command. Allocation failure can return to
    // native without partially recording a conversion or changing tracked states.
-   backend->AllocateRecording(session.Plan(),inputs,work.relax);
+   D3D12Backend::Arena relaxArena=arena;if(arena.heap){relaxArena.first+=22;relaxArena.count-=22;}
+   backend->AllocateRecording(session.Plan(),inputs,work.relax,relaxArena);
    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=22;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-   Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&work.heap)));
+   if(arena.heap)work.heap=arena.heap;else Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&work.heap)));
    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
    D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=256;bd.Height=1;bd.DepthOrArraySize=bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
    Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&work.constants)));
    void* mapped=nullptr;D3D12_RANGE empty{};Check(work.constants->Map(0,&empty,&mapped));std::memcpy(mapped,&conversion,sizeof(conversion));work.constants->Unmap(0,nullptr);
    for(auto* r:all)work.retained.emplace_back(r->resource);for(auto& t:textures)work.retained.push_back(t);
    work.root=root;work.prepare=prepare;work.finish=finish;
-   const auto cpu=work.heap->GetCPUDescriptorHandleForHeapStart();const auto gpu=work.heap->GetGPUDescriptorHandleForHeapStart();
+   auto cpu=work.heap->GetCPUDescriptorHandleForHeapStart();auto gpu=work.heap->GetGPUDescriptorHandleForHeapStart();
+   if(arena.heap){cpu.ptr+=SIZE_T(arena.first)*increment;gpu.ptr+=UINT64(arena.first)*increment;}
    auto ch=[&](UINT i){return D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr+SIZE_T(i)*increment};};
    auto gh=[&](UINT i){return D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr+UINT64(i)*increment};};
    auto srv=[&](ID3D12Resource* r,UINT i){D3D12_SHADER_RESOURCE_VIEW_DESC v{};v.Format=r?r->GetDesc().Format:DXGI_FORMAT_R16G16B16A16_FLOAT;v.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;v.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;v.Texture2D.MipLevels=1;device->CreateShaderResourceView(r,&v,ch(i));};
@@ -112,7 +118,7 @@ public:
    srv(textures[5].Get(),11);srv(textures[4].Get(),12);srv(bindings.input[RawGI].resource,13);
    for(UINT i=14;i<17;++i)srv(nullptr,i);uav(bindings.output.resource,17);for(UINT i=18;i<22;++i)uav(nullptr,i);
    std::array<D3D12_RESOURCE_STATES,7> original{};for(unsigned i=0;i<7;++i)original[i]=all[i]->state;
-   auto bind=[&](ID3D12PipelineState* ps,UINT base){auto* heap=work.heap.Get();list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());list->SetPipelineState(ps);list->SetComputeRootConstantBufferView(0,work.constants->GetGPUVirtualAddress());list->SetComputeRootDescriptorTable(1,gh(base));list->SetComputeRootDescriptorTable(2,gh(base+6));};
+   auto bind=[&](ID3D12PipelineState* ps,UINT base){auto* heap=work.heap.Get();if(!arena.heap)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());list->SetPipelineState(ps);list->SetComputeRootConstantBufferView(0,work.constants->GetGPUVirtualAddress());list->SetComputeRootDescriptorTable(1,gh(base));list->SetComputeRootDescriptorTable(2,gh(base+6));};
    commands=true;
    for(auto& input:bindings.input)Transition(list,input,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
    for(unsigned i=0;i<5;++i){External t{textures[i].Get(),states[i]};Transition(list,t,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);states[i]=t.state;}
