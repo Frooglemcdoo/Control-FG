@@ -1,3 +1,4 @@
+#include "../src/settings_check_state.h"
 #define NOMINMAX
 #include <windows.h>
 #include <d3d12.h>

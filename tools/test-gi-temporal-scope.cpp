@@ -1,3 +1,4 @@
+#include "../src/settings_check_state.h"
 #include <windows.h>
 #include <cstdint>
 #include <cassert>
