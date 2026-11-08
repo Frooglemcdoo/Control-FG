@@ -26,6 +26,17 @@ inline bool Near(const Matrix&a,const Matrix&b) {
 struct CameraMatrices {
  std::array<float,16> worldToView{},viewToWorld{},viewToClip{},clipToView{};
 };
+// Audited native projection translation: renderer instance +0x480/+0x488.
+// NGX raster offsets are (width*dx/2, -height*dy/2). NRD asks for sample
+// offsets instead: the unjittered ray through a raster texel subtracts NGX.
+// See validation/jitter-native/evidence.json and rr_jitter_ray.hlsli.
+inline bool NativeClipShiftToNrdJitter(double dx,double dy,unsigned width,unsigned height,
+                                     std::array<float,2>& output) {
+ if(!width||!height||!std::isfinite(dx)||!std::isfinite(dy))return false;
+ const double x=-.5*width*dx,y=.5*height*dy;
+ if(std::abs(x)>.500001||std::abs(y)>.500001)return false;
+ output={float(x),float(y)};return true;
+}
 template<class Camera> bool ConvertCamera(const Camera& c,CameraMatrices& output) {
  const auto wv=ExpandAffine(c.worldToView),vw=ExpandAffine(c.viewToWorld);
  Matrix vc{},cv{},wc{},cw{},identity{};

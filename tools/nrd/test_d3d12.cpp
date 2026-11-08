@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <dxgi1_6.h>
+#include <d3d12sdklayers.h>
 #include "../../src/nrd_diffuse_d3d12.h"
 #ifdef CONTROL_NRD_PIPELINE_TEST
 #include "../../src/nrd_diffuse_pipeline.h"
@@ -18,8 +19,10 @@ constexpr UINT InputCount=6,OutputIndex=6;
 constexpr UINT InputCount=4,OutputIndex=4;
 #endif
 int main(){try{
+ ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));ComPtr<IDXGIAdapter> adapter;Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
  ComPtr<ID3D12Device> device;Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)));
+ ComPtr<ID3D12InfoQueue> messages;Check(device.As(&messages));
  ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};Check(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue)));
  ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
  ComPtr<ID3D12GraphicsCommandList> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
@@ -81,7 +84,12 @@ int main(){try{
   control_nrd::DiffusePipeline::Work recording;
   control_nrd::DiffusePipeline::Constants conversion;
   conversion.radianceScale=frame<64?2.f:1.f; // exercise scale-epoch restart
+  if(frame==1){
+   auto alias=bindings;alias.output=alias.input[0];control_nrd::DiffusePipeline::Work rejected;
+   Require(!pipeline.Record(list.Get(),f,1,alias,conversion,rejected),"aliased native output accepted");
+  }
   Require(pipeline.Record(list.Get(),f,1,bindings,conversion,recording),"complete pipeline rejected");
+  {control_nrd::DiffusePipeline::Work duplicate;Require(!pipeline.Record(list.Get(),f,1,bindings,conversion,duplicate),"pending frame accepted twice");}
   for(UINT i=0;i<InputCount;++i)Require(input(i).state==D3D12_RESOURCE_STATE_COPY_DEST,"input state not restored");
 #else
   Require(session.Prepare(f,1),"plan rejected");control_nrd::D3D12Backend::Recording recording;backend.Record(list.Get(),session.Plan(),inputs,recording);
@@ -109,5 +117,9 @@ int main(){try{
   // Remove all recorded references before releasing this frame's descriptors.
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));Check(list->Close());
  }
- CloseHandle(event);std::puts("PASS actual RELAX_DIFFUSE D3D12 dispatch chain and independent history");return 0;
+ CloseHandle(event);
+ unsigned errors=0;for(UINT64 i=0;i<messages->GetNumStoredMessages();++i){SIZE_T bytes=0;Check(messages->GetMessage(i,nullptr,&bytes));std::vector<unsigned char> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,message,&bytes));
+  if(message->Severity==D3D12_MESSAGE_SEVERITY_ERROR||message->Severity==D3D12_MESSAGE_SEVERITY_CORRUPTION){++errors;std::fprintf(stderr,"D3D12: %s\n",message->pDescription);}}
+ Require(errors==0,"D3D12 validation errors");
+ std::puts("PASS actual RELAX_DIFFUSE D3D12 dispatch chain and independent history; clean debug layer");return 0;
  }catch(const std::exception&e){std::fprintf(stderr,"%s\n",e.what());return 1;}}
