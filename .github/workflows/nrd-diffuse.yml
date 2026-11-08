@@ -17,4 +17,13 @@ jobs:
       - name: Build actual NRD and D3D12 adapter
         run: cmake --build nrd-build --config Release --parallel 4
       - name: Validate contracts and WARP output
-        run: ctest --test-dir nrd-build -C Release --output-on-failure
+        run: ctest --test-dir nrd-build -C Release --output-on-failure -V
+      - name: Compile native receiver and NRD conversion shaders
+        shell: pwsh
+        run: |
+          $compiler = (Get-ChildItem nrd-build/_deps -Recurse -Filter dxc.exe | Select-Object -First 1).FullName
+          if (!$compiler) { throw 'NRD DXC was not found' }
+          foreach ($shader in @('receiver', 'prepare', 'finish')) {
+            & $compiler -T cs_6_0 -HV 2018 -E main -WX -I nrd-build/_deps/nrd-src/Shaders -Fo "nrd-build/nrd-$shader.dxil" "src/shaders/nrd_diffuse_$shader.hlsl"
+            if ($LASTEXITCODE -ne 0) { throw "Failed to compile $shader" }
+          }
