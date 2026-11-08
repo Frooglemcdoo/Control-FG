@@ -59,7 +59,7 @@ public:
  D3D12Backend(ID3D12Device* d,const nrd::InstanceDesc& desc,std::uint16_t w,std::uint16_t h):device(d),width(w),height(h){
   if(!d||!w||!h)throw std::runtime_error("NRD device or extent missing");
   increment=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-  srvCount=std::max(1u,desc.descriptorPoolDesc.perSetTexturesMaxNum);uavCount=std::max(1u,desc.descriptorPoolDesc.perSetStorageTexturesMaxNum);
+  srvCount=(std::max)(1u,desc.descriptorPoolDesc.perSetTexturesMaxNum);uavCount=(std::max)(1u,desc.descriptorPoolDesc.perSetStorageTexturesMaxNum);
   constantStride=(desc.constantBufferMaxDataSize+255)&~255u;
   D3D12_DESCRIPTOR_RANGE ranges[2]{};
   ranges[0]={D3D12_DESCRIPTOR_RANGE_TYPE_SRV,srvCount,desc.resourcesBaseRegisterIndex,desc.resourcesSpaceIndex,0};

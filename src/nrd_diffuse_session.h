@@ -86,8 +86,8 @@ public:
   // Fixed accumulation time avoids frame-rate-dependent temporal lag.
   const float frames=.25f*1000.f/s.timeDeltaBetweenFrames;
   relax.diffuseMaxAccumulatedFrameNum=std::uint32_t(std::fmin(60.f,std::fmax(2.f,frames)));
-  relax.diffuseMaxFastAccumulatedFrameNum=std::max(1u,relax.diffuseMaxAccumulatedFrameNum/5u);
-  relax.historyFixFrameNum=std::min(3u,relax.diffuseMaxFastAccumulatedFrameNum);
+  relax.diffuseMaxFastAccumulatedFrameNum=(std::max)(1u,relax.diffuseMaxAccumulatedFrameNum/5u);
+  relax.historyFixFrameNum=(std::min)(3u,relax.diffuseMaxFastAccumulatedFrameNum);
   relax.enableAntiFirefly=true;
   Check(nrd::SetCommonSettings(*instance,s));Check(nrd::SetDenoiserSettings(*instance,DiffuseId,&relax));
   const nrd::DispatchDesc* ds=nullptr;std::uint32_t count=0;

@@ -1,8 +1,21 @@
 #include "../../src/nrd_diffuse_session.h"
+#include "../../src/nrd_diffuse_camera.h"
 #include <cstdio>
 #include <cstdlib>
 static void Require(bool good,const char* what){if(!good){std::fprintf(stderr,"FAIL %s\n",what);std::exit(1);}}
 int main(){
+ struct Camera {double worldToView[12]{},viewToWorld[12]{},viewToClip[16]{},clipToView[16]{},worldToClip[16]{},clipToWorld[16]{};} camera;
+ // Rotated + translated camera: catches transpose and translation placement.
+ const double vw[]={0,1,0,-1,0,0,0,0,1,3,5,7};
+ const double wv[]={0,-1,0,1,0,0,0,0,1,-5,3,-7};
+ std::copy(vw,vw+12,camera.viewToWorld);std::copy(wv,wv+12,camera.worldToView);
+ for(unsigned i=0;i<16;++i)camera.viewToClip[i]=camera.clipToView[i]=i%5==0?1:0;
+ const auto wc=control_nrd::ExpandAffine(wv),cw=control_nrd::ExpandAffine(vw);
+ std::copy(wc.begin(),wc.end(),camera.worldToClip);std::copy(cw.begin(),cw.end(),camera.clipToWorld);
+ control_nrd::CameraMatrices converted;
+ Require(control_nrd::ConvertCamera(camera,converted),"native camera matrix relations");
+ Require(converted.viewToWorld[12]==3&&converted.worldToView[12]==-5&&converted.viewToWorld[1]==1,"camera column-vector convention");
+ camera.worldToClip[12]+=1;Require(!control_nrd::ConvertCamera(camera,converted),"mismatched camera snapshot rejected");
  control_nrd::Session session;control_nrd::Frame f;
  f.frame=1;f.view=1;f.width=64;f.height=32;
  f.sameFrameGuides=f.worldNormals=f.linearViewDepth=f.unjitteredMotion=f.radianceContract=f.hitDistanceContract=true;
