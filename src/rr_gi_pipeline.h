@@ -6,6 +6,7 @@
 #include "rt_surface_source_capture.h"
 #include <cstring>
 #include <new>
+#include <type_traits>
 #include "../build/gi_motion_history.generated.h"
 #include "../build/gi_spatial_history.generated.h"
 #include "../build/gi_owned_denoise.generated.h"
@@ -137,12 +138,14 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&spatialSteady&&!historyDisabled)replacement=b->stableEnergy?b->stableEnergy:b->bypass;
  if(b&&!b->spatial&&!spatialDispatch&&rawBypass)replacement=b->bypass;
  if(b && b->spatial==spatialDispatch && ownedDenoise)replacement=b->owned?b->owned:b->bypass;
+ if constexpr(std::is_convertible_v<DispatchFn,gi_dual_bridge::Dispatch>){
  if(b&&replacement&&replacement==b->stableEnergy&&count==1){
   gi_dual_bridge::status=2;
   if(const auto adapter=gi_dual_bridge::callbacks.load())if(b->dual&&adapter->dispatch(list,observed,b->dual,x,y,z,dispatch)){
    gi_dual_bridge::status=1;++gi_dual_bridge::applied;
    used=true;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIStableTemporal);return;
   }
+ }
  }
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
