@@ -2,7 +2,13 @@
 // Included inside native_lighting (or a test fixture) after PatchSlot.
 namespace gi_compute_hooks {
 using Microsoft::WRL::ComPtr;
+// Rendering-state preservation for NRD must not require the legacy scene,
+// descriptor inventory or shadow diagnostics. Latch for the process lifetime:
+// toggling observation off mid-recording would leave an incomplete snapshot.
+inline std::atomic<bool> denoiserBindingsRequired{false};
+inline void EnableForDenoiser() noexcept {denoiserBindingsRequired.store(true,std::memory_order_release);}
 inline bool Enabled() noexcept {
+    if(denoiserBindingsRequired.load(std::memory_order_acquire))return true;
     static const bool enabled=[] {char value[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_BINDINGS",value,4)==1 && value[0]=='1';}();
     return enabled && gi_reuse::runtime::Enabled();
 }

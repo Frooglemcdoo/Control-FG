@@ -16,19 +16,44 @@ claiming an NRD quality fix. The existing build workflow still builds R383.
   current world normal/roughness, reconstructed view Z and receiver throughput.
 - Prepare/finish shaders divide/multiply the same receiver throughput. They
   preserve native data on rejected input and preserve the temporal output ABI.
+- Complete prepare → RELAX → remodulation transaction, including native input
+  state restoration and all-before-recording descriptor/resource allocation.
+- Fresh variable-size native descriptor arena allocation rejects heap rollover,
+  material-prefix overlap, native-table overlap and mismatched CPU/GPU handles.
+  The live transaction never changes descriptor heaps, preserving graphics tables.
+- Native receiver GPU owner creates private world-normal, throughput and view-Z
+  exports against the captured native root. It mirrors only exact GI6 bindings.
+- Native compute transaction restores root arguments and PSO even on exceptions.
+  Its state tracker can be enabled independently of legacy scene/shadow inventory;
+  this opt-in is not enabled in the live game yet.
 - Tests reject mismatched guides, invalid transforms, duplicate/pending frames,
   wrong queues; cancellation, frame gaps and view changes clear history.
 
 ## Evidence
 
-Windows run 42444378059 passed actual NRD compilation, CPU contracts and a full
-D3D12 RELAX dispatch chain preserving uniform light.
+Windows run 42446718211 passed actual receiver PSO creation against the audited
+native root fixture plus the complete conversion/RELAX/remodulation pipeline.
+Windows run 42446954107 additionally passed a shader dispatched immediately after
+RELAX without rebinding: the restored PSO, root signature, constants and root UAV
+produced the expected per-frame values. All 96 frames passed with a clean D3D12
+debug layer. Native graphics-table preservation still needs live verification.
 
-Windows run 42444463780 additionally passed persistent local illumination,
-moving sparse outliers and removal of illumination. These synthetic tests are
-integration checks, not evidence of in-game quality or NVIDIA hardware cost.
-All three conversion shaders also compile locally with DXC, warnings as errors.
-The generated native receiver decoder requires HLSL 2018 semantics.
+Full-pipeline synthetic measurements: uniform target 0.4 → 0.39942307; persistent
+light target 0.8 → 0.79830933; removed light target 0.01 → 0.00997646. Sparse moving
+outliers did not repeatedly reset the independent history. These WARP tests are
+integration checks, not in-game quality or NVIDIA hardware cost measurements.
+
+`tools/nrd/audit_native_inputs.py` verifies the exact native temporal bytecode:
+`g_tGeometryVelocityTexture` is t2/space0, sampled with s6/space1 at pixel centers
+scaled by sys[1].zw; native previous UV = current UV + sampled motion. Live
+admission must verify the current resource and viewport convention, not reuse a
+later RR resource. Existing stationary RR captures show zero motion despite
+changing jitter, but do not establish earlier boundary resource identity.
+
+Native jitter translation is already audited in `validation/jitter-native`:
+renderer INSTANCE +0x480/+0x488 contains clip shifts. NRD sample jitter is
+(-width*dx/2, +height*dy/2), opposite NGX raster jitter. Endpoint tolerance is
+clamped to NRD's exact [-0.5,0.5] contract. No new capture is needed for this ABI.
 
 ## Native signal semantics
 
@@ -45,12 +70,18 @@ evaluation runs in the receiver export. Sky/invalid receivers remain rejected.
 
 ## Remaining live integration
 
-1. Allocate/bind private receiver exports at the exact GI6 bindings, alongside
-   the same frame's raw GI and native u1 mean first-hit-distance output.
-2. Verify native motion-vector jitter convention and bind those vectors at this
-   boundary. RR's later guide output cannot be reused as an earlier-frame guide.
-3. Record prepare, RELAX and finish as one transaction; restore the engine's
-   root, heaps, constants and PSO. Disable the native spatial history path for
+1. Connect the implemented private receiver export to the exact GI6 bind/dispatch
+   hooks. GI6 may dispatch more than once before filtering; keep the last matching
+   producer's guides with that frame, view, queue and command-list generation.
+   The existing "weight" globals 0x1297478 / 0x12974a0 are actually g_rwtHitInfo /
+   g_tHitInfo, both referring to native IDHitInfo (raytracing-passes.asm). Acquire
+   this native first-hit-distance texture directly with its tracked state.
+2. Acquire current native t2 motion at the temporal boundary and validate
+   sys[1].zw against the GI viewport. Use the audited jitter conversion and
+   previous SUBMITTED camera, not the last prepared or cancelled camera.
+3. Wire the tested NativeTransaction to that boundary with a complete compute
+   snapshot and fresh arena in the already-bound heap. Disable native spatial
+   history for
    that successfully admitted transaction, without double filtering.
 4. Connect queue submission/reset retirement and resize/view/producer changes.
    Never advertise RELAX as active if admission or resource acquisition fails.
