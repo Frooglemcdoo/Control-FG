@@ -4,6 +4,7 @@ on:
     branches: [work/gi-modernization]
     paths:
       - 'tools/test-gi-full-chain.cpp'
+      - 'tools/test-gi-history-footprint.cpp'
       - 'tools/gi_motion_history.py'
       - 'tools/gi_spatial_history.py'
       - '.github/workflows/gi-filter-feedback.yml'
@@ -36,4 +37,8 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-full-chain.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-history-footprint.cpp /Febuild\test-gi-history-footprint.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-history-footprint.exe
           if errorlevel 1 exit /b 1

@@ -3,7 +3,7 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_current=False):
+def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_current=False,validated_history=True):
  if preserve_current and (not history or outliers or view or smooth):raise ValueError("Energy preservation requires the stable temporal path")
  if smooth and (history or outliers or view):raise ValueError("Smoothing requires a normal zero-history path")
  if view not in (0,1,2) or (view and (history or not outliers)):raise ValueError("Diagnostic requires zero-history outlier path")
@@ -152,9 +152,53 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
    # Once r3 is filtered, both sides must use that same current estimate.
    # Otherwise output = filtered + weight * (history - raw), amplifying noise.
    w[393:403]=ins(0,dst(1,15),src(1,0x24),[0x80100e46,0x41,3])
+  validated=[]
+  if preserve_current and validated_history:
+   # Validate each history footprint texel BEFORE interpolation. An averaged
+   # depth can agree with the receiver even when neither contributing surface does.
+   w[76]=18
+   inv_prev=list(w[231:235]);assert len(inv_prev)==4
+   size_prev=inv_prev.copy();size_prev[0]=(size_prev[0]&~0xff0)|(0x44<<4)
+   def history_sample(r,mask,uv,texture):
+    code=list(w[380:393]);code[1:3]=dst(r,mask);code[3:5]=uv
+    code[6]=code[7]=texture
+    if texture in (0,1):code[5]=0x207006
+    return code
+   validated=history_sample(10,1,src(1,0xae),0)
+   validated+=ins(52,dst(10,2),[0x80100006,0x81,10],imm(.000001))
+   validated+=ins(56,dst(10,2),src(10,0x55),imm(.01))
+   validated+=ins(50,dst(11,3),src(4,0x44),size_prev,imm(-.5))
+   validated+=ins(65,dst(12,3),src(11)) # floor pixel position
+   validated+=ins(0,dst(11,3),src(11),[0x80100e46,0x41,12])
+   validated+=ins(0,dst(12,3),src(12),imm(.5))
+   validated+=ins(56,dst(12,3),src(12),inv_prev)
+   validated+=ins(54,dst(9,15),imm(0))
+   depth_offset=list(w[290:294])
+   for x,y in ((0,0),(1,0),(0,1),(1,1)):
+    validated+=ins(50,dst(13,3),vec((x,y,0,0)),inv_prev,src(12))
+    validated+=history_sample(14,8,src(13),1)+history_sample(14,7,src(13),4)
+    for lane,coord,offset in ((1,0,x),(2,0x55,y)):
+     validated+=ins(54,dst(15,lane),src(11,coord)) if offset else ins(0,dst(15,lane),imm(1),[0x80100006|(coord<<4),0x41,11])
+    validated+=ins(0,dst(15,4),src(14,0xff),depth_offset)
+    validated+=ins(0,dst(15,4),src(15,0xaa),[0x80100006,0x41,10])
+    validated+=ins(29,dst(15,8),src(10,0x55),[0x80100aa6,0x81,15])
+    validated+=ins(29,dst(16,3),src(13),imm(0))+ins(29,dst(17,3),imm(1),src(13))
+    validated+=ins(1,dst(16,3),src(16),src(17))
+    validated+=ins(1,dst(16,1),src(16,0),src(16,0x55))
+    validated+=ins(1,dst(15,8),src(15,0xff),src(16,0))
+    validated+=ins(56,dst(15,1),src(15,0),src(15,0x55))
+    validated+=ins(1,dst(15,1),src(15,0),src(15,0xff))
+    validated+=ins(50,dst(9),src(14),src(15,0),src(9))
+    validated+=ins(0,dst(9,8),src(9,0xff),src(15,0))
+   validated+=ins(52,dst(15,1),src(9,0xff),imm(.000001))
+   validated+=ins(14,dst(1),src(9),src(15,0))
+   validated+=ins(29,dst(15,2),src(9,0xff),imm(.000001))
+   validated+=ins(1,dst(15,2),src(15,0x55),imm(1))
+   validated+=ins(56,dst(0,8),src(0,0xff),src(15,0x55))
   # Insert backwards to preserve original audited dword positions.
   w[393:393]=clip
-  if preserve_current:w[380:380]=onscreen
+  if preserve_current and validated_history:w[259:393]=validated
+  elif preserve_current:w[380:380]=onscreen
   w[204:204]=energy_filter+pad
   if not preserve_current:w[144:144]=bounds
  return transform_shex(data,patch)
@@ -195,3 +239,6 @@ if __name__=='__main__':
 
  with (out/'gi_motion_history.generated.h').open('a') as f:
   f.write('inline constexpr unsigned char kGIStableEnergyShader[]={\n'+','.join(map(str,generate(source,preserve_current=True)))+'\n};\n')
+
+ with (out/"gi_stable_r380.generated.h").open("w") as f:
+  f.write("#pragma once\ninline constexpr unsigned char kGIStableR380[]={\n"+",".join(map(str,generate(source,preserve_current=True,validated_history=False)))+"\n};\n")
