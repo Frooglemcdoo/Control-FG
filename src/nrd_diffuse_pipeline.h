@@ -38,14 +38,14 @@ public:
  static_assert(sizeof(Constants)==36);
  struct Work {
   D3D12Backend::Recording relax;
-  bool commandsRecorded=false;
+  bool commandsRecorded=false,heapSwitched=false;
   Ptr<ID3D12DescriptorHeap> heap;Ptr<ID3D12Resource> constants;
   Ptr<ID3D12RootSignature> root;
   Ptr<ID3D12PipelineState> prepare,finish;
   std::vector<Ptr<ID3D12Resource>> retained;
   void* mapped=nullptr;
   ~Work(){if(mapped)constants->Unmap(0,nullptr);}
-  void RetireForReuse(){relax.RetireForReuse();commandsRecorded=false;heap.Reset();root.Reset();prepare.Reset();finish.Reset();retained.clear();}
+  void RetireForReuse(){relax.RetireForReuse();commandsRecorded=heapSwitched=false;heap.Reset();root.Reset();prepare.Reset();finish.Reset();retained.clear();}
   Work()=default;Work(const Work&)=delete;Work&operator=(const Work&)=delete;
  };
  DiffusePipeline(ID3D12Device* d,UINT w,UINT h,D3D12_SHADER_BYTECODE prep,D3D12_SHADER_BYTECODE final):device(d),width(w),height(h){
@@ -73,7 +73,8 @@ public:
  size_t DispatchCount()const noexcept{return session.Plan().size();}
  using ReserveArena=const char*(*)(const void*,UINT,D3D12Backend::Arena&);
  UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
- bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0},ReserveArena reserve=nullptr,const void* reserveContext=nullptr){
+ bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0},ReserveArena reserve=nullptr,const void* reserveContext=nullptr,bool allowHeapSwitch=false){
+  auto* originalHeap=arena.heap;
   if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return Reject("filter_owner_or_extent_contract");
   if(!reserve&&arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_descriptor_arena_bounds");
   for(float v:conversion.motionScale)if(!std::isfinite(v))return Reject("filter_conversion_motion_scale");
@@ -111,7 +112,7 @@ public:
    if(reserve){
     auto* expectedHeap=arena.heap;D3D12Backend::Arena allocated{};
     if(const char* why=reserve(reserveContext,required,allocated)){session.CancelAfterReset();return Reject(why);}
-    if(!expectedHeap||allocated.heap!=expectedHeap){session.CancelAfterReset();return Reject("filter_heap_changed");}
+    if(!expectedHeap||!allocated.heap||(!allowHeapSwitch&&allocated.heap!=expectedHeap)){session.CancelAfterReset();return Reject("filter_heap_changed");}
     arena=allocated;
    }
    if(arena.heap&&(arena.count<required||arena.first>UINT32_MAX-required)){
@@ -146,6 +147,7 @@ public:
    for(UINT i=14;i<17;++i)srv(nullptr,i);uav(bindings.output.resource,17);for(UINT i=18;i<22;++i)uav(nullptr,i);
    auto bind=[&](ID3D12PipelineState* ps,UINT base){auto* heap=work.heap.Get();if(!arena.heap)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());list->SetPipelineState(ps);list->SetComputeRootConstantBufferView(0,work.constants->GetGPUVirtualAddress());list->SetComputeRootDescriptorTable(1,gh(base));list->SetComputeRootDescriptorTable(2,gh(base+6));};
    commands=true;work.commandsRecorded=true;
+   if(arena.heap&&arena.heap!=originalHeap){auto* h=arena.heap;list->SetDescriptorHeaps(1,&h);work.heapSwitched=true;}
    for(auto& input:bindings.input)Transition(list,input,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
    for(unsigned i=0;i<5;++i){External t{textures[i].Get(),states[i]};Transition(list,t,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);states[i]=t.state;}
    bind(prepare.Get(),0);list->Dispatch((width+7)/8,(height+7)/8,1);

@@ -1,5 +1,6 @@
 #pragma once
 #include "compute_root_arguments.h"
+#include "graphics_table_state.h"
 #include <d3d12.h>
 #include <utility>
 #include <wrl/client.h>
@@ -64,21 +65,22 @@ public:
     void Constants(unsigned index,unsigned offset,unsigned count,const std::uint32_t* values) noexcept {
         state_.arguments.Constants(index,offset,count,values);
     }
-    void Heaps(unsigned count,ID3D12DescriptorHeap* const* heaps) noexcept {
-        if (count>2 || (count && !heaps)) { Invalidate(); return; }
+    bool Heaps(unsigned count,ID3D12DescriptorHeap* const* heaps) noexcept {
+        if (count>2 || (count && !heaps)) { Invalidate(); return true; }
         std::array<Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>,2> next;
         for (unsigned i=0;i<count;++i) {
-            if (!heaps[i]) { Invalidate(); return; }
+            if (!heaps[i]) { Invalidate(); return true; }
             const auto desc=heaps[i]->GetDesc();
-            if (!(desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)) { Invalidate(); return; }
+            if (!(desc.Flags & D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE)) { Invalidate(); return true; }
             const auto type=desc.Type;
-            if (type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV && type!=D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) { Invalidate(); return; }
+            if (type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV && type!=D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER) { Invalidate(); return true; }
             const unsigned slot=type==D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER?1u:0u;
-            if (next[slot]) { Invalidate(); return; }
+            if (next[slot]) { Invalidate(); return true; }
             next[slot]=heaps[i];
         }
-        if (next[0].Get()!=state_.heaps[0].Get() || next[1].Get()!=state_.heaps[1].Get()) state_.arguments.HeapChange();
-        state_.heaps=std::move(next);
+        const bool changed=next[0].Get()!=state_.heaps[0].Get() || next[1].Get()!=state_.heaps[1].Get();
+        if(changed)state_.arguments.HeapChange();
+        state_.heaps=std::move(next);return changed;
     }
     bool Ready() const noexcept { return state_.Ready(); }
     bool Capture(ComputeBindingSnapshot& snapshot) const noexcept {

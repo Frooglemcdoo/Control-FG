@@ -5,6 +5,8 @@
 #ifdef CONTROL_NRD_PIPELINE_TEST
 #include "../../src/nrd_diffuse_native_transaction.h"
 #include "nrd_restore_probe.h"
+#include "nrd_graphics_vs.h"
+#include "nrd_graphics_ps.h"
 #include "../../src/nrd_diffuse_receiver_d3d12.h"
 #include "nrd_prepare.h"
 #include "nrd_finish.h"
@@ -55,6 +57,31 @@ int main(){try{
  D3D12_RESOURCE_DESC probeBuffer{};probeBuffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;probeBuffer.Width=16;probeBuffer.Height=1;probeBuffer.DepthOrArraySize=probeBuffer.MipLevels=1;probeBuffer.SampleDesc.Count=1;probeBuffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;probeBuffer.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
  ComPtr<ID3D12Resource> probeOutput;Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&probeBuffer,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&probeOutput)));
  auto probeReadback=buffer(16,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ // A real graphics draw after heap restoration must still read its native
+ // descriptor. Rebinding only compute tables is insufficient to pass this.
+ D3D12_DESCRIPTOR_RANGE graphicsRange{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,1,0,0,0};
+ D3D12_ROOT_PARAMETER graphicsParam{};graphicsParam.ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;graphicsParam.DescriptorTable={1,&graphicsRange};
+ D3D12_ROOT_SIGNATURE_DESC graphicsDesc{};graphicsDesc.NumParameters=1;graphicsDesc.pParameters=&graphicsParam;
+ ComPtr<ID3DBlob> graphicsBytes;Check(D3D12SerializeRootSignature(&graphicsDesc,D3D_ROOT_SIGNATURE_VERSION_1,&graphicsBytes,&probeErrors));
+ ComPtr<ID3D12RootSignature> graphicsRoot;Check(device->CreateRootSignature(0,graphicsBytes->GetBufferPointer(),graphicsBytes->GetBufferSize(),IID_PPV_ARGS(&graphicsRoot)));
+ D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsPS{};graphicsPS.pRootSignature=graphicsRoot.Get();graphicsPS.VS={kNrd_graphics_vs,sizeof(kNrd_graphics_vs)};graphicsPS.PS={kNrd_graphics_ps,sizeof(kNrd_graphics_ps)};
+ graphicsPS.SampleMask=UINT32_MAX;graphicsPS.SampleDesc.Count=1;graphicsPS.PrimitiveTopologyType=D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+ graphicsPS.RasterizerState.FillMode=D3D12_FILL_MODE_SOLID;graphicsPS.RasterizerState.CullMode=D3D12_CULL_MODE_NONE;graphicsPS.RasterizerState.DepthClipEnable=TRUE;
+ graphicsPS.DepthStencilState.DepthFunc=D3D12_COMPARISON_FUNC_ALWAYS;graphicsPS.DepthStencilState.StencilReadMask=graphicsPS.DepthStencilState.StencilWriteMask=255;
+ graphicsPS.DepthStencilState.FrontFace={D3D12_STENCIL_OP_KEEP,D3D12_STENCIL_OP_KEEP,D3D12_STENCIL_OP_KEEP,D3D12_COMPARISON_FUNC_ALWAYS};graphicsPS.DepthStencilState.BackFace=graphicsPS.DepthStencilState.FrontFace;
+ graphicsPS.BlendState.RenderTarget[0].SrcBlend=graphicsPS.BlendState.RenderTarget[0].SrcBlendAlpha=D3D12_BLEND_ONE;
+ graphicsPS.BlendState.RenderTarget[0].DestBlend=graphicsPS.BlendState.RenderTarget[0].DestBlendAlpha=D3D12_BLEND_ZERO;
+ graphicsPS.BlendState.RenderTarget[0].BlendOp=graphicsPS.BlendState.RenderTarget[0].BlendOpAlpha=D3D12_BLEND_OP_ADD;graphicsPS.BlendState.RenderTarget[0].LogicOp=D3D12_LOGIC_OP_NOOP;
+ graphicsPS.NumRenderTargets=1;graphicsPS.RTVFormats[0]=DXGI_FORMAT_R32G32B32A32_UINT;graphicsPS.BlendState.RenderTarget[0].RenderTargetWriteMask=D3D12_COLOR_WRITE_ENABLE_ALL;
+ ComPtr<ID3D12PipelineState> graphicsPipeline;Check(device->CreateGraphicsPipelineState(&graphicsPS,IID_PPV_ARGS(&graphicsPipeline)));
+ auto graphicsInput=buffer(16,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);void* graphicsData=nullptr;Check(graphicsInput->Map(0,nullptr,&graphicsData));
+ const UINT graphicsExpected[]={11,22,33,44};std::memcpy(graphicsData,graphicsExpected,16);graphicsInput->Unmap(0,nullptr);
+ auto graphicsTD=td;graphicsTD.Width=graphicsTD.Height=1;graphicsTD.Format=DXGI_FORMAT_R32G32B32A32_UINT;graphicsTD.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+ ComPtr<ID3D12Resource> graphicsTarget;Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&graphicsTD,D3D12_RESOURCE_STATE_RENDER_TARGET,nullptr,IID_PPV_ARGS(&graphicsTarget)));
+ D3D12_DESCRIPTOR_HEAP_DESC rtvDesc{};rtvDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;rtvDesc.NumDescriptors=1;
+ ComPtr<ID3D12DescriptorHeap> rtvHeap;Check(device->CreateDescriptorHeap(&rtvDesc,IID_PPV_ARGS(&rtvHeap)));device->CreateRenderTargetView(graphicsTarget.Get(),nullptr,rtvHeap->GetCPUDescriptorHandleForHeapStart());
+ D3D12_PLACED_SUBRESOURCE_FOOTPRINT graphicsFootprint{};UINT64 graphicsSize=0;device->GetCopyableFootprints(&graphicsTD,0,1,0,&graphicsFootprint,nullptr,nullptr,&graphicsSize);
+ auto graphicsReadback=buffer(graphicsSize,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  control_nrd::DiffusePipeline::Bindings bindings;
  for(UINT i=0;i<InputCount;++i)bindings.input[i]={textures[i].Get(),D3D12_RESOURCE_STATE_COMMON};
  bindings.output={textures[OutputIndex].Get(),D3D12_RESOURCE_STATE_COMMON};
@@ -122,6 +149,13 @@ int main(){try{
   arenaDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;arenaDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
   arenaDesc.NumDescriptors=31+pipeline.MaxDescriptors();Check(device->CreateDescriptorHeap(&arenaDesc,IID_PPV_ARGS(&nativeHeap)));
   ID3D12DescriptorHeap* boundHeap=nativeHeap.Get();list->SetDescriptorHeaps(1,&boundHeap);
+  D3D12_SHADER_RESOURCE_VIEW_DESC graphicsSRV{};graphicsSRV.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;graphicsSRV.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;graphicsSRV.Buffer.NumElements=1;graphicsSRV.Buffer.StructureByteStride=16;
+  device->CreateShaderResourceView(graphicsInput.Get(),&graphicsSRV,nativeHeap->GetCPUDescriptorHandleForHeapStart());
+  list->SetGraphicsRootSignature(graphicsRoot.Get());list->SetGraphicsRootDescriptorTable(0,nativeHeap->GetGPUDescriptorHandleForHeapStart());
+  gi_reuse::GraphicsTableState graphics;graphics.Reset();graphics.Root(reinterpret_cast<UINT64>(graphicsRoot.Get()));graphics.Table(0,nativeHeap->GetGPUDescriptorHandleForHeapStart().ptr);
+  ComPtr<ID3D12DescriptorHeap> privateHeap;
+  if(!(frame%2)){Check(device->CreateDescriptorHeap(&arenaDesc,IID_PPV_ARGS(&privateHeap)));}
+
   control_nrd::D3D12Backend::Arena arena{nativeHeap.Get(),31,pipeline.MaxDescriptors()};
   conversion.radianceScale=frame<64?2.f:1.f; // exercise scale-epoch restart
   if(frame==1){
@@ -157,8 +191,9 @@ int main(){try{
   // Once the normal plan is known, expose exactly that many descriptors.
   // A regression to worst-case reservation fails here instead of silently
   // relying on a large test heap. Restart at frame 64 retains full capacity.
+  if(privateHeap){reservation.available.heap=privateHeap.Get();reservation.available.first=0;}
   if(frame>2&&frame<64)reservation.available.count=normalDescriptors;
-  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction,reserve,&reservation),"complete native transaction rejected");
+  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction,reserve,&reservation,&graphics),"complete native transaction rejected");
   Require(requested==22+UINT(pipeline.DispatchCount())*(descriptorContract.Description().descriptorPoolDesc.perSetTexturesMaxNum+descriptorContract.Description().descriptorPoolDesc.perSetStorageTexturesMaxNum),"reservation did not match dispatch plan");
   if(frame==1)restartDescriptors=requested;
   if(frame==2){normalDescriptors=requested;Require(normalDescriptors<restartDescriptors&&normalDescriptors<pipeline.MaxDescriptors(),"steady frame retained worst-case reservation");std::printf("Descriptor reservation: restart %u, normal %u, maximum %u\n",restartDescriptors,normalDescriptors,pipeline.MaxDescriptors());}
@@ -171,7 +206,14 @@ int main(){try{
   D3D12_RESOURCE_BARRIER probeBarrier{};probeBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;probeBarrier.Transition={probeOutput.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&probeBarrier);
   list->CopyBufferRegion(probeReadback.Get(),0,probeOutput.Get(),0,16);
   std::swap(probeBarrier.Transition.StateBefore,probeBarrier.Transition.StateAfter);list->ResourceBarrier(1,&probeBarrier);
-  Require(recording.relax.borrowed&&recording.relax.heap.Get()==nativeHeap.Get(),"native descriptor heap not retained");
+  Require(recording.relax.borrowed&&recording.relax.heap.Get()==reservation.available.heap,"selected descriptor heap not retained");
+  Require(recording.heapSwitched==bool(privateHeap),"heap switch was not tracked");
+  auto rtv=rtvHeap->GetCPUDescriptorHandleForHeapStart();list->OMSetRenderTargets(1,&rtv,FALSE,nullptr);
+  D3D12_VIEWPORT viewport{0,0,1,1,0,1};D3D12_RECT scissor{0,0,1,1};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&scissor);
+  list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);list->SetPipelineState(graphicsPipeline.Get());list->DrawInstanced(3,1,0,0);
+  D3D12_RESOURCE_BARRIER graphicsBarrier{};graphicsBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;graphicsBarrier.Transition={graphicsTarget.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_RENDER_TARGET,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&graphicsBarrier);
+  D3D12_TEXTURE_COPY_LOCATION graphicsDst{},graphicsSrc{};graphicsDst.pResource=graphicsReadback.Get();graphicsDst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;graphicsDst.PlacedFootprint=graphicsFootprint;graphicsSrc.pResource=graphicsTarget.Get();graphicsSrc.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;list->CopyTextureRegion(&graphicsDst,0,0,0,&graphicsSrc,nullptr);
+  std::swap(graphicsBarrier.Transition.StateBefore,graphicsBarrier.Transition.StateAfter);list->ResourceBarrier(1,&graphicsBarrier);
   {control_nrd::DiffusePipeline::Work duplicate;Require(!pipeline.Record(list.Get(),f,1,bindings,conversion,duplicate),"pending frame accepted twice");}
   for(UINT i=0;i<InputCount;++i)Require(input(i).state==D3D12_RESOURCE_STATE_COPY_DEST,"input state not restored");
 #else
@@ -209,6 +251,10 @@ int main(){try{
    Require(movingCenter/movingCount>.6,"moving foreground lost illumination");
   }
   if(frame==128)std::printf("Moving surface: worst exposed background %.8f (target 0.05), foreground %.8f (target 0.8)\n",worstTrail,movingCenter/movingCount);
+#ifdef CONTROL_NRD_PIPELINE_TEST
+  void* graphicsResult=nullptr;Check(graphicsReadback->Map(0,nullptr,&graphicsResult));
+  Require(std::memcmp(static_cast<unsigned char*>(graphicsResult)+graphicsFootprint.Offset,graphicsExpected,16)==0,"graphics descriptor table was not restored after RELAX");graphicsReadback->Unmap(0,nullptr);
+#endif
   // Remove all recorded references before releasing this frame's descriptors.
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));Check(list->Close());
 #ifdef CONTROL_NRD_PIPELINE_TEST

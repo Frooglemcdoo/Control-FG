@@ -21,6 +21,7 @@ class State final : public IUnknown {
     std::atomic<ULONG> refs{1};
 public:
     gi_reuse::ComputeBindingTracker tracker;
+    gi_reuse::GraphicsTableState graphics;
     UINT64 generation=0;
     State() noexcept {tracker.Invalidate();}
     ~State(){--liveStates;}
@@ -55,12 +56,17 @@ template<class F> inline void Change(ID3D12GraphicsCommandList* list,F&& fn) noe
 inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial) noexcept {
     if(!Enabled())return;
     Change(list,[&](State& s){if(s.generation==UINT64_MAX){failed=true;s.tracker.Invalidate();return;}
-        ++s.generation;s.tracker.Reset(initial);});
+        ++s.generation;s.tracker.Reset(initial);s.graphics.Reset();});
 }
 inline bool Capture(ID3D12GraphicsCommandList* list,gi_reuse::ComputeBindingSnapshot& out,UINT64& generation) noexcept {
     out={};generation=0;if(!Enabled() || failed.load())return false;
     auto state=Read(list);if(!state || !state->generation)return false;
     if(!state->tracker.Capture(out))return false;generation=state->generation;return true;
+}
+inline bool CaptureGraphics(ID3D12GraphicsCommandList* list,gi_reuse::GraphicsTableState& out) noexcept {
+    out={};if(!Enabled()||failed.load())return false;
+    auto state=Read(list);if(!state||!state->generation||!state->graphics.known)return false;
+    out=state->graphics;return true;
 }
 using ResetFn=HRESULT(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12CommandAllocator* allocator,ID3D12PipelineState* pso);
 using ClearFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,ID3D12PipelineState* pso);
@@ -81,8 +87,8 @@ struct Hooks {void** table=nullptr;
     PipelineFn pipeline=nullptr;
     BundleFn bundle=nullptr;
     HeapsFn heaps=nullptr;
-    RootFn root=nullptr;
-    TableFn tableBinding=nullptr;
+    RootFn root=nullptr,graphicsRoot=nullptr;
+    TableFn tableBinding=nullptr,graphicsTable=nullptr;
     ConstantFn constant=nullptr;
     ConstantsFn constants=nullptr;
     CbvFn cbv=nullptr;
@@ -110,11 +116,11 @@ inline void STDMETHODCALLTYPE PipelineHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 inline void STDMETHODCALLTYPE BundleHook(ID3D12GraphicsCommandList* list,ID3D12GraphicsCommandList* bundle) {
     Lookup(list).bundle(list,bundle);
-    Change(list,[](State& s){s.tracker.Invalidate();});
+    Change(list,[](State& s){s.tracker.Invalidate();s.graphics.Invalidate();});
 }
 inline void STDMETHODCALLTYPE HeapsHook(ID3D12GraphicsCommandList* list,UINT count,ID3D12DescriptorHeap* const* heaps) {
     Lookup(list).heaps(list,count,heaps);
-    Change(list,[&](State& s){s.tracker.Heaps(count,heaps);});
+    Change(list,[&](State& s){if(s.tracker.Heaps(count,heaps))s.graphics.HeapChange();});
 }
 inline void STDMETHODCALLTYPE RootHook(ID3D12GraphicsCommandList* list,ID3D12RootSignature* root) {
     Lookup(list).root(list,root);
@@ -123,6 +129,14 @@ inline void STDMETHODCALLTYPE RootHook(ID3D12GraphicsCommandList* list,ID3D12Roo
 inline void STDMETHODCALLTYPE TableHook(ID3D12GraphicsCommandList* list,UINT index,D3D12_GPU_DESCRIPTOR_HANDLE handle) {
     Lookup(list).tableBinding(list,index,handle);
     Change(list,[&](State& s){s.tracker.Descriptor(index,gi_reuse::RootArgumentKind::Table,handle.ptr);});
+}
+inline void STDMETHODCALLTYPE GraphicsRootHook(ID3D12GraphicsCommandList* list,ID3D12RootSignature* root) {
+    Lookup(list).graphicsRoot(list,root);
+    Change(list,[&](State& s){s.graphics.Root(reinterpret_cast<UINT64>(root));});
+}
+inline void STDMETHODCALLTYPE GraphicsTableHook(ID3D12GraphicsCommandList* list,UINT index,D3D12_GPU_DESCRIPTOR_HANDLE handle) {
+    Lookup(list).graphicsTable(list,index,handle);
+    Change(list,[&](State& s){s.graphics.Table(index,handle.ptr);});
 }
 inline void STDMETHODCALLTYPE ConstantHook(ID3D12GraphicsCommandList* list,UINT index,UINT value,UINT offset) {
     Lookup(list).constant(list,index,value,offset);
@@ -146,7 +160,7 @@ inline void STDMETHODCALLTYPE UavHook(ID3D12GraphicsCommandList* list,UINT index
 }
 inline void STDMETHODCALLTYPE IndirectHook(ID3D12GraphicsCommandList* list,ID3D12CommandSignature* signature,UINT count,ID3D12Resource* arguments,UINT64 offset,ID3D12Resource* counts,UINT64 countOffset) {
     Lookup(list).indirect(list,signature,count,arguments,offset,counts,countOffset);
-    Change(list,[](State& s){s.tracker.Invalidate();});
+    Change(list,[](State& s){s.tracker.Invalidate();s.graphics.Invalidate();});
 }
 using RaysFn=void(STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList4*,ID3D12StateObject*);
 struct RayHooks {void** table=nullptr;RaysFn rays=nullptr;};
@@ -177,6 +191,8 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         available->bundle=reinterpret_cast<BundleFn>(table[27]);
         available->heaps=reinterpret_cast<HeapsFn>(table[28]);
         available->root=reinterpret_cast<RootFn>(table[29]);
+        available->graphicsRoot=reinterpret_cast<RootFn>(table[30]);
+        available->graphicsTable=reinterpret_cast<TableFn>(table[32]);
         available->tableBinding=reinterpret_cast<TableFn>(table[31]);
         available->constant=reinterpret_cast<ConstantFn>(table[33]);
         available->constants=reinterpret_cast<ConstantsFn>(table[35]);
@@ -189,6 +205,8 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         if(!PatchSlot(&table[25],reinterpret_cast<void*>(available->pipeline),reinterpret_cast<void*>(&PipelineHook)))failed=true;
         if(!PatchSlot(&table[27],reinterpret_cast<void*>(available->bundle),reinterpret_cast<void*>(&BundleHook)))failed=true;
         if(!PatchSlot(&table[28],reinterpret_cast<void*>(available->heaps),reinterpret_cast<void*>(&HeapsHook)))failed=true;
+        if(!PatchSlot(&table[30],reinterpret_cast<void*>(available->graphicsRoot),reinterpret_cast<void*>(&GraphicsRootHook)))failed=true;
+        if(!PatchSlot(&table[32],reinterpret_cast<void*>(available->graphicsTable),reinterpret_cast<void*>(&GraphicsTableHook)))failed=true;
         if(!PatchSlot(&table[29],reinterpret_cast<void*>(available->root),reinterpret_cast<void*>(&RootHook)))failed=true;
         if(!PatchSlot(&table[31],reinterpret_cast<void*>(available->tableBinding),reinterpret_cast<void*>(&TableHook)))failed=true;
         if(!PatchSlot(&table[33],reinterpret_cast<void*>(available->constant),reinterpret_cast<void*>(&ConstantHook)))failed=true;

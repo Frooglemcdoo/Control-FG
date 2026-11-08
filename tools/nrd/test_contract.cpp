@@ -1,3 +1,4 @@
+#include "../../src/gi_reuse/graphics_table_state.h"
 #include "../../src/nrd_diffuse_session.h"
 #include "../../src/nrd_diffuse_camera.h"
 #include <cstdio>
@@ -73,5 +74,10 @@ int main(){
  moving.frame=3;moving.settings.worldToViewMatrix[12]=4;moving.settings.cameraJitter[0]=-.25f;
  Require(cameras.Prepare(moving,7),"third camera");
  Require(cameras.PreparedFrame()->settings.worldToViewMatrixPrev[12]==3&&cameras.PreparedFrame()->settings.cameraJitterPrev[0]==.25f,"camera and jitter follow same submitted history");
+ gi_reuse::GraphicsTableState graphics;Require(!graphics.known,"graphics admission before reset");
+ graphics.Reset();graphics.Root(7);graphics.Table(3,99);graphics.Root(7);unsigned replayed=0;
+ graphics.Replay([&](unsigned slot,std::uint64_t address){Require(slot==3&&address==99,"graphics table mismatch");++replayed;});Require(replayed==1,"same graphics root lost table");
+ graphics.HeapChange();Require(!graphics.mask,"heap switch retained stale graphics tables");graphics.Table(3,101);graphics.Root(8);Require(!graphics.mask,"root switch retained stale graphics tables");
+ graphics.Table(64,1);Require(!graphics.known,"invalid graphics table index accepted");graphics.Reset();graphics.Invalidate();graphics.Root(9);Require(!graphics.known,"unknown graphics state became trusted without reset");
  std::printf("PASS actual NRD RELAX_DIFFUSE: %u pipelines, %u permanent / %u transient textures; %zu restart / %zu continuous dispatches; input guards, submission and reset lifecycle\n",desc.pipelinesNum,desc.permanentPoolSize,desc.transientPoolSize,restartCount,continuousCount);
 }

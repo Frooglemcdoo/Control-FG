@@ -63,6 +63,15 @@ if(CONTROL_NRD_GPU)
    -Fh "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h" -Vn kNrd_restore_probe
    "${CMAKE_CURRENT_SOURCE_DIR}/restore_probe.hlsl"
   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/restore_probe.hlsl" VERBATIM)
+ foreach(stage vs ps)
+  string(TOUPPER "${stage}" entry)
+  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nrd_graphics_${stage}.h"
+   COMMAND "${SHADERMAKE_DXC_PATH}" -T ${stage}_6_0 -E ${entry} -WX
+    -Fh "${CMAKE_CURRENT_BINARY_DIR}/nrd_graphics_${stage}.h" -Vn kNrd_graphics_${stage}
+    "${CMAKE_CURRENT_SOURCE_DIR}/graphics_restore_probe.hlsl"
+   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/graphics_restore_probe.hlsl" VERBATIM)
+  list(APPEND conversion_headers "${CMAKE_CURRENT_BINARY_DIR}/nrd_graphics_${stage}.h")
+ endforeach()
  add_executable(control_nrd_pipeline test_d3d12.cpp ${conversion_headers}
   "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h")
  target_compile_definitions(control_nrd_pipeline PRIVATE CONTROL_NRD_PIPELINE_TEST)

@@ -198,10 +198,15 @@ static void ProducerDispatch() noexcept {
   }
   auto* r=GetRecording(c.rays,generation);if(!r||r->exports.size()>=16){Reason("producer_recording_capacity");return;}
   if(r->epoch&&r->epoch!=epoch){Reason("producer_epoch_change");return;}
-  r->epoch=epoch;PTGlass::DescriptorRange fresh;if(!PTGlassRuntime::Fresh(c,&fresh)){Reason("producer_heap");return;}
+  r->epoch=epoch;PTGlass::DescriptorRange fresh;const char* allocationFailure=nullptr;
+  const bool allocated=PTGlassRuntime::FreshCount(c,PTGlass::LightingTableLayout::Count,&fresh,&allocationFailure);
+  gi_reuse::GraphicsTableState graphics;
+  if(!allocated&&(strcmp(allocationFailure,"filter_heap_rollover")||!hooks::CaptureGraphics(c.list,graphics))){Reason(allocationFailure);return;}
   r->exports.emplace_back();
   native_lighting::performance::Scope timing(c.list,native_lighting::performance::Stage::ReceiverExport,w,h,1,0);
-  if(!epoch->receiver->Record(c.list,b.pipeline.Get(),c.gpu,*pass.shadow,sequence,fresh,r->exports.back())){r->exports.pop_back();Reason("producer_descriptors");return;}
+  const bool exported=allocated?epoch->receiver->Record(c.list,b.pipeline.Get(),c.gpu,*pass.shadow,sequence,fresh,r->exports.back()):
+   epoch->receiver->RecordPrivate(c.rays,b,graphics,*pass.shadow,sequence,r->exports.back());
+  if(!exported){r->exports.pop_back();Reason(allocated?"producer_descriptors":"producer_private_heap");return;}
   settings_check::Record(settings_check::ReceiverExport);
   r->exported=true;guideFrame=pass.frame;guideView=pass.view;guideList=c.list;guideGeneration=generation;guideProducer=mode;
  }catch(...){Invalidate(epoch);Reason("producer_exception");}
@@ -234,18 +239,27 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   control_nrd::DiffusePipeline::Bindings inputs;using E=control_nrd::D3D12Backend::External;
   inputs.input={E{in.raw.resource,in.raw.state},E{epoch->receiver->Resource(0),epoch->receiver->State(0)},E{epoch->receiver->Resource(2),epoch->receiver->State(2)},E{in.motion.resource,in.motion.state},E{in.hit.resource,in.hit.state},E{epoch->receiver->Resource(1),epoch->receiver->State(1)}};
   inputs.output={target.resource,target.state};
-  auto reserve=[](const void* context,UINT count,control_nrd::D3D12Backend::Arena& result)->const char* {
-   PTGlass::DescriptorRange range;const char* why=nullptr;
-   if(!PTGlassRuntime::FreshCount(*static_cast<const PTGlassRuntime::Context*>(context),count,&range,&why))return why;
-   result={range.heap,range.first,range.count};return nullptr;
-  };
   record=GetRecording(c.rays,generation);if(!record||record->filtered||(record->epoch&&record->epoch!=epoch)){Reason("filter_recording");return false;}
   native_lighting::performance::Scope timing(list,native_lighting::performance::Stage::RelaxTotal,w,h,1,1);
   record->epoch=epoch;
   if(retiredWork.empty()){record->work=std::make_unique<control_nrd::NativeTransaction::Work>();settings_check::Record(settings_check::RelaxWorkCreated);}
   else {record->work=std::move(retiredWork.back());retiredWork.pop_back();settings_check::Record(settings_check::RelaxWorkReused);}
+  gi_reuse::GraphicsTableState graphics;hooks::CaptureGraphics(c.list,graphics);
+  struct Reservation {const PTGlassRuntime::Context* context;control_nrd::NativeTransaction::Work* work;bool canSwitch;};
+  Reservation reservation{&c,record->work.get(),graphics.known};
+  auto reserve=[](const void* context,UINT count,control_nrd::D3D12Backend::Arena& result)->const char* {
+   const auto& request=*static_cast<const Reservation*>(context);PTGlass::DescriptorRange range;const char* why=nullptr;
+   if(PTGlassRuntime::FreshCount(*request.context,count,&range,&why)){result={range.heap,range.first,range.count};return nullptr;}
+   if(strcmp(why,"filter_heap_rollover")||!request.canSwitch)return why;
+   auto& heap=request.work->privateHeap;
+   if(!heap||heap->GetDesc().NumDescriptors<count){
+    D3D12_DESCRIPTOR_HEAP_DESC desc{};desc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;desc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;desc.NumDescriptors=epoch->filter->MaxDescriptors();
+    if(FAILED(PTGlassRuntime::device->CreateDescriptorHeap(&desc,IID_PPV_ARGS(&heap))))return "filter_private_heap_allocation";
+   }
+   result={heap.Get(),0,count};return nullptr;
+  };
   epoch->filter->BeginAttempt();
-  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {c.table.heap,0,0},*record->work,reserve,&c)){
+  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {c.table.heap,0,0},*record->work,reserve,&reservation,&graphics)){
    if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}
    else record->work.reset();
    Reason(epoch->filter->LastFailure());return false;
