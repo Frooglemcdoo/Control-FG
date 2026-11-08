@@ -2,8 +2,11 @@
 
 Status: R384 wires RELAX_DIFFUSE into the native GI6 producer and temporal
 filter boundary. The backend passes standalone Windows D3D12 WARP validation.
-The full Windows build packages the embedded backend; live game quality and
-RTX 5090 performance remain unverified.
+The full Windows build packages the embedded backend. On November 8, 2026,
+the user confirmed that R384 fixed the visual issue and everything looked good,
+explicitly using Owned GI (not Native) with RELAX. Native GI with RELAX and
+quantified RTX 5090 performance remain separately unverified. See
+[the changes and settings inventory](ControlTOH-Changes-and-Settings-R384.md).
 
 ## Implemented
 
@@ -102,10 +105,10 @@ evaluation runs in the receiver export. Sky/invalid receivers remain rejected.
   No legacy scene/shadow inventory is enabled. NRD is embedded in the proxy;
   its license accompanies the complete installable package.
 
-## Required live validation
+## Follow-up validation after user acceptance
 
 Compare projector energy, character jaw/neck, desk/plant detail and disocclusions
 against RAW, then measure render-time cost with captures idle. Automated WARP
 checks establish resource and signal contracts, not in-game image quality or
-hardware performance. No game quality/performance result has been measured for
-this path.
+hardware performance. Owned GI visual acceptance is user-reported as recorded
+above; quantitative game performance has not yet been established.
