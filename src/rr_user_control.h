@@ -4,7 +4,7 @@
 #include "rr_compact_distance_policy.h"
 namespace control_rr {
 #ifdef CONTROL_NRD_GI
-inline void ApplyRRBundleDefaults() noexcept;
+inline void ApplyRRBundleDefaults(bool enabled) noexcept;
 #endif
 // r21y production: native Control energy clamp is fixed in the public runtime.
 // The r21w ReShade reference enum/helper remains only for archived source comparison; the
@@ -90,7 +90,7 @@ inline bool RRUserRuntimeWorkRequested() noexcept {return RRUserModeValue()==RRU
 inline void RRUserSetMode(RRUserMode mode) noexcept {rrUserMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
 inline void RRUserRequest(bool enabled) noexcept {
 #ifdef CONTROL_NRD_GI
- if(enabled&&RRUserModeValue()!=RRUserMode::Full)ApplyRRBundleDefaults();
+ if(enabled!=(RRUserModeValue()==RRUserMode::Full))ApplyRRBundleDefaults(enabled);
 #endif
  RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);
 }

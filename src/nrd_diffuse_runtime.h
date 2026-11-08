@@ -8,8 +8,8 @@
 #include "nrd_receiver.h"
 #include <mutex>
 namespace control_rr {
-inline void ApplyRRBundleDefaults() noexcept {
- gi_reuse::ownedRequested=true;GISampleSelect(4);
+inline void ApplyRRBundleDefaults(bool enabled) noexcept {
+ gi_reuse::ownedRequested=enabled;GISampleSelect(4);
  native_lighting::specularSampleChoice=0;
  rt_surface_source::ResetManual();
  control_rr_clamp::requestedMode=control_rr_clamp::Mode::Override60;

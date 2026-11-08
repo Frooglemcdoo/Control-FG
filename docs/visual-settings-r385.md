@@ -2,7 +2,7 @@
 
 R384 Owned GI + RELAX remains the user-accepted rendering baseline. R385 moves feature preferences into the existing native Visual menu without changing RELAX shader parameters.
 
-Enabling RR restores Owned GI, RELAX, four indirect samples, the Native reflection sample policy and clamp60. These are automatic parts of RR, not separate Visual controls. The old saved GI sample override is no longer loaded or saved. RR itself retains its existing saved On/Off choice.
+Enabling RR restores Owned GI, RELAX, four indirect samples, the Native reflection sample policy and clamp60. These are automatic parts of RR, not separate Visual controls. The old saved GI sample override is no longer loaded or saved. RR itself retains its existing saved On/Off choice. Turning RR off restores the Native GI producer and skips RELAX receiver exports.
 
 | Visual section | Control | Default |
 | --- | --- | --- |

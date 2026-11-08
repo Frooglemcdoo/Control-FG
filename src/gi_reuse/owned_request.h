@@ -1,6 +1,6 @@
 #pragma once
 #include <atomic>
-namespace gi_reuse {inline std::atomic<bool> ownedRequested{true};}
+namespace gi_reuse {inline std::atomic<bool> ownedRequested{false};}
 #ifdef _WIN32
 #include <windows.h>
 namespace gi_reuse {
