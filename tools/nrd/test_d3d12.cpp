@@ -72,8 +72,8 @@ int main(){try{
  auto&s=f.settings;s.timeDeltaBetweenFrames=16.6667f;for(UINT i=0;i<16;++i)s.worldToViewMatrix[i]=s.worldToViewMatrixPrev[i]=i%5==0?1.f:0.f;
  s.viewToClipMatrix[0]=s.viewToClipMatrix[5]=1;s.viewToClipMatrix[10]=1.001f;s.viewToClipMatrix[11]=1;s.viewToClipMatrix[14]=-.1001f;std::memcpy(s.viewToClipMatrixPrev,s.viewToClipMatrix,64);
  auto transition=[&](control_nrd::D3D12Backend::External&t,D3D12_RESOURCE_STATES next){if(t.state==next)return;D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={t.resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,t.state,next};list->ResourceBarrier(1,&b);t.state=next;};
- double finalMean=0,spotMean=0,quietMean=0;
- for(UINT frame=1;frame<=96;++frame){
+ double finalMean=0,spotMean=0,quietMean=0,worstTrail=0;
+ for(UINT frame=1;frame<=128;++frame){
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
   std::vector<ComPtr<ID3D12Resource>> uploads;
   for(UINT i=0;i<InputCount;++i){auto upload=buffer(bytes,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);void*p=nullptr;Check(upload->Map(0,nullptr,&p));
@@ -86,6 +86,15 @@ int main(){try{
      // for illumination changes and repeatedly reset to the noisy sample.
      if(frame>48&&frame<=80&&((x*17+y*31+frame*13)%509)==0)light=4;
      value={light,light,light,2};
+    }
+    if(frame>96){
+     // A foreground surface moves right, exposing a stationary background.
+     // This is geometry motion with matching depth/MV, not a moving light.
+     const UINT left=16+2*(frame-97);
+     const bool foreground=x>=left&&x<left+24&&y>=16&&y<48;
+     if(i==0){const float light=foreground?.8f:.05f;value={light,light,light,2};}
+     if(i==2)value={foreground?9.f:10.f,0,0,0};
+     if(i==3)value={foreground?-2.f/W:0.f,0,0,0};
     }
 #ifdef CONTROL_NRD_PIPELINE_TEST
     const float material=x<W/2?.25f:.75f;
@@ -142,17 +151,26 @@ int main(){try{
 #ifdef CONTROL_NRD_PIPELINE_TEST
   void* probeData=nullptr;Check(probeReadback->Map(0,nullptr,&probeData));Require(std::memcmp(probeData,expected,16)==0,"native bindings were not restored");probeReadback->Unmap(0,nullptr);
 #endif
-  void*p=nullptr;Check(readback->Map(0,nullptr,&p));double sum=0,center=0;unsigned centerCount=0;for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){const auto*pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;Require(std::isfinite(pixel[0])&&std::isfinite(pixel[1])&&std::isfinite(pixel[2]),"nonfinite RELAX output");float light=pixel[0];
+  void*p=nullptr;Check(readback->Map(0,nullptr,&p));double sum=0,center=0,trail=0,movingCenter=0;unsigned centerCount=0,trailCount=0,movingCount=0;for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){const auto*pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;Require(std::isfinite(pixel[0])&&std::isfinite(pixel[1])&&std::isfinite(pixel[2]),"nonfinite RELAX output");float light=pixel[0];
 #ifdef CONTROL_NRD_PIPELINE_TEST
   const float factor=x<W/2?.25f:.75f;light/=factor;
   Require(pixel[3]==pixel[0],"native alpha contract changed");
   if(frame==16)Require(std::abs(light-.4f)<.02f&&std::abs(pixel[1]/.5f-.4f)<.02f&&std::abs(pixel[2]/.8f-.4f)<.02f,"receiver shading or brightness changed");
 #endif
+  if(frame>96){const UINT left=16+2*(frame-97);
+   if(x>=left-2&&x<left&&y>=24&&y<40){trail+=light;++trailCount;}
+   if(x>=left+8&&x<left+16&&y>=24&&y<40){movingCenter+=light;++movingCount;}
+  }
   sum+=light;if(x>=7*W/16&&x<9*W/16&&y>=7*H/16&&y<9*H/16){center+=light;++centerCount;}}readback->Unmap(0,nullptr);finalMean=sum/(W*H);
   if(frame==16){std::printf("Uniform mean %.8f\n",finalMean);Require(std::abs(finalMean-.4)<.015,"RELAX lost uniform light");}
   if(frame==48){spotMean=center/centerCount;quietMean=finalMean;std::printf("Persistent light center %.8f mean %.8f\n",spotMean,quietMean);Require(spotMean>.65,"RELAX removed persistent local light");}
   if(frame==80){std::printf("Sparse outliers center %.8f mean %.8f\n",center/centerCount,finalMean);Require(std::abs(finalMean-quietMean)<.06,"Sparse outliers caused excessive light fluctuation");}
   if(frame==96){std::printf("Light off mean %.8f\n",finalMean);Require(finalMean<.025,"Stale illumination persisted after light removal");}
+  if(frame>100){const double trailMean=trail/trailCount;worstTrail=(std::max)(worstTrail,trailMean);
+   Require(trailMean<.14,"moving foreground left stale illumination on exposed background");
+   Require(movingCenter/movingCount>.6,"moving foreground lost illumination");
+  }
+  if(frame==128)std::printf("Moving surface: worst exposed background %.8f (target 0.05), foreground %.8f (target 0.8)\n",worstTrail,movingCenter/movingCount);
   // Remove all recorded references before releasing this frame's descriptors.
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));Check(list->Close());
  }
