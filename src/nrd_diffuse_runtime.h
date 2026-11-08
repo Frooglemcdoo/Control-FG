@@ -191,6 +191,7 @@ static void ProducerDispatch() noexcept {
   r->epoch=epoch;PTGlass::DescriptorRange fresh;if(!PTGlassRuntime::Fresh(c,&fresh)){Reason("producer_heap");return;}
   r->exports.emplace_back();
   if(!epoch->receiver->Record(c.list,b.pipeline.Get(),c.gpu,*pass.shadow,sequence,fresh,r->exports.back())){r->exports.pop_back();Reason("producer_descriptors");return;}
+  settings_check::Record(settings_check::ReceiverExport);
   r->exported=true;guideFrame=pass.frame;guideView=pass.view;guideList=c.list;guideGeneration=generation;guideProducer=mode;
  }catch(...){Invalidate(epoch);Reason("producer_exception");}
 }
@@ -228,6 +229,7 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
    else record->work.reset();
    Reason("filter_contract");return false;
   }
+  settings_check::Record(settings_check::RelaxPasses,epoch->filter->DispatchCount());
   record->checkGeneration=settings_check::active.load()?settings_check::generation.load():0;settings_check::RecordFor(settings_check::RelaxRecorded,record->checkGeneration);
   record->filtered=true;lastFilterTicks=now.QuadPart;lastFilterFrame=f.frame;guideFrame=0;Reason("active");gi_dual_bridge::status=1;return true;
  }catch(...){Invalidate(epoch);Reason("filter_exception");return false;}

@@ -63,6 +63,7 @@ public:
  }
  // Live insertion uses a fresh range in the ALREADY BOUND native heap. Never
  // switch heaps there: doing so also invalidates the game's graphics tables.
+ size_t DispatchCount()const noexcept{return session.Plan().size();}
  UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
  bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0}){
   if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return false;

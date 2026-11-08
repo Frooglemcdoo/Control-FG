@@ -79,6 +79,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
     if(single){gi_reuse::singleRayApplied.store(useNew);if(useNew)++gi_reuse::singleRayDispatches;}
     if(applied.exchange(version)!=version)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",useNew?"new":"native",version);
+    settings_check::Record(useNew?settings_check::OwnedRays:settings_check::NativeRays);
     if(useNew){auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);
      if(single&&temporalRecord)temporalRecord(list,state.Get(),custom);
      return true;}

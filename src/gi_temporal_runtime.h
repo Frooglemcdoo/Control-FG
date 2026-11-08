@@ -112,6 +112,7 @@ inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state,con
     auto temporal=desc;temporal.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),64};
     rt_shadow_capture::Lookup(list).dispatch(list,&temporal);
     list->ResourceBarrier(1,&barrier);
+    settings_check::Record(settings_check::GIReuse);
     ++gi_reuse::temporalDispatches;
 }
 }

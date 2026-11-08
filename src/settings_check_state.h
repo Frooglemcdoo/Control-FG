@@ -3,8 +3,8 @@
 #include <array>
 #include <cstdint>
 namespace settings_check {
-enum Event : unsigned {RRSuccess,RRFailure,OwnedGI,NativeGI,CharacterEnhanced,CharacterNative,VolumeEnhanced,VolumeNative,LightingEnhanced,LightingNative,Clamp60,ClampOther,RelaxRecorded,RelaxSubmitted,RelaxCompleted,RelaxFallback,GISampleQueries,Count};
-inline constexpr const char* names[]={"rr_evaluations_succeeded","rr_evaluations_failed","owned_gi_dispatches","native_gi_dispatches","enhanced_character_bindings","native_character_bindings","enhanced_volume_bindings","native_volume_bindings","enhanced_lighting_bindings","native_lighting_bindings","clamp60_invocations","other_clamp_invocations","relax_recorded","relax_submitted","relax_gpu_completed","relax_rejections","gi_sample_queries"};
+enum Event : unsigned {RRSuccess,RRFailure,OwnedGI,NativeGI,CharacterEnhanced,CharacterNative,VolumeEnhanced,VolumeNative,LightingEnhanced,LightingNative,Clamp60,ClampOther,RelaxRecorded,RelaxSubmitted,RelaxCompleted,RelaxFallback,GISampleQueries,OwnedRays,NativeRays,GIReuse,ReceiverExport,RelaxPasses,GINativeTemporal,GINativeSpatial,GICustomTemporal,GICustomSpatial,GIRawCopy,GINativeFilterFallback,SpecularNativeWithRR,BroadNativeWithRR,Count};
+inline constexpr const char* names[]={"rr_evaluations_succeeded","rr_evaluations_failed","owned_gi_dispatches","native_gi_dispatches","enhanced_character_bindings","native_character_bindings","enhanced_volume_bindings","native_volume_bindings","enhanced_lighting_bindings","native_lighting_bindings","clamp60_invocations","other_clamp_invocations","relax_recorded","relax_submitted","relax_gpu_completed","relax_rejections","gi_sample_queries","owned_gi_ray_dispatches","native_gi_ray_dispatches","gi_temporal_visibility_dispatches","relax_receiver_export_dispatches","relax_internal_compute_dispatches","native_gi_temporal_dispatches","native_gi_spatial_dispatches","other_custom_gi_temporal_dispatches","other_custom_gi_spatial_dispatches","gi_raw_copy_dispatches","unintercepted_gi_filter_calls","native_specular_filter_calls_with_rr","native_broad_diffuse_filter_calls_with_rr"};
 inline std::atomic<bool> active{false};
 inline std::atomic<std::uint64_t> generation{0};
 inline std::array<std::atomic<std::uint64_t>,Count> counts{};
@@ -14,7 +14,7 @@ inline void RecordGISamples(unsigned value) noexcept {
  ++counts[GISampleQueries];giSampleMask.fetch_or(1u<<(value<31?value:31));
 }
 inline std::atomic<const char*> reason{"none"};
-inline void Record(Event e) noexcept {if(active.load(std::memory_order_relaxed))++counts[e];}
+inline void Record(Event e,std::uint64_t n=1) noexcept {if(active.load(std::memory_order_relaxed))counts[e].fetch_add(n,std::memory_order_relaxed);}
 inline void RecordFor(Event e,std::uint64_t id) noexcept {if(id&&id==generation.load())Record(e);}
 inline std::uint64_t Reset() noexcept {
  active=false;for(auto& c:counts)c=0;giSampleMask=0;reason="none";

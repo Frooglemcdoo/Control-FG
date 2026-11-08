@@ -769,6 +769,7 @@ static void RRNativeHookBroadDiffuseCommon(unsigned site, void* color, void* his
  const auto policy=control_rr::BroadDiffusePolicy(full,partial,rrNativeRTFrame.effects,preserve);
  SetLastError(entryError);
  if(!policy.bypass){
+  if(full)settings_check::Record(settings_check::BroadNativeWithRR);
   rrNativeDiffuseFilterOriginal(color,history,passes);
   control_rr_diagnostic::Record(control_rr_diagnostic::Event::BroadNative);
  }else control_rr_diagnostic::Record(control_rr_diagnostic::Event::BroadBypass);
@@ -882,6 +883,7 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
  SetLastError(saved);
  // Let native exceptions propagate. The finally block is also the last-resort
  // provider restoration boundary if the bind or dispatch unwinds unexpectedly.
+ if(scope.preserveNativeFiltering)settings_check::Record(settings_check::SpecularNativeWithRR);
  __try {rrNativeFilterOriginal(color,history,scope.spatialPasses,evaluateColor);}
  __finally {
   if(rrNativeClampLease.armed){

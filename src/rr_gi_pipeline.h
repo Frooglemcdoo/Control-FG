@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "settings_check_state.h"
 #include "rr_gi_stage_policy.h"
 #include "gi_dual_history_bridge.h"
 #include "../build/gi_dual_history.generated.h"
@@ -155,9 +156,10 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
 #endif
  }
  }
- if(!replacement||count!=1){dispatch(list,x,y,z);return;}
+ if(!replacement||count!=1){settings_check::Record(spatialDispatch?settings_check::GINativeSpatial:settings_check::GINativeTemporal);dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;
+  settings_check::Record(replacement==b->bypass?settings_check::GIRawCopy:spatialDispatch?settings_check::GICustomSpatial:settings_check::GICustomTemporal);
 #ifndef CONTROL_PERFORMANCE_BUILD
   if(replacement==b->owned && b->owned)++ownedApplied;
 #endif

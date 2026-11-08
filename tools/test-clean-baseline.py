@@ -53,6 +53,11 @@ for name, expected in manifest['files'].items():
         hook = settings_check_hooks[name].encode()
         assert data.count(hook) == 1, (name, 'R386 gated observation hook changed')
         data = data.replace(hook, b'', 1)
+    if name == 'src/rr_native_frame.h':
+        for hook in ['  if(full)settings_check::Record(settings_check::BroadNativeWithRR);\n',
+                     ' if(scope.preserveNativeFiltering)settings_check::Record(settings_check::SpecularNativeWithRR);\n']:
+            assert data.count(hook.encode()) == 1
+            data = data.replace(hook.encode(), b'', 1)
     if name in demand_exceptions:
         text=data.decode()
         for before,after in reversed(demand_exceptions[name]):

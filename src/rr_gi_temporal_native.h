@@ -74,7 +74,7 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&
   rrNativeFrame.Selected()&&rrNativeFrame.Stage()==control_rr::RRFrameStage::Lighting&&color&&passes&&
   reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
- if(!eligible||rrNativeGIHistoryScope){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ if(!eligible||rrNativeGIHistoryScope){settings_check::Record(settings_check::GINativeFilterFallback);rrNativeDiffuseFilterOriginal(color,history,passes);return;}
  const auto mode=rt_surface_source::Stage(capture,control_rr_gi::stageMode.load(std::memory_order_acquire));
  const unsigned previousCapture=rt_surface_source::giScope;rt_surface_source::giScope=capture;
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEligible);

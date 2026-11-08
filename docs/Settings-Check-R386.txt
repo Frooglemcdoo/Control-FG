@@ -15,6 +15,8 @@ saved mod settings and renderer.ini when available, and saved-file copy status.
 It records RR evaluation results, Owned/native GI dispatches, character/volume/
 lighting bindings, clamp invocations, RELAX recording/submission/GPU completion,
 GI allocation/shader sample counts, and existing FG runtime state. Missing scene coverage is marked NOT_OBSERVED.
+Pass counts also flag native GI filtering observed in a RELAX window. See
+RENDERING-WORK-AUDIT.md for replacement boundaries and known additional costs.
 Errors and fallbacks are reported even if other frames succeeded. Settings changes
 or loss of focus mark the observation incomplete. No universal ALL PASS is issued.
 
