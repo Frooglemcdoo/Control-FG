@@ -42,6 +42,8 @@ static Result Sequence(bool old,unsigned mode,unsigned passCount){
  for(UINT frame=0;frame<64;++frame){
   float value=mode==0||mode==3?(frame%2?.6f:.2f):.4f;
   if(mode==1&&frame>=40)value=.02f;
+  if(mode==8&&frame>=2)value=.02f;
+  if(mode==9&&frame>=2)value=8.f;
   if(mode==2&&frame>=40)value=4.f;
   if(mode==4&&frame>=40)value=.1f;
   Image raw(W*H,Pixel{value,value,value,value});
@@ -60,12 +62,13 @@ static Result Sequence(bool old,unsigned mode,unsigned passCount){
  }
  g.Submit();Result r;float previous=0;
  for(UINT frame=0;frame<64;++frame){void* data=nullptr;Check(reads[frame]->Map(0,nullptr,&data));auto&t=outputs[frame];auto*p=reinterpret_cast<float*>(static_cast<unsigned char*>(data)+t.f.Offset+(H/2)*t.f.Footprint.RowPitch)+4*(W/2);float v=p[0];if(frame>=24&&frame<40){double total=0;for(UINT yy=0;yy<H;++yy)for(UINT xx=0;xx<W;++xx){auto* q=reinterpret_cast<float*>(static_cast<unsigned char*>(data)+t.f.Offset+yy*t.f.Footprint.RowPitch)+4*xx;total+=q[0];}r.energy+=total/16.;}Require(std::isfinite(v)&&std::abs(p[3]-v)<1e-5f,"finite/red-alpha");reads[frame]->Unmap(0,nullptr);
-  if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==40)r.reveal=v;if(frame>=42)r.off=std::max(r.off,std::abs(v-(mode==1?.02f:(mode==2||mode==7)?4.f:mode==4?.1f:.4f)));previous=v;
+  if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==(mode>=8?2u:40u))r.reveal=v;if(frame>=(mode>=8?4u:42u))r.off=std::max(r.off,std::abs(v-((mode==1||mode==8)?.02f:mode==9?8.f:(mode==2||mode==7)?4.f:mode==4?.1f:.4f)));previous=v;
  }r.delta=std::sqrt(r.delta/16.);return r;
 }
-int main(){try{for(unsigned count:{0u,2u,6u})for(unsigned mode=0;mode<8;++mode){std::cout<<"START dual spatial="<<count<<" mode="<<mode<<std::endl;auto old=Sequence(true,mode,count),next=Sequence(false,mode,count);std::cout<<"Dual spatial="<<count<<" mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" old_mean="<<old.mean<<" mean="<<next.mean<<" old_energy="<<old.energy<<" energy="<<next.energy<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
+int main(){try{for(unsigned count:{0u,2u,6u})for(unsigned mode=0;mode<10;++mode){std::cout<<"START dual spatial="<<count<<" mode="<<mode<<std::endl;auto old=Sequence(true,mode,count),next=Sequence(false,mode,count);std::cout<<"Dual spatial="<<count<<" mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" old_mean="<<old.mean<<" mean="<<next.mean<<" old_energy="<<old.energy<<" energy="<<next.energy<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
  if(mode==0||mode==3||mode==6){Require(next.delta<old.delta*.25,"fluctuating-input suppression");Require(std::abs(next.mean-.4)<.015,"mean brightness drift");}
- if(mode==1||mode==2)Require(next.off<.005,"light transition lag");
+ if(mode==1||mode==2||mode>=8)Require(next.off<.005,"light transition lag");
+ if(mode>=8)Require(std::abs(next.reveal-(mode==8?.02f:8.f))<.001f,"startup light change retained history");
  if(mode==4)Require(std::abs(next.reveal-.1)<1e-5,"revealed surface retained old light");
  if(mode==7){
   if(count==0)Require(std::abs(next.mean-4.)<.005,"temporal compact light centre lost brightness");

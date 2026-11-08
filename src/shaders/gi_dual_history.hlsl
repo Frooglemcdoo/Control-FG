@@ -54,8 +54,8 @@ void main(uint3 tid:SV_DispatchThreadID) {
   // Confidence uses temporal noise, not a fresh single-frame min/max box.
   float reactive=saturate((delta-3*sigma-.02*max(oldL,l))/(max(oldL,l)*.25+.001));
   // A nearly extinguished or newly dominant light must not leave a long trail.
-  if(l<oldL*.1||oldL<l*.1)reactive=1;
   if(fast.a<4)reactive=0;
+  if(l<oldL*.1||oldL<l*.1)reactive=1;
   sampleAge=min(fast.a+1,32.);
   age=lerp(min(moments.z+1,32.),1.,reactive);
   float alpha=1/age,fastAlpha=1/min(sampleAge,4.);
