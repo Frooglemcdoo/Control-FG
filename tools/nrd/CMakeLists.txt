@@ -27,6 +27,7 @@ FetchContent_Declare(nrd
    -P ${CMAKE_CURRENT_SOURCE_DIR}/patch_nrd.cmake)
 FetchContent_MakeAvailable(nrd)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/nrd_library_$<CONFIG>.txt" CONTENT "$<TARGET_FILE:NRD>")
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/nrd_shader_blob_$<CONFIG>.txt" CONTENT "$<TARGET_FILE:ShaderMakeBlob>")
 add_executable(control_nrd_contract test_contract.cpp)
 target_link_libraries(control_nrd_contract PRIVATE NRD)
 if(MSVC)
