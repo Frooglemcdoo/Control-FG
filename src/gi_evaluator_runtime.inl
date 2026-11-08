@@ -55,6 +55,7 @@ inline void Bind(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexc
 inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled())return;UINT mode=0,size=sizeof(mode);
  if(FAILED(list->GetPrivateData(kMode,&size,&mode))||size!=sizeof(mode)||!mode)return;
+ settings_check::Record(mode==2?settings_check::OwnedGI:settings_check::NativeGI);
  if(mode==2&&gi_reuse::SingleProducerEnabled())++gi_reuse::singleEvaluatorDispatches;
  const auto rev=revision.load();const auto key=rev*4+mode;
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);

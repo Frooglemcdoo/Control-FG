@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "settings_check_state.h"
 #include <cstring>
 #include "rr_compact_distance_policy.h"
 namespace control_rr {

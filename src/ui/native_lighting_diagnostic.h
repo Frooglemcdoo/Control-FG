@@ -9,6 +9,7 @@
 #include "lighting_performance_capture.h"
 #include "rr_reflection_suite.h"
 #include "gi_path_capture.h"
+#include "settings_check.h"
 
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
@@ -25,19 +26,20 @@ inline RECT ButtonRect(unsigned index) noexcept {
  if(index<kModeCount)return {14+int(index%3)*156,56+int(index/3)*42,162+int(index%3)*156,92+int(index/3)*42};
  constexpr unsigned features[]={8,11,9,10,12,13,14,15,16};
  constexpr unsigned comparisons[]={21,22,23,24};
- constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19,27};
+ constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19,27,28};
  const unsigned local=index-kModeCount;unsigned row=0,col=0;int top=0;
  for(unsigned i=0;i<9;++i)if(features[i]==local){row=i/3;col=i%3;top=220;}
  for(unsigned i=0;i<4;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
- for(unsigned i=0;i<10;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
+ for(unsigned i=0;i<11;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
  return {14+int(col)*156,top+int(row)*42,162+int(col)*156,top+int(row)*42+36};
 }
 #ifdef CONTROL_GI_LONG_SEQUENCE
-inline constexpr unsigned kButtonCount = kModeCount + 28;
+inline constexpr unsigned kButtonCount = kModeCount + 29;
 #else
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
+    if(index==kModeCount+28)return settings_report::Busy()?L"CHECK: RUNNING":L"CHECK SETTINGS";
     if(index==kModeCount+27)return path_capture::active?L"GI PATH: RECORDING":L"CAPTURE GI PATH";
     if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -173,7 +175,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R385",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R386",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
@@ -381,7 +383,12 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
-            if(path_capture::active||!ButtonVisible(index))return 0;
+            if(path_capture::active||settings_report::Busy()||!ButtonVisible(index))return 0;
+            if(index==kModeCount+28){
+                if(settings_report::Start(GetTickCount64()))ClosePanel(window);
+                else MessageBoxW(window,L"Finish other captures first. The report needs a writable LOCALAPPDATA/ControlFGProbe folder. Click CHECK SETTINGS, return to gameplay, and keep Jesse visible. One beep after five seconds starts the ten-second check. Two beeps mean the ZIP is ready.",L"Settings check",MB_OK);
+                return 0;
+            }
             if(index==kModeCount+27){
                 if(path_capture::Start(GetTickCount64()))ClosePanel(window);
                 else MessageBoxW(window,L"Use Native Blend, RR ON and FG OFF. Finish other captures first. After two earlier RR pairs or a failed capture, restart the game. Hold still for both conditions; two beeps mean the ZIP is ready.",L"GI path capture",MB_OK);
@@ -524,7 +531,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     while(GetMessageW(&msg,nullptr,0,0)>0){
         if(msg.message==WM_HOTKEY && msg.hwnd==nullptr && msg.wParam==f10Id){
             if(lighting_panel::Valid(panel,owner,kClass) &&
-               lighting_panel::Foreground(owner,panel,GetForegroundWindow()) && !capture_suite::active
+               lighting_panel::Foreground(owner,panel,GetForegroundWindow()) && !capture_suite::active && !settings_report::active
 #ifdef CONTROL_RR_F9_SUITE
                && !reflection_suite::active
 #endif
@@ -550,6 +557,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         HWND game=cachedGame;
         render_fps::Tick(game,now);
+        settings_report::Tick(game,now);
         UpdateCaptureActivity();
         gi_trace_status::Tick(game);
         if(panel && (owner!=game || !lighting_panel::Valid(panel,owner,kClass))){
@@ -607,7 +615,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
                (!control_rr_capture_ui::Busy()||i==0)&&
 #endif
-               !capture_suite::active&&(i!=0||!f10Registered)&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
+               !capture_suite::active&&!settings_report::active&&(i!=0||!f10Registered)&&foreground&&down&&!held[i]&&(i==0||modifier)&&(!performance_capture::Active()||i==0)){
                 if(i==0){if(panelOpen)ClosePanel(panel);else OpenPanel(panel);}else {selectionRejected=!SelectMode(kModeChoices[i-1].mode);savedNotice=0;}
             }held[i]=down;
         }

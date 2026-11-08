@@ -144,6 +144,7 @@ inline bool Invoke(NativeDispatchFn fn,void* state,const void* groups,ID3D12Grap
  __finally {active=previous;}
  const bool changed=armed&&request.used&&request.count==1;
  if(used)*used=changed;
+ settings_check::Record(changed&&strength==60?settings_check::Clamp60:settings_check::ClampOther);
  effective.store(changed?strength:100,std::memory_order_release);applied.store(strength==100||changed,std::memory_order_release);
  SetLastError(nativeError);return !armed||request.count<=1;
 }

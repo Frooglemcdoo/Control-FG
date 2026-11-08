@@ -26,7 +26,8 @@ struct Epoch {
 };
 struct Recording {
  ComPtr<ID3D12GraphicsCommandList4> list;UINT64 generation=0,fence=0;
- bool submitted=false,reset=false,filtered=false,exported=false;
+ bool submitted=false,reset=false,filtered=false,exported=false,checkCompleted=false;
+ UINT64 checkGeneration=0;
  std::shared_ptr<Epoch> epoch;
  std::vector<control_nrd::NativeReceiver::Work> exports;
  std::unique_ptr<control_nrd::NativeTransaction::Work> work;
@@ -49,6 +50,7 @@ struct Mute {bool observing=gi_dual_bridge::observing;hooks::Mute bindings;
  Mute(){gi_dual_bridge::observing=false;control_rr_clamp::active=nullptr;}
  ~Mute(){control_rr_clamp::active=nativeRequest;gi_dual_bridge::observing=observing;}};
 static void Reason(const char* reason) noexcept {
+ if(settings_check::active.load()&&strcmp(reason,"active")){settings_check::reason=reason;settings_check::Record(settings_check::RelaxFallback);}
  gi_dual_bridge::status=2;
  static const char* last=nullptr;if(last!=reason){last=reason;Log("NRD_R384 admission=%s",reason);}
 }
@@ -65,6 +67,7 @@ static void Poll() {
  const UINT64 complete=fence?fence->GetCompletedValue():0;
  if(complete==UINT64_MAX){Invalidate(epoch);Reason("device_removed");return;}
  for(auto i=recordings.begin();i!=recordings.end();){auto& r=**i;
+  if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}
   if(r.reset&&(!r.submitted||r.fence<=complete)){
    if(!r.submitted&&(r.filtered||r.exported||(r.work&&r.work->diffuse.commandsRecorded)))Invalidate(r.epoch);
    i=recordings.erase(i);
@@ -104,7 +107,8 @@ static void After(ID3D12CommandQueue* q,UINT64 mask) noexcept {
  if(!mask)return;
  for(unsigned i=0;i<recordings.size();++i)if(mask&(1ull<<i)){
   auto& r=*recordings[i];r.submitted=true;r.fence=++nextFence;
-  if(FAILED(q->Signal(fence.Get(),r.fence))||(r.filtered&&!r.epoch->filter->Submitted(reinterpret_cast<UINT64>(q),r.fence))){Invalidate(r.epoch);Reason("submission_failed");}
+  if(FAILED(q->Signal(fence.Get(),r.fence))||(r.filtered&&!r.epoch->filter->Submitted(reinterpret_cast<UINT64>(q),r.fence))){r.checkGeneration=0;Invalidate(r.epoch);Reason("submission_failed");}
+  else if(r.filtered)settings_check::RecordFor(settings_check::RelaxSubmitted,r.checkGeneration);
  }
  mutex.unlock();
 }
@@ -224,6 +228,7 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
    else record->work.reset();
    Reason("filter_contract");return false;
   }
+  record->checkGeneration=settings_check::active.load()?settings_check::generation.load():0;settings_check::RecordFor(settings_check::RelaxRecorded,record->checkGeneration);
   record->filtered=true;lastFilterTicks=now.QuadPart;lastFilterFrame=f.frame;guideFrame=0;Reason("active");gi_dual_bridge::status=1;return true;
  }catch(...){Invalidate(epoch);Reason("filter_exception");return false;}
 }

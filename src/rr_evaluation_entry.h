@@ -156,6 +156,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     if(rrAttempt){
         const bool success=(result&0xFFF00000u)!=0xBAD00000u;
         rrNativeFrame.EvaluationResult(success);
+        settings_check::Record(success?settings_check::RRSuccess:settings_check::RRFailure);
         if(success)control_rr_diagnostic::Record(bindings.viewAngleApplied ?
             control_rr_diagnostic::Event::ViewAngleConsumed : control_rr_diagnostic::Event::ViewAngleBaseline);
         control_rr::RRUserPublish(success?control_rr::RRUserStatus::Active:control_rr::RRUserStatus::Stopped);

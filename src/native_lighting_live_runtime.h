@@ -428,6 +428,11 @@ struct Binding {
     }
     unsigned volumePhase = 0,surfacePhase=0,surfaceGroup=3;
     void Recorded() const noexcept {
+        if(settings_check::active.load(std::memory_order_relaxed)){
+            if(kind==character_surface::kind)settings_check::Record(alternate?settings_check::CharacterEnhanced:settings_check::CharacterNative);
+            else if(kind==volume_temporal::kind)settings_check::Record(alternate?settings_check::VolumeEnhanced:settings_check::VolumeNative);
+            else if(kind)settings_check::Record(alternate?settings_check::LightingEnhanced:settings_check::LightingNative);
+        }
         if(!control_diagnostics::Active())return;
 #ifdef CONTROL_PERFORMANCE_BUILD
         if(kind==volume_temporal::kind || kind==character_surface::kind)return;

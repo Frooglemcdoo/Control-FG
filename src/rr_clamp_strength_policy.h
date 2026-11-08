@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <atomic>
+#include "settings_check_state.h"
 #include "rr_suite_policy.h"
 namespace control_rr_clamp {
 inline constexpr unsigned kReflectionDetailPercent = 60;

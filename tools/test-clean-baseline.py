@@ -41,6 +41,17 @@ for name, expected in manifest['files'].items():
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    # R386 adds only gated observation hooks to these baseline files.
+    settings_check_hooks = {
+        'src/rr_clamp_strength.h': ' settings_check::Record(changed&&strength==60?settings_check::Clamp60:settings_check::ClampOther);\n',
+        'src/rr_clamp_strength_policy.h': '#include "settings_check_state.h"\n',
+        'src/rr_user_control.h': '#include "settings_check_state.h"\n',
+        'src/rr_evaluation_entry.h': '        settings_check::Record(success?settings_check::RRSuccess:settings_check::RRFailure);\n',
+    }
+    if name in settings_check_hooks:
+        hook = settings_check_hooks[name].encode()
+        assert data.count(hook) == 1, (name, 'R386 gated observation hook changed')
+        data = data.replace(hook, b'', 1)
     if name in demand_exceptions:
         text=data.decode()
         for before,after in reversed(demand_exceptions[name]):

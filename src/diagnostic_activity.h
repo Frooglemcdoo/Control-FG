@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "settings_check_state.h"
 namespace control_diagnostics {
 inline std::atomic<bool> captureActive{false};
 inline bool Active() noexcept {
