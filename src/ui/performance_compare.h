@@ -15,7 +15,7 @@ inline HANDLE packager=nullptr;
 inline bool ioFailed=false;
 inline std::string outcome="incomplete";
 struct Saved {Mode mode{};bool owned=false,lighting=false;unsigned rays=0,quality=0,volume=0,surface=0,request=0,manualGI=0,contact=0,spec=0;control_rr_gi::StageMode stage{};} saved;
-struct Result {uint64_t evidence[settings_check::Count]{};uint64_t skipped=0;bool observed=false;std::string settings;};
+struct Result {uint64_t evidence[settings_check::Count]{};uint64_t skipped=0;unsigned sampleMask=0;bool observed=false;std::string settings;};
 inline Result results[phaseCount]{};
 struct GPU {unsigned phase;uint64_t present;unsigned stage;double ms;};
 inline std::vector<GPU> gpu;
@@ -74,10 +74,11 @@ inline void Summary(){
  if(stats[6].mean&&stats[7].mean)out<<"Full repeat drift: "<<100*(stats[7].mean/stats[6].mean-1)<<"% in mean frame time.\n";
  if(stats[0].mean&&stats[6].mean)out<<"Full minus initial native: "<<stats[6].mean-stats[0].mean<<" ms (raw observation, not a causal allocation).\n";
  out<<"Input/output dimensions (packed 16-bit W,H,W,H): "<<geometryAtStart<<"\n";
- out<<"\nStage isolation is incremental: sample policy -> Owned producer/reuse -> lighting policy -> RELAX -> character+near-volume -> main volume filter.\nDo not sum these deltas as independent costs: dependencies, GPU occupancy, CPU bottlenecks and clock drift can interact.\nMore than 5% repeat drift warrants rejecting the comparison. No effect is ranked if required-path coverage is missing.\n\n";
+ out<<"\nStage isolation is incremental: sample policy -> Owned producer/reuse -> lighting policy -> RELAX -> character -> near-volume and main volume filters.\nDo not sum these deltas as independent costs: dependencies, GPU occupancy, CPU bottlenecks and clock drift can interact.\nMore than 5% repeat drift warrants rejecting the comparison. No effect is ranked if required-path coverage is missing.\n\n";
  stage<<"phase,stage,sampled_presents,mean_gpu_ms_per_sampled_present,p95_gpu_ms_per_sampled_present\n";
  for(unsigned p=0;p<phaseCount;++p){
   out<<"\n"<<conditions[p].name<<" evidence:\n";
+  out<<"effective_GI_sample_mask="<<results[p].sampleMask<<" (bit N means N samples; bit 31 means 31 or more)\n";
   for(unsigned e=0;e<settings_check::Count;++e)out<<settings_check::names[e]<<'='<<results[p].evidence[e]<<'\n';
   for(unsigned s=1;s<performance::kStageCount;++s){std::vector<double> v;for(const auto& entry:perPresent)if(std::get<0>(entry.first)==p&&std::get<1>(entry.first)==s)v.push_back(entry.second);
    auto x=Summarize(v);if(x.count)stage<<conditions[p].name<<','<<performance::Name(performance::Stage(s))<<','<<x.count<<','<<x.mean<<','<<x.p95<<'\n';}
@@ -145,12 +146,16 @@ inline void Tick(HWND game,uint64_t now){
   performance::Poll(session,Emit);if(now<until)return;
   control_compare::enabled=false;performance::enabled=false;settings_check::End();
   for(unsigned e=0;e<settings_check::Count;++e)results[step].evidence[e]=settings_check::counts[e].load();
+  results[step].sampleMask=settings_check::giSampleMask.load();
   results[step].settings=settings_report::Snapshot();results[step].skipped=performance::skipped.load()-skippedStart;
   using namespace settings_check;const auto* e=results[step].evidence;
   results[step].observed=e[RRSuccess]>100&&!e[RRFailure]&&!e[RelaxFallback]&&
     (conditions[step].owned?e[OwnedGI]>100&&!e[NativeGI]:e[NativeGI]>100&&!e[OwnedGI])&&
     (conditions[step].relax?e[RelaxCompleted]>100:e[RelaxRecorded]==0)&&
-    (!conditions[step].character||e[CharacterEnhanced]>0);
+    (conditions[step].character?e[CharacterEnhanced]>0:e[CharacterEnhanced]==0)&&
+    (!conditions[step].volume||e[VolumeEnhanced]>0)&&
+    (!conditions[step].lighting||e[LightingEnhanced]>0)&&
+    (!conditions[step].rays||results[step].sampleMask==(1u<<conditions[step].rays));
   state=State::Drain;until=now+5000;
  }
  if(state==State::Drain){const auto pending=performance::Poll(session,Emit);if(pending){if(now>until)Finish(game,"INCOMPLETE: GPU timings did not retire");return;}

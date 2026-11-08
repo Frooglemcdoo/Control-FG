@@ -10,7 +10,7 @@ inline constexpr Condition conditions[]={
  {"owned_4_raw",true,4,false,false,false,false},
  {"owned_4_lighting_raw",true,4,true,false,false,false},
  {"owned_4_lighting_relax",true,4,true,true,false,false},
- {"plus_character_near_volume",true,4,true,true,true,false},
+ {"plus_character",true,4,true,true,true,false},
  {"full_rr",true,4,true,true,true,true},
  {"full_rr_repeat",true,4,true,true,true,true},
  {"native_rr_end",false,0,false,false,false,false}};

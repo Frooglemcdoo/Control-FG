@@ -11,7 +11,7 @@ Allow about three minutes and keep the game focused. Your previous rendering
 settings are restored before packaging. Explorer selects the resulting ZIP.
 
 Conditions: native RR; native RR with 4 GI samples; Owned GI raw; plus enhanced
-lighting; plus RELAX; plus character and near-volume filtering; full features;
+lighting; plus RELAX; plus character filtering; full features (including both volume filters);
 full repeat; native repeat. Each condition warms for 5 seconds and measures 12.
 The native baseline uses the same mod RR integration, not an unmodified game.
 Clamp and unrelated settings are fixed; reflection sample policy is Native.
