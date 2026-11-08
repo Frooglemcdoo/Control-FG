@@ -27,35 +27,39 @@ jobs:
         run: |
           for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           if not exist build mkdir build
           python tools/gi_motion_history.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-owned.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned-spatial.cpp /Febuild\compile-gi-owned-spatial.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-owned-spatial.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-full-chain.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-history-footprint.cpp /Febuild\test-gi-history-footprint.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-history-footprint.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-dual-history.cpp /Febuild\compile-gi-dual-history.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-dual-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-history.cpp /Febuild\test-gi-dual-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-dual-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-runtime.cpp /Febuild\test-gi-dual-runtime.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-gi-dual-runtime.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-dual-history-policy.cpp /Febuild\test-gi-dual-history-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-dual-history-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1

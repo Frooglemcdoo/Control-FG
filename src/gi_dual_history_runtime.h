@@ -144,7 +144,7 @@ static void Transition(ID3D12GraphicsCommandList* list,Storage& s,bool write) {
   write?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};}
  list->ResourceBarrier(2,b);
 }
-static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState* native,ID3D12PipelineState* custom,UINT x,UINT y,UINT z,gi_dual_bridge::Dispatch dispatch) noexcept {
+static bool DispatchTarget(ID3D12GraphicsCommandList* list,ID3D12PipelineState* native,ID3D12PipelineState* custom,UINT x,UINT y,UINT z,gi_dual_bridge::Dispatch dispatch,ID3D12Resource* target) noexcept {
  if(!pass.serial||pass.failed||!pass.shadow||z!=1)return false;
  const auto serial=pass.serial;pass.serial=0; // exactly one consumption per bind
  std::lock_guard<std::recursive_mutex> guard(mutex);Unobserve mute;
@@ -156,7 +156,7 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState* native
   // Native b0/b1 remain root CBVs. Mirror all five native temporal SRVs and u0.
   constexpr UINT64 nativeMask=(31ull<<5)|(1ull<<41);
   if(!pass.shadow->Has(serial,nativeMask)||!Initialize(c.queue))return false;
-  auto* target=Target();if(!target)return false;const auto desc=target->GetDesc();
+  if(!target)return false;const auto desc=target->GetDesc();
   if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||desc.DepthOrArraySize!=1||desc.SampleDesc.Count!=1||!desc.Width||!desc.Height||desc.Width>8192||desc.Height>8192||x!=(desc.Width+7)/8||y!=(desc.Height+7)/8)return false;
   // Hard bound includes all four sidecar pairs. No unbounded resize generations.
   if(desc.Width*desc.Height*32*Slots>1024ull*1024*1024)return false;
@@ -182,6 +182,10 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState* native
   static UINT reports=0;if(reports++<4)Log("GI_DUAL applied=1 frame=%llu previous=%u extent=%ux%u independent_lifetime=1",pass.frame,unsigned(lease.previous<Slots),width,height);
   return true;
  }catch(...){if(commands)Fail("recording_exception");else if(lease)policy.Cancel(lease,serial);return commands;}
+}
+static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState* native,ID3D12PipelineState* custom,UINT x,UINT y,UINT z,gi_dual_bridge::Dispatch dispatch) noexcept {
+ if(!pass.serial)return false;
+ return DispatchTarget(list,native,custom,x,y,z,dispatch,Target());
 }
 static const gi_dual_bridge::Callbacks callbacks{&Begin,&End,&Copy,&Constant,&Dispatch,&Reset,&Before,&After};
 [[maybe_unused]] static const bool registered=[] {gi_dual_bridge::callbacks.store(&callbacks);return true;}();

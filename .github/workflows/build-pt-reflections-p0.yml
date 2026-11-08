@@ -106,17 +106,17 @@ jobs:
         shell: cmd
         run: |
           python tools/test-spec-component-launch.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-spec-local-launch.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-spec-indirect-launch.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-spec-environment-launch.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-spec-volume-launch.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-compact-distance-launch.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Configure MSVC
         shell: cmd
@@ -131,29 +131,29 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-dual-history.cpp /Febuild\compile-gi-dual-history.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-dual-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-owned.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned-spatial.cpp /Febuild\compile-gi-owned-spatial.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-owned-spatial.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-sequence.cpp /Febuild\test-gi-owned-sequence.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-owned-sequence.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-regressions.cpp /Febuild\test-gi-owned-regressions.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-owned-regressions.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-edge.cpp /Febuild\test-gi-owned-edge.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-owned-edge.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate character rig sampling R382
         shell: cmd
@@ -161,124 +161,124 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           python tools/volume_temporal.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/character_surface.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python -m pip install numpy
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-character-diffuse-gpu.cpp /Febuild\test-character-diffuse-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-character-diffuse-gpu.exe --compile
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-character-diffuse.py --gpu-fixture
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-character-diffuse-gpu.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-neck-isolation.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-character-capture-contract.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-diffuse-source-policy.cpp /Febuild\test-diffuse-source-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-diffuse-source-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-performance-build.cpp /Febuild\test-performance-build.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-performance-build.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-diagnostic-activity.cpp /Febuild\test-diagnostic-activity.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-diagnostic-activity.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-signal-history.cpp /Febuild\test-gi-signal-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-signal-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-rt-surface-source.cpp /Febuild\test-rt-surface-source.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-rt-surface-source.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 build\test-character-log.cpp /Febuild\test-character-log.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-character-log.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-character-rig-filter.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-character-surface-gpu.cpp /Febuild\test-character-surface-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-character-surface-gpu.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate near volume history R382
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/test-volume-temporal.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-volume-temporal-gpu.cpp /Febuild\test-volume-temporal-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-volume-temporal-gpu.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate geometry descriptor probe R279
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           if not exist build mkdir build
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-probe.cpp /Febuild\test-gi-geometry-probe.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-geometry-probe.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate GI spotlight trace R274
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/gi_spot_trace.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-trace.cpp /Febuild\test-gi-spot-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-spot-trace.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_TEST_GI_RAY_TRACE tools\test-gi-spot-trace.cpp /Febuild\test-gi-ray-trace.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-ray-trace.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_TEST_GI_JOINT_TRACE tools\test-gi-spot-trace.cpp /Febuild\test-gi-joint-light.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-joint-light.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/analyze_gi_joint_trace.py build/gi-joint-oracle-readback.bin --output build/gi-joint-oracle-analysis.json
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-gi-joint-light.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-analyze-gi-ray-trace.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-bindings.cpp /Febuild\test-gi-spot-bindings.exe /link d3d12.lib dxgi.lib d3dcompiler.lib user32.lib gdi32.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-spot-bindings.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-gi-spot-collector.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate GI batch capture R271
         shell: cmd
         run: |
           if not exist build mkdir build
           python tools/test-gi-hit-collector.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-batch-capture-policy.cpp /Febuild\test-gi-batch-capture-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-batch-capture-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-slice-copy.cpp /Febuild\test-gi-slice-copy.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-slice-copy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate native CPU timing and call patches
         shell: cmd
@@ -286,34 +286,34 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-rt-append.cpp /Febuild\test-native-rt-append.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-rt-append.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-cpu-metrics.cpp /Febuild\test-native-cpu-metrics.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-cpu-metrics.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-cpu-workload.cpp /Febuild\test-native-cpu-workload.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-cpu-workload.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-native-material-diff.cpp /Febuild\test-native-material-diff.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-material-diff.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-cpu-runtime.cpp /Febuild\test-native-cpu-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-cpu-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Build and validate preparation phase accounting
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-preparation-phases.cpp /Febuild\test-native-preparation-phases.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-preparation-phases.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Fetch pinned DirectStorage SDK 1.3
         shell: powershell
@@ -332,7 +332,7 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\validate.cpp /Febuild\DirectStorage\ControlFG-DirectStorage-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate DirectStorage payload transfer
         shell: powershell
@@ -345,73 +345,73 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-texture-contract.cpp /Febuild\TestNativeTextureContract.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestNativeTextureContract.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate native packed texture GPU transport
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\directstorage\compile-packed-shader.cpp /Febuild\CompilePackedShader.exe /link d3d12.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\CompilePackedShader.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-packed-textures.cpp /Febuild\DirectStorage\TestPackedTextures.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\DirectStorage\TestPackedTextures.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\diagnostics\test-storage-selection.cpp /Febuild\TestStorageSelection.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestStorageSelection.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\diagnostics\test-texture-upgrade-patch.cpp /Febuild\TestTextureUpgrade.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestTextureUpgrade.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\diagnostics\test-storage-startup.cpp /Febuild\TestStorageStartup.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestStorageStartup.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\directstorage\restart-game.cpp /Febuild\ControlFG-Restart.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\diagnostics\test-storage-restart.cpp /Febuild\TestStorageRestart.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestStorageRestart.exe "%CD%\build\ControlFG-Restart.exe"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate native DirectStorage archive cache
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-loader-candidate.cpp /Febuild\TestLoaderCandidate.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestLoaderCandidate.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-loader-stages.cpp /Febuild\TestLoaderStages.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestLoaderStages.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-loader-trace.cpp /Febuild\TestLoaderTrace.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestLoaderTrace.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-loader-trace-runtime.cpp /Febuild\TestLoaderTraceRuntime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestLoaderTraceRuntime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\directstorage\test-prefetch-window.cpp /Febuild\TestPrefetchWindow.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\TestPrefetchWindow.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-early-reader.cpp /Febuild\DirectStorage\ControlFG-Early-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\DirectStorage\ControlFG-Early-Validate.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-archive-cache.cpp /Febuild\DirectStorage\ControlFG-Archive-Validate.exe /link /LIBPATH:build\dstorage-sdk\native\lib\x64 dstorage.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\DirectStorage\ControlFG-Archive-Validate.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate EXE-adjacent DirectStorage dynamic loading
         shell: cmd
@@ -421,7 +421,7 @@ jobs:
           copy /y build\DirectStorage\dstorage.dll build\StorageIntegration\dstorage.dll
           copy /y build\DirectStorage\dstoragecore.dll build\StorageIntegration\dstoragecore.dll
           cl /nologo /std:c++17 /EHsc /W4 /O2 /Ibuild\dstorage-sdk\native\include tools\directstorage\test-runtime-loading.cpp /Febuild\StorageIntegration\ControlFG-Storage-Loading-Test.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           pushd "%SystemRoot%"
           "%GITHUB_WORKSPACE%\build\StorageIntegration\ControlFG-Storage-Loading-Test.exe"
           set "STORAGE_TEST_EXIT=%ERRORLEVEL%"
@@ -434,78 +434,78 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           cl /nologo /std:c++17 /EHsc /W4 /Isrc validation\reflection-backend\test_backend.cpp /Febuild\backend-full.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\backend-full.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc tools\test-rr-temporal-probe.cpp /Febuild\temporal-probe.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\temporal-probe.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-free-camera-control.cpp /Febuild\free-camera-control.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\free-camera-control.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-native-blend-capture.cpp /Febuild\native-blend-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\native-blend-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc tools\test-rr-suite-policy.cpp /Febuild\suite-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\suite-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /Isrc /DCONTROL_RR_COMPACT_DISTANCE validation\reflection-backend\test_backend.cpp /Febuild\backend-compact.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\backend-compact.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-compact-distance-policy.cpp /Febuild\compact-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compact-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-compact-distance-copy.cpp /Febuild\compact-copy.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compact-copy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate emitted spotlight PCF instructions on WARP
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /EHsc /std:c++17 tools/test-spot-bilinear-validation.cpp /Fe:spot-bilinear-test.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           spot-bilinear-test.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate RT spotlight contract and capture
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-shadow-candidates.cpp /Fe:rt-shadow-candidates.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           rt-shadow-candidates.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-shadow-capture.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-spot-shadow-contract.cpp /Fe:rt-spot-contract.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           rt-spot-contract.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-spot-culling.cpp /Fe:rt-spot-culling.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           rt-spot-culling.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-shadow-observer.cpp /Fe:rt-shadow-observer.exe /link bcrypt.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           rt-shadow-observer.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Test spotlight resolution policy
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /EHsc /std:c++17 tools/test-spot-shadow-resolution.cpp /Fe:spot-resolution-test.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           spot-resolution-test.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Prepare audited world albedo shaders
         shell: cmd
@@ -517,54 +517,54 @@ jobs:
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Fetch-Streamline.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-Streamline.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File Verify-RRRuntime.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-distance.cpp /Fobuild\compile-distance.obj /Febuild\compile-distance.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-distance.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-live.cpp /Fobuild\compile-live.obj /Febuild\compile-live.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-live.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-hair-opacity.cpp /Fobuild\compile-rr-hair-opacity.obj /Febuild\compile-rr-hair-opacity.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-rr-hair-opacity.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-rr-character-base-albedo.cpp /Fobuild\compile-rr-character-base-albedo.obj /Febuild\compile-rr-character-base-albedo.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-rr-character-base-albedo.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-skin-mask.cpp /Fobuild\compile-skin-mask.obj /Febuild\compile-skin-mask.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-skin-mask.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-reflectance.cpp /Fobuild\compile-reflectance.obj /Febuild\compile-reflectance.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-reflectance.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-fg-ui-alpha.cpp /Fobuild\compile-fg-ui-alpha.obj /Febuild\compile-fg-ui-alpha.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-fg-ui-alpha.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-clamp-strength.cpp /Fobuild\compile-clamp-strength.obj /Febuild\compile-clamp-strength.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-clamp-strength.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-clamp-strength.exe --temporal
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           copy /y src\rr_clamp_variants.in.h build\rr_clamp_variants.h >nul
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-pt-reflection-p2-composite.cpp /Fobuild\compile-pt-reflection-p2-composite.obj /Febuild\compile-pt-reflection-p2-composite.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-pt-reflection-p2-composite.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\compile-pt-reflection-p2-diffuse-bridge.cpp /Fobuild\compile-pt-reflection-p2-diffuse-bridge.obj /Febuild\compile-pt-reflection-p2-diffuse-bridge.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-pt-reflection-p2-diffuse-bridge.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Prepare validated RT spotlight shader pair
         shell: powershell
@@ -618,25 +618,25 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /EHsc /std:c++17 /W4 /WX tools/test-rt-spot-shaders.cpp /Fe:rt-spot-shaders.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           rt-spot-shaders.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-diagnostics.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-selection.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-canonical.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-contribution.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-segments.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-samples.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-filter.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rt-spot-history.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Check secondary ray origin precision
         run: python tools/test-pt-secondary-origin.py
@@ -652,11 +652,11 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\assemble-validated-dxil.cpp /Febuild\assemble-validated-dxil.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc research\spec-performance\validate.cpp /Febuild\spec-validate.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-phase-gpu.cpp /Febuild\test-spec-phase-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Compile PT reflection DXIL libraries
         shell: powershell
@@ -858,289 +858,293 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-spot-projection-gpu.cpp /Febuild\test-spot-projection-gpu.exe /link d3d11.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spot-projection-gpu.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-glass-lighting-direction.cpp /Febuild\test-glass-direction.exe /link d3d11.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-glass-direction.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-glass-shadow-filter.cpp /Febuild\test-glass-shadow.exe /link d3d11.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-glass-shadow.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-pt-glass-glossy-only.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\compile-pt-glass-lighting.cpp /Febuild\compile-glass.exe /link d3dcompiler.lib d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-glass.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-resources.cpp /Febuild\test-glass-resources.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-glass-resources.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-descriptors.cpp /Febuild\test-glass-descriptors.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-glass-descriptors.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-pt-glass-vtable-call.cpp /Febuild\test-glass-call.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-glass-call.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Verify clean baseline and character guide scope
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-specular-samples.cpp /Febuild\test-specular-samples.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-specular-samples.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-gi-samples.cpp /Febuild\test-gi-samples.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-samples.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-perf-r32.cpp /Febuild\test-perf-r32.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-perf-r32.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rr-world-albedo.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rr-material-audit.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-specular-filter.cpp /Febuild\test-specular-filter.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-specular-filter.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rr-gi-filter.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/gi_spot_trace.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/gi_spot_pcf.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned-spatial.cpp /Febuild\compile-gi-owned-spatial.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-owned-spatial.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\compile-gi-owned.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/gi_motion_history.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/prepare-owned-volume.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-owned-volume-gpu.cpp /Febuild\test-owned-volume-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-owned-volume-gpu.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-gi-motion-history.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-motion-pso.cpp /Febuild\test-gi-motion-pso.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-motion-pso.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-stable-sequence.cpp /Febuild\test-gi-stable-sequence.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-stable-sequence.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-surface-history.cpp /Febuild\test-gi-surface-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-surface-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-history-footprint.cpp /Febuild\test-gi-history-footprint.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-history-footprint.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-path-capture.cpp /Febuild\test-gi-path-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-path-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-full-chain.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-history.cpp /Febuild\test-gi-dual-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-dual-history.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-runtime.cpp /Febuild\test-gi-dual-runtime.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-gi-dual-runtime.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-dual-history-policy.cpp /Febuild\test-gi-dual-history-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-dual-history-policy.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-gi-spatial-history.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-spatial-pso.cpp /Febuild\test-gi-spatial-pso.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-spatial-pso.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_PERFORMANCE_BUILD tools\test-gi-spatial-pso.cpp /Febuild\test-gi-spatial-performance.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-spatial-performance.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-gi-temporal-audit.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-temporal-scope.cpp /Febuild\test-gi-temporal-scope.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-temporal-scope.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-clean-baseline.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rr-character-shader-match.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-character-albedo.cpp /Febuild\test-character.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-character.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-specular-temporal-gpu.cpp /Febuild\test-specular-temporal.exe /link d3d11.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-specular-temporal.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-hair-normals-gpu.cpp /Febuild\test-hair.exe /link d3d11.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-hair.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-input-native.cpp /Febuild\test-input-native.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-input-native.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Check character capture bounds
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-character-capture-bounds.cpp /Febuild\test-character-capture-bounds.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-character-capture-bounds.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate live lighting switching on WARP
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-lighting-performance.cpp /Febuild\test-lighting-performance.exe /link d3d12.lib dxgi.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-lighting-performance.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-retry-runtime.cpp /Febuild\test-spec-retry-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-retry-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-rr-foliage-source.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-foliage-evidence.cpp /Febuild\test-rr-foliage-evidence.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-rr-foliage-evidence.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-sequence-runtime.cpp /Febuild\test-gi-sequence-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-sequence-runtime.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-sequence-runtime.exe live
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-toggle.cpp /Febuild\test-gi-live-toggle.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-lighting-panel-window.cpp /Febuild\test-lighting-panel-window.exe /link user32.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-lighting-panel-window.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-live-toggle.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           set CONTROLTOH_GI_SINGLE=0
           build\test-gi-live-toggle.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           set CONTROLTOH_GI_SINGLE=
           cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_SPEC_LONG_SEQUENCE tools\test-spec-retry-runtime.cpp /Febuild\test-spec-long-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-long-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_SPEC_PHASE_PRECISION tools\test-spec-retry-runtime.cpp /Febuild\test-spec-phase-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-phase-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-component-runtime.cpp /Febuild\test-spec-component-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-component-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-component-runtime.exe emission
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-component-runtime.exe shading
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-component-runtime.exe invalid
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-local-runtime.cpp /Febuild\test-spec-local-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-local-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-local-runtime.exe other
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-local-runtime.exe local
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-local-runtime.exe invalid
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-indirect-runtime.cpp /Febuild\test-spec-indirect-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-indirect-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-indirect-runtime.exe diffuse
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-indirect-runtime.exe environment
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-indirect-runtime.exe volume
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-indirect-runtime.exe cube
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-indirect-runtime.exe invalid
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-volume-runtime.cpp /Febuild\test-spec-volume-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-volume-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-volume-runtime.exe off
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-volume-runtime.exe on
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-volume-runtime.exe invalid
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-hit-view-runtime.cpp /Febuild\test-spec-hit-view-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-hit-view-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-serial-runtime.cpp /Febuild\test-spec-serial-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spec-serial-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live.cpp /Febuild\test-native-lighting-live.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-lighting-live.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-rr-diagnostic-bypass.cpp /Febuild\test-rr-diagnostic-bypass.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-rr-diagnostic-bypass.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-spot-hit-capture.cpp /Febuild\test-spot-hit-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-spot-hit-capture.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live-warp.cpp /Febuild\test-native-lighting-live-warp.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-lighting-live-warp.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /DCONTROL_CAPTURE_DIAGNOSTIC tools\test-native-lighting-live-warp.cpp /Febuild\test-native-lighting-capture-warp.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-lighting-capture-warp.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Build and validate standalone capture preflight R134
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/embed-capture-preflight.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\capture-preflight.cpp /Febuild\Capture-Preflight.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\Capture-Preflight.exe --warp
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Package standalone capture preflight R134
         shell: powershell
@@ -1172,39 +1176,39 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/generate-baked-gi-rt.py --check
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rt-baked-gi.cpp /Febuild\test-rt-baked-gi.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-rt-baked-gi.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate diagnostic report saving
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-lighting-shader-snapshot.cpp /Febuild\test-lighting-shader-snapshot.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-lighting-shader-snapshot.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-lighting-shader-decoder.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-native-lighting-report.cpp /Febuild\test-native-lighting-report.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-lighting-report.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-native-lighting-log-queue.cpp /Febuild\test-native-lighting-log-queue.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-lighting-log-queue.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           powershell -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-texture-trace-collector.ps1
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Compile experimental proxy
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
@@ -1213,35 +1217,35 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python validation/mfg-test/contracts.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++20 /EHsc /W4 /O2 /MT /LD /DNOMINMAX /DUNICODE /D_UNICODE src\rtx40_mfg\control_bridge.cpp src\rtx40_mfg\ada_patch.cpp src\rtx40_mfg\provider_policy.cpp src\rtx40_mfg\gates.cpp src\rtx40_mfg\patches.cpp src\rtx40_mfg\log.cpp /Fobuild\ /Febuild\ControlFG.RTX40MFG.dll /link /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT bcrypt.lib version.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Test native graphics menu
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           python tools/test-settings-schema.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/generate-settings-schema.py --check
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/embed-native-menu.py
           git diff --exit-code -- src/native_menu/script.h
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           node tools/test-native-menu.js
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\test-native-menu-bundle.cpp /Fobuild\test-native-menu-bundle.obj /Febuild\test-native-menu-bundle.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-menu-bundle.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT tools\test-native-menu-runtime.cpp /Fobuild\test-native-menu-runtime.obj /Febuild\test-native-menu-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-menu-runtime.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-native-menu-runtime.exe --config build\native-menu-config.json
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           node tools/test-native-menu.js --config build/native-menu-config.json
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Preserve verified glass raygen across DXC updates
         run: python tools/prepare-canonical-glass.py
@@ -1251,32 +1255,32 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-lighting-capture-plan.cpp /Febuild\test-lighting-capture-plan.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-lighting-capture-plan.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate overlay RR request state
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-capture-ui.cpp /Febuild\test-rr-capture-ui.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-rr-capture-ui.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
           cl /nologo /std:c++17 /EHsc /W4 /WX /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_F9_SUITE tools\test-rr-capture-ui.cpp /Febuild\test-gi-boundary-ui.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-boundary-ui.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-sequence-ui.cpp /Febuild\test-gi-sequence-ui.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-sequence-ui.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-rr-early-gi.cpp /Febuild\test-rr-early-gi.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-rr-early-gi.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate RR boundary collector
         shell: powershell
@@ -1303,39 +1307,39 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc tools\test-rr-suite-dispatch.cpp /Febuild\suite-dispatch.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\suite-dispatch.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc tools\test-rr-suite-controller.cpp /Febuild\suite-controller.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\suite-controller.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate native GI lighting isolation R270
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/generate-gi-source-probe.py --check
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-source-probe.cpp /Febuild\test-gi-source-probe.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-source-probe.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Validate GI spotlight PCF R268
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python -m pip install numpy
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-gi-spot-pcf.py
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-spot-pcf.cpp /Febuild\test-gi-spot-pcf.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-spot-pcf.exe
-          if errorlevel 1 exit /b 1
+          if not "%errorlevel%"=="0" exit /b 1
 
       - name: Compile exact uint16 snapshot kernel R309
         shell: powershell

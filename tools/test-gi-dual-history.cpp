@@ -5,9 +5,9 @@
 #include "../build/gi_motion_history.generated.h"
 #include "../build/gi_spatial_history.generated.h"
 struct Dual:Harness {
- ComPtr<ID3D12PipelineState> baseline,passes[2];
+ ComPtr<ID3D12PipelineState> baseline,passes[2];ComPtr<ID3D12DescriptorHeap> priorViews;
  Dual():Harness(false){
-  gpu.views.Reset();D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=16384;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+  priorViews=gpu.views;gpu.views.Reset();D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;hd.NumDescriptors=16384;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
   Check(gpu.device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&gpu.views)));ID3D12DescriptorHeap* heap=gpu.views.Get();gpu.list->SetDescriptorHeaps(1,&heap);
   D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,8,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,3,0,0,0}};
   D3D12_ROOT_PARAMETER ps[4]{};for(UINT i=0;i<2;++i){ps[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;ps[i].Descriptor.ShaderRegister=i;ps[i+2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;ps[i+2].DescriptorTable={1,&ranges[i]};}
@@ -63,7 +63,7 @@ static Result Sequence(bool old,unsigned mode,unsigned passCount){
   if(frame>=24&&frame<40){r.delta+=(v-previous)*(v-previous);r.mean+=v/16.;}if(frame==40)r.reveal=v;if(frame>=42)r.off=std::max(r.off,std::abs(v-(mode==1?.02f:(mode==2||mode==7)?4.f:mode==4?.1f:.4f)));previous=v;
  }r.delta=std::sqrt(r.delta/16.);return r;
 }
-int main(){try{for(unsigned count:{0u,2u,6u})for(unsigned mode=0;mode<8;++mode){auto old=Sequence(true,mode,count),next=Sequence(false,mode,count);std::cout<<"Dual spatial="<<count<<" mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" mean="<<next.mean<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
+int main(){try{for(unsigned count:{0u,2u,6u})for(unsigned mode=0;mode<8;++mode){std::cout<<"START dual spatial="<<count<<" mode="<<mode<<std::endl;auto old=Sequence(true,mode,count),next=Sequence(false,mode,count);std::cout<<"Dual spatial="<<count<<" mode="<<mode<<" R382_delta="<<old.delta<<" dual_delta="<<next.delta<<" mean="<<next.mean<<" transition="<<next.reveal<<" settled_error="<<next.off<<'\n';
  if(mode==0||mode==3||mode==6){Require(next.delta<old.delta*.25,"fluctuating-input suppression");Require(std::abs(next.mean-.4)<.015,"mean brightness drift");}
  if(mode==1||mode==2)Require(next.off<.005,"light transition lag");
  if(mode==4)Require(std::abs(next.reveal-.1)<1e-5,"revealed surface retained old light");
