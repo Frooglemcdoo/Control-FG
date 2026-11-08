@@ -1,6 +1,8 @@
 #pragma once
 #include <atomic>
 #include "rr_gi_stage_policy.h"
+#include "gi_dual_history_bridge.h"
+#include "../build/gi_dual_history.generated.h"
 #include "rt_surface_source_capture.h"
 #include <cstring>
 #include <new>
@@ -12,7 +14,7 @@
 namespace control_rr_gi {
 inline std::atomic<unsigned> ownedReady{0};
 inline std::atomic<unsigned long long> ownedApplied{0};
-struct Bundle {ID3D12PipelineState* stableEnergy=nullptr;ID3D12PipelineState* owned=nullptr;bool spatial=false;ID3D12PipelineState* bypass=nullptr;ID3D12PipelineState* bounded=nullptr;ID3D12PipelineState* steady=nullptr;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
+struct Bundle {ID3D12PipelineState* dual=nullptr;ID3D12PipelineState* stableEnergy=nullptr;ID3D12PipelineState* owned=nullptr;bool spatial=false;ID3D12PipelineState* bypass=nullptr;ID3D12PipelineState* bounded=nullptr;ID3D12PipelineState* steady=nullptr;ID3D12PipelineState* native=nullptr;ID3D12PipelineState* adaptive=nullptr;ID3D12PipelineState* noHistory=nullptr;ID3D12PipelineState* outlier=nullptr;ID3D12PipelineState* mask=nullptr;ID3D12PipelineState* zero=nullptr;ID3D12PipelineState* smooth=nullptr;};
 inline std::atomic<Bundle*> bundles[8]{};
 inline std::atomic<unsigned> reserved{0},ready{0},failed{0};
 inline Bundle* Find(ID3D12PipelineState* native) noexcept {
@@ -82,6 +84,9 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
  if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;
   Log("GI_PIPELINE_R217 ready=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return;}
+ replacement.CS={kGIDualHistory,sizeof(kGIDualHistory)};
+ const HRESULT dualResult=create(device,&replacement,IID_PPV_ARGS(&b->dual));
+ if(FAILED(dualResult)){if(b->dual)b->dual->Release();b->dual=nullptr;++failed;}
  replacement.CS={kGIStableEnergyShader,sizeof(kGIStableEnergyShader)};
  const HRESULT stableResult=create(device,&replacement,IID_PPV_ARGS(&b->stableEnergy));
  if(FAILED(stableResult)){if(b->stableEnergy)b->stableEnergy->Release();b->stableEnergy=nullptr;++failed;}
@@ -132,6 +137,11 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
  if(b&&!b->spatial&&!spatialDispatch&&spatialSteady&&!historyDisabled)replacement=b->stableEnergy?b->stableEnergy:b->bypass;
  if(b&&!b->spatial&&!spatialDispatch&&rawBypass)replacement=b->bypass;
  if(b && b->spatial==spatialDispatch && ownedDenoise)replacement=b->owned?b->owned:b->bypass;
+ if(b&&b->dual&&replacement==b->stableEnergy&&count==1){
+  if(const auto adapter=gi_dual_bridge::callbacks.load())if(adapter->dispatch(list,observed,b->dual,x,y,z,dispatch)){
+   used=true;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIStableTemporal);return;
+  }
+ }
  if(!replacement||count!=1){dispatch(list,x,y,z);return;}
  // Called only after DeviceUtil commits its native PSO and bindings.
  __try {set(list,replacement);dispatch(list,x,y,z);used=true;

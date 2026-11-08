@@ -110,10 +110,12 @@ static PTGlass::LightingTableShadow* ActiveShadow() {
 static void STDMETHODCALLTYPE CopyHook(ID3D12Device* d,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE dst,D3D12_CPU_DESCRIPTOR_HANDLE src,D3D12_DESCRIPTOR_HEAP_TYPE type){
     copySimple(d,count,dst,src,type);
     if(type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+    if(gi_dual_bridge::observing)if(const auto cb=gi_dual_bridge::callbacks.load())cb->copy(dst,count,src);
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeCopy(pass.serial,dst,count,src);mirrorGuard=false;}
 }
 static void STDMETHODCALLTYPE CbvHook(ID3D12Device* d,const D3D12_CONSTANT_BUFFER_VIEW_DESC* cb,D3D12_CPU_DESCRIPTOR_HANDLE dst){
     createCbv(d,cb,dst);if(!cb)return;
+    if(gi_dual_bridge::observing)if(const auto observer=gi_dual_bridge::callbacks.load())observer->constant(dst,*cb);
     if(auto* s=ActiveShadow()){mirrorGuard=true;s->ObserveNativeConstant(pass.serial,dst,*cb);mirrorGuard=false;}
 }
 static HRESULT STDMETHODCALLTYPE StateHook(ID3D12Device5* d,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out){

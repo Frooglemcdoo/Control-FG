@@ -37,9 +37,9 @@ void main(uint3 tid:SV_DispatchThreadID) {
  float2 vuv=(float2(p)+.5)*sys[1].zw,prevUV=vuv+Velocity.SampleLevel(LinearClamp,vuv,0).xy;
  float3 slow=0;float4 fast=0;float3 moments=0;float weight=0;
  if(asuint(filtering[1].z)==0&&isfinite(z)&&z>0&&all(isfinite(prevUV))&&all(prevUV>=0)&&all(prevUV<=1)){
-  uint hw,hh;History.GetDimensions(hw,hh);float2 hp=prevUV*float2(hw,hh)-.5;int2 base=int2(floor(hp));float2 f=frac(hp);
+  uint hw,hh,fw,fh;History.GetDimensions(hw,hh);FastHistory.GetDimensions(fw,fh);float2 hp=prevUV*float2(hw,hh)-.5;int2 base=int2(floor(hp));float2 f=frac(hp);
   [unroll]for(int y=0;y<2;++y)[unroll]for(int x=0;x<2;++x){
-   int2 q=base+int2(x,y);if(any(q<0)||any(q>=int2(hw,hh)))continue;
+   int2 q=base+int2(x,y);if(fw!=hw||fh!=hh||any(q<0)||any(q>=int2(hw,hh)))continue;
    float2 huv=(float2(q)+.5)/float2(hw,hh);float pz=PreviousDepth.SampleLevel(LinearClamp,huv,0).x+sys[37].z;
    float3 old=History.Load(int3(q,0)).rgb;float4 sh=FastHistory.Load(int3(q,0));float3 m=MomentsHistory.Load(int3(q,0)).xyz;
    if(!Valid(old)||!Valid(sh.rgb)||!all(isfinite(m))||!isfinite(sh.a)||sh.a<1||!isfinite(pz)||abs(pz-z-dot(slope,huv-prevUV))>max(abs(z)*.01,1e-6))continue;

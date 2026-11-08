@@ -130,6 +130,10 @@ jobs:
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
           if not exist build mkdir build
+          cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-dual-history.cpp /Febuild\compile-gi-dual-history.exe /link d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\compile-gi-dual-history.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\compile-gi-owned.cpp /Febuild\compile-gi-owned.exe /link d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\compile-gi-owned.exe
@@ -955,6 +959,14 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           build\test-gi-full-chain.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-dual-history.cpp /Febuild\test-gi-dual-history.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-dual-history.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-dual-history-policy.cpp /Febuild\test-gi-dual-history-policy.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-dual-history-policy.exe
           if errorlevel 1 exit /b 1
           python tools/test-gi-spatial-history.py
           if errorlevel 1 exit /b 1

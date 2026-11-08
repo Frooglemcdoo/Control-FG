@@ -1,4 +1,5 @@
 #pragma once
+#include "gi_dual_history_bridge.h"
 // CPU evidence replay in observed queue submission order. Does not submit GPU
 // work, wait on a fence, or claim that CPU samples equal completed GPU contents.
 namespace rt_spot_table_audit {
@@ -452,7 +453,10 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     const auto geometryToken=geometryBegin?geometryBegin(queue,count,lists):0;
     const auto integration=beginIntegration.load();
     const auto integrationToken=integration?integration(queue,count,lists):0;
+    const auto dual=gi_dual_bridge::callbacks.load();
+    const auto dualToken=dual?dual->before(queue,count,lists):0;
     original(queue,count,lists);
+    if(dual)dual->after(queue,dualToken);
     if(const auto end=endIntegration.load())end(queue,integrationToken);
     if(const auto end=endGeometry.load())end(queue,geometryToken);
     if(const auto end=endTiming.load())end(queue,timing);

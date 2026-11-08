@@ -456,7 +456,7 @@ struct Binding {
 using SetPso = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, ID3D12PipelineState*);
 using ResetList = HRESULT (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*, ID3D12CommandAllocator*, ID3D12PipelineState*);
 using ComputeDispatch = void (STDMETHODCALLTYPE*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT);
-struct ListHooks { void** table = nullptr; SetPso set = nullptr; ResetList reset = nullptr; ComputeDispatch dispatch = nullptr; };
+struct ListHooks { void** table = nullptr; SetPso set = nullptr; ResetList reset = nullptr; ComputeDispatch dispatch = nullptr; bool resetInstalled=false; };
 inline ListHooks listHooks[8]{};
 inline SRWLOCK hookLock = SRWLOCK_INIT;
 inline ListHooks Lookup(ID3D12GraphicsCommandList* list) noexcept {
@@ -507,7 +507,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     gi_evaluator::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     gi_binding_audit::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
-    if(SUCCEEDED(hr)){gi_spot_trace::Reset(list);gi_geometry_probe::ResetInstances(list);}
+    if(SUCCEEDED(hr)){if(const auto cb=gi_dual_bridge::callbacks.load())cb->reset(list);gi_spot_trace::Reset(list);gi_geometry_probe::ResetInstances(list);}
     gi_spot_trace::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
@@ -608,6 +608,8 @@ inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
         const bool reset = PatchSlot(&table[10], reinterpret_cast<void*>(available->reset), reinterpret_cast<void*>(&ResetHook));
         if constexpr (rt_spot_capture::GpuCaptureEnabled)
             PatchSlot(&table[14],reinterpret_cast<void*>(available->dispatch),reinterpret_cast<void*>(&ComputeDispatchHook));
+        available->resetInstalled=reset;
+        gi_dual_bridge::resetReady=+[](ID3D12GraphicsCommandList* l) noexcept {return Lookup(l).resetInstalled;};
         Trace("command_list_hooks set=%u reset=%u", unsigned(set), unsigned(reset));
     } else Trace("command_list_hooks failed=capacity");
     ReleaseSRWLockExclusive(&hookLock);

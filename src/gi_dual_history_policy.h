@@ -15,7 +15,7 @@ class Policy {
 public:
  const Slot& Get(unsigned i)const{return slots.at(i);}
  bool Failed()const{return failed;}
- Lease Begin(Id frame,Id epoch,Id queue,Id generation,Id completed){
+ Lease Begin(Id frame,Id epoch,Id queue,Id generation,Id completed,unsigned reusableMask=(1u<<Slots)-1){
   if(failed||!frame||!epoch||!queue||!generation||(ownerQueue&&queue!=ownerQueue))return {};
   ownerQueue=queue;
   unsigned previous=Invalid;
@@ -25,7 +25,7 @@ public:
    if(s.phase!=Phase::Idle&&s.frame==frame&&s.epoch==epoch&&s.queue==queue)return {};
   }
   for(unsigned i=0;i<Slots;++i){auto&s=slots[i];
-   if(i==previous||s.pins||s.phase==Phase::Recording||s.phase==Phase::Poisoned||s.lastUse>completed)continue;
+   if(!(reusableMask&(1u<<i))||i==previous||s.pins||s.phase==Phase::Recording||s.phase==Phase::Poisoned||s.lastUse>completed)continue;
    const Id serial=next++;s={Phase::Recording,serial,frame,epoch,queue,generation,0,0};
    Lease l{i,previous,serial,previous<Slots?slots[previous].serial:0};
    if(previous<Slots)++slots[previous].pins;

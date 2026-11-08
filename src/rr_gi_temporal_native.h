@@ -39,7 +39,13 @@ static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
  }__finally {control_rr_gi::spatialDispatch=previous;}
 }
 static void RRNativeHookGITemporalBind(void* record){
- rrNativeTemporalBindOriginal(record);
+ const auto dual=gi_dual_bridge::callbacks.load();
+ control_rr_reflection::Context context{};
+ const bool observe=dual&&rrNativeGIHistoryScope&&control_rr_gi::spatialSteady&&!control_rr_gi::rawBypass&&
+  !control_rr_gi::ownedDenoise&&RRReflectionCurrent(nullptr,context)&&context.frame==rrNativeFrame.Key().frame;
+ if(observe)dual->begin(context.frame,context.view);
+ __try {rrNativeTemporalBindOriginal(record);}
+ __finally {if(observe)dual->end();}
  if(rrNativeGIHistoryScope){rrNativeGIMotionBound=true;rrNativeGIHistoryReason="native_bind_returned";}
 }
 static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
