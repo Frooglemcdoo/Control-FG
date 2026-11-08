@@ -1,6 +1,6 @@
 {
   "protocol": {
-    "version": 263,
+    "version": 385,
     "firstId": 10000,
     "endId": 11000,
     "handshakeId": 10999,
@@ -111,7 +111,7 @@
       "id": 10003,
       "localizationKey": "RR",
       "label": "Ray Reconstruction",
-      "description": "Use NVIDIA DLSS Ray Reconstruction Model F to reconstruct ray-traced lighting and reflections. Reflection detail is fixed at 60%. Requires native ray tracing. This can improve detail and stability, but may change fine textures and hair and increase GPU memory use. Starting with RR enabled can use less memory than enabling it during play.",
+      "description": "Use NVIDIA DLSS Ray Reconstruction with Owned indirect lighting, RELAX diffuse denoising, four indirect-light samples and the native reflection sample policy. Reflection clamp is fixed at 60%. Requires native ray tracing. Improves noisy lighting while preserving the tested R384 rendering path.",
       "type": "choice",
       "default": 0,
       "choices": [
@@ -177,10 +177,6 @@
           "label": "16"
         }
       ],
-      "storage": {
-        "section": "RayReconstruction",
-        "key": "GISamples"
-      },
       "presentation": "slider",
       "requires": [
         {
@@ -191,7 +187,8 @@
       "nativeRequires": [
         "MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY"
       ],
-      "group": "rayTracing"
+      "group": "rayTracing",
+      "hidden": true
     },
     {
       "key": "GlassReflections",
@@ -336,6 +333,84 @@
       "visibility": "rtx40",
       "group": "monitor",
       "presentation": "checkbox"
+    },
+    {
+      "key": "EnhancedCharacterLighting",
+      "id": 10012,
+      "localizationKey": "CHARACTER",
+      "label": "Enhanced Character Lighting",
+      "description": "Improve character light-rig sampling, near-volume stability and diffuse reconstruction on skin, clothing and hair. Off restores native character lighting.",
+      "type": "choice",
+      "default": 1,
+      "choices": [
+        {
+          "value": 0,
+          "label": "Off"
+        },
+        {
+          "value": 1,
+          "label": "On"
+        }
+      ],
+      "storage": {
+        "section": "Visual",
+        "key": "EnhancedCharacterLighting"
+      },
+      "presentation": "checkbox",
+      "group": "quality",
+      "afterNative": "MENU_OPTIONS_VOLUMETRIC_LIGHTING_QUALITY"
+    },
+    {
+      "key": "EnhancedLighting",
+      "id": 10013,
+      "localizationKey": "LIGHTING",
+      "label": "Enhanced Lighting and Shadows",
+      "description": "Use Native Blend lighting and shadow improvements with projection rays and Map Guard off. Off restores the native lighting selection.",
+      "type": "choice",
+      "default": 1,
+      "choices": [
+        {
+          "value": 0,
+          "label": "Off"
+        },
+        {
+          "value": 1,
+          "label": "On"
+        }
+      ],
+      "storage": {
+        "section": "Visual",
+        "key": "EnhancedLighting"
+      },
+      "presentation": "checkbox",
+      "group": "rayTracing",
+      "afterNative": "MENU_OPTIONS_RT_SPOT_CONTACT_SHADOW_QUALITY"
+    },
+    {
+      "key": "FpsCounter",
+      "id": 10014,
+      "localizationKey": "FPS",
+      "label": "FPS Counter",
+      "description": "Display the in-game frame-rate counter. Does not start recording or diagnostic monitoring.",
+      "type": "choice",
+      "default": 0,
+      "choices": [
+        {
+          "value": 0,
+          "label": "Off"
+        },
+        {
+          "value": 1,
+          "label": "On"
+        }
+      ],
+      "storage": {
+        "section": "Visual",
+        "key": "FpsCounter"
+      },
+      "presentation": "checkbox",
+      "group": "monitor",
+      "afterNative": "MENU_OPTIONS_VSYNC"
     }
   ],
   "layout": {

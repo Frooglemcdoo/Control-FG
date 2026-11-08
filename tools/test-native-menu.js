@@ -48,9 +48,9 @@ function exercise(rtx40) {
     ]};
     const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
     const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
-    assert.equal(rows.length,rtx40?9:8);
+    assert.equal(rows.length,rtx40?11:10);
     assert(!byId[10004] && !byId[10005]);
-    [10003,10007,10009].concat(rtx40?[10010]:[]).forEach(id=>{
+    [10003,10007,10009,10012,10013,10014].concat(rtx40?[10010]:[]).forEach(id=>{
         assert.equal(byId[id].m_eDataType,0);
         const next=!byId[id].m_value;
         engine.trigger('OnBoolGraphicsPropertySet',id,next);
@@ -58,9 +58,6 @@ function exercise(rtx40) {
         assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',id,Number(next)]);
         engine.trigger('OnBoolGraphicsPropertySet',id,!next);
     });
-    const style=menu.sliderValueStyle(byId[10006]);
-    assert.equal(style.alignItems,'center');assert.equal(style.justifyContent,'center');
-    assert.strictEqual(style,menu.sliderValueStyle(byId[10002]));
     assert(!byId[10008]); // Streaming budget is internal, never rendered.
     assert.equal(menu.sliderValueStyle({}),undefined);
     events.splice(1); // Discard checkbox round-trip events; retain the initial handshake.
@@ -88,28 +85,9 @@ function exercise(rtx40) {
     const beforeHidden=events.length;
     engine.trigger('OnIntGraphicsPropertySet',10008,2);
     assert.equal(events.length,beforeHidden);
-    assert.equal(byId[10006].m_bIsDisabled,false); // Contact Shadows off does not disable GI.
-    engine.trigger('OnIntGraphicsPropertySet',10006,3);
-    assert.equal(byId[10006].m_value,6);
-    assert.equal(menu.slider(byId[10006]).m_value,3);
-    assert.deepEqual(Array.from(menu.sliderLabels(byId[10006])),['Native','2','4','6','8','10','12','14','16']);
+    assert(!byId[10006]); // GI sampling belongs to RR, not a separate menu option.
     engine.trigger('OnIntGraphicsPropertySet',10006,8);
-    assert.deepEqual(events.at(-1),['OnIntGraphicsPropertySet',10006,16]);
-    assert.equal(byId[10006].m_value,16);
-    assert.equal(menu.slider(byId[10006]).m_value,8);
-    engine.trigger('OnIntGraphicsPropertySet',10006,3);
-    nativeModel.m_vecBoolProperties[0].m_bIsDisabled=true;
-    menu.rows(requireModule,nativeModel);
-    assert.equal(byId[10006].m_bIsDisabled,true); // Global RT capability/settings can disable the native control.
-    nativeModel.m_vecBoolProperties[0].m_bIsDisabled=false;
-    nativeModel.m_vecBoolProperties[0].m_value=false;
-    menu.rows(requireModule,nativeModel);
-    assert.equal(byId[10006].m_bIsDisabled,true);
-    assert.equal(menu.slider(byId[10006]).m_value,0);
-    assert.equal(byId[10006].m_value,6); // Keep the requested count while inactive.
-    nativeModel.m_vecBoolProperties[0].m_value=true;
-    menu.rows(requireModule,nativeModel);
-    assert.equal(menu.slider(byId[10006]).m_value,3);
+    assert.equal(events.length,beforeHidden);
     engine.trigger('OnIntGraphicsPropertySet',10005,76);
     assert(!byId[10005]);
     if(!rtx40){
@@ -125,14 +103,14 @@ function exercise(rtx40) {
     assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',14,3]);
     engine.trigger('OnBoolGraphicsPropertySet',14,true);
     assert.deepEqual(events.at(-1),['OnBoolGraphicsPropertySet',14,true]); // Native checkboxes pass through unchanged.
-    const names=['MENU_OPTIONS_WINDOW_MODE','VSYNC','MENU_OPTIONS_HDR','MENU_OPTIONS_FILM_GRAIN',
-        'MENU_OPTIONS_QUALITY_PRESET','QUALITY_LAST','MENU_OPTIONS_RT_QUALITY_PRESET','RT_LAST'];
+    const names=['MENU_OPTIONS_WINDOW_MODE','MENU_OPTIONS_VSYNC','MENU_OPTIONS_HDR','MENU_OPTIONS_FILM_GRAIN',
+        'MENU_OPTIONS_QUALITY_PRESET','MENU_OPTIONS_VOLUMETRIC_LIGHTING_QUALITY','QUALITY_LAST','MENU_OPTIONS_RT_QUALITY_PRESET','MENU_OPTIONS_RT_SPOT_CONTACT_SHADOW_QUALITY','RT_LAST'];
     const native=names.map((name,i)=>({m_iPropertyID:i,m_strNameLocID:name}));
     const ordered=menu.order(native.concat(rows));
     const position=name=>ordered.findIndex(row=>row.m_strNameLocID===name);
-    assert(position('CFG_FG')>position('VSYNC') && position('CFG_FG')<position('MENU_OPTIONS_HDR'));
-    assert(position('CFG_STORAGE')>position('QUALITY_LAST') && position('CFG_STORAGE')<position('MENU_OPTIONS_RT_QUALITY_PRESET'));
-    ['CFG_RR','CFG_GI','CFG_GLASS'].forEach(name=>assert(position(name)>position('RT_LAST')));
+    assert(position('CFG_FG')>position('MENU_OPTIONS_VSYNC') && position('CFG_FG')<position('MENU_OPTIONS_HDR'));
+    assert(position('CFG_STORAGE')>position('MENU_OPTIONS_VOLUMETRIC_LIGHTING_QUALITY','QUALITY_LAST') && position('CFG_STORAGE')<position('MENU_OPTIONS_RT_QUALITY_PRESET'));
+    ['CFG_RR','CFG_GLASS'].forEach(name=>assert(position(name)>position('RT_LAST')));
     assert.equal(new Set(ordered).size,ordered.length);
     assert.deepEqual(ordered.filter(row=>!row.cfgDefinition),native);
     const storage=byId[10011];
@@ -141,6 +119,11 @@ function exercise(rtx40) {
     button.props.event='OnBoolGraphicsPropertySet';button.props.eventArgs=[10011,false];
     assert.equal(button.props.needsConfirm,true);assert.equal(button.props.useHold,false);
     assert.equal(button.props.confirmLocId,'CFG_STORAGE_DISABLE');
+    assert.equal(position('CFG_FPS'),position('MENU_OPTIONS_VSYNC')+1);
+    assert.equal(position('CFG_CHARACTER'),position('MENU_OPTIONS_VOLUMETRIC_LIGHTING_QUALITY')+1);
+    assert.equal(position('CFG_LIGHTING'),position('MENU_OPTIONS_RT_SPOT_CONTACT_SHADOW_QUALITY')+1);
+    assert.equal(new Set(ordered).size,ordered.length);
+    assert.equal(menu.order(rows).length,rows.length); // Missing native anchors retain all controls.
     assert.deepEqual(Object.keys(menu.confirmProps({})),[]); // Native checkboxes remain untouched.
     assert.equal(storage.m_value,1); // Creating/opening a native button cannot change the preference.
     const beforeRestart=events.length;

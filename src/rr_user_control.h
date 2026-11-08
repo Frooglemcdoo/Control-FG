@@ -3,6 +3,9 @@
 #include <cstring>
 #include "rr_compact_distance_policy.h"
 namespace control_rr {
+#ifdef CONTROL_NRD_GI
+inline void ApplyRRBundleDefaults() noexcept;
+#endif
 // r21y production: native Control energy clamp is fixed in the public runtime.
 // The r21w ReShade reference enum/helper remains only for archived source comparison; the
 // public overlay does not expose it and the production temporal hooks do not request it.
@@ -85,7 +88,12 @@ inline bool RRDiagnosticBypassed() noexcept { return rrDiagnosticBypass.load(std
 inline void RRSetDiagnosticBypass(bool bypass) noexcept { rrDiagnosticBypass.store(bypass,std::memory_order_release); }
 inline bool RRUserRuntimeWorkRequested() noexcept {return RRUserModeValue()==RRUserMode::Full&&!RRUserRuntimePaused()&&!RRDiagnosticBypassed();}
 inline void RRUserSetMode(RRUserMode mode) noexcept {rrUserMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
-inline void RRUserRequest(bool enabled) noexcept {RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);}
+inline void RRUserRequest(bool enabled) noexcept {
+#ifdef CONTROL_NRD_GI
+ if(enabled&&RRUserModeValue()!=RRUserMode::Full)ApplyRRBundleDefaults();
+#endif
+ RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);
+}
 inline RRSpecularSignalMode RRUserSpecularSignalModeValue() noexcept {return static_cast<RRSpecularSignalMode>(rrUserSpecularSignalMode.load(std::memory_order_acquire));}
 inline bool RRUserSpecularReferenceRequested() noexcept {return RRUserSpecularSignalModeValue()==RRSpecularSignalMode::ReferenceClamp;}
 inline bool RRUserSpecularNativeClampRequested() noexcept {return RRUserSpecularSignalModeValue()==RRSpecularSignalMode::NativeClamp;}

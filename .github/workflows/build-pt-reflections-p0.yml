@@ -1363,11 +1363,11 @@ jobs:
           & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo build/gi_index_snapshot.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Exact index snapshot compile failed' }
 
-      - name: Package RELAX GI integration R384
+      - name: Package Visual settings integration R385
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R384'
+          $out='ControlTOH-R385'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1409,12 +1409,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           @'
           Control The Oldest House: Visual and Performance Overhaul
-          R384 - NVIDIA NRD RELAX diffuse integration
-          GI FILTER now selects RELAX for Owned or Native GI. It replaces the old temporal/spatial filter and uses current world normals, view depth, motion and native first-hit distances. Receiver shading is removed and reapplied using the same native throughput.
+          R385 - Visual settings and automatic RR quality bundle
+          Enabling RR selects Owned GI, RELAX, four GI samples, Native reflection samples and clamp60. These are automatic, not separate Visual options.
+          Visual settings: Enhanced Character Lighting under Quality; Enhanced Lighting and Shadows under Ray Tracing; FPS Counter under Display/Monitor. Defaults are On, On, Off. Selections persist.
+          F10 retains captures and advanced comparisons; migrated feature controls and sample counters have been removed. GI RAW is a temporary comparison; RESET COMPARE restores the RR bundle.
+          R384 rendering baseline: NVIDIA NRD RELAX diffuse integration
+          RR now selects Owned GI with RELAX. It replaces the old temporal/spatial filter and uses current world normals, view depth, motion and native first-hit distances. Receiver shading is removed and reapplied using the same native throughput.
           F10 reports RELAX after recording the path; RAW FALLBACK means inputs were rejected and RAW is preserved. Status is CPU recording coverage, not proof of GPU completion. The old R383 filter is not used as a fallback.
           History advances only after actual queue submission. The existing black/red panel, FPS counter, clamp60 and on-demand capture tools remain. Scene/shadow inventory is not enabled. A small compute-binding tracker is required for rendering-state restoration.
           WARP tests validate light preservation, moving surfaces, camera/history reset and compute-state restoration. In-game quality, compatibility and RTX performance still require verification.
-          Compare GI FILTER RELAX against OFF/RAW with other settings unchanged, especially projector light, Jesse's jaw and the desk plant/books. Initial resource and shader creation may cause a one-time hitch.
+          Compare the RR bundle against F10 GI RAW with other settings unchanged, especially projector light, Jesse's jaw and the desk plant/books. Initial resource and shader creation may cause a one-time hitch.
 
           Close Control. Copy all package contents beside Control_DX12.exe, preserving folders.
           Enable RR and RT indirect lighting. Turn FG OFF. Select Native Blend and the GI producer you want to diagnose (Owned for the reported issue).
@@ -1426,7 +1430,7 @@ jobs:
           No diagnostic work begins until a capture button is clicked.
           The R368 black/red F10 panel and its Lighting Modes, Feature Settings, Feature Comparisons and Capture sections remain.
           Capture buttons remain available. Shadow diagnostic monitoring and runtime logging stay idle until capture is requested. No capture starts at launch.
-          GI FILTER toggles RELAX. GI STABLE selects the same replacement for existing capture comparisons; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
+          GI RAW temporarily bypasses RELAX. GI STABLE selects the same replacement for existing capture comparisons; GI REMOVE is diagnosis only. CONTACT RAW disables filtering, not shadows.
           TEST JESSE and TEST VOLUME run their existing full-screen comparison sequences and package the result. Missing shader coverage is reported instead of claiming a successful comparison.
           With RR and RT indirect lighting enabled, F10 GI RAYS cycles 2 through 16 in steps of two.
           Use the F10 GI button to compare NATIVE / OWNED live.
@@ -1452,7 +1456,7 @@ jobs:
           R384 - Original F10 panel restored, grouped by feature and capture.
           Capture tools are included and start from their buttons. Idle shadow bind reporting, character/volume monitoring and RT source counters are gated off; runtime diagnostic logs activate only during a requested capture. Shader replacements remain available for feature comparisons.
           RENDER FPS uses the existing application Present count, sampled twice per second. It excludes generated frames. FPS can be toggled from F10.
-          The existing GI producer selection and clamp60 are preserved; RELAX is selected initially. OFF selects RAW. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
+          Owned, RELAX and clamp60 are restored when enabling RR. GI RAW selects a temporary RAW comparison. Status labels refresh while the panel is open. Native Blend startup remains independent of the UI. A WAIT label means the renderer has not yet confirmed that path; it is not a success indication.
           '@ | Add-Content "$out/ControlTOH/README.txt" -Encoding ASCII
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -1461,10 +1465,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R384
+          name: ControlTOH-R385
           path: |
-            ControlTOH-R384.zip
-            ControlTOH-R384.sha256
+            ControlTOH-R385.zip
+            ControlTOH-R385.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

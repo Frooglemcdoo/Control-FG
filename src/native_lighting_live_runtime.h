@@ -209,6 +209,14 @@ inline bool SelectMode(Mode mode) noexcept {
     Trace("selection seq=%llu mode=%s ready_mask=%u", LiveSelection::Sequence(state), ModeName(mode), readyMask.load());
     return true;
 }
+inline void ApplyVisualLightingSelection() noexcept {
+        static std::atomic<unsigned> appliedRevision{0};
+        const unsigned revision=::control_visual::lightingRevision.load();
+        if(appliedRevision.load()!=revision){
+            const auto desired=::control_visual::lightingEnabled.load()?kNativeBlendDefaultMode:Mode::Native;
+            if(ModeAvailable(desired,readyMask.load(std::memory_order_acquire))){selection.Select(desired);appliedRevision=revision;}
+        }
+}
 namespace spot_resolution_runtime { inline bool Observed(uint64_t state) noexcept; }
 inline bool ReportVisual(bool specklesRemain) noexcept {
     const auto state = selection.Read();
@@ -376,7 +384,8 @@ struct Binding {
     uint64_t state = selection.Read();
     unsigned kind = 0;
     explicit Binding(ID3D12PipelineState* native) noexcept : selected(native) {
-        if(LiveSelection::Sequence(state)==0){selection.EnsureDefault(readyMask.load(std::memory_order_acquire));state=selection.Read();}
+        ApplyVisualLightingSelection();
+        state=selection.Read();
 #ifndef CONTROL_PERFORMANCE_BUILD
         if(control_diagnostics::Active())bindingsSeen.fetch_add(1);
 #endif

@@ -16,14 +16,19 @@ inline constexpr int kWidth = 490, kButtonFirst = 5400;
 inline constexpr int kModeRows = (kModeCount + 2) / 3;
 inline constexpr int kStatusY=746,kCaptureStatusY=766,kFooterY=812,kHeight=858;
 // Preserve the original three-column controls and theme; group actions by purpose.
+inline bool ButtonVisible(unsigned index) noexcept {
+ if(index<kModeCount)return index!=kModeCount-1; // Native Blend moved to Visual settings.
+ const unsigned local=index-kModeCount;
+ return local!=7&&local!=17&&local!=20&&local!=25&&local!=26;
+}
 inline RECT ButtonRect(unsigned index) noexcept {
  if(index<kModeCount)return {14+int(index%3)*156,56+int(index/3)*42,162+int(index%3)*156,92+int(index/3)*42};
- constexpr unsigned features[]={7,8,11,9,10,20,12,13,14,15,16,17};
- constexpr unsigned comparisons[]={21,22,23,24,25,26};
+ constexpr unsigned features[]={8,11,9,10,12,13,14,15,16};
+ constexpr unsigned comparisons[]={21,22,23,24};
  constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19,27};
  const unsigned local=index-kModeCount;unsigned row=0,col=0;int top=0;
- for(unsigned i=0;i<12;++i)if(features[i]==local){row=i/3;col=i%3;top=220;}
- for(unsigned i=0;i<6;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
+ for(unsigned i=0;i<9;++i)if(features[i]==local){row=i/3;col=i%3;top=220;}
+ for(unsigned i=0;i<4;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
  for(unsigned i=0;i<10;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
  return {14+int(col)*156,top+int(row)*42,162+int(col)*156,top+int(row)*42+36};
 }
@@ -67,7 +72,7 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #endif
     if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
     if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"SMOOTH: N/A":control_rr_gi::outlierRequested.load()?L"SMOOTH: ON":L"SMOOTH: OFF";
-    if(index==kModeCount+12)return rt_surface_source::FilterLabel(rt_surface_source::EffectiveRequest(),control_rr_gi::stageMode.load());
+    if(index==kModeCount+12)return rt_surface_source::manualGI.load()==4?L"GI RAW: ON":L"GI RAW: OFF";
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
         const auto mode=LiveSelection::GetMode(selection.Read());
@@ -168,9 +173,9 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R384",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R385",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
-    DrawLabel(dc,detailFont,L"FEATURE SETTINGS",{14,192,kWidth-12,216},theme::kAccent);
+    DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
     DrawLabel(dc,detailFont,L"CAPTURE",{14,524,kWidth-12,548},theme::kAccent);
     const auto mode=LiveSelection::GetMode(selection.Read());
@@ -351,6 +356,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_PAINT: Paint(window); return 0;
     case WM_CREATE:
         for (unsigned i=0;i<kButtonCount;++i) {
+            if(!ButtonVisible(i))continue;
             const RECT bounds=ButtonRect(i);
             HWND button=CreateWindowExW(0,L"STATIC",ButtonLabel(i),WS_CHILD|WS_VISIBLE|SS_NOTIFY|SS_OWNERDRAW,
                 bounds.left,bounds.top,bounds.right-bounds.left,bounds.bottom-bounds.top,window,reinterpret_cast<HMENU>(INT_PTR(kButtonFirst+i)),selfModule,nullptr);
@@ -375,7 +381,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
-            if(path_capture::active)return 0;
+            if(path_capture::active||!ButtonVisible(index))return 0;
             if(index==kModeCount+27){
                 if(path_capture::Start(GetTickCount64()))ClosePanel(window);
                 else MessageBoxW(window,L"Use Native Blend, RR ON and FG OFF. Finish other captures first. After two earlier RR pairs or a failed capture, restart the game. Hold still for both conditions; two beeps mean the ZIP is ready.",L"GI path capture",MB_OK);
@@ -460,9 +466,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 savedNotice=0;
             }
             else if(index==kModeCount+12 && !capture_suite::active) {
-                const auto next=control_rr_gi::NextStage(control_rr_gi::stageMode.load());
-                rt_surface_source::SelectSavedStage(next);
-                Trace("gi_stage_request build=R217 stage=%s native_blend_only=1",control_rr_gi::StageName(next));
+                rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==4?0:4);
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);
@@ -564,7 +568,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         if(foreground && !f10Registered)f10Registered=RegisterHotKey(nullptr,f10Id,MOD_NOREPEAT,VK_F10)!=FALSE;
         if(!foreground && f10Registered){UnregisterHotKey(nullptr,f10Id);f10Registered=false;}
         if(!panel){path_capture::Tick(nullptr,now);if(performance_capture::Active())performance_capture::Tick(nullptr,now);if(capture_suite::active)capture_suite::Finish(nullptr,"game_window_lost");continue;}
-        if(LiveSelection::Sequence(selection.Read())==0 && ModeAvailable(kNativeBlendDefaultMode,readyMask.load()))SelectMode(kNativeBlendDefaultMode);
+        // Visual settings own startup lighting selection on the render thread.
 #ifndef CONTROL_ON_DEMAND_DIAGNOSTICS
         static bool f9Held=false;
         const bool f9Down=(GetAsyncKeyState(VK_F9)&0x8000)!=0;

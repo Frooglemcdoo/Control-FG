@@ -1,4 +1,5 @@
 #include "gpu_test_device.h"
+#include "../src/visual_settings_policy.h"
 #include <atomic>
 #include <cstdarg>
 namespace native_lighting {

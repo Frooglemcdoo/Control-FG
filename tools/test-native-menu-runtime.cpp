@@ -97,6 +97,14 @@ int main(int argc,char** argv){
     alignas(8) unsigned char model[0xd8]{};
     void* viewPointer=&view;
     memcpy(model+0xd0,&viewPointer,sizeof(viewPointer));
+    for(int id:{10012,10013,10014}) {
+      const auto* option=control_settings::Find(id);assert(option&&option->section&&option->storageKey);
+      assert(Apply(id,0)&&control_settings::Read(option->key)==0);
+      assert(Apply(id,1)&&control_settings::Read(option->key)==1);
+      assert(!Apply(id,2)&&control_settings::Read(option->key)==1);
+      assert(control_settings::Write(*option,control_settings::Default(*option),control_settings::WriteReason::Reset));
+    }
+    dirtyCount=0;
     mode=6;target=1000;
     EnumHook(model,10999,control_settings::kVersion);
     assert(emitted.front()=="CFG_CHOICES_BEGIN"&&emitted.back()=="CFG_STATE_END");

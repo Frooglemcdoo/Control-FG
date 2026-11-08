@@ -201,6 +201,9 @@
             var result = [], inserted = Object.create(null);
             nativeRows.forEach(function (row, index) {
                 result.push(row);
+                customRows.forEach(function (custom) {
+                    if (custom.cfgDefinition.afterNative === row.m_strNameLocID) { result.push(custom); inserted[custom.m_iPropertyID] = true; }
+                });
                 Object.keys(schema.layout.groups).forEach(function (group) {
                     var anchor = nativeRows.findIndex(function (item) {
                         return item.m_strNameLocID === schema.layout.groups[group];
@@ -208,13 +211,13 @@
                     var next = nativeRows[index + 1];
                     var boundary = !next || schema.layout.boundaries.indexOf(next.m_strNameLocID) !== -1;
                     if (anchor >= 0 && index >= anchor && boundary && !inserted[group]) {
-                        customRows.forEach(function (custom) { if (custom.cfgDefinition.group === group) result.push(custom); });
+                        customRows.forEach(function (custom) { if (custom.cfgDefinition.group === group && !inserted[custom.m_iPropertyID]) { result.push(custom); inserted[custom.m_iPropertyID] = true; } });
                         inserted[group] = true;
                     }
                 });
             });
             // Keep controls usable if a native group is absent; never discard rows.
-            customRows.forEach(function (row) { if (!inserted[row.cfgDefinition.group]) result.push(row); });
+            customRows.forEach(function (row) { if (!inserted[row.m_iPropertyID]) result.push(row); });
             return result;
         },
         confirmProps: function (row) {

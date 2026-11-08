@@ -5,7 +5,7 @@ namespace character_surface {
 #include "../build/character_surface.generated.h"
 inline constexpr unsigned kind=0x73460000;
 // 0=native,1=R351,2=R353 HQ,3=HQ with near history and guarded diffuse reconstruction. Capture phase overrides never mutate this choice.
-inline std::atomic<unsigned> quality{3};
+inline auto& quality=::control_visual::characterQuality;
 inline int SelectedVariant(unsigned phase,unsigned quality) noexcept {
     if(phase==0)return quality==3?6:quality==1?1:quality==2?0:-1;
     return (phase==2 || phase==4)?0:phase==3?1:phase==5?2:phase==6?3:phase==7?4:phase==9?5:phase==10?6:-1;

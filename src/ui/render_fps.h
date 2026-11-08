@@ -1,7 +1,7 @@
 #pragma once
 #include "theme.h"
 namespace native_lighting::render_fps {
-inline bool enabled=true;
+inline auto& enabled=::control_visual::fpsEnabled;
 inline HWND window=nullptr,owner=nullptr;
 inline unsigned long long lastTick=0,lastFrames=0;
 inline wchar_t label[64]=L"RENDER FPS: --";

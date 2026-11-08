@@ -2,6 +2,10 @@
 
 Recorded November 8, 2026. Project: Control Epic Compatiable / Control The Oldest House graphics and rendering overhaul.
 
+## R385 settings decision
+
+The user subsequently chose to bundle Owned GI, RELAX, four GI samples and Native reflection sampling into RR rather than expose separate options. The R384 inventory below remains a historical snapshot. See [R385 settings integration](visual-settings-r385.md) for the implemented menu and F10 changes.
+
 ## Accepted baseline
 
 **R384 with Owned GI and NVIDIA NRD RELAX is the user-confirmed visual baseline.** After installing R384, Matthew reported: “man that fixed it right up. everything looks good.” He then explicitly confirmed that the test used **Owned, not Native**.

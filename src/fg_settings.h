@@ -150,7 +150,12 @@ static void FGSettingsLoadSettings() noexcept {
     const unsigned int selection = control_settings::RestoreFG(rawSelection);
     const unsigned int rawTarget = FGSettingsReadStored(control_settings::Key::DynamicTargetFps);
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
-    control_rr::GISampleSelect(FGSettingsReadStored(control_settings::Key::GlobalIlluminationSamples));
+    control_rr::GISampleSelect(4); // RR owns the accepted four-sample policy.
+    for(auto key:{control_settings::Key::EnhancedCharacterLighting,control_settings::Key::EnhancedLighting,control_settings::Key::FpsCounter}) {
+        const auto& option=control_settings::Definition(key);
+        const unsigned stored=FGSettingsReadStored(key);
+        control_settings::Write(option,control_settings::Valid(option,int(stored))?stored:control_settings::Default(option),control_settings::WriteReason::Reset);
+    }
     const bool rrEnabled = FGSettingsReadStored(control_settings::Key::RayReconstruction) != 0;
     // Retired menu setting: old explicit budgets must not override the accepted baseline.
     const unsigned int textureStreamingMs = 0;

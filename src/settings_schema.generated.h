@@ -14,6 +14,9 @@ enum class Key {
     TextureStreamingBudget,
     VideoMemoryMonitor,
     ExperimentalMultiFrameGeneration,
+    EnhancedCharacterLighting,
+    EnhancedLighting,
+    FpsCounter,
 };
 struct Dependency { Key key; unsigned value; };
 struct Option {
@@ -25,7 +28,7 @@ struct Option {
     const wchar_t* storageKey;
     std::initializer_list<Dependency> dependencies;
 };
-inline constexpr int kVersion = 263;
+inline constexpr int kVersion = 385;
 inline constexpr int kFirstId = 10000;
 inline constexpr int kEndId = 11000;
 inline constexpr int kHandshakeId = 10999;
@@ -35,12 +38,15 @@ inline const Option kOptions[] = {
     {Key::DynamicTargetMode, 10001, 0, 0, 0, 1, {0, 1}, nullptr, nullptr, {{Key::FrameGeneration, 1}}},
     {Key::DynamicTargetFps, 10002, 144, 30, 1000, 1, {}, L"FrameGeneration", L"DynamicTargetFPS", {{Key::FrameGeneration, 1}, {Key::DynamicTargetMode, 1}}},
     {Key::RayReconstruction, 10003, 0, 0, 0, 1, {0, 1}, L"RayReconstruction", L"Enabled", {}},
-    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8, 10, 12, 14, 16}, L"RayReconstruction", L"GISamples", {{Key::RayReconstruction, 1}}},
+    {Key::GlobalIlluminationSamples, 10006, 4, 0, 0, 1, {0, 2, 4, 6, 8, 10, 12, 14, 16}, nullptr, nullptr, {{Key::RayReconstruction, 1}}},
     {Key::GlassReflections, 10007, 1, 0, 0, 1, {0, 1}, L"GlassReflections", L"Enabled", {}},
     {Key::DirectStorage, 10011, 1, 0, 0, 1, {0, 1}, L"DirectStorage", L"Enabled", {}},
     {Key::TextureStreamingBudget, 10008, 0, 0, 0, 1, {0, 4, 6, 8, 10, 12}, L"Experimental", L"TextureStreamingBudgetMs", {}},
     {Key::VideoMemoryMonitor, 10009, 1, 0, 0, 1, {0, 1}, L"Overlay", L"VramMonitorEnabled", {}},
     {Key::ExperimentalMultiFrameGeneration, 10010, 0, 0, 0, 1, {0, 1}, L"Experimental", L"RTX40MultiFG", {}},
+    {Key::EnhancedCharacterLighting, 10012, 1, 0, 0, 1, {0, 1}, L"Visual", L"EnhancedCharacterLighting", {}},
+    {Key::EnhancedLighting, 10013, 1, 0, 0, 1, {0, 1}, L"Visual", L"EnhancedLighting", {}},
+    {Key::FpsCounter, 10014, 0, 0, 0, 1, {0, 1}, L"Visual", L"FpsCounter", {}},
 };
 inline constexpr std::size_t kOptionCount = sizeof(kOptions) / sizeof(kOptions[0]);
 }

@@ -8,13 +8,7 @@ namespace rt_surface_source {
 // Transient diagnostic request. No saved setting is changed. Zero is gameplay.
 inline std::atomic<unsigned> request{0};
 // Session-only manual comparisons; automated capture has priority.
-inline std::atomic<unsigned> manualGI{
-#ifdef CONTROL_NRD_GI
-3
-#else
-0
-#endif
-}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
+inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
 inline std::atomic<unsigned> manualContact{0}; // 0 auto, 1 preserved, 2 unfiltered
 inline std::atomic<bool> ownedFilterEnabled{true};
 inline unsigned EffectiveRequest() noexcept {
@@ -24,7 +18,11 @@ inline unsigned EffectiveRequest() noexcept {
  const unsigned capture=request.load(std::memory_order_acquire);
  if(capture)return capture;
  const unsigned gi=manualGI.load();
+ #ifdef CONTROL_NRD_GI
+ return gi==1?2:gi==2?3:gi==4?0:7; // Zero restores the RR bundle; four is diagnostic RAW.
+#else
  return gi==1?2:gi==2?3:gi==3?7:0;
+#endif
 #endif
 }
 inline bool ManualContactUnfiltered() noexcept {return !request.load() && manualContact.load()==2;}

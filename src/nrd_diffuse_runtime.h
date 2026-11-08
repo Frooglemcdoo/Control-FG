@@ -7,6 +7,14 @@
 #include "nrd_finish.h"
 #include "nrd_receiver.h"
 #include <mutex>
+namespace control_rr {
+inline void ApplyRRBundleDefaults() noexcept {
+ gi_reuse::ownedRequested=true;GISampleSelect(4);
+ native_lighting::specularSampleChoice=0;
+ rt_surface_source::ResetManual();
+ control_rr_clamp::requestedMode=control_rr_clamp::Mode::Override60;
+}
+}
 namespace ControlNrdRuntime {
 using Microsoft::WRL::ComPtr;
 namespace hooks=native_lighting::gi_compute_hooks;
@@ -45,6 +53,7 @@ static void Reason(const char* reason) noexcept {
  static const char* last=nullptr;if(last!=reason){last=reason;Log("NRD_R384 admission=%s",reason);}
 }
 static bool Requested() noexcept {
+ if(!control_rr::RRUserRuntimeWorkRequested())return false;
  const auto request=rt_surface_source::EffectiveRequest();
  return request==7||request==3||(!request&&control_rr_gi::stageMode.load()==control_rr_gi::StageMode::BothSteadySpatial);
 }

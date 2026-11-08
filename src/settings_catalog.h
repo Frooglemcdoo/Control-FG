@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdlib>
 #include "settings_schema.generated.h"
+#include "visual_settings_policy.h"
 
 // Renderer adapters only. UI metadata and the shared validation contract are
 // defined in settings_schema.json. Callers serialize access with fgSettingsMutex.
@@ -46,6 +47,9 @@ inline bool Valid(const Option& option, int value) {
 }
 inline unsigned Read(Key key) {
     switch (key) {
+    case Key::EnhancedCharacterLighting: return control_visual::characterQuality.load()==3;
+    case Key::EnhancedLighting: return control_visual::lightingEnabled.load();
+    case Key::FpsCounter: return control_visual::fpsEnabled.load();
     case Key::FrameGeneration: return GetFGUserMultiplier();
     case Key::DynamicTargetMode: return GetFGDynamicManualTargetFps() ? 1 : 0;
     case Key::DynamicTargetFps: {
@@ -92,6 +96,9 @@ inline bool Write(const Option& option, int value, WriteReason reason = WriteRea
     if (reason == WriteReason::UserChange && !Enabled(option)) return false;
     const unsigned requested = static_cast<unsigned>(value);
     switch (option.key) {
+    case Key::EnhancedCharacterLighting: control_visual::characterQuality.store(requested?3:0); break;
+    case Key::EnhancedLighting: control_visual::SetLighting(requested!=0); break;
+    case Key::FpsCounter: control_visual::fpsEnabled.store(requested!=0); break;
     case Key::FrameGeneration: SetFGUserMultiplier(requested); break;
     case Key::DynamicTargetMode: SetFGDynamicManualTargetFps(requested ? manualTarget : 0); break;
     case Key::DynamicTargetFps:
