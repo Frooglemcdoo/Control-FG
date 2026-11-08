@@ -35,6 +35,7 @@ struct Recording {
 static std::recursive_mutex mutex;
 static std::vector<std::unique_ptr<Recording>> recordings;
 static std::shared_ptr<Epoch> epoch;
+static std::vector<std::unique_ptr<control_nrd::NativeTransaction::Work>> retiredWork;
 static ComPtr<ID3D12CommandQueue> queue;
 static ComPtr<ID3D12Fence> fence;
 static UINT64 nextFence=0,serial=0,guideFrame=0,guideView=0,guideGeneration=0;
@@ -70,6 +71,11 @@ static void Poll() {
   if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}
   if(r.reset&&(!r.submitted||r.fence<=complete)){
    if(!r.submitted&&(r.filtered||r.exported||(r.work&&r.work->diffuse.commandsRecorded)))Invalidate(r.epoch);
+   // Both conditions above are mandatory: completion alone cannot rule out
+   // replay of an unreset list. Never recycle failed or obsolete-epoch work.
+   if(r.submitted&&r.filtered&&r.work&&r.epoch==epoch&&!epoch->poisoned&&retiredWork.size()<8){
+    r.work->RetireForReuse();retiredWork.push_back(std::move(r.work));
+   }
    i=recordings.erase(i);
   }else ++i;
  }
@@ -184,7 +190,7 @@ static void ProducerDispatch() noexcept {
    if(held.size()>=3){Reason("epoch_retirement_pending");return;}
    auto e=std::make_shared<Epoch>();e->width=w;e->height=h;e->root=b.root;
    e->receiver=std::make_unique<control_nrd::NativeReceiver>(PTGlassRuntime::device.Get(),b.root.Get(),D3D12_SHADER_BYTECODE{kNrd_receiver,sizeof(kNrd_receiver)},w,h);
-   e->filter=std::make_unique<control_nrd::DiffusePipeline>(PTGlassRuntime::device.Get(),w,h,D3D12_SHADER_BYTECODE{kNrd_prepare,sizeof(kNrd_prepare)},D3D12_SHADER_BYTECODE{kNrd_finish,sizeof(kNrd_finish)});epoch=e;
+   e->filter=std::make_unique<control_nrd::DiffusePipeline>(PTGlassRuntime::device.Get(),w,h,D3D12_SHADER_BYTECODE{kNrd_prepare,sizeof(kNrd_prepare)},D3D12_SHADER_BYTECODE{kNrd_finish,sizeof(kNrd_finish)});retiredWork.clear();epoch=e;
   }
   auto* r=GetRecording(c.rays,generation);if(!r||r->exports.size()>=16){Reason("producer_recording_capacity");return;}
   if(r->epoch&&r->epoch!=epoch){Reason("producer_epoch_change");return;}
@@ -225,7 +231,9 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   PTGlass::DescriptorRange arena;if(!PTGlassRuntime::FreshCount(c,epoch->filter->MaxDescriptors(),&arena)){Reason("filter_heap");return false;}
   record=GetRecording(c.rays,generation);if(!record||record->filtered||(record->epoch&&record->epoch!=epoch)){Reason("filter_recording");return false;}
   native_lighting::performance::Scope timing(list,native_lighting::performance::Stage::RelaxTotal,w,h,1,1);
-  record->epoch=epoch;record->work=std::make_unique<control_nrd::NativeTransaction::Work>();
+  record->epoch=epoch;
+  if(retiredWork.empty()){record->work=std::make_unique<control_nrd::NativeTransaction::Work>();settings_check::Record(settings_check::RelaxWorkCreated);}
+  else {record->work=std::move(retiredWork.back());retiredWork.pop_back();settings_check::Record(settings_check::RelaxWorkReused);}
   if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {arena.heap,arena.first,arena.count},*record->work)){
    if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}
    else record->work.reset();

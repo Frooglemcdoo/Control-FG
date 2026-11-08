@@ -32,6 +32,7 @@ inline UINT64 frequency=0,nextFence=0;
 inline std::atomic<bool> submitting{false};
 inline Sample samples[kCapacity]{};
 inline unsigned count=0;
+inline std::atomic<unsigned> scanFirst{0}; // completed comparison phases never reuse query indices
 inline std::atomic<bool> enabled{false},watch{false},fault{false};
 inline std::atomic<UINT64> capture{0},skipped{0};
 inline void RememberDevice(ID3D12Device* value) noexcept {
@@ -56,6 +57,7 @@ inline bool Prepare() noexcept {
 }
 inline unsigned Begin(ID3D12GraphicsCommandList* list,Stage stage,UINT x,UINT y,UINT z,UINT64 tableBytes=0,const char* sourceShader=nullptr,const D3D12_DISPATCH_RAYS_DESC* rays=nullptr) noexcept {
     if(!enabled.load(std::memory_order_acquire) || fault.load() || stage==Stage::None || !list)return kInvalid;
+    if(control_compare::enabled.load()&&(stage==Stage::OtherCompute||stage==Stage::OtherRays))return kInvalid;
     const auto present=presentCount.load();const auto interval=sampleInterval.load();if(present%(interval?interval:1u))return kInvalid;
     if(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)return kInvalid;
     if(!TryAcquireSRWLockExclusive(&lock)){++skipped;return kInvalid;}
@@ -101,7 +103,7 @@ struct Scope {
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
     if(!watch.load())return;
     AcquireSRWLockExclusive(&lock); // Metadata only; UI never holds this lock during file I/O.
-    for(unsigned i=0;i<count;++i)if(samples[i].list==list && samples[i].current){
+    for(unsigned i=scanFirst.load();i<count;++i)if(samples[i].list==list && samples[i].current){
         samples[i].current=false;
         if(samples[i].state==State::Recorded || samples[i].state==State::Recording)samples[i].state=State::Discarded;
     }
@@ -112,7 +114,7 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT n,ID3D12CommandList*const
     if(!watch.load() || fault.load())return 0;
     AcquireSRWLockExclusive(&lock); // Submission/reset bookkeeping must not be dropped on contention.
     bool found=false;
-    for(unsigned i=0;i<count;++i){auto& s=samples[i];
+    for(unsigned i=scanFirst.load();i<count;++i){auto& s=samples[i];
         if(!s.current || s.state==State::Discarded)continue;
         for(UINT j=0;j<n;++j)if(s.list==lists[j]){
             // Read or submitted queries cannot be measured twice. Keep resources
@@ -129,7 +131,7 @@ inline UINT64 BeforeExecute(ID3D12CommandQueue* q,UINT n,ID3D12CommandList*const
     if(found && !fault.load()){
         if(submitting.exchange(true)){fault=true;ReleaseSRWLockExclusive(&lock);return 0;}
         value=++nextFence;
-        for(unsigned i=0;i<count;++i){auto& s=samples[i];if(!s.current || s.state!=State::Recorded)continue;
+        for(unsigned i=scanFirst.load();i<count;++i){auto& s=samples[i];if(!s.current || s.state!=State::Recorded)continue;
             for(UINT j=0;j<n;++j)if(s.list==lists[j]){s.state=State::Submitting;s.fence=value;s.frequency=frequency;break;}
         }
     }
@@ -140,7 +142,7 @@ inline void AfterExecute(ID3D12CommandQueue* q,UINT64 value) noexcept {
     const HRESULT hr=q->Signal(fence,value);
     AcquireSRWLockExclusive(&lock);
     if(FAILED(hr))fault=true;
-    for(unsigned i=0;i<count;++i)if(samples[i].state==State::Submitting && samples[i].fence==value)
+    for(unsigned i=scanFirst.load();i<count;++i)if(samples[i].state==State::Submitting && samples[i].fence==value)
         samples[i].state=SUCCEEDED(hr)?State::Submitted:State::Discarded;
     ReleaseSRWLockExclusive(&lock);submitting=false;
 }
@@ -150,7 +152,7 @@ template<class Emit> inline unsigned Poll(UINT64 session,Emit emit) noexcept {
     unsigned pending=0;
     const auto completed=fence->GetCompletedValue();
     if(completed==UINT64_MAX){fault=true;return 0;}
-    for(unsigned i=0;;++i){
+    for(unsigned i=scanFirst.load();;++i){
         if(!TryAcquireSRWLockExclusive(&lock))return pending+1;
         if(i>=count){ReleaseSRWLockExclusive(&lock);break;}
         auto& s=samples[i];Sample copy{};double ms=0;bool output=false;

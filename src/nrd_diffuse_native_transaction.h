@@ -11,6 +11,7 @@ struct NativeTransaction {
  struct Work {
   DiffusePipeline::Work diffuse;
   gi_reuse::ComputeBindingSnapshot native;
+  void RetireForReuse(){native={};diffuse.RetireForReuse();}
  };
  static bool Record(DiffusePipeline& pipeline,ID3D12GraphicsCommandList4* list,
                     const gi_reuse::ComputeBindingSnapshot& native,

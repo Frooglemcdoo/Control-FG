@@ -63,7 +63,7 @@ inline void Summary(){
  for(const auto& s:gpu){raw<<conditions[s.phase].name<<','<<s.present<<','<<performance::Name(performance::Stage(s.stage))<<','<<s.ms<<'\n';perPresent[{s.phase,s.stage,s.present}]+=s.ms;}
  Write(L"gpu-timings.csv",raw.str());
  Statistics stats[phaseCount];std::ostringstream out,table,stage;
- out<<"R387 RR PERFORMANCE COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, 4 GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR, clamp, reflections sample policy (Native), FG OFF and unrelated Visual settings held fixed.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 32 Presents.\n\n";
+ out<<"R388 RR PERFORMANCE COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, 4 GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR, clamp, reflections sample policy (Native), FG OFF and unrelated Visual settings held fixed.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents; unrelated compute/rays excluded.\n\n";
  table<<"phase,intervals,mean_frame_ms,p50_ms,p95_ms,p99_ms,average_fps,one_percent_low_fps,coverage_ok,skipped_gpu_samples\n";
  for(unsigned p=0;p<phaseCount;++p){stats[p]=Summarize(intervals[p]);auto& s=stats[p];
   table<<conditions[p].name<<','<<s.count<<','<<s.mean<<','<<s.p50<<','<<s.p95<<','<<s.p99<<','<<(s.mean?1000/s.mean:0)<<','<<s.low1<<','<<results[p].observed<<','<<results[p].skipped<<'\n';
@@ -107,7 +107,7 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return false;qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return false;
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-R387-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
+ folder=root+L"\\Performance-R388-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
@@ -115,7 +115,7 @@ inline bool Start(uint64_t now){
  wchar_t module[32768]{};GetModuleFileNameW(nullptr,module,32768);if(auto* slash=wcsrchr(module,L'\\')){*slash=0;CopyFileW((std::wstring(module)+L"\\renderer.ini").c_str(),(folder+L"\\renderer.ini").c_str(),FALSE);}
  if(ioFailed)return false;
  AcquireSRWLockExclusive(&performance::lock);for(unsigned i=0;i<performance::count;++i){performance::samples[i].current=false;performance::samples[i].state=performance::State::Discarded;}ReleaseSRWLockExclusive(&performance::lock);
- savedInterval=performance::sampleInterval.load();performance::sampleInterval=32;performance::skipped=0;
+ savedInterval=performance::sampleInterval.load();performance::sampleInterval=64;performance::skipped=0;
  geometryAtStart=0;control_compare::geometry=0;control_compare::running=true;
  step=0;state=State::Arm;until=now+5000;return true;
 }
@@ -136,6 +136,7 @@ inline void Tick(HWND game,uint64_t now){
   if(!geometryAtStart)geometryAtStart=control_compare::geometry.load();
   if(!geometryAtStart){Finish(game,"INCOMPLETE: live render dimensions unavailable");return;}
   lastRR=0;lastRRTime=now;
+  AcquireSRWLockExclusive(&performance::lock);performance::scanFirst=performance::count;ReleaseSRWLockExclusive(&performance::lock);
   session=performance::capture.fetch_add(1)+1;skippedStart=performance::skipped.load();settings_check::Begin();
   control_compare::phase=step;control_compare::enabled=true;performance::enabled=true;
   state=State::Measure;until=now+12000;Beep(800,80);return;
@@ -154,12 +155,15 @@ inline void Tick(HWND game,uint64_t now){
     (conditions[step].relax?e[RelaxCompleted]>100:e[RelaxRecorded]==0)&&
     (conditions[step].character?e[CharacterEnhanced]>0:e[CharacterEnhanced]==0)&&
     (!conditions[step].volume||e[VolumeEnhanced]>0)&&
-    (!conditions[step].lighting||e[LightingEnhanced]>0)&&
+    (!conditions[step].lighting||e[EnhancedShadowRays]>0)&&
     (!conditions[step].rays||results[step].sampleMask==(1u<<conditions[step].rays));
   state=State::Drain;until=now+5000;
  }
  if(state==State::Drain){const auto pending=performance::Poll(session,Emit);if(pending){if(now>until)Finish(game,"INCOMPLETE: GPU timings did not retire");return;}
-  if(step+1==phaseCount){Finish(game,"COMPLETE: inspect coverage, repeat drift and timing data");return;}
+  performance::watch=false;
+  if(step+1==phaseCount){
+   bool complete=true;for(unsigned p=0;p<phaseCount;++p){bool timed=false;for(const auto& s:gpu)if(s.phase==p&&s.stage==unsigned(performance::Stage::RREvaluation))timed=true;complete=complete&&timed&&results[p].observed;}
+   Finish(game,complete?"COMPLETE: inspect repeat drift and timing data":"INCOMPLETE: missing GPU timings or feature coverage");return;}
   ++step;if(!Apply()){Finish(game,"INCOMPLETE: feature unavailable");return;}state=State::Warm;until=now+5000;
  }
 }

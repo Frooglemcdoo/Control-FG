@@ -55,6 +55,8 @@ public:
   std::vector<Ptr<ID3D12PipelineState>> pipelines;
   void* mapped=nullptr;
   UINT first=0;bool borrowed=false;
+  // Caller must establish fence completion AND command-list reset before reuse.
+  void RetireForReuse(){heap.Reset();retained.clear();root.Reset();pipelines.clear();first=0;borrowed=false;}
   ~Recording(){if(mapped)constants->Unmap(0,nullptr);}
   Recording()=default;Recording(const Recording&)=delete;Recording&operator=(const Recording&)=delete;
  };
@@ -113,8 +115,12 @@ public:
   }else Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&recording.heap)));
   D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
   D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=UINT64(constantStride)*plan.size();bd.Height=1;bd.DepthOrArraySize=bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-  Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&recording.constants)));
-  D3D12_RANGE empty{};Check(recording.constants->Map(0,&empty,&recording.mapped));
+  if(!recording.constants||recording.constants->GetDesc().Width<bd.Width){
+   if(recording.mapped){recording.constants->Unmap(0,nullptr);recording.mapped=nullptr;}
+   recording.constants.Reset();bd.Width=UINT64(constantStride)*(std::max)(maxSets,UINT(plan.size()));
+   Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&recording.constants)));
+  }
+  if(!recording.mapped){D3D12_RANGE empty{};Check(recording.constants->Map(0,&empty,&recording.mapped));}
   for(const auto&kv:inputs)recording.retained.emplace_back(kv.second.resource);
   for(const auto&t:permanent)recording.retained.push_back(t.resource);
   for(const auto&t:transient)recording.retained.push_back(t.resource);

@@ -587,6 +587,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     if (active->fullRay) {
         if (active->reset) Trace("rt_spot_ray_route mode=%s record_offset=%u blocker_bands=%u raw=%u gpu_confirmed=0",ModeName(active->mode),RayRecordOffset(active->mode),unsigned(active->mode==Mode::RoomBlocker),unsigned(UsesRawSpotVisibility(active->mode)));
         auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress() + RayRecordOffset(active->mode),32};
+        settings_check::Record(settings_check::EnhancedShadowRays);
         rt_shadow_capture::Lookup(list).dispatch(list,&custom);
         if(SupportsLightContextCapture(active->mode))rt_spot_capture_runtime::Record(list,state,desc);
     }

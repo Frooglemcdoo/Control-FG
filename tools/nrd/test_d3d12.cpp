@@ -73,6 +73,10 @@ int main(){try{
  s.viewToClipMatrix[0]=s.viewToClipMatrix[5]=1;s.viewToClipMatrix[10]=1.001f;s.viewToClipMatrix[11]=1;s.viewToClipMatrix[14]=-.1001f;std::memcpy(s.viewToClipMatrixPrev,s.viewToClipMatrix,64);
  auto transition=[&](control_nrd::D3D12Backend::External&t,D3D12_RESOURCE_STATES next){if(t.state==next)return;D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={t.resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,t.state,next};list->ResourceBarrier(1,&b);t.state=next;};
  double finalMean=0,spotMean=0,quietMean=0,worstTrail=0;
+#ifdef CONTROL_NRD_PIPELINE_TEST
+ control_nrd::NativeTransaction::Work transaction;
+ ID3D12Resource* previousRelax=nullptr;ID3D12Resource* previousConversion=nullptr;
+#endif
  for(UINT frame=1;frame<=128;++frame){
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
   std::vector<ComPtr<ID3D12Resource>> uploads;
@@ -109,7 +113,6 @@ int main(){try{
   }
   f.frame=frame;
 #ifdef CONTROL_NRD_PIPELINE_TEST
-  control_nrd::NativeTransaction::Work transaction;
   auto& recording=transaction.diffuse;
   control_nrd::DiffusePipeline::Constants conversion;
   // Mimic the native renderer's already-bound heap with a reserved prefix.
@@ -127,6 +130,8 @@ int main(){try{
   const std::uint32_t expected[]={frame,17,93,421};tracker.Constants(0,0,4,expected);tracker.Descriptor(1,gi_reuse::RootArgumentKind::UAV,probeOutput->GetGPUVirtualAddress());
   gi_reuse::ComputeBindingSnapshot snapshot;Require(tracker.Capture(snapshot),"native state snapshot rejected");Require(snapshot.Restore(list.Get()),"initial native bindings");
   Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction),"complete native transaction rejected");
+  if(frame>1){Require(recording.constants.Get()==previousConversion,"conversion upload buffer was not reused");Require(recording.relax.constants.Get()==previousRelax,"NRD upload buffer was not reused");}
+  previousConversion=recording.constants.Get();previousRelax=recording.relax.constants.Get();
   // Dispatch without rebinding: only the transaction's restoration can supply
   // the correct PSO, root signature, constants and root UAV here.
   list->Dispatch(1,1,1);
@@ -173,6 +178,10 @@ int main(){try{
   if(frame==128)std::printf("Moving surface: worst exposed background %.8f (target 0.05), foreground %.8f (target 0.8)\n",worstTrail,movingCenter/movingCount);
   // Remove all recorded references before releasing this frame's descriptors.
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));Check(list->Close());
+#ifdef CONTROL_NRD_PIPELINE_TEST
+  transaction.RetireForReuse();
+  Require(!transaction.native.root&&!recording.heap&&!recording.relax.heap,"retired work kept stale descriptors");
+#endif
  }
  CloseHandle(event);
  unsigned errors=0;for(UINT64 i=0;i<messages->GetNumStoredMessages();++i){SIZE_T bytes=0;Check(messages->GetMessage(i,nullptr,&bytes));std::vector<unsigned char> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,message,&bytes));

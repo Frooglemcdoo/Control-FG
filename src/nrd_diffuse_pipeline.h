@@ -41,6 +41,9 @@ public:
   Ptr<ID3D12RootSignature> root;
   Ptr<ID3D12PipelineState> prepare,finish;
   std::vector<Ptr<ID3D12Resource>> retained;
+  void* mapped=nullptr;
+  ~Work(){if(mapped)constants->Unmap(0,nullptr);}
+  void RetireForReuse(){relax.RetireForReuse();commandsRecorded=false;heap.Reset();root.Reset();prepare.Reset();finish.Reset();retained.clear();}
   Work()=default;Work(const Work&)=delete;Work&operator=(const Work&)=delete;
  };
  DiffusePipeline(ID3D12Device* d,UINT w,UINT h,D3D12_SHADER_BYTECODE prep,D3D12_SHADER_BYTECODE final):device(d),width(w),height(h){
@@ -106,8 +109,9 @@ public:
    if(arena.heap)work.heap=arena.heap;else Check(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&work.heap)));
    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
    D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=256;bd.Height=1;bd.DepthOrArraySize=bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-   Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&work.constants)));
-   void* mapped=nullptr;D3D12_RANGE empty{};Check(work.constants->Map(0,&empty,&mapped));std::memcpy(mapped,&conversion,sizeof(conversion));work.constants->Unmap(0,nullptr);
+   if(!work.constants)Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&work.constants)));
+   if(!work.mapped){D3D12_RANGE empty{};Check(work.constants->Map(0,&empty,&work.mapped));}
+   std::memcpy(work.mapped,&conversion,sizeof(conversion));
    for(auto* r:all)work.retained.emplace_back(r->resource);for(auto& t:textures)work.retained.push_back(t);
    work.root=root;work.prepare=prepare;work.finish=finish;
    auto cpu=work.heap->GetCPUDescriptorHandleForHeapStart();auto gpu=work.heap->GetGPUDescriptorHandleForHeapStart();
