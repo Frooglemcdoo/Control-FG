@@ -3,7 +3,8 @@
 #include <d3d12sdklayers.h>
 #include "../../src/nrd_diffuse_d3d12.h"
 #ifdef CONTROL_NRD_PIPELINE_TEST
-#include "../../src/nrd_diffuse_pipeline.h"
+#include "../../src/nrd_diffuse_native_transaction.h"
+#include "nrd_restore_probe.h"
 #include "../../src/nrd_diffuse_receiver_d3d12.h"
 #include "nrd_prepare.h"
 #include "nrd_finish.h"
@@ -28,7 +29,7 @@ int main(){try{
  ComPtr<ID3D12InfoQueue> messages;Check(device.As(&messages));
  ComPtr<ID3D12CommandQueue> queue;D3D12_COMMAND_QUEUE_DESC qd{};Check(device->CreateCommandQueue(&qd,IID_PPV_ARGS(&queue)));
  ComPtr<ID3D12CommandAllocator> allocator;Check(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&allocator)));
- ComPtr<ID3D12GraphicsCommandList> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
+ ComPtr<ID3D12GraphicsCommandList4> list;Check(device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,allocator.Get(),nullptr,IID_PPV_ARGS(&list)));Check(list->Close());
  ComPtr<ID3D12Fence> fence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"event");
  auto buffer=[&](UINT64 size,D3D12_HEAP_TYPE type,D3D12_RESOURCE_STATES state){ComPtr<ID3D12Resource> p;D3D12_HEAP_PROPERTIES hp{};hp.Type=type;D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=size;d.Height=1;d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&d,state,nullptr,IID_PPV_ARGS(&p)));return p;};
  std::array<ComPtr<ID3D12Resource>,InputCount+1> textures;
@@ -43,6 +44,17 @@ int main(){try{
  ComPtr<ID3D12RootSignature> nativeRoot;Check(CreateGlassNativeRootFixture(device.Get(),&nativeRoot));
  control_nrd::NativeReceiver receiver(device.Get(),nativeRoot.Get(),{kNrd_receiver,sizeof(kNrd_receiver)},W,H);
  control_nrd::DiffusePipeline pipeline(device.Get(),W,H,{kNrd_prepare,sizeof(kNrd_prepare)},{kNrd_finish,sizeof(kNrd_finish)});
+ D3D12_ROOT_PARAMETER probeParameters[2]{};
+ probeParameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;probeParameters[0].Constants={0,0,4};
+ probeParameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;probeParameters[1].Descriptor={0,0};
+ D3D12_ROOT_SIGNATURE_DESC probeDesc{};probeDesc.NumParameters=2;probeDesc.pParameters=probeParameters;
+ ComPtr<ID3DBlob> probeBytes,probeErrors;Check(D3D12SerializeRootSignature(&probeDesc,D3D_ROOT_SIGNATURE_VERSION_1,&probeBytes,&probeErrors));
+ ComPtr<ID3D12RootSignature> probeRoot;Check(device->CreateRootSignature(0,probeBytes->GetBufferPointer(),probeBytes->GetBufferSize(),IID_PPV_ARGS(&probeRoot)));
+ D3D12_COMPUTE_PIPELINE_STATE_DESC probePS{};probePS.pRootSignature=probeRoot.Get();probePS.CS={kNrd_restore_probe,sizeof(kNrd_restore_probe)};
+ ComPtr<ID3D12PipelineState> probePipeline;Check(device->CreateComputePipelineState(&probePS,IID_PPV_ARGS(&probePipeline)));
+ D3D12_RESOURCE_DESC probeBuffer{};probeBuffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;probeBuffer.Width=16;probeBuffer.Height=1;probeBuffer.DepthOrArraySize=probeBuffer.MipLevels=1;probeBuffer.SampleDesc.Count=1;probeBuffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;probeBuffer.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+ ComPtr<ID3D12Resource> probeOutput;Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&probeBuffer,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&probeOutput)));
+ auto probeReadback=buffer(16,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  control_nrd::DiffusePipeline::Bindings bindings;
  for(UINT i=0;i<InputCount;++i)bindings.input[i]={textures[i].Get(),D3D12_RESOURCE_STATE_COMMON};
  bindings.output={textures[OutputIndex].Get(),D3D12_RESOURCE_STATE_COMMON};
@@ -88,7 +100,8 @@ int main(){try{
   }
   f.frame=frame;
 #ifdef CONTROL_NRD_PIPELINE_TEST
-  control_nrd::DiffusePipeline::Work recording;
+  control_nrd::NativeTransaction::Work transaction;
+  auto& recording=transaction.diffuse;
   control_nrd::DiffusePipeline::Constants conversion;
   // Mimic the native renderer's already-bound heap with a reserved prefix.
   ComPtr<ID3D12DescriptorHeap> nativeHeap;D3D12_DESCRIPTOR_HEAP_DESC arenaDesc{};
@@ -101,7 +114,16 @@ int main(){try{
    auto alias=bindings;alias.output=alias.input[0];control_nrd::DiffusePipeline::Work rejected;
    Require(!pipeline.Record(list.Get(),f,1,alias,conversion,rejected),"aliased native output accepted");
   }
-  Require(pipeline.Record(list.Get(),f,1,bindings,conversion,recording,arena),"complete pipeline rejected");
+  gi_reuse::ComputeBindingTracker tracker;tracker.Reset(probePipeline.Get());tracker.Root(probeRoot.Get());tracker.Heaps(1,&boundHeap);
+  const std::uint32_t expected[]={frame,17,93,421};tracker.Constants(0,0,4,expected);tracker.Descriptor(1,gi_reuse::RootArgumentKind::UAV,probeOutput->GetGPUVirtualAddress());
+  gi_reuse::ComputeBindingSnapshot snapshot;Require(tracker.Capture(snapshot),"native state snapshot rejected");Require(snapshot.Restore(list.Get()),"initial native bindings");
+  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction),"complete native transaction rejected");
+  // Dispatch without rebinding: only the transaction's restoration can supply
+  // the correct PSO, root signature, constants and root UAV here.
+  list->Dispatch(1,1,1);
+  D3D12_RESOURCE_BARRIER probeBarrier{};probeBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;probeBarrier.Transition={probeOutput.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&probeBarrier);
+  list->CopyBufferRegion(probeReadback.Get(),0,probeOutput.Get(),0,16);
+  std::swap(probeBarrier.Transition.StateBefore,probeBarrier.Transition.StateAfter);list->ResourceBarrier(1,&probeBarrier);
   Require(recording.relax.borrowed&&recording.relax.heap.Get()==nativeHeap.Get(),"native descriptor heap not retained");
   {control_nrd::DiffusePipeline::Work duplicate;Require(!pipeline.Record(list.Get(),f,1,bindings,conversion,duplicate),"pending frame accepted twice");}
   for(UINT i=0;i<InputCount;++i)Require(input(i).state==D3D12_RESOURCE_STATE_COPY_DEST,"input state not restored");
@@ -117,6 +139,9 @@ int main(){try{
   Require(session.Submitted(1,frame),"submission rejected");
 #endif
   Check(fence->SetEventOnCompletion(frame,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout");
+#ifdef CONTROL_NRD_PIPELINE_TEST
+  void* probeData=nullptr;Check(probeReadback->Map(0,nullptr,&probeData));Require(std::memcmp(probeData,expected,16)==0,"native bindings were not restored");probeReadback->Unmap(0,nullptr);
+#endif
   void*p=nullptr;Check(readback->Map(0,nullptr,&p));double sum=0,center=0;unsigned centerCount=0;for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){const auto*pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;Require(std::isfinite(pixel[0])&&std::isfinite(pixel[1])&&std::isfinite(pixel[2]),"nonfinite RELAX output");float light=pixel[0];
 #ifdef CONTROL_NRD_PIPELINE_TEST
   const float factor=x<W/2?.25f:.75f;light/=factor;

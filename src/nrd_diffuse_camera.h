@@ -35,7 +35,9 @@ inline bool NativeClipShiftToNrdJitter(double dx,double dy,unsigned width,unsign
  if(!width||!height||!std::isfinite(dx)||!std::isfinite(dy))return false;
  const double x=-.5*width*dx,y=.5*height*dy;
  if(std::abs(x)>.500001||std::abs(y)>.500001)return false;
- output={float(x),float(y)};return true;
+ // Clamp only the accepted floating-point endpoint tolerance. Session admission
+ // requires the actual submitted values to stay within [-0.5, 0.5].
+ output={float(std::fmax(-.5,std::fmin(.5,x))),float(std::fmax(-.5,std::fmin(.5,y)))};return true;
 }
 template<class Camera> bool ConvertCamera(const Camera& c,CameraMatrices& output) {
  const auto wv=ExpandAffine(c.worldToView),vw=ExpandAffine(c.viewToWorld);

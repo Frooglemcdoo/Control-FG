@@ -8,6 +8,7 @@ int main(){
  Require(control_nrd::NativeClipShiftToNrdJitter(2*.297851562/2560,-2*.379286706/1440,2560,1440,jitter),"native jitter units");
  Require(std::abs(jitter[0]+.297851562f)<1e-7f&&std::abs(jitter[1]+.379286706f)<1e-7f,"NRD sample offset is inverse raster offset");
  Require(!control_nrd::NativeClipShiftToNrdJitter(1,0,2560,1440,jitter),"invalid jitter rejected");
+ Require(control_nrd::NativeClipShiftToNrdJitter(-1.000001/2560,1.000001/1440,2560,1440,jitter)&&jitter[0]==.5f&&jitter[1]==.5f,"jitter endpoint tolerance cannot violate session contract");
  struct Camera {double worldToView[12]{},viewToWorld[12]{},viewToClip[16]{},clipToView[16]{},worldToClip[16]{},clipToWorld[16]{};} camera;
  // Rotated + translated camera: catches transpose and translation placement.
  const double vw[]={0,1,0,-1,0,0,0,0,1,3,5,7};

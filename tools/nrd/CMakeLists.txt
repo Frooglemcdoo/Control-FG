@@ -53,7 +53,13 @@ if(CONTROL_NRD_GPU)
    VERBATIM)
   list(APPEND conversion_headers "${header}")
  endforeach()
- add_executable(control_nrd_pipeline test_d3d12.cpp ${conversion_headers})
+ add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h"
+  COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -E main -WX
+   -Fh "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h" -Vn kNrd_restore_probe
+   "${CMAKE_CURRENT_SOURCE_DIR}/restore_probe.hlsl"
+  DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/restore_probe.hlsl" VERBATIM)
+ add_executable(control_nrd_pipeline test_d3d12.cpp ${conversion_headers}
+  "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h")
  target_compile_definitions(control_nrd_pipeline PRIVATE CONTROL_NRD_PIPELINE_TEST)
  target_include_directories(control_nrd_pipeline PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
  target_link_libraries(control_nrd_pipeline PRIVATE NRD d3d12 dxgi)
