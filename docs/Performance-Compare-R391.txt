@@ -68,3 +68,5 @@ draw plus compute dispatch immediately afterward, alongside the existing 128-fra
 brightness, moving-surface, outlier, light-removal and buffer-reuse checks.
 Microsoft descriptor heap contract: https://learn.microsoft.com/en-us/windows/win32/direct3d12/setting-descriptor-heaps
 In-game performance and rollover recovery still require the PERF COMPARE run.
+Successful RELAX and receiver heap recoveries are counted only during an active
+settings/performance capture and included in SUMMARY.txt.
