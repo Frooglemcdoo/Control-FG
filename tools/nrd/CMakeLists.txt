@@ -21,7 +21,9 @@ set(NRD_ROUGHNESS_ENCODING 1 CACHE STRING "" FORCE)
 FetchContent_Declare(nrd
  GIT_REPOSITORY https://github.com/NVIDIA-RTX/NRD.git
  GIT_TAG c862a54f4ed845378eeebd832491eebdc203c537
- GIT_SHALLOW FALSE)
+ GIT_SHALLOW FALSE
+ PATCH_COMMAND ${CMAKE_COMMAND} -DNRD_SOURCE=<SOURCE_DIR>
+   -P ${CMAKE_CURRENT_SOURCE_DIR}/patch_nrd.cmake)
 FetchContent_MakeAvailable(nrd)
 add_executable(control_nrd_contract test_contract.cpp)
 target_link_libraries(control_nrd_contract PRIVATE NRD)

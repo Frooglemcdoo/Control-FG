@@ -17,6 +17,7 @@ class D3D12Backend {
  std::vector<Texture> permanent,transient;
  UINT increment=0,srvCount=0,uavCount=0,constantStride=0;
  std::uint16_t width=0,height=0;
+ bool poisoned=false;
  static void Check(HRESULT hr){if(FAILED(hr))throw std::runtime_error("NRD D3D12 operation failed");}
  static DXGI_FORMAT Format(nrd::Format f){switch(f){
 #define F(n,d) case nrd::Format::n:return DXGI_FORMAT_##d
@@ -49,6 +50,8 @@ public:
   Ptr<ID3D12DescriptorHeap> heap;Ptr<ID3D12Resource> constants;
   // Retains external resources referenced by the immutable descriptor table.
   std::vector<Ptr<ID3D12Resource>> retained;
+  Ptr<ID3D12RootSignature> root;
+  std::vector<Ptr<ID3D12PipelineState>> pipelines;
   void* mapped=nullptr;
   ~Recording(){if(mapped)constants->Unmap(0,nullptr);}
   Recording()=default;Recording(const Recording&)=delete;Recording&operator=(const Recording&)=delete;
@@ -83,7 +86,7 @@ public:
  }
  // Use one owner/queue and record only after the previous session was submitted.
  // This class deliberately does not signal fences or decide native list lifetime.
- void Record(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
+ void RecordImpl(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
   if(!list||plan.empty()||recording.heap)throw std::runtime_error("Invalid NRD recording");
   // Complete validation before touching the command list.
   for(const auto&d:plan){
@@ -104,6 +107,9 @@ public:
   Check(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&recording.constants)));
   D3D12_RANGE empty{};Check(recording.constants->Map(0,&empty,&recording.mapped));
   for(const auto&kv:inputs)recording.retained.emplace_back(kv.second.resource);
+  for(const auto&t:permanent)recording.retained.push_back(t.resource);
+  for(const auto&t:transient)recording.retained.push_back(t.resource);
+  recording.root=root;recording.pipelines=pipelines;
   auto cpu=recording.heap->GetCPUDescriptorHandleForHeapStart();auto gpu=recording.heap->GetGPUDescriptorHandleForHeapStart();
   auto ch=[&](UINT i){return D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr+SIZE_T(i)*increment};};
   auto gh=[&](UINT i){return D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr+UINT64(i)*increment};};
@@ -128,5 +134,14 @@ public:
    list->SetComputeRootDescriptorTable(1,gh(base));list->SetComputeRootDescriptorTable(2,gh(base+srvCount));list->Dispatch(d.width,d.height,1);
   }
  }
+ // Once commands or tracked states may have changed, any exception/cancellation
+ // requires recreating the backend after retiring its recordings. Clearing NRD
+ // history alone does not restore a cancelled D3D12 resource transition.
+ void AbandonAfterReset()noexcept{poisoned=true;}
+ void Record(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
+  if(poisoned)throw std::runtime_error("NRD backend requires recreation after abandoned recording");
+  try{RecordImpl(list,plan,inputs,recording);}catch(...){poisoned=true;throw;}
+ }
+
 };
 }
