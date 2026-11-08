@@ -56,7 +56,7 @@ metrics are diagnostic, not a claim that six-pass quality is acceptable. The
 native adapter GPU fixture executes four histories behind a deliberately held
 queue fence, rejects a fifth allocation, checks output energy and retirement
 only after GPU completion plus Reset. A post-dispatch probe also verifies native
-PSO and descriptor-table restoration (release validation pending).
+PSO and descriptor-table restoration (passed in the final release run).
 
 ## Validation status / limits
 
@@ -66,11 +66,19 @@ that test bug is fixed by retaining the heap. CMD checks now reject every
 nonzero exit code, including negative process-crash status, rather than allowing
 some GPU test crashes to appear successful.
 
-Run 42436333047 / job 128595852690 passed the production-adapter delayed-fence
-fixture. It deliberately failed the six-pass light-energy assertion, which led
-to the two-pass policy above. Final R383 shader, stronger restoration fixture,
-full proxy compilation and package verification still need their release run.
-Do not deliver an intermediate artifact as a validated new build.
+Final full build run 42437895258 / job 128600607056 passed on commit
+`eefa6a47b84cd52518c99174d3cf94398ddbb816` (source tree
+`6ef9af13390f677d5f981de772ec05e33d16d612`). The native scope fixture now
+uses the live context ABI and expects two passes for Stable capture phases.
+Shader, delayed-fence/Reset, binding restoration, legacy regression, DLL compile
+and complete package checks passed. Foundation run 42437895340 also passed.
+
+The downloaded full ZIP contains 81 entries and the exact 22,848-byte tested
+DXBC is embedded in dxgi.dll; R383/DUAL/FALLBACK labels and adapter code verified.
+- ZIP SHA256: `b7cab7b1eedccde1e1ebd30aa3e62cd3a205f9119c17f56e562dd0a77cbc379f`
+- DXBC SHA256: `69bcda7d64a9934c7194919851fc5b87fb5d0963789f7b5cfe2b048ecbb3facd`
+- Delivered full build: ControlTOH-R383.zip, Library
+  `libfile_21bc48f2e01481918dd76b5656754f67`.
 
 Synthetic tests do not prove the in-game desk/plant flicker is fixed, nor measure
 RTX 5090 performance. The new temporal shader adds two sidecar reads/writes,
