@@ -145,7 +145,7 @@ assert all(ec[k]==b[k] for k in b if k!=b'SHEX')
 with tempfile.TemporaryDirectory() as d:
  p=Path(d)/'stable.dxbc';p.write_bytes(energy);ej=decode(p)
 assert ej['bindings']==j['bindings']
-assert sum(i['name']=='sample_l' for i in ej['instructions'])==sum(i['name']=='sample_l' for i in j['instructions'])+19
+assert sum(i['name']=='sample_l' for i in ej['instructions'])==sum(i['name']=='sample_l' for i in j['instructions'])+23
 assert sum(i['name']=='store_uav_typed' for i in ej['instructions'])==1
 print('PASS R374 same-surface current gather, unchanged bindings and one output dispatch')
 
@@ -154,8 +154,8 @@ print('PASS R374 same-surface current gather, unchanged bindings and one output 
 native_depth=next(i for i in old if i['dword']==259)
 assert native_depth['operands'][2].split('.')[-1]['xyzw'.index(native_depth['operands'][0].split('.')[-1])]=='x'
 depth_samples=[i for i in ej['instructions'] if i['name']=='sample_l' and i['operands'][2].startswith('t[0][0]')]
-assert len(depth_samples)==10
-assert sum(i['operands'][2]=='t[0][0].xxxx' for i in depth_samples)==10
+assert len(depth_samples)==14
+assert sum(i['operands'][2]=='t[0][0].xxxx' for i in depth_samples)==14
 assert sum(i['name']=='movc' and i['operands'][0]=='r[15].xyz' for i in ej['instructions'])==8
 print('PASS R380 native effective X depth and eight surface-gated history-bound taps')
 
@@ -164,3 +164,6 @@ assert len(previous_depth_samples)==4
 assert all(i["operands"][2]=="t[1][1].xxxx" for i in previous_depth_samples)
 assert sum(i["name"]=="sample_l" and i["operands"][2].startswith("t[4][4]") for i in ej["instructions"])==4
 print("PASS four independently depth-tested history footprint samples")
+
+assert sum(i["name"]=="resinfo" for i in ej["instructions"])==2
+print("PASS queried history/depth SRV dimensions and receiver-depth gradients")

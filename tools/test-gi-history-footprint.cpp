@@ -4,12 +4,13 @@
 #undef main
 #include "../build/gi_motion_history.generated.h"
 #include "../build/gi_stable_r380.generated.h"
-static float Footprint(bool old,unsigned geometry,float fraction,float vertical=0.f,float viewOffset=0.f,bool cut=false){
+#include "../build/gi_stable_r381.generated.h"
+static float Footprint(bool old,unsigned geometry,float fraction,float vertical=0.f,float viewOffset=0.f,bool cut=false,float outputScale=1.f,bool r381=false){
  Harness h(false);auto& g=h.gpu;
  D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=h.root.Get();
- pd.CS=old?D3D12_SHADER_BYTECODE{kGIStableR380,sizeof(kGIStableR380)}:D3D12_SHADER_BYTECODE{kGIStableEnergyShader,sizeof(kGIStableEnergyShader)};
+ pd.CS=r381?D3D12_SHADER_BYTECODE{kGIStableR381,sizeof(kGIStableR381)}:old?D3D12_SHADER_BYTECODE{kGIStableR380,sizeof(kGIStableR380)}:D3D12_SHADER_BYTECODE{kGIStableEnergyShader,sizeof(kGIStableEnergyShader)};
  h.temporal.Reset();Check(g.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&h.temporal)));
- Image depth(W*H,Pixel{.5f,.7f,.9f,1}),pastDepth(W*H),color(W*H),past(W*H),mv(W*H,Pixel{fraction/W,vertical/H,0,0});
+ Image depth(W*H,Pixel{.5f,.7f,.9f,1}),pastDepth(W*H),color(W*H),past(W*H),mv(W*H,Pixel{fraction/W+(W/2+.5f)*(1.f/W-1.f/(W*outputScale)),vertical/H+(H/2+.5f)*(1.f/H-1.f/(H*outputScale)),0,0});
  for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){
   bool right=x>W/2;float c=right?1.f:.4f,p=right?1.f:.2f;
   float z=.5f;
@@ -18,10 +19,11 @@ static float Footprint(bool old,unsigned geometry,float fraction,float vertical=
   if(geometry==3&&!right)z=.508f; // Only bright history belongs to receiver.
   if(geometry==4){const bool valid=x<=W/2&&y<=H/2;z=valid?.5f:.508f;p=valid?.2f:1.f;}
   if(geometry==5){const bool valid=x>W/2&&y>H/2;z=valid?.5f:.508f;p=valid?1.f:.2f;}
+  if(geometry==6){const float here=.5f+.02f*(float(x)-W/2)+.015f*(float(y)-H/2);depth[y*W+x][0]=here;z=here-.02f*fraction-.015f*vertical;c=.4f;p=.35f;}
   pastDepth[y*W+x]={z-viewOffset,.7f,.9f,1};color[y*W+x]={c,c,c,c};past[y*W+x]={p,p,p,p};
  }
  auto d=h.Texture(&depth),pdtex=h.Texture(&pastDepth),motion=h.Texture(&mv),current=h.Texture(&color),history=h.Texture(&past),out=h.Texture();
- std::array<float,192> sys{};sys[0]=sys[4]=float(W);sys[1]=sys[5]=float(H);sys[2]=sys[6]=1.f/W;sys[3]=sys[7]=1.f/H;sys[150]=viewOffset;
+ std::array<float,192> sys{};sys[0]=sys[4]=float(W);sys[1]=sys[5]=float(H);sys[2]=sys[6]=1.f/W;sys[3]=sys[7]=1.f/H;sys[150]=viewOffset;sys[4]*=outputScale;sys[5]*=outputScale;sys[6]/=outputScale;sys[7]/=outputScale;
  auto cb0=g.Buffer(sizeof(sys),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,sys.data());
  std::array<UINT,64> filter{};filter[6]=cut?1u:0u;auto cb1=g.Buffer(sizeof(filter),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,filter.data());
  h.Dispatch(h.temporal.Get(),{d.r.Get(),pdtex.r.Get(),motion.r.Get(),current.r.Get(),history.r.Get(),current.r.Get()},out,cb0.Get(),cb1.Get());
@@ -52,5 +54,19 @@ int main(){try{
  }
  Require(std::abs(Footprint(false,0,.5f,0.f,.1f)-.305f)<.0001f,"native previous-view depth offset lost");
  Require(std::abs(Footprint(false,0,.5f,0.f,0.f,true)-.55f)<.0001f,"camera cut retained history");
+ float slopeOldMin=1,slopeOldMax=0;
+ for(float phase:{.25f,.5f,.75f}){
+  const float old=Footprint(false,6,phase,0.f,0.f,false,1.f,true),next=Footprint(false,6,phase);
+  slopeOldMin=std::min(slopeOldMin,old);slopeOldMax=std::max(slopeOldMax,old);
+  std::cout<<"Sloped receiver phase="<<phase<<" R381="<<old<<" corrected="<<next<<'\n';
+  Require(std::abs(next-.365f)<.0001f,"valid sloped receiver history discarded");
+  Require(std::abs(Footprint(false,6,phase,.5f)-.365f)<.0001f,"diagonal sloped history discarded");
+ }
+ Require(slopeOldMax-slopeOldMin>.02f,"R381 sloped receiver regression not reproduced");
+ for(float scale:{1.5f,2.f})for(float phase:{.25f,.5f,.75f}){
+  const float value=Footprint(false,0,phase,0.f,0.f,false,scale);
+  std::cout<<"Unequal output/history scale="<<scale<<" phase="<<phase<<" corrected="<<value<<'\n';
+  Require(std::abs(value-.305f)<.0001f,"output size moved history footprint off its SRV grid");
+ }
  std::cout<<"PASS validated history footprint: subpixel phases, invalid average, valid interpolation, bright retention\n";return 0;
 }catch(const std::exception&e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -60,3 +60,22 @@ not a full-resolution game replay or an RR test.
 The targeted failure is reproduced and corrected. Whether it accounts for the
 books/plant fluctuation still requires the user's in-game comparison. No general
 flicker-free, brightness-parity, or performance-parity claim is made.
+
+## User validation: rejected
+
+The subsequent 9.1-second video `20261108-0036-01.6108770.mp4` reports a worse
+result. The visible panel confirms R381, GI Owned, GI Stable ON, GI Filter OFF,
+clamp 60%, and four rays. Extracted desk/plant frames still show changing shading.
+Treat R381 as a visual regression, not a successful flicker fix.
+
+A concrete untested assumption is present in the new footprint reconstruction:
+`size_prev`/`inv_prev` come from sys_constants.g_vOutputRes/g_vInvOutputRes, rather
+than the bound history SRV extent. All footprint fixtures currently set current,
+previous-depth, history and output sizes equal. Native code using those constants
+for normalized reprojection does not prove they describe the history texel grid.
+The existing R378 exports have different RR input/output sizes, but do not capture
+the native temporal history SRV extent and constants together; that is not proof
+of an actual mismatch in this dispatch. Do not label the mismatch the root cause
+without evidence. Validate unequal dimensions and the actual binding contract
+before another per-tap change. Also test sloped receiver depth and temporal jitter;
+flat synthetic depth boundaries did not predict the observed game result.

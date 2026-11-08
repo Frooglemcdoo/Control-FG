@@ -3,7 +3,7 @@ import base64,hashlib,struct
 from pathlib import Path
 from dxbc_transform import transform_shex
 SOURCE_SHA='d54d94fdbb783796cc33bc78ab20dde687d90d9cba6f24c8092a6b177eec5d15'
-def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_current=False,validated_history=True):
+def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_current=False,validated_history=True,surface_plane=True):
  if preserve_current and (not history or outliers or view or smooth):raise ValueError("Energy preservation requires the stable temporal path")
  if smooth and (history or outliers or view):raise ValueError("Smoothing requires a normal zero-history path")
  if view not in (0,1,2) or (view and (history or not outliers)):raise ValueError("Diagnostic requires zero-history outlier path")
@@ -165,6 +165,30 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
     if texture in (0,1):code[5]=0x207006
     return code
    validated=history_sample(10,1,src(1,0xae),0)
+   if surface_plane:
+    # Query the bound SRV grid: output-resolution constants define native
+    # reprojection, but must not be assumed to be history texture dimensions.
+    w[76]=21
+    validated+=ins(61,dst(18,3),imm(0),[0x207e46,4,4])
+    validated+=ins(129,dst(18,12),src(18,0x44))
+    validated+=ins(61,dst(19,3),imm(0),[0x207e46,0,0])
+    validated+=ins(129,dst(19,12),src(19,0x44))
+    inv_prev=src(18,0xee);size_prev=src(18,0x44)
+    # Limited linear-depth gradient. Choose the smaller same-sign one-sided
+    # slope, or zero at a discontinuity/extremum, rather than fitting across it.
+    for axis in (0,1):
+     for side,mask in ((-1,1),(1,2)):
+      offset=(side,0,0,0) if axis==0 else (0,side,0,0)
+      validated+=ins(50,dst(13,3),vec(offset),src(19,0xee),src(1,0xae))
+      validated+=history_sample(14,mask,src(13),0)
+     validated+=ins(0,dst(15,1),src(10,0),[0x80100006,0x41,14])
+     validated+=ins(0,dst(15,2),src(14,0x55),[0x80100006,0x41,10])
+     validated+=ins(56,dst(15,4),src(15,0),src(15,0x55))
+     validated+=ins(29,dst(16,1),src(15,0xaa),imm(0))
+     validated+=ins(29,dst(16,2),[0x80100006,0x81,15],[0x80100556,0x81,15])
+     validated+=ins(55,dst(15,1),src(16,0x55),src(15,0x55),src(15,0))
+     validated+=ins(1,dst(15,1),src(15,0),src(16,0))
+     validated+=ins(56,dst(20,1<<axis),src(15,0),src(19,axis*0x55))
    validated+=ins(52,dst(10,2),[0x80100006,0x81,10],imm(.000001))
    validated+=ins(56,dst(10,2),src(10,0x55),imm(.01))
    validated+=ins(50,dst(11,3),src(4,0x44),size_prev,imm(-.5))
@@ -181,6 +205,10 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
      validated+=ins(54,dst(15,lane),src(11,coord)) if offset else ins(0,dst(15,lane),imm(1),[0x80100006|(coord<<4),0x41,11])
     validated+=ins(0,dst(15,4),src(14,0xff),depth_offset)
     validated+=ins(0,dst(15,4),src(15,0xaa),[0x80100006,0x41,10])
+    if surface_plane:
+     validated+=ins(0,dst(16,3),src(13),[0x80100446,0x41,4])
+     validated+=ins(15,dst(16,4),src(20),src(16))
+     validated+=ins(0,dst(15,4),src(15,0xaa),[0x80100aa6,0x41,16])
     validated+=ins(29,dst(15,8),src(10,0x55),[0x80100aa6,0x81,15])
     validated+=ins(29,dst(16,3),src(13),imm(0))+ins(29,dst(17,3),imm(1),src(13))
     validated+=ins(1,dst(16,3),src(16),src(17))
@@ -242,3 +270,6 @@ if __name__=='__main__':
 
  with (out/"gi_stable_r380.generated.h").open("w") as f:
   f.write("#pragma once\ninline constexpr unsigned char kGIStableR380[]={\n"+",".join(map(str,generate(source,preserve_current=True,validated_history=False)))+"\n};\n")
+
+ with (out/"gi_stable_r381.generated.h").open("w") as f:
+  f.write("#pragma once\ninline constexpr unsigned char kGIStableR381[]={\n"+",".join(map(str,generate(source,preserve_current=True,surface_plane=False)))+"\n};\n")
