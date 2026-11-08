@@ -6,7 +6,7 @@
 using Microsoft::WRL::ComPtr;
 static void Check(HRESULT h){if(FAILED(h))throw std::runtime_error("GPU test failure");}
 static void Require(bool good,const char*s){if(!good)throw std::runtime_error(s);}
-constexpr UINT W=64,H=32;
+constexpr UINT W=128,H=64;
 int main(){try{
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));ComPtr<IDXGIAdapter> adapter;Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
  ComPtr<ID3D12Device> device;Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)));
@@ -29,13 +29,22 @@ int main(){try{
  auto&s=f.settings;s.timeDeltaBetweenFrames=16.6667f;for(UINT i=0;i<16;++i)s.worldToViewMatrix[i]=s.worldToViewMatrixPrev[i]=i%5==0?1.f:0.f;
  s.viewToClipMatrix[0]=s.viewToClipMatrix[5]=1;s.viewToClipMatrix[10]=1.001f;s.viewToClipMatrix[11]=1;s.viewToClipMatrix[14]=-.1001f;std::memcpy(s.viewToClipMatrixPrev,s.viewToClipMatrix,64);
  auto transition=[&](control_nrd::D3D12Backend::External&t,D3D12_RESOURCE_STATES next){if(t.state==next)return;D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={t.resource,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,t.state,next};list->ResourceBarrier(1,&b);t.state=next;};
- double finalMean=0;
- for(UINT frame=1;frame<=16;++frame){
+ double finalMean=0,spotMean=0,quietMean=0;
+ for(UINT frame=1;frame<=96;++frame){
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
   std::vector<ComPtr<ID3D12Resource>> uploads;
   for(UINT i=0;i<4;++i){auto upload=buffer(bytes,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);void*p=nullptr;Check(upload->Map(0,nullptr,&p));
    for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){auto*pixel=reinterpret_cast<float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;
-    std::array<float,4> value=i==0?std::array<float,4>{.4f,.4f,.4f,2.f}:i==1?std::array<float,4>{0,0,-1,1}:i==2?std::array<float,4>{10,0,0,0}:std::array<float,4>{0,0,0,0};std::memcpy(pixel,value.data(),16);
+    std::array<float,4> value=i==0?std::array<float,4>{.4f,.4f,.4f,2.f}:i==1?std::array<float,4>{0,0,-1,1}:i==2?std::array<float,4>{10,0,0,0}:std::array<float,4>{0,0,0,0};
+    if(i==0 && frame>16){
+     const bool spot=x>=W/4&&x<3*W/4&&y>=H/4&&y<3*H/4;
+     float light=frame>80?.01f:(spot?.8f:.05f);
+     // Sparse, moving single-frame outliers: the old hybrid path mistook these
+     // for illumination changes and repeatedly reset to the noisy sample.
+     if(frame>48&&frame<=80&&((x*17+y*31+frame*13)%509)==0)light=4;
+     value={light,light,light,2};
+    }
+    std::memcpy(pixel,value.data(),16);
    }upload->Unmap(0,nullptr);transition(inputs[names[i]],D3D12_RESOURCE_STATE_COPY_DEST);
    D3D12_TEXTURE_COPY_LOCATION dst{},src{};dst.pResource=textures[i].Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;src.pResource=upload.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;src.PlacedFootprint=footprint;list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);uploads.push_back(upload);
   }
@@ -44,9 +53,13 @@ int main(){try{
   D3D12_TEXTURE_COPY_LOCATION dst{},src{};dst.pResource=readback.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=footprint;src.pResource=textures[4].Get();src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
   Check(list->Close());ID3D12CommandList* lists[]={list.Get()};queue->ExecuteCommandLists(1,lists);Check(queue->Signal(fence.Get(),frame));Require(session.Submitted(1,frame),"submission rejected");
   Check(fence->SetEventOnCompletion(frame,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"GPU timeout");
-  void*p=nullptr;Check(readback->Map(0,nullptr,&p));double sum=0;for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){const auto*pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;Require(std::isfinite(pixel[0]),"nonfinite RELAX output");sum+=pixel[0];}readback->Unmap(0,nullptr);finalMean=sum/(W*H);
+  void*p=nullptr;Check(readback->Map(0,nullptr,&p));double sum=0,center=0;unsigned centerCount=0;for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){const auto*pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;Require(std::isfinite(pixel[0])&&std::isfinite(pixel[1])&&std::isfinite(pixel[2]),"nonfinite RELAX output");sum+=pixel[0];if(x>=7*W/16&&x<9*W/16&&y>=7*H/16&&y<9*H/16){center+=pixel[0];++centerCount;}}readback->Unmap(0,nullptr);finalMean=sum/(W*H);
+  if(frame==16){std::printf("Uniform mean %.8f\n",finalMean);Require(std::abs(finalMean-.4)<.015,"RELAX lost uniform light");}
+  if(frame==48){spotMean=center/centerCount;quietMean=finalMean;std::printf("Persistent light center %.8f mean %.8f\n",spotMean,quietMean);Require(spotMean>.65,"RELAX removed persistent local light");}
+  if(frame==80){std::printf("Sparse outliers center %.8f mean %.8f\n",center/centerCount,finalMean);Require(std::abs(finalMean-quietMean)<.06,"Sparse outliers caused excessive light fluctuation");}
+  if(frame==96){std::printf("Light off mean %.8f\n",finalMean);Require(finalMean<.025,"Stale illumination persisted after light removal");}
   // Remove all recorded references before releasing this frame's descriptors.
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));Check(list->Close());
  }
- CloseHandle(event);std::printf("RELAX uniform mean %.8f\n",finalMean);Require(std::abs(finalMean-.4)<.015,"RELAX lost uniform light");std::puts("PASS actual RELAX_DIFFUSE D3D12 dispatch chain and independent history");return 0;
+ CloseHandle(event);std::puts("PASS actual RELAX_DIFFUSE D3D12 dispatch chain and independent history");return 0;
  }catch(const std::exception&e){std::fprintf(stderr,"%s\n",e.what());return 1;}}
