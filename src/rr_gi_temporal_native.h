@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_gi_stage_policy.h"
+#include "gi_dual_history_bridge.h"
 #include "rt_surface_source_capture.h"
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
 #include "rr_gi_boundary.h"

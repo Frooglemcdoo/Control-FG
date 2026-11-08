@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <atomic>
-struct ID3D12GraphicsCommandList{};
+#include <d3d12.h>
 struct RRAlbedoCallPatch{};struct RRIndirectCallPatch{};
 namespace control_rr {enum class RRFrameStage {Lighting,Ready};}
 struct Frame {bool selected=true,failed=false;control_rr::RRFrameStage stage=control_rr::RRFrameStage::Lighting;
@@ -14,7 +14,7 @@ static void* verifiedRenderer=reinterpret_cast<void*>(0x10000000);
 static unsigned expectedPasses=6;static bool expectedHistoryDisabled=false;static unsigned expectedView=0;
 static unsigned fault=0,binds=0,dispatches=0,spatials=0,invokes=0,filters=0;
 static void* record=reinterpret_cast<void*>(0x2000);static void* bound=nullptr;
-namespace control_rr_reflection {struct Context{unsigned long long frame=123;std::uintptr_t list=0x3000;};}
+namespace control_rr_reflection {struct Context{unsigned long long frame=123;std::uintptr_t list=0x3000,view=0x4000;};}
 static bool RRReflectionCurrent(void*,control_rr_reflection::Context& c){if(fault==10)c.frame=124;return fault!=9;}
 struct Copy {bool StateMatches(std::uintptr_t){return fault!=8;}} rrNativeCopy;
 namespace control_rr_gi {static std::atomic<unsigned> ready{1};}
@@ -48,9 +48,9 @@ int main(){auto* history=reinterpret_cast<void*>(std::uintptr_t(verifiedRenderer
   __except(EXCEPTION_EXECUTE_HANDLER){caught=true;}
   assert(caught==(fault==1||fault==2||(fault==11&&expectedPasses>0)));assert(!rrNativeGIHistoryScope&&!rrNativeGIMotionBound&&filters==1&&!control_rr_gi::historyDisabled&&!control_rr_gi::outlierEnabled&&control_rr_gi::activeView==control_rr_gi::DiagnosticView::Normal);
   assert(!rrNativeFrame.failed&&rrNativeFrame.selected==(fault!=5));assert(bound==record);
-  if(fault==0)assert(rrNativeGIHistoryDispatches==1&&invokes==(mode>=4&&mode<=6?7u:1u));
+  if(fault==0)assert(rrNativeGIHistoryDispatches==1&&invokes==(mode>=4&&mode<=6?1u+expectedPasses:1u));
   if(fault==0)assert(rrNativeGISpatialObserved==expectedPasses);
-  if(fault==0)assert(rrNativeGISpatialApplied==(mode>=4&&mode<=6?6u:0u));
+  if(fault==0)assert(rrNativeGISpatialApplied==(mode>=4&&mode<=6?expectedPasses:0u));
   assert(!control_rr_gi::rawBypass&&!control_rr_gi::spatialSteady&&!control_rr_gi::spatialHistoryBounded&&!control_rr_gi::spatialDispatch&&!rrNativeGISingleHistory);
   if(fault==3)assert(rrNativeGIHistoryDispatches==0&&invokes==1);
   if(fault>=4&&fault<=10)assert(invokes==0);
