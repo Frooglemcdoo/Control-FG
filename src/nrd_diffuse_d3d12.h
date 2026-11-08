@@ -86,8 +86,8 @@ public:
  }
  // Use one owner/queue and record only after the previous session was submitted.
  // This class deliberately does not signal fences or decide native list lifetime.
- void RecordImpl(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
-  if(!list||plan.empty()||recording.heap)throw std::runtime_error("Invalid NRD recording");
+ void AllocateRecording(const std::vector<Dispatch>& plan,const Inputs& inputs,Recording& recording){
+  if(poisoned||plan.empty()||recording.heap)throw std::runtime_error("Invalid NRD recording");
   // Complete validation before touching the command list.
   for(const auto&d:plan){
    if(d.pipeline>=pipelines.size()||!d.width||!d.height||d.constants.size()>constantStride)throw std::runtime_error("Invalid NRD dispatch");
@@ -110,6 +110,11 @@ public:
   for(const auto&t:permanent)recording.retained.push_back(t.resource);
   for(const auto&t:transient)recording.retained.push_back(t.resource);
   recording.root=root;recording.pipelines=pipelines;
+ }
+ // AllocateRecording must finish before the enclosing transaction records any
+ // commands. The plan/inputs remain immutable between allocation and dispatch.
+ void RecordPrepared(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
+  if(poisoned||!list||!recording.heap||!recording.constants||!recording.mapped)throw std::runtime_error("NRD recording was not prepared");
   auto cpu=recording.heap->GetCPUDescriptorHandleForHeapStart();auto gpu=recording.heap->GetGPUDescriptorHandleForHeapStart();
   auto ch=[&](UINT i){return D3D12_CPU_DESCRIPTOR_HANDLE{cpu.ptr+SIZE_T(i)*increment};};
   auto gh=[&](UINT i){return D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr+UINT64(i)*increment};};
@@ -140,7 +145,7 @@ public:
  void AbandonAfterReset()noexcept{poisoned=true;}
  void Record(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
   if(poisoned)throw std::runtime_error("NRD backend requires recreation after abandoned recording");
-  try{RecordImpl(list,plan,inputs,recording);}catch(...){poisoned=true;throw;}
+  try{AllocateRecording(plan,inputs,recording);RecordPrepared(list,plan,inputs,recording);}catch(...){poisoned=true;throw;}
  }
 
 };

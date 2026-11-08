@@ -39,4 +39,22 @@ if(CONTROL_NRD_GPU)
  target_link_libraries(control_nrd_d3d12 PRIVATE NRD d3d12 dxgi)
  target_compile_options(control_nrd_d3d12 PRIVATE /W4)
  add_test(NAME control_nrd_d3d12 COMMAND control_nrd_d3d12)
+ set(conversion_headers)
+ foreach(shader prepare finish)
+  set(header "${CMAKE_CURRENT_BINARY_DIR}/nrd_${shader}.h")
+  add_custom_command(OUTPUT "${header}"
+   COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -HV 2018 -E main -WX
+    -I "${nrd_SOURCE_DIR}/Shaders"
+    -Fh "${header}" -Vn "kNrd_${shader}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_${shader}.hlsl"
+   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_${shader}.hlsl"
+   VERBATIM)
+  list(APPEND conversion_headers "${header}")
+ endforeach()
+ add_executable(control_nrd_pipeline test_d3d12.cpp ${conversion_headers})
+ target_compile_definitions(control_nrd_pipeline PRIVATE CONTROL_NRD_PIPELINE_TEST)
+ target_include_directories(control_nrd_pipeline PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+ target_link_libraries(control_nrd_pipeline PRIVATE NRD d3d12 dxgi)
+ target_compile_options(control_nrd_pipeline PRIVATE /W4)
+ add_test(NAME control_nrd_pipeline COMMAND control_nrd_pipeline)
 endif()
