@@ -21,12 +21,7 @@ inline void Record(const rt_owned_assembly::Result& result,UINT64 instanceCount=
  }
 }
 inline void Hook(void* context,const void* transform,void* materials,std::int32_t variant,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
- std::uint32_t count=0;
- auto* entry=rt_prepared_cache::Eligible(api,provider,count)?RTPreparedCache::Find(context,provider,materials,variant):nullptr;rt_owned_assembly::Result result;
- if(entry&&rt_prepared_cache::Replay(api,RTCacheRevision::revisions,*entry,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result)){++RTPreparedCache::current->hits;Record(result);return;}
- if(entry)++RTPreparedCache::current->misses;
- result=rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
- if(entry&&rt_prepared_cache::Capture(api,RTCacheRevision::revisions,*entry,context,materials,variant,provider,ignoreAlpha,disableCull,result))++RTPreparedCache::current->stored;
+ const auto result=rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
  Record(result);
 }
 inline std::uint32_t HookBatch(void* context,const void* transforms,std::uint32_t count,void* materials,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){

@@ -91,19 +91,54 @@ template<unsigned Kind>inline Result AssembleProvider(const Api& api,void* conte
  const auto address=BlasAddress<Kind>(provider);std::memcpy(instance+14,&address,8);
  Append64(api,ctx+0x70,instance,result);*prefix+=static_cast<std::uint32_t>(count);result.geometry=static_cast<std::uint32_t>(count);return result;
 }
+inline bool FitsBatch(const void* vector,std::uint64_t amount)noexcept{
+ const auto used=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
+ return used<=capacity&&amount<=std::uint64_t(capacity-used);
+}
+
+// Reserve the whole object's existing capacity once. With verified leaf getters
+// and no allocation callbacks, vector counts need publication only at completion.
+// Every geometry/material/transform input is still read fresh for this call.
+template<unsigned Kind>inline bool TryAssembleReserved(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
+ void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix,Result& result){
+ static_assert(Kind==1||Kind==2,"verified live providers only");(void)api;
+ const auto count=GeometryCount<Kind>(provider);if(count<0)return false;
+ auto* ctx=static_cast<unsigned char*>(context);
+ if(!FitsBatch(ctx+0x70,1)||!FitsBatch(ctx+0x80,static_cast<std::uint32_t>(count))||!FitsBatch(ctx+0x90,static_cast<std::uint32_t>(count)))return false;
+ const auto instances=Read<std::uint32_t>(ctx,0x78),geometries=Read<std::uint32_t>(ctx,0x88),materialCount=Read<std::uint32_t>(ctx,0x98);
+ auto* records=Read<unsigned char*>(ctx,0x80)+std::size_t(geometries)*64;
+ auto* pointers=Read<unsigned char*>(ctx,0x90)+std::size_t(materialCount)*8;
+ void* table=nullptr;
+ if(count){
+  if(variant!=0&&Read<std::uint32_t>(materials,0x158)!=0)table=Read<void*>(Read<unsigned char*>(materials,0x150)+(std::ptrdiff_t(variant)*3-2)*8);
+  else table=Read<void*>(materials,0x130);
+ }
+ bool alpha=false,cull=disableCull!=0;
+ for(std::int32_t i=0;i<count;++i){
+  auto* record=records+std::size_t(i)*64;std::memcpy(record,GeometryRecord<Kind>(provider,i),64);
+  auto* material=Read<void*>(static_cast<unsigned char*>(table)+std::ptrdiff_t(Read<std::int32_t>(record))*8);
+  Write(pointers,std::size_t(i)*8,material);cull|=Read<std::uint32_t>(material,0x204)!=2;
+  const bool a=!ignoreAlpha&&((Read<std::uint32_t>(Read<void*>(material,0x1f8))&Read<std::uint32_t>(material,0x1f0)&0x80000000u)!=0);
+  alpha|=a;Write(record,4,std::uint32_t(a));
+ }
+ std::uint32_t instance[16]{};
+ for(unsigned column=0;column<4;++column)for(unsigned row=0;row<3;++row)instance[row*4+column]=Read<std::uint32_t>(transform,(column*3+row)*4);
+ instance[12]=InstanceMask<Kind>(provider)<<24;instance[13]=(*prefix*2u)&0xffffffu;
+ if(!alpha){instance[12]|=0x04000000u;instance[13]|=0x04000000u;}if(cull)instance[13]|=0x01000000u;
+ const auto address=BlasAddress<Kind>(provider);std::memcpy(instance+14,&address,8);
+ std::memcpy(Read<unsigned char*>(ctx,0x70)+std::size_t(instances)*64,instance,64);
+ Write(ctx,0x78,instances+1);Write(ctx,0x88,geometries+static_cast<std::uint32_t>(count));Write(ctx,0x98,materialCount+static_cast<std::uint32_t>(count));*prefix+=static_cast<std::uint32_t>(count);
+ result={};result.geometry=static_cast<std::uint32_t>(count);result.fastAppends=result.geometry+1;result.materialFastAppends=result.geometry;result.providerKind=Kind;result.avoidedCalls=result.geometry+3;return true;
+}
 inline Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
- if(MatchesProvider(provider,api.staticMesh))return AssembleProvider<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
- if(MatchesProvider(provider,api.skinnedMesh))return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
+ if(MatchesProvider(provider,api.staticMesh)){Result result;if(TryAssembleReserved<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
+ if(MatchesProvider(provider,api.skinnedMesh)){Result result;if(TryAssembleReserved<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
  return AssembleProvider<0>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
 }
 // Reuse is scoped to one native instanced group. No readiness/update callback
 // occurs inside that loop. Require a known static provider and enough existing
 // output capacity for the WHOLE group, so replay invokes no native allocator.
-inline bool FitsBatch(const void* vector,std::uint64_t amount)noexcept{
- const auto used=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
- return used<=capacity&&amount<=std::uint64_t(capacity-used);
-}
 inline bool TryAssembleBatch(const Api& api,void* context,const void* transforms,std::uint32_t instances,
  void* materials,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix,Result& total){
  if(instances<2||!MatchesProvider(provider,api.staticMesh))return false;

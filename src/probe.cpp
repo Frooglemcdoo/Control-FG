@@ -1332,7 +1332,6 @@ static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept {
 #endif
 #ifdef CONTROL_RT_OWNED_ASSEMBLY
 #include "rt_cache_revision_runtime.h"
-#include "rt_prepared_cache_runtime.h"
 #include "rt_owned_assembly_runtime.h"
 #include "rt_owned_selection_runtime.h"
 #include "rt_owned_prepare_runtime.h"
@@ -1594,7 +1593,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RT_INSTANCE_R393_INSTALL ready=%u",unsigned(RTInstanceCapture::Install(renderer)));
 #endif
 #ifdef CONTROL_RT_OWNED_ASSEMBLY
-        Log("RT_CACHE_R402_INSTALL ready=%u",unsigned(RTCacheRevision::Install(renderer)));
+        Log("RT_CACHE_R402_INSTALL ready=0 disabled=1 reason=exact_validation_cost");
         Log("RT_ASSEMBLY_R402_INSTALL ready=%u",unsigned(RTOwnedAssembly::Install(renderer)));
         Log("RT_SELECTION_R402_INSTALL ready=%u",unsigned(RTOwnedSelection::Install(renderer)));
         Log("RT_PREPARE_R402_INSTALL ready=%u",unsigned(RTOwnedPrepare::Install(renderer)));

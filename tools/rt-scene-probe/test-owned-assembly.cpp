@@ -3,6 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <algorithm>
+#include <chrono>
 #include "../../src/rt_prepared_cache.h"
 #include "native-assembly-oracle.h"
 #include "../../src/rt_owned_provider_bytes.h"
@@ -58,6 +59,17 @@ static void TestPreparedCache(AssembleFn original,const Api& api){
   rt_prepared_cache::Entry entry;
   auto capture=[&]{Fixture f(128);std::uint32_t prefix=0;auto result=Assemble(api,f.context,transform.data(),owner,variant,provider,ignore,cull,&prefix);assert(rt_prepared_cache::Capture(api,revisions,entry,f.context,owner,variant,provider,ignore,cull,result));};
   capture();
+  if(test>=1&&test<=4){
+   Fixture f(128);std::uint32_t prefix=0;Result result;std::uint64_t checksum=0;
+   for(unsigned mode=0;mode<3;++mode){auto begin=std::chrono::steady_clock::now();
+    for(unsigned n=0;n<1000000;++n){for(auto off:{0x78,0x88,0x98})Write(f.context,off,0u);prefix=n;transform[0]=n;
+     if(mode==1) {if(!rt_prepared_cache::Replay(api,revisions,entry,f.context,transform.data(),owner,variant,provider,ignore,cull,&prefix,result))assert(false);}
+     else if(mode==2) result=Assemble(api,f.context,transform.data(),owner,variant,provider,ignore,cull,&prefix);
+     else {assert(MatchesProvider(provider,api.staticMesh));result=AssembleProvider<1>(api,f.context,transform.data(),owner,variant,provider,ignore,cull,&prefix);}
+     checksum+=Read<std::uint32_t>(f.instances[0].data())+result.geometry;
+    }auto end=std::chrono::steady_clock::now();std::printf("MICRO baseline=0 exact_cache=1 reserved=2 geometry=%u mode=%u ns=%.2f checksum=%llu\n",test,mode,std::chrono::duration<double,std::nano>(end-begin).count()/1000000.,(unsigned long long)checksum);
+   }
+  }
   // Transform, instance mask, prefix, compacted BLAS state/address remain live.
   for(unsigned i=0;i<12;++i)transform[i]=test*0x1234567u+i;transform[5]=0x7fc01234u;
   Write(provider,0x60,test*0x1020304u);Write(provider,0xac,static_cast<std::int32_t>(test%7)-2);
