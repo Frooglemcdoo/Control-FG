@@ -6,6 +6,7 @@
 #include <cstdio>
 int main(){
  using namespace control_rr;
+ assert(GISampleRequested()==0); // R392 startup preserves the native count.
  for(unsigned requested: {0u,1u,2u,3u,4u,6u,8u,10u,12u,14u,16u,17u,32u,0xffffffffu}){
   const bool accepted=requested==2||requested==4||requested==6||requested==8||requested==10||requested==14||requested==12||requested==16;
   assert(NormalizeGISampleRequest(requested)==(accepted?requested:0u));

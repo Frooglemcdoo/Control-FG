@@ -1376,11 +1376,11 @@ jobs:
           build\test-performance-compare.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package performance comparison R391
+      - name: Package performance comparison R392
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R391'
+          $out='ControlTOH-R392'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1420,7 +1420,7 @@ jobs:
           Copy-Item tools/diagnostics/Collect-ControlTOH-Materials.cmd,tools/diagnostics/Collect-ControlTOH-Materials.ps1 $tools
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-material-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
-          Copy-Item docs/Performance-Compare-R391.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/Performance-Compare-R392.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1433,10 +1433,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R391
+          name: ControlTOH-R392
           path: |
-            ControlTOH-R391.zip
-            ControlTOH-R391.sha256
+            ControlTOH-R392.zip
+            ControlTOH-R392.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

@@ -2,7 +2,7 @@
 #include <atomic>
 #include "rr_gi_sample_policy.h"
 namespace control_rr {
-inline std::atomic<unsigned> rrGISampleRequested{4};
+inline std::atomic<unsigned> rrGISampleRequested{0};
 inline unsigned GISampleRequested() noexcept {return rrGISampleRequested.load(std::memory_order_acquire);}
 inline void GISampleSelect(unsigned samples) noexcept {rrGISampleRequested.store(NormalizeGISampleRequest(samples),std::memory_order_release);}
 // Render-thread owned snapshot. UI changes cannot alter a frame in progress.

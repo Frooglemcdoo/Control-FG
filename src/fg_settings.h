@@ -150,7 +150,7 @@ static void FGSettingsLoadSettings() noexcept {
     const unsigned int selection = control_settings::RestoreFG(rawSelection);
     const unsigned int rawTarget = FGSettingsReadStored(control_settings::Key::DynamicTargetFps);
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
-    control_rr::GISampleSelect(4); // RR owns the accepted four-sample policy.
+    control_rr::GISampleSelect(0); // RR preserves the native GI sample count.
     for(auto key:{control_settings::Key::EnhancedCharacterLighting,control_settings::Key::EnhancedLighting,control_settings::Key::FpsCounter}) {
         const auto& option=control_settings::Definition(key);
         const unsigned stored=FGSettingsReadStored(key);

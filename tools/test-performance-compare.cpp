@@ -9,6 +9,7 @@ int main(){
  Reset();assert(!frames[0].ready&&cpuCalls[2][1]==0);
  assert(phaseCount==9&&!conditions[0].owned&&!conditions[8].owned);
  assert(conditions[6].relax&&conditions[6].character&&conditions[6].volume&&conditions[6].owned);
+ for(const auto& p:conditions)if(p.owned)assert(p.rays==0);
  auto empty=Summarize({0,-1,NAN});assert(empty.count==0);
  auto s=Summarize({10,10,10,20});assert(s.mean==12.5&&s.p50==10&&s.p99==20&&s.low1==50);
 }

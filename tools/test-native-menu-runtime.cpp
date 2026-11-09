@@ -144,7 +144,7 @@ int main(int argc,char** argv){
     assert(control_settings::Default(control_settings::Key::FrameGeneration)==0);
     maxMultiplier=6;
     ResetHook(nullptr);assert(mode==2&&target==0&&glass&&texture==0&&!control_rr::rr);
-    assert(control_rr::gi==4&&control_rr_clamp::value==60&&saveCount==1&&nativeCalls==2);
+    assert(control_rr::gi==0&&control_rr_clamp::value==60&&saveCount==1&&nativeCalls==2);
     SaveHook(nullptr);assert(saveCount==2&&nativeCalls==3);
     // Restart-only setting: no generic write/reset, no exit-ready event on rejection.
     assert(!Apply(10011,0)&&storageEnabled);

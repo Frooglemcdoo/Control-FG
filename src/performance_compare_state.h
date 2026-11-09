@@ -7,12 +7,12 @@ struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,
 inline constexpr Condition conditions[]={
  {"native_rr_begin",false,0,false,false,false,false},
  {"native_rr_4_samples",false,4,false,false,false,false},
- {"owned_4_raw",true,4,false,false,false,false},
- {"owned_4_lighting_raw",true,4,true,false,false,false},
- {"owned_4_lighting_relax",true,4,true,true,false,false},
- {"plus_character",true,4,true,true,true,false},
- {"full_rr",true,4,true,true,true,true},
- {"full_rr_repeat",true,4,true,true,true,true},
+ {"owned_native_raw",true,0,false,false,false,false},
+ {"owned_native_lighting_raw",true,0,true,false,false,false},
+ {"owned_native_lighting_relax",true,0,true,true,false,false},
+ {"plus_character",true,0,true,true,true,false},
+ {"full_rr",true,0,true,true,true,true},
+ {"full_rr_repeat",true,0,true,true,true,true},
  {"native_rr_end",false,0,false,false,false,false}};
 inline constexpr unsigned phaseCount=sizeof(conditions)/sizeof(conditions[0]);
 inline constexpr unsigned capacity=65536;
