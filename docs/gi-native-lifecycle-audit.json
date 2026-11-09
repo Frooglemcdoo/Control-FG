@@ -1,0 +1,170 @@
+{
+  "schema": 2,
+  "sha256": "cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5",
+  "source_commit": "2f314e8992aec822f13cafbf7efa8bb55dc3915c",
+  "calls": [
+    {
+      "site": "0x25217",
+      "target": "0x26030",
+      "bytes": "e8140e0000"
+    },
+    {
+      "site": "0x2527f",
+      "target": "0x26030",
+      "bytes": "e8ac0d0000"
+    },
+    {
+      "site": "0x252f1",
+      "target": "0x26030",
+      "bytes": "e83a0d0000"
+    },
+    {
+      "site": "0x25367",
+      "target": "0x26030",
+      "bytes": "e8c40c0000"
+    },
+    {
+      "site": "0x253d1",
+      "target": "0x26030",
+      "bytes": "e85a0c0000"
+    },
+    {
+      "site": "0x2544b",
+      "target": "0x26030",
+      "bytes": "e8e00b0000"
+    },
+    {
+      "site": "0x254bb",
+      "target": "0x26030",
+      "bytes": "e8700b0000"
+    },
+    {
+      "site": "0x2551f",
+      "target": "0x26030",
+      "bytes": "e80c0b0000"
+    },
+    {
+      "site": "0x2824f",
+      "target": "0x26360",
+      "bytes": "e80ce1ffff"
+    },
+    {
+      "site": "0x2ae34",
+      "target": "0x26360",
+      "bytes": "e827b5ffff"
+    },
+    {
+      "site": "0x35763",
+      "target": "0x26360",
+      "bytes": "e8f80bffff"
+    },
+    {
+      "site": "0x17c25",
+      "target": "0x25f00",
+      "bytes": "e8d6e20000"
+    },
+    {
+      "site": "0x17c67",
+      "target": "0x25f00",
+      "bytes": "e894e20000"
+    },
+    {
+      "site": "0x17d6e",
+      "target": "0x25f00",
+      "bytes": "e88de10000"
+    },
+    {
+      "site": "0x17f0b",
+      "target": "0x25f00",
+      "bytes": "e8f0df0000"
+    },
+    {
+      "site": "0x25200",
+      "target": "0x25f00",
+      "bytes": "e8fb0c0000"
+    },
+    {
+      "site": "0x25268",
+      "target": "0x25f00",
+      "bytes": "e8930c0000"
+    },
+    {
+      "site": "0x252d8",
+      "target": "0x25f00",
+      "bytes": "e8230c0000"
+    },
+    {
+      "site": "0x25350",
+      "target": "0x25f00",
+      "bytes": "e8ab0b0000"
+    },
+    {
+      "site": "0x253b8",
+      "target": "0x25f00",
+      "bytes": "e8430b0000"
+    },
+    {
+      "site": "0x25430",
+      "target": "0x25f00",
+      "bytes": "e8cb0a0000"
+    },
+    {
+      "site": "0x254a0",
+      "target": "0x25f00",
+      "bytes": "e85b0a0000"
+    },
+    {
+      "site": "0x25508",
+      "target": "0x25f00",
+      "bytes": "e8f3090000"
+    },
+    {
+      "site": "0x2565d",
+      "target": "0x25f00",
+      "bytes": "e89e080000"
+    },
+    {
+      "site": "0x28233",
+      "target": "0x25f00",
+      "bytes": "e8c8dcffff"
+    },
+    {
+      "site": "0x2ae20",
+      "target": "0x25f00",
+      "bytes": "e8dbb0ffff"
+    },
+    {
+      "site": "0x35752",
+      "target": "0x25f00",
+      "bytes": "e8a907ffff"
+    },
+    {
+      "site": "0x357c6",
+      "target": "0x33a40",
+      "bytes": "e875e2ffff"
+    },
+    {
+      "site": "0x374a1",
+      "target": "0x33a40",
+      "bytes": "e89ac5ffff"
+    }
+  ],
+  "mutation_rejections": 58,
+  "binding_row_stride": 64,
+  "scope": "listed direct calls only; not exhaustive callers, GI dispatch identity, ABI or lifetime proof",
+  "release_sequence": {
+    "0x25f0d": "488b09",
+    "0x25f15": "e816e5ffff",
+    "0x24485": "488b07488bcfff5008",
+    "0x244ac": "488938",
+    "0x244af": "488d0d6affffff",
+    "0x244b6": "48894808",
+    "0x24420": "488b0148ff6010",
+    "0x25f1a": "488b0b488b01ff5010",
+    "0x25f55": "4889034889431048894318"
+  },
+  "release_sequence_mutation_rejections": 9,
+  "native_deferred_reference": true,
+  "gpu_completion_proven": false,
+  "runtime_hooks_installed_by_audit": false
+}

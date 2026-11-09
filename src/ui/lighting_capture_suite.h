@@ -1,0 +1,366 @@
+#pragma once
+#include "../lighting_capture_plan.h"
+#include "../rr_clamp_strength_policy.h"
+#include "../rr_diffuse_source_policy.h"
+#include "../rt_surface_source_capture.h"
+#include "lighting_screenshot.h"
+#include "../rr_native_blend_capture_policy.h"
+namespace native_lighting::capture_suite {
+// All suite state and file I/O belong to the diagnostic UI thread.
+enum class Kind { Stationary, Motion, Blocker, MapProbe, NativeBlend, Character, Volume };
+inline bool character=false,volume=false;
+inline bool characterRRWasSelected=false;
+inline control_rr::RRUserMode characterSavedRR=control_rr::RRUserMode::Off;
+inline uint64_t characterRRSuccess=0;
+inline rt_surface_source::Snapshot sourceStart{};
+inline uint64_t initialBinds=0,initialApplied=0,initialTemporalApplied=0;
+inline uint64_t initialGroupBinds[3]{},initialGroupApplied[3]{};
+inline bool preserveSettings=false,savedRR=false,savedDistance=false;
+inline unsigned savedSamples=0,savedEffects=0;
+inline uint64_t preservedSelection=0;
+inline uint64_t savedCameraGeneration=0;
+inline int savedCameraMode=-1;
+inline native_blend_capture::Failure lastFailure=native_blend_capture::Failure::None;
+inline bool active=false,entered=false,gpuAccepted=false,motion=false,blocker=false;
+inline uint64_t traceStarted=0,lastRequest=0;
+inline unsigned step=0,imageIndex=0,failures=0;
+inline Mode restore=Mode::Native;
+inline capture_plan::Step focusedBlockerStep=capture_plan::blockerStep;
+inline uint64_t began=0,firstPresent=0,nextImage=0,selectedState=0;
+inline wchar_t folder[MAX_PATH]{};
+inline HANDLE manifest=INVALID_HANDLE_VALUE;
+inline LARGE_INTEGER logOffset{};
+inline void Note(const char* format,...) noexcept {
+    char line[1024]{};va_list args;va_start(args,format);
+    int n=vsnprintf_s(line,sizeof(line)-3,_TRUNCATE,format,args);va_end(args);
+    if(n<0)n=int(strlen(line));line[n++]='\r';line[n++]='\n';DWORD written=0;
+    if(manifest!=INVALID_HANDLE_VALUE)WriteFile(manifest,line,n,&written,nullptr);
+}
+inline bool CopyLog(const wchar_t* destination,uint64_t maxBytes=0) noexcept {
+    HANDLE in=CreateFileW(report.Path(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,0,nullptr);
+    if(in==INVALID_HANDLE_VALUE)return false;
+    LARGE_INTEGER start=logOffset,end{};
+    if(maxBytes){
+        if(!GetFileSizeEx(in,&end)){CloseHandle(in);return false;}
+        if(end.QuadPart>start.QuadPart && uint64_t(end.QuadPart-start.QuadPart)>maxBytes)start.QuadPart=end.QuadPart-static_cast<LONGLONG>(maxBytes);
+    }
+    bool ok=SetFilePointerEx(in,start,nullptr,FILE_BEGIN)!=FALSE;
+    uint64_t remaining=maxBytes?maxBytes:~uint64_t(0);
+    HANDLE out=CreateFileW(destination,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
+    ok=ok && out!=INVALID_HANDLE_VALUE;
+    char data[16384];DWORD read=0,written=0;
+    while(ok && remaining){
+        const DWORD want=remaining<sizeof(data)?static_cast<DWORD>(remaining):DWORD(sizeof(data));
+        if(!ReadFile(in,data,want,&read,nullptr)){ok=false;break;}if(!read)break;
+        ok=WriteFile(out,data,read,&written,nullptr) && written==read;remaining-=read;
+    }
+    if(out!=INVALID_HANDLE_VALUE)CloseHandle(out);CloseHandle(in);return ok;
+}
+inline bool PackageCharacter(HWND game) noexcept {
+    wchar_t sys[MAX_PATH]{},exe[MAX_PATH]{},args[3*MAX_PATH]{};
+    if(!GetSystemDirectoryW(sys,MAX_PATH) || swprintf_s(exe,L"%s\\tar.exe",sys)<0 ||
+       swprintf_s(args,L"-a -cf \"%s.zip\" -C \"%s\" .",folder,folder)<0)return false;
+    SHELLEXECUTEINFOW run{sizeof(run)};
+    run.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_NOASYNC;run.lpFile=exe;run.lpParameters=args;run.nShow=SW_HIDE;
+    if(!ShellExecuteExW(&run)||!run.hProcess)return false;
+    DWORD code=1;
+    const bool ok=WaitForSingleObject(run.hProcess,120000)==WAIT_OBJECT_0 && GetExitCodeProcess(run.hProcess,&code)&&code==0;
+    CloseHandle(run.hProcess);
+    if(ok){
+        swprintf_s(args,L"/select,\"%s.zip\"",folder);
+        ShellExecuteW(game,L"open",L"explorer.exe",args,nullptr,SW_SHOWNORMAL);
+    }
+    return ok;
+}
+inline void Finish(HWND game,const char* reason) noexcept {
+    volume_test::phase.store(0);
+    character_surface::phase.store(0);
+    rt_surface_source::request.store(0,std::memory_order_release);
+    control_rr_diffuse_source::legacyBypass.store(false,std::memory_order_release);
+    rt_spot_capture_runtime::CancelPending();
+    if(!preserveSettings)SelectMode(restore);ReportRRPaths("f9_restore");rt_shadow_capture::Summary();
+    Trace("capture_suite_end reason=%s failures=%u restored=%s",reason,failures,ModeName(restore));
+    DrainDiagnosticLog(true);
+    wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\lighting.log",folder);
+    if(!character && !volume && !CopyLog(path))++failures;
+    if(character)Note("near_history matched=%u ready=%u recorded_binds=%llu applied=%llu",volume_temporal::matched.load(),volume_temporal::ready.load(),volume_temporal::binds.load(),volume_temporal::applied.load());
+    if(character)Note("rr_mode_end=%u rr_saved_mode=%u rr_status_end=%u rr_selected_end=%u rr_modified_by_capture=0",unsigned(control_rr::RRUserModeValue()),unsigned(characterSavedRR),unsigned(control_rr::rrUserStatus.load()),unsigned(control_rr_diagnostic::lastSelected.load()));
+    if(character && failures)Note("failure_log_tail_limit=65536 copied=%u",unsigned(CopyLog(path,65536)));
+    if(character)Note("rig_quality_restored=%u filtered_recorded_binds=%llu",character_surface::quality.load(),character_surface::filteredBinds.load());
+    if(character && failures && strcmp(reason,"shader_not_active")==0){
+        const unsigned saved=character_surface::ExportCandidates(folder);
+        Note("shader_detection graphics_seen=%llu observed=%u candidate_files=%u dropped=%u",graphicsSeen.load(),character_surface::observed.load(),saved,character_surface::candidateDropped.load());
+    }
+    Note("end=%s failures=%u restored=%s",reason,failures,ModeName(restore));
+    if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
+    active=false;
+    if(character || volume){
+        if(!PackageCharacter(game)){
+            ShellExecuteW(game,L"open",folder,nullptr,nullptr,SW_SHOWNORMAL);
+            MessageBoxW(game,L"The full-screen images and manifest are in the opened folder.",volume?L"Volumetric lighting":L"Character shadows",MB_OK);
+        }
+        return;
+    }
+    if(blocker) {
+        wchar_t message[1024]{};
+        swprintf_s(message,L"Shadow trace %s. Failures: %u.\n\n%s\n\nSend lighting.log and the PNGs from this folder. Package-Lighting-Capture.cmd can split the folder into ZIPs below 200 MB. Your previous mode is restored.",
+            strcmp(reason,"complete")==0 && !failures?L"saved":L"incomplete",failures,folder);
+        MessageBoxW(game,message,L"Control-FG shadow trace",MB_OK);
+        return;
+    }
+    wchar_t message[768]{};swprintf_s(message,L"Lighting capture %s. %u skipped/failed steps or files.\n\n%s\n\nYour previous mode has been restored. Use Package-Lighting-Capture.cmd to split this folder into ZIPs below 200 MB.\nStationary suites include PNGs. Motion traces store light records in lighting.log.",
+        strcmp(reason,"complete")==0?L"finished":L"stopped",failures,folder);
+    MessageBoxW(game,message,L"Control-FG F9 capture",MB_OK);
+}
+inline bool Start(Kind kind=Kind::Stationary) noexcept {
+    if(free_camera::commands.Pending()) {lastFailure=native_blend_capture::Failure::Busy;return false;}
+    const bool traceMotion=kind==Kind::Motion,traceBlocker=kind==Kind::Blocker||kind==Kind::MapProbe||kind==Kind::NativeBlend;
+    const Mode captureMode=kind==Kind::NativeBlend?(IsNativeBlend(LiveSelection::GetMode(selection.Read()))?LiveSelection::GetMode(selection.Read()):kNativeBlendDefaultMode):kind==Kind::MapProbe?Mode::RoomMapProbe:traceBlocker?capture_plan::BlockerMode(LiveSelection::GetMode(selection.Read())):kDefaultMode;
+    lastFailure=native_blend_capture::Failure::None;
+    if(kind==Kind::NativeBlend){
+        using P=rt_spot_capture_runtime::Phase;
+        const auto phase=rt_spot_capture_runtime::phase.load();
+        lastFailure=native_blend_capture::Check({active,
+            IsNativeBlend(LiveSelection::GetMode(selection.Read())),
+            control_rr::RRUserRequested(),(control_rr_diagnostic::lastEffects.load()&8u)!=0,
+            rr_compact_distance::enabled.load(),rt_spot_capture_runtime::ready.load(),
+            (rt_spot_capture_runtime::signalReady.load() && rt_spot_capture_runtime::mapReady.load()),ModeAvailable(captureMode,readyMask.load()),
+            phase==P::Failed,phase!=P::Idle&&!(phase==P::Complete&&rt_spot_capture_runtime::exportStage==3)});
+        if(lastFailure!=native_blend_capture::Failure::None){
+            Trace("native_blend_capture_rejected reason=%u effects=0x%X ready_mask=0x%X",unsigned(lastFailure),control_rr_diagnostic::lastEffects.load(),readyMask.load());return false;
+        }
+    }
+    if(active)return false;
+    savedCameraGeneration=free_camera::commands.Generation();
+    savedCameraMode=free_camera::commands.Mode();
+    if((traceMotion||traceBlocker) && (!rt_spot_capture_runtime::ready.load() || !rt_spot_capture_runtime::signalReady.load() ||
+       !ModeAvailable(captureMode,readyMask.load()))) {
+        Trace("transition_start_rejected reason=default_or_capture_unavailable");return false;
+    }
+    using CapturePhase=rt_spot_capture_runtime::Phase;
+    const auto capturePhase=rt_spot_capture_runtime::phase.load();
+    if(traceBlocker && capturePhase==CapturePhase::Failed){
+        Trace("blocker_start_rejected reason=failed_capture_requires_fresh_session");return false;
+    }
+    if(capturePhase!=CapturePhase::Idle && capturePhase!=CapturePhase::Failed &&
+       !(capturePhase==CapturePhase::Complete && rt_spot_capture_runtime::exportStage==3)) {
+        Trace("capture_suite_start_rejected reason=previous_gpu_capture_pending");return false;
+    }
+    lastFailure=native_blend_capture::Failure::Files;
+    if(!DrainDiagnosticLog(true))return false;
+    wchar_t root[MAX_PATH]{};wcscpy_s(root,report.Path());auto* slash=wcsrchr(root,L'\\');if(!slash)return false;*slash=0;
+    SYSTEMTIME time{};GetLocalTime(&time);static unsigned serial=0;
+    character=kind==Kind::Character;
+    characterSavedRR=control_rr::RRUserModeValue();
+    characterRRWasSelected=control_rr_diagnostic::lastSelected.load();
+    volume=kind==Kind::Volume;
+    if(swprintf_s(folder,L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%u",root,volume?L"Volume-Light":character?L"Character-Surface":L"Shadow-R217",time.wYear,time.wMonth,time.wDay,time.wHour,time.wMinute,time.wSecond,GetCurrentProcessId(),serial++)<0)return false;
+    if(!CreateDirectoryW(folder,nullptr))return false;
+    wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",folder);
+    manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);
+    if(manifest==INVALID_HANDLE_VALUE)return false;
+    HANDLE log=CreateFileW(report.Path(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,OPEN_EXISTING,0,nullptr);
+    if(log==INVALID_HANDLE_VALUE || !GetFileSizeEx(log,&logOffset)){
+        if(log!=INVALID_HANDLE_VALUE)CloseHandle(log);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;return false;}
+    CloseHandle(log);
+    focusedBlockerStep={captureMode,L"shadow-blocker",true};
+    preserveSettings=volume || character || kind==Kind::NativeBlend;preservedSelection=selection.Read();
+    savedRR=control_rr::RRUserRequested();savedSamples=specularSampleChoice.load();
+    savedEffects=control_rr_diagnostic::lastEffects.load();savedDistance=rr_compact_distance::enabled.load();
+    motion=traceMotion;blocker=traceBlocker;traceStarted=0;lastRequest=0;
+    restore=LiveSelection::GetMode(selection.Read());active=true;entered=false;step=imageIndex=failures=0;
+    if(volume){
+        Note("R345 native / fog-isolation (transparent media) / owned scattering / native repeat. Full-resolution JPEG quality 95. Two samples per condition. Counters measure recorded PSO binds, not executed GPU draws.");
+        lastFailure=native_blend_capture::Failure::None;
+        return true;
+    }
+    if(character){
+        Note("R362 active RT signal comparison. Baseline / GI removed (diagnostic only) / stabilized GI / contact filtering preserved / both / baseline repeat. Twelve full-client JPEGs. RT/RR and saved GI/quality settings unchanged. Temporary source overrides restore on every exit. Native Blend GI eligibility and selected diagnostic PSO dispatches are counted. Five-second settling; counters prove CPU command recording, not GPU completion. Missing candidate coverage skips its images and records the failure. No default rendering correction is claimed.");
+        Note("rr_saved_mode=%u rr_selected_at_start=%u",unsigned(characterSavedRR),unsigned(control_rr_diagnostic::lastSelected.load()));
+        Note("audited_families=12 executable_and_linkage_exact=1 matched_psos=%u ready_psos=%u",character_surface::matched.load(),character_surface::ready.load());
+        Note("clamp_requested_percent=%u clamp_effective_percent=%u",control_rr_clamp::RuntimeRequested(),control_rr_clamp::effective.load());
+        Note("flat_views_expected=0 lighting_source_isolation=0 native_alpha_depth_coverage_preserved=1 quality_settings_unchanged=1 rr_modified_by_capture=0 post_processing_retained=1");
+        lastFailure=native_blend_capture::Failure::None;
+        return true;
+    }
+    if(character)Note("Character shadow comparison: full game client at native pixel resolution. Matched authored-clip modes. Two displayed samples per condition. No resource readback.");
+    else Note("build=R217 restore=%s steps=%u PNG=display_referred_not_raw_HDR\nFor stationary suites keep camera still; motion traces require walking. F9 cancels. Focus loss cancels. No GPU waits.\nUnavailable shader variants are explicitly skipped. Hit coordinates and legacy unclipped visibility use reference rays. Default spot signal/IDs retain authored clipping and corrected selection.\nFull suite GPU capture uses BOTH; motion uses DEFAULT; Native Blend trace keeps the selected rendering configuration. Legacy blocker diagnostics may use RR-off modes. MAP PROBE diffuse-before RGB is encoded visibility/complement/ID, not radiance. Context records identify sampled light geometry, not a persistent engine object. Composition pairs contain matching pixel/light/visibility and diffuse/specular before and after the direct-light pass, before tone mapping.",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    Trace("capture_suite_start build=R217 restore=%s steps=%u",ModeName(restore),character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    Note("capture_kind=%s requested_samples=%u",character?"character_shadows":preserveSettings?"native_blend_rays":blocker?"stationary_shadow_blocker":motion?"motion_light_context":"stationary_suite",
+        character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count);
+    if(blocker)Trace("blocker_trace_start mode=%s settle_ms=%llu reference_rays=full_length",ModeName(focusedBlockerStep.mode),capture_plan::blockerSettleMs);
+    if(motion)Trace("transition_trace_start samples=%u mode=%s",capture_plan::transitionSamples,ModeName(kDefaultMode));
+    if(motion)Note("Walk through the affected area and back for about 25 seconds. Normal lighting remains enabled. No screenshots or mode cycling. Selected light records use the corrected default; diagnostic hit rays remain unclipped reference rays. F9 cancels.");
+    if(blocker)Note("Hold the same camera position. Five-second settle, one GPU batch and three PNGs. Native Blend capture preserves RR and all selected settings. Legacy MAP PROBE replaces diffuse RGB with diagnostic values; other captures use accepted corrected rendering. Hit rays are full-length reference rays; offline analysis compares them against the authored clipping plane. Geometry IDs are scoped to this capture, not asset names.");
+    if(preserveSettings)Note("eligibility_probes=mask1_opaque,mask255_opaque native_misses_only=1 inline_queries=1 displayed_lighting_unchanged=1 raw_shadow=gameplay_pre_filter raw_shadow_bytes=32 native_pcf_center=1");
+    Note("preserve_settings=%u rr_requested=%u spec_choice=%u rt_effects=0x%X hit_distance=%u",unsigned(preserveSettings),unsigned(savedRR),savedSamples,savedEffects,unsigned(savedDistance));
+    lastFailure=native_blend_capture::Failure::None;
+    Note("map_guard=%u composition=%s",unsigned(NativeBlendMapGuard(captureMode)),ModeName(captureMode));
+    Note("shadow_ray_target=%s",UsesNativeBlendProjection(captureMode)?"projection_cone_apex":"emitter");
+    Note("camera_mode=%d camera_generation=%llu camera_hook=%u time_scale_modified=0 player_teleported=0",
+        savedCameraMode,static_cast<unsigned long long>(savedCameraGeneration),unsigned(free_camera::installed.load()));
+    Trace("capture_camera mode=%d generation=%llu",savedCameraMode,static_cast<unsigned long long>(savedCameraGeneration));
+    ReportRRPaths("f9_start");return true;
+}
+inline void Tick(HWND game,uint64_t now) noexcept {
+    if(!active)return;
+    if(GetForegroundWindow()!=game || IsIconic(game)){Finish(game,"focus_lost");return;}
+    if(preserveSettings && (free_camera::commands.Pending() || free_camera::commands.Generation()!=savedCameraGeneration)) {
+        Finish(game,"camera_mode_changed");return;
+    }
+    if(preserveSettings&&LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(preservedSelection)){Finish(game,"selection_changed");return;}
+    if(character && control_rr::RRUserModeValue()!=characterSavedRR){Finish(game,"rr_mode_changed");return;}
+    if(preserveSettings&&!native_blend_capture::SettingsMatch(control_rr::RRUserRequested(),savedRR,
+        specularSampleChoice.load(),savedSamples,control_rr_diagnostic::lastEffects.load(),savedEffects,
+        rr_compact_distance::enabled.load(),savedDistance)){Finish(game,"settings_changed");return;}
+    if(character){
+        static constexpr const wchar_t* names[]={L"baseline",L"gi-removed-diagnostic",L"gi-stabilized",L"contact-filtered",L"gi-and-contact-filtered",L"baseline-repeat"};
+        if(step>=6){Finish(game,failures?"incomplete":"complete");return;}
+        static constexpr unsigned phases[]={10,10,10,10,10,10};
+        const unsigned phase=phases[step];
+        if(!entered){
+            const unsigned sourcePhase=step+1;
+            sourceStart=rt_surface_source::Read(sourcePhase);
+            rt_surface_source::request.store(sourcePhase,std::memory_order_release);
+            characterRRSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
+            initialBinds=character_surface::binds[phase].load();initialApplied=character_surface::applied[phase].load();
+            for(unsigned g=0;g<3;++g){initialGroupBinds[g]=character_surface::groupBinds[g][phase].load();initialGroupApplied[g]=character_surface::groupApplied[g][phase].load();}
+            initialTemporalApplied=volume_temporal::applied.load();
+            character_surface::phase.store(phase);began=now;firstPresent=presentCount.load();imageIndex=0;entered=true;
+            nextImage=now+5000;
+        }
+        if(characterSavedRR==control_rr::RRUserMode::Full && control_rr::rrUserStatus.load()==control_rr::RRUserStatus::Stopped){
+            ++failures;Finish(game,"rr_runtime_stopped_restart_required");return;
+        }
+        if(now-began>15000){++failures;Finish(game,characterRRWasSelected && !control_rr_diagnostic::lastSelected.load()?"rr_selection_timeout":"present_timeout");return;}
+        if(now<nextImage || presentCount.load()-firstPresent<2)return;
+        if(step==0 && !imageIndex)characterRRWasSelected=characterSavedRR==control_rr::RRUserMode::Full && control_rr_diagnostic::lastSelected.load();
+        if(step>0 && characterRRWasSelected && !control_rr_diagnostic::lastSelected.load())return;
+        const auto rrSuccess=control_rr_diagnostic::counters.Snapshot()[size_t(control_rr_diagnostic::Event::RRSuccess)];
+        Note("step=%u sample=%u rr_mode=%u rr_selected=%u rr_status=%u rr_success_delta=%llu clamp_effective=%u",step,imageIndex,unsigned(control_rr::RRUserModeValue()),unsigned(control_rr_diagnostic::lastSelected.load()),unsigned(control_rr::rrUserStatus.load()),rrSuccess-characterRRSuccess,control_rr_clamp::effective.load());
+        characterRRSuccess=rrSuccess;
+        if(imageIndex==0){
+            auto delta=rt_surface_source::Read(step+1);
+            for(unsigned i=0;i<rt_surface_source::count;++i){
+                delta[i]-=sourceStart[i];Note("step=%u source=%s recorded=%llu",step,rt_surface_source::names[i],delta[i]);
+            }
+            Note("step=%u rt_effects=0x%X gi_requested=%s source_override=%u",step,control_rr_diagnostic::lastEffects.load(),control_rr_gi::StageName(control_rr_gi::stageMode.load()),step+1);
+            if(!rt_surface_source::Covered(step+1,delta)){
+                Note("step=%u source_coverage_missing=1 images_skipped=1",step);
+                ++failures;++step;entered=false;return;
+            }
+        }
+        const auto currentBinds=character_surface::binds[phase].load()-initialBinds;
+        const auto currentApplied=character_surface::applied[phase].load()-initialApplied;
+        bool wholeCharacter=true;
+        for(unsigned g=0;g<3;++g){
+            const auto b=character_surface::groupBinds[g][phase].load()-initialGroupBinds[g];
+            const auto a=character_surface::groupApplied[g][phase].load()-initialGroupApplied[g];
+            if(imageIndex==0)Note("step=%u group=%s recorded_binds=%llu replacement_binds=%llu",step,g==0?"skin":g==1?"cloth":"hair",b,a);
+            if(!b || (phase>=4 && !a))wholeCharacter=false;
+        }
+        if(phase>=4 && volume_temporal::applied.load()==initialTemporalApplied){
+            Note("near_history_missing=1 matched=%u ready=%u",volume_temporal::matched.load(),volume_temporal::ready.load());
+            ++failures;Finish(game,"near_history_not_active");return;
+        }
+        if(!wholeCharacter || !character_surface::ready.load() || !currentBinds || (phase>=4 && !currentApplied)){
+            Note("step=%u preflight_failed=1 matched=%u ready=%u binds=%llu applied=%llu screenshots_skipped=1",step,character_surface::matched.load(),character_surface::ready.load(),currentBinds,currentApplied);
+            ++failures;Finish(game,"shader_not_active");
+            MessageBoxW(game,L"Skin, clothing or hair coverage is missing. No comparison images were taken for this phase. A small shader report was packaged instead; send that ZIP.",L"TEST JESSE: shader report saved",MB_OK);
+            return;
+        }
+        wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.jpg",folder,step,names[step],imageIndex);
+        const auto hr=screenshots::Save(game,path,true);
+        Note("step=%u sample=%u present=%llu hr=0x%08lX",step,imageIndex,presentCount.load(),static_cast<unsigned long>(hr));
+        if(FAILED(hr)){++failures;Finish(game,"screenshot_failed");return;}
+        firstPresent=presentCount.load();nextImage=GetTickCount64()+250;
+        if(++imageIndex==2){
+            const auto binds=character_surface::binds[phase].load()-initialBinds;
+            const auto applied=character_surface::applied[phase].load()-initialApplied;
+            Note("step=%u matched_psos=%u ready_psos=%u recorded_binds=%llu replacement_binds=%llu",step,character_surface::matched.load(),character_surface::ready.load(),binds,applied);
+            if(!binds || (phase>=4 && !applied))++failures;
+            ++step;entered=false;
+        }
+        return;
+    }
+    if(volume){
+        static constexpr const wchar_t* names[]={L"native",L"fog-isolation",L"owned-scattering",L"native-repeat"};
+        if(step>=4){Finish(game,failures?"incomplete":"complete");return;}
+        const unsigned phase=step+1;
+        if(!entered){
+            initialBinds=volume_test::binds[phase].load();
+            initialApplied=volume_test::applied[phase].load();
+            volume_test::phase.store(phase);
+            began=now;firstPresent=presentCount.load();imageIndex=0;entered=true;
+            nextImage=now+(step==0?5000:2500);
+        }
+        if(now-began>15000){++failures;Finish(game,"present_timeout");return;}
+        if(now<nextImage || presentCount.load()-firstPresent<2)return;
+        wchar_t path[MAX_PATH]{};
+        swprintf_s(path,L"%s\\%02u-%s-%u.jpg",folder,step,names[step],imageIndex);
+        const auto hr=screenshots::Save(game,path,true);
+        Note("step=%u sample=%u present=%llu hr=0x%08lX",step,imageIndex,presentCount.load(),static_cast<unsigned long>(hr));
+        if(FAILED(hr)){++failures;Finish(game,"screenshot_failed");return;}
+        firstPresent=presentCount.load();nextImage=GetTickCount64()+250;
+        if(++imageIndex==2){
+            const auto binds=volume_test::binds[phase].load()-initialBinds;
+            const auto applied=volume_test::applied[phase].load()-initialApplied;
+            Note("step=%u matched_psos=%u ready_psos=%u recorded_binds=%llu replacement_binds=%llu",step,
+                 volume_test::matched.load(),volume_test::ready.load(),binds,applied);
+            if(!binds || ((phase==2 || phase==3) && !applied))++failures;
+            ++step;entered=false;
+        }
+        return;
+    }
+    rt_spot_capture_runtime::Poll();
+    if(motion && !traceStarted)traceStarted=now;
+    if(motion && now-traceStarted>=capture_plan::transitionTimeoutMs){++failures;Finish(game,"trace_timeout");return;}
+    const auto count=character?capture_plan::characterCount:blocker?1u:motion?capture_plan::transitionSamples:capture_plan::count;
+    if(step>=count){Finish(game,"complete");return;}
+    const unsigned imageCount=character?2u:capture_plan::imagesPerStep;
+    const auto& current=character?capture_plan::characterSteps[step]:blocker?focusedBlockerStep:motion?capture_plan::transitionStep:capture_plan::steps[step];
+    if(!entered){
+        if(motion && step>0 && LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(selectedState)){
+            ++failures;Finish(game,"selection_changed");return;
+        }
+        if(!preserveSettings && (!motion||step==0) && !SelectMode(current.mode)){
+            Note("step=%u mode=%s skipped=unavailable",step,ModeName(current.mode));++failures;
+            if(motion)Finish(game,"default_unavailable");else ++step;
+            return;
+        }
+        selectedState=selection.Read();began=now;firstPresent=presentCount.load();imageIndex=0;nextImage=0;entered=true;gpuAccepted=false;
+        Note("step=%u mode=%s start_ms=%llu present=%llu gpu_requested=%u",step,ModeName(current.mode),now,firstPresent,unsigned(gpuAccepted));
+        Trace("capture_suite_step index=%u mode=%s",step,ModeName(current.mode));return;
+    }
+    if(LiveSelection::Sequence(selection.Read())!=LiveSelection::Sequence(selectedState)){Finish(game,"selection_changed");return;}
+    const auto elapsed=now-began;
+    const auto observed=LiveSelection::Observed(selection.Read());
+    // Native has no replacement hook; count presents instead of claiming a GPU binding.
+    const bool bound=capture_plan::Applied(current.mode,observed,control_rr_diagnostic::lastSelected.load());
+    const auto frames=presentCount.load()-firstPresent;
+    const bool settled=blocker?capture_plan::BlockerSettled(elapsed,frames,bound):motion?capture_plan::TransitionSettled(elapsed,frames,bound,now-lastRequest,lastRequest==0):
+        capture_plan::Settled(elapsed,frames,bound);
+    if(current.gpu && settled && !gpuAccepted) {
+        const auto requestPresent=presentCount.load();
+        gpuAccepted=rt_spot_capture_runtime::RequestFresh(preserveSettings);
+        if(gpuAccepted && motion){lastRequest=now;
+            Trace("transition_sample_requested sample=%u mode=%s seq=%llu present=%llu",step,ModeName(current.mode),LiveSelection::Sequence(selectedState),requestPresent);
+            Note("motion_sample=%u request_ms=%llu",step,now);
+        }
+    }
+    if((motion||blocker) && rt_spot_capture_runtime::phase.load()==rt_spot_capture_runtime::Phase::Failed){++failures;Finish(game,"gpu_capture_failed");return;}
+    if(!motion && settled && now>=nextImage && imageIndex<imageCount){
+        wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\%02u-%s-%u.png",folder,step,current.name,imageIndex);
+        const HRESULT hr=screenshots::Save(game,path);
+        Note("image step=%u sample=%u ms=%llu present=%llu hr=0x%08lX rr=%u effects=0x%X",step,imageIndex,now,presentCount.load(),static_cast<unsigned long>(hr),unsigned(control_rr_diagnostic::lastSelected.load()),control_rr_diagnostic::lastEffects.load());
+        if(FAILED(hr))++failures;++imageIndex;nextImage=GetTickCount64()+capture_plan::burstIntervalMs;
+    }
+    const bool gpuDone=!current.gpu || (gpuAccepted && rt_spot_capture_runtime::Exported());
+    if(((motion||imageIndex==imageCount) && gpuDone) || elapsed>=capture_plan::timeoutMs){
+        if((!motion&&imageIndex<imageCount) || !gpuDone){++failures;Note("step=%u timeout=1 images=%u gpu_exported=%u",step,imageIndex,unsigned(gpuDone));}
+        Note("step=%u end_ms=%llu gpu_exported=%u",step,now,unsigned(current.gpu && gpuDone));
+        ++step;entered=false;
+    }
+}
+}
+

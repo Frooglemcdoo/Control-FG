@@ -1,0 +1,63 @@
+dcl_global_flags raw:
+dcl_constant_buffer raw:0x308e46,0x0,0x0,0x0,0x37,0x0
+dcl_constant_buffer raw:0x308e46,0x1,0x1,0x1,0x1,0x0
+dcl_constant_buffer raw:0x308e46,0x2,0x2,0x2,0x50,0x0
+dcl_resource_structured raw:0x307e46,0x0,0x0,0x0,0x40,0x0
+dcl_resource_structured raw:0x307e46,0x1,0x1,0x1,0x10,0x0
+dcl_resource_structured raw:0x307e46,0x2,0x2,0x2,0x150,0x0
+dcl_input raw:0x1010f2,0x0
+dcl_input raw:0x101032,0x3
+dcl_input raw:0x101032,0x4
+dcl_input raw:0x101032,0x5
+dcl_output raw:0x1020f2,0x0
+dcl_output raw:0x102032,0x1
+dcl_output raw:0x1020c2,0x1
+dcl_output raw:0x102032,0x2
+dcl_output_siv raw:0x1020f2,0x3,0x1
+dcl_temps raw:0x4
+itof r[0].xy, v[3].xyxx
+mul o[1].xy, r[0].xyxx, l(0.000244200259,0.000244200259,0,0)
+ld_structured r[0].xy, v[5].x, l(32), t[0][0].xyxx
+utof r[0].x, r[0].x
+mad r[0].x, v[4].x, l(255), r[0].x
+mul r[0].z, r[0].x, l(32)
+ge r[0].z, r[0].z, -r[0].z
+movc r[0].zw, r[0].zzzz, l(0,0,32,0.03125), l(0,0,-32,-0.03125)
+mul r[0].x, r[0].w, r[0].x
+frc r[0].x, r[0].x
+mul r[0].x, r[0].x, r[0].z
+ftou r[0].x, r[0].x
+ld_structured r[0].zw, cb[1][1][0].x, l(296), t[2][2].xxxy
+ld_structured r[1].x, cb[1][1][0].x, l(316), t[2][2].xxxx
+mul r[1].yzw, r[1].xxxx, cb[2][2][r[0].x].xxyz
+and r[0].x, r[0].y, l(15)
+mul r[2].xyz, r[1].xxxx, cb[2][2][64+r[0].x].xyzx
+add r[0].x, -r[0].w, v[0].y
+mul r[0].xyw, r[0].xxxx, r[2].xyxz
+mul r[0].xyz, r[0].zzzz, r[0].xywx
+mad r[0].xyz, r[1].yzwy, v[4].yyyy, r[0].xyzx
+add r[0].xyz, r[0].xyzx, v[0].xyzx
+imul null, r[1].x, v[5].x, l(3)
+ld_structured r[1].xyzw, r[1].x, l(0), t[1][1].xyzw
+imad r[2].xy, v[5].xxxx, l(3,3,0,0), l(1,2,0,0)
+ld_structured r[3].xyzw, r[2].x, l(0), t[1][1].xyzw
+ld_structured r[2].xyzw, r[2].y, l(0), t[1][1].xyzw
+mov r[0].w, v[0].w
+dp4 r[1].x, r[1].xyzw, r[0].xyzw
+dp4 r[1].y, r[3].xyzw, r[0].xyzw
+dp4 r[1].z, r[2].xyzw, r[0].xyzw
+mul r[0].xyz, r[1].yyyy, cb[0][0][7].xyzx
+mad r[0].xyz, cb[0][0][6].xyzx, r[1].xxxx, r[0].xyzx
+mad r[0].xyz, cb[0][0][8].xyzx, r[1].zzzz, r[0].xyzx
+add r[0].xyz, r[0].xyzx, cb[0][0][9].xyzx
+add o[0].xyz, r[0].xyzx, -cb[0][0][54].xyzx
+dp3 r[0].x, r[1].xyzx, r[1].xyzx
+sqrt o[0].w, r[0].x
+mul r[0].xyzw, r[1].yyyy, cb[0][0][11].xyzw
+mad r[0].xyzw, cb[0][0][10].xyzw, r[1].xxxx, r[0].xyzw
+mad r[0].xyzw, cb[0][0][12].xyzw, r[1].zzzz, r[0].xyzw
+mad r[0].xyzw, cb[0][0][13].xyzw, v[0].wwww, r[0].xyzw
+mov o[1].zw, r[0].zzzw
+mov o[3].xyzw, r[0].xyzw
+mov o[2].xy, v[5].xyxx
+ret 

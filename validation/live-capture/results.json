@@ -1,0 +1,14 @@
+{
+  "status": "LOCAL_EXPORT_PASS_WINDOWS_REQUIRED",
+  "results": {
+    "normal": "PASS: actual live exporter writes active rows without padding; handles map failure, unmaps mapped resources, never overwrites completed capture",
+    "asan_ubsan": "PASS: actual live exporter writes active rows without padding; handles map failure, unmaps mapped resources, never overwrites completed capture"
+  },
+  "sha256": {
+    "src/rr_live_capture.h": "33f2d640d2a880caf33be4734cd827c01839fa01f8f5f6617349165c16b37a55",
+    "Collect-LiveGuides.ps1": "406816eb0b8f7fac7ba81b950486c3fd1fa67e1f96619556ede6daa2c3e8aca9",
+    "tools/analyze-live-capture.py": "8c20badf5cce7738648ca21528fe9e27bf34f35e68f09921c82d4a9b453eac02",
+    "validation/live-capture/export-test.cpp": "c6b36a78031109d222c6e4ae34f40c31323400c85050d526eb8ce1394cab0efc"
+  },
+  "limits": "Win32 exporter uses POSIX file shim; no GPU or PowerShell runtime validation on this host."
+}

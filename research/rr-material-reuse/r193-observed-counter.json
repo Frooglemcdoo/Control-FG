@@ -1,0 +1,25 @@
+{
+  "cpu_provider_only": true,
+  "gpu_consumption_verified": false,
+  "rows": 1024,
+  "invalid_rows": 0,
+  "camera_cut_rows": 0,
+  "segments": [
+    {
+      "current_values_available": true,
+      "current_increments_by_one": true,
+      "frames": 1024,
+      "first_frame": 7814,
+      "last_frame": 8837,
+      "distinct_values": 4,
+      "minimum": 0,
+      "maximum": 3,
+      "sufficient_window": true,
+      "observed_period_up_to_64": 4,
+      "all_increment_by_one": false,
+      "repeated_adjacent_values": 0
+    }
+  ],
+  "sufficient_window": true,
+  "note": "Period is observed within this window, not proof of perpetual behavior. Gaps, cuts and invalid reads split windows."
+}

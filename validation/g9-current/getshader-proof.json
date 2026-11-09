@@ -1,0 +1,31 @@
+{
+  "schema": "ControlFG.RRNativeG9.GetShaderProof.v1",
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "renderer_expected_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "getShader_rva": "0x1DD3F0",
+  "file_offset": "0x1dc7f0",
+  "first_84_bytes_hex": "448b51044533c08b4108440bd28b9140020000f7d04423d083ea0178304c8b9938020000428d0402d1f84863c84c69c9a80000004d03cb453b510473058d50ffeb06760c448d4001443bc27ed733c0c3498bc1c3",
+  "semantic_formula": "effective_key = (technique_or | requested_key) & ~technique_clear; binary search compares effective_key with Shader+0x4",
+  "foliage_example": {
+    "requested": "0x02000022",
+    "or": "0x02000000",
+    "clear": "0x0000003C",
+    "effective": "0x02000002",
+    "g8_actual": "0x02000002"
+  },
+  "hair_example": {
+    "requested": "0x42000002",
+    "or": "0x02000000",
+    "clear": "0x0000000F",
+    "effective": "0x42000000",
+    "g8_actual": "0x42000000"
+  },
+  "eye_example": {
+    "requested": "0x42000002",
+    "or": "0x02000000",
+    "clear": "0x00000000",
+    "effective": "0x42000002",
+    "g8_lookup": "not found"
+  },
+  "status": "PASS"
+}

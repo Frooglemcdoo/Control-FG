@@ -1,0 +1,28 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "version": "1.0.0-RR-Native-G12-r20r",
+  "checks": [
+    "identity",
+    "modes",
+    "partial-no-registered-true",
+    "partial-option-mirror",
+    "partial-native-feature-off",
+    "partial-filter",
+    "partial-gi",
+    "partial-evaluation",
+    "full-evaluation-still-present",
+    "preset-restart-gate",
+    "preset-create-confirmation",
+    "preset-options",
+    "overlay-visible",
+    "partial-sharpness-available",
+    "frozen-files",
+    "braces-rr_user_control.h",
+    "braces-rr_native_frame.h",
+    "braces-rr_evaluation_entry.h",
+    "braces-fg_overlay.h",
+    "braces-rr_native_preset.h",
+    "braces-rr_options_r20p.h"
+  ],
+  "count": 21
+}

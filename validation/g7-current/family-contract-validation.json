@@ -1,0 +1,16 @@
+{
+  "schema": "ControlFG.RRNativeG7.Validation.v1",
+  "phase": "NativeG7MaterialFamilyContractAudit",
+  "status": "PASS_LOCAL",
+  "checks": {
+    "unsupported_family_stays_rejected": true,
+    "technique_contract_audit": true,
+    "original_shader_lookup_and_match": true,
+    "predicted_albedo_key_and_lookup": true,
+    "replacement_key_match": true,
+    "replacement_stage_layout": true,
+    "ordinary_cpp_fixture": true,
+    "asan_ubsan_fixture": true
+  },
+  "runtime_claim": "Windows/MSVC and native GPU runtime pending"
+}

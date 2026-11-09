@@ -1,0 +1,23 @@
+name: Audit centered spotlight rays
+on:
+  push:
+    branches: [experiment/native-hit-capture-r118]
+    paths: ['.github/workflows/audit-centered-rays.yml']
+jobs:
+  audit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $bytes=[Convert]::FromBase64String((Get-Content assets/rt-spot-authored-clip/rt_spot_authored_clip.dxil.b64 -Raw))
+          [IO.File]::WriteAllBytes("$pwd/centered-original.dxil",$bytes)
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object {$_.FullName -match '\\x64\\'} | Sort-Object FullName -Descending | Select-Object -First 1
+          if(-not $dxc){throw 'DXC unavailable'}
+          & $dxc.FullName -dumpbin centered-original.dxil | Set-Content centered-original.ll
+          if($LASTEXITCODE){throw 'Disassembly failed'}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: centered-ray-audit
+          path: centered-original.ll

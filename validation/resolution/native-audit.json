@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "dll_sha256": "cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5",
+  "checks": {
+    "0x29892": "488bcb",
+    "0x29895": "e8460b0100",
+    "0x2989b": "488bcb",
+    "0x2989e": "ff15dc3f0300",
+    "0x3a4de": "488b8b88000000",
+    "0x3a4ed": "ff5010"
+  },
+  "conclusion": "NativeTexture destructor at 3A3E0 then r::deleteMemory through 5D880 matches the exact game deletion pair; resource Release is inside the destructor.",
+  "limits": "Static exact-DLL audit. Runtime requires creation thread, completed CPU join, native Present submission and own completed GPU fence. Windows/GPU execution not performed.",
+  "tested_sha256": {
+    "validation/resolution/audit_native.py": "7df69a6710243d33e71bec65a9c33cbf8de2dad46fe129528086bad60da7b30d",
+    "validation/resolution/native-destroy-pair.asm": "681f23d3b8ce4c0ff39aba4dbfabc445ad2ddee1b32038944da4fa6aed0867b0",
+    "validation/resolution/native-destructor.asm": "3409982fd12130b07a0d4bf0c87ca9ce32804c99cdb764fc612ac82faa10abe6",
+    "src/rr_diffuse_resize.h": "18f9b609e215d569589d8786b824044106119deb13973bc5db0b55ffb280812b"
+  }
+}

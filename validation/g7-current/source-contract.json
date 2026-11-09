@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "checks": {
+    "g7_identity": true,
+    "audit_marker": true,
+    "audit_schema": true,
+    "audit_file": true,
+    "audit_bounded": true,
+    "collector_reconciles": true,
+    "rr_still_disabled": true,
+    "g5_pairing_preserved": true
+  }
+}

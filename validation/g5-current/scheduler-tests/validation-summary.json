@@ -1,0 +1,28 @@
+{
+  "suite": "actual G5 scheduler + complete albedo capture + complete HookAA",
+  "prior_identity_cases": 48,
+  "new_scheduling_cases": 32,
+  "runs": {
+    "results.txt": {
+      "passed": 80,
+      "failed": 0,
+      "sha256": "62574aa88174d8f5957a50d484b02799a0f89c40ab452eaf7f17e63e6da729e9"
+    },
+    "results-sanitized.txt": {
+      "passed": 80,
+      "failed": 0,
+      "sha256": "62574aa88174d8f5957a50d484b02799a0f89c40ab452eaf7f17e63e6da729e9"
+    }
+  },
+  "tested_sources": {
+    "rr_albedo_draw_abi.h": "c53f5279f80edb8cd31246899da2b88073a7415ea484bd3378e46c21d7303f1a",
+    "rr_albedo_capture.h": "a30e2ffd0b05f065eedcdb0255e32825f3f0680778ff540946e91651e65e36ad",
+    "rr_albedo_prepare.h": "f96c43419a8203b97479e2b73bbf063a73b18562223ac815d0357923ed9d0cab",
+    "rr_guide_render.h": "649324163bc6b6d12dcefc95957f0860d52f77e330b1d5ab9fdb5d51b34fc7d6",
+    "probe.cpp": "4637ed1b6dd9a41bee537c3753ad62b9cffb2524711e596478f016878042e066",
+    "aa_under_test.inc": "5f1a16c5b867ace48887d702203be2ce9dbaf6e86110692bd1c6adbca5220357",
+    "scheduler_under_test.inc": "760273123195fdeb741d48086c260c3c4e8b5831fdfa7fb1660720ff8e6a1a2d",
+    "capture_under_test.inc": "6ec56323668390824f867d8a94c03c3b9067478f122cda10efbf5d8d9c5e2faf"
+  },
+  "host_limits": "Native engine/D3D, FG submissions, SRW locking, thread creation and SEH are mocked. No Windows, GPU, concurrency, or production ownership/lifetime validation."
+}

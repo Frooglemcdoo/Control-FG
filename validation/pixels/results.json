@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "tests": {
+    "capture_header": "PASS Windows x64 cross-compile, C++17 -Wall -Wextra -Werror",
+    "analyzer": "PASS synthetic aligned, one-frame-old and static ambiguous images",
+    "tile_geometry": "PASS bounds and D3D12 footprint alignment 128x64 through 16384x16384",
+    "collector": "PASS full log and 48 sample/metadata files byte-identical in ZIP",
+    "powershell_parse": "PASS all root scripts",
+    "rr_unchanged": 79,
+    "overlay_unchanged": true,
+    "fg_policy_unchanged": true
+  },
+  "windows_msvc_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN",
+  "changed_source_files": [
+    "src/hdr10_bridge.h",
+    "src/fg_ui_recomposition.h",
+    "src/fg_pixel_capture.h",
+    "src/probe.cpp"
+  ]
+}

@@ -1,0 +1,77 @@
+{
+  "runtime_changed": false,
+  "rr_evaluated": false,
+  "limitations": [
+    "Two jittered frames: difference includes sampling and subpixel scene changes.",
+    "No SPEC16 reference; reduced high frequencies do not establish quality.",
+    "Primary guides cannot protect reflection detail inside one surface.",
+    "Captured specular is downstream of existing filtering; pre-clamp behavior is untested.",
+    "No GPU performance measurement."
+  ],
+  "scenes": {
+    "painting": {
+      "roi_xyxy": [
+        1200,
+        600,
+        1460,
+        800
+      ],
+      "metadata_sha256": {
+        "rr-input-c1-13980-7909": "e9385cc758b6013f68ea6e4b1815c8f977a4897a5c2890b88cc2931186daf026",
+        "rr-input-c1-13980-7910": "2110615c9d4c72259b38103c1a9e5627ad370cf3abb79ee893a0d129d09b2767"
+      },
+      "original": {
+        "mean": 0.00022995008622407912,
+        "high_frequency_rms_over_mean": 0.8154375502103546,
+        "frame_difference_rms_over_mean": 1.2016834948727058,
+        "peak_over_mean": 11.822405133542025
+      },
+      "candidates": {
+        "1": {
+          "mean": 0.0002299500862240791,
+          "high_frequency_rms_over_mean": 0.27487985408889154,
+          "frame_difference_rms_over_mean": 0.49065982083143783,
+          "peak_over_mean": 4.439872786833663
+        },
+        "2": {
+          "mean": 0.00022995008622407912,
+          "high_frequency_rms_over_mean": 0.22803516815193012,
+          "frame_difference_rms_over_mean": 0.41350144660001004,
+          "peak_over_mean": 4.903780193782527
+        }
+      }
+    },
+    "elevator": {
+      "roi_xyxy": [
+        900,
+        650,
+        1300,
+        790
+      ],
+      "metadata_sha256": {
+        "rr-input-c1-13980-11652": "564e3cb4e4619d82a961f801d4a7f46892d9c2ce2ba79af24e0a334bd8df1643",
+        "rr-input-c1-13980-11653": "df57d20e9e5cf571f1662f5871e0a8c21a7a5566dc97cfdca673dfa4ebb5c288"
+      },
+      "original": {
+        "mean": 0.001533769921851584,
+        "high_frequency_rms_over_mean": 2.235318315229718,
+        "frame_difference_rms_over_mean": 3.3613808222964505,
+        "peak_over_mean": 85.2210908795522
+      },
+      "candidates": {
+        "1": {
+          "mean": 0.0015337699218515837,
+          "high_frequency_rms_over_mean": 0.6745353708325479,
+          "frame_difference_rms_over_mean": 1.2603090615549104,
+          "peak_over_mean": 29.191892077720208
+        },
+        "2": {
+          "mean": 0.0015337699218515837,
+          "high_frequency_rms_over_mean": 0.4902194152722726,
+          "frame_difference_rms_over_mean": 0.9669833678417914,
+          "peak_over_mean": 32.21468768622712
+        }
+      }
+    }
+  }
+}

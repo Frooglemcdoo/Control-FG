@@ -1,0 +1,17 @@
+{
+  "checks": [
+    "compare_tls",
+    "set_tls",
+    "clip_matrix_upload",
+    "clip_depth_upload_and_mirror",
+    "inv_output_upload_and_mirror",
+    "whole_provider_set",
+    "provider_arena_allocation",
+    "reflection_thread_view",
+    "thread_view_upload",
+    "clip_provider_name",
+    "world_provider_name"
+  ],
+  "status": "PASS",
+  "scope": "Static DLL evidence only; no runtime authentication or GPU validation"
+}

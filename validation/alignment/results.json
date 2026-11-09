@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "tests": {
+    "provenance_unit": "PASS g++ C++17 -Wall -Wextra -Werror; ASan/UBSan with leak detection disabled because host ptrace prevents LSan",
+    "analyzer": "PASS aligned, one-frame-old, prior-epoch, and evicted-resource samples",
+    "powershell_parse": "PASS all root scripts",
+    "rr_unchanged": 79,
+    "overlay_unchanged": true,
+    "collector": "PASS complete 1.35 MB synthetic log copied byte-for-byte into ZIP",
+    "powershell_source_gate": "PASS Verify-Source.ps1 on PowerShell Linux",
+    "evidence_hashes": "PASS 874 hashes checked"
+  },
+  "windows_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN",
+  "changed_source_files": [
+    "src/hdr10_bridge.h",
+    "src/fg_alignment_trace.h",
+    "src/fg_ui_recomposition.h",
+    "src/streamline_bridge.h",
+    "src/probe.cpp",
+    "src/streamline_frame.h"
+  ]
+}

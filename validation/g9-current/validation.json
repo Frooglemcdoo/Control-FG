@@ -1,0 +1,27 @@
+{
+  "schema": "ControlFG.RRNativeG9.Validation.v1",
+  "phase": "NativeG9CanonicalKeyReplayTimingAudit",
+  "tests": {
+    "canonical_key_foliage": "PASS",
+    "canonical_key_hair": "PASS",
+    "canonical_key_eye": "PASS",
+    "g8_standard_material_regression": "PASS",
+    "g8_character_regression": "PASS",
+    "g8_cloth_regression": "PASS",
+    "foliage_still_rejected": "PASS",
+    "hair_still_rejected": "PASS",
+    "eye_still_rejected": "PASS",
+    "draw_range_family_attribution": "PASS",
+    "asan_ubsan": "PASS",
+    "renderer_getshader_static_proof": "PASS",
+    "frozen_production_hashes": "11/11 PASS"
+  },
+  "g8_runtime_blocker": "max_replay_cpu_ms=1377.075; Streamline long-frame warning",
+  "limitations": [
+    "Windows/MSVC compile pending",
+    "native gameplay/runtime pending",
+    "RR evaluation disabled",
+    "denoiser bypass disabled",
+    "no new material family admitted"
+  ]
+}

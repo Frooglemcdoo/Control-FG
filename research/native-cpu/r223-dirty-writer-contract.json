@@ -1,0 +1,57 @@
+{
+  "purpose": "Attribution only; preserve every native dirty store",
+  "base": "R222 with append hooks bypassed",
+  "direct_stores": [
+    {
+      "rva": "0xc481c",
+      "bytes": "41c6861801000001",
+      "instruction": "mov byte ptr [r14 + 0x118], 1"
+    },
+    {
+      "rva": "0xc4da5",
+      "bytes": "c6861801000001",
+      "instruction": "mov byte ptr [rsi + 0x118], 1"
+    },
+    {
+      "rva": "0xc4f8f",
+      "bytes": "c6861801000001",
+      "instruction": "mov byte ptr [rsi + 0x118], 1"
+    },
+    {
+      "rva": "0xc7b96",
+      "bytes": "41c6871801000001",
+      "instruction": "mov byte ptr [r15 + 0x118], 1"
+    },
+    {
+      "rva": "0xc7bb0",
+      "bytes": "c6811801000001",
+      "instruction": "mov byte ptr [rcx + 0x118], 1"
+    },
+    {
+      "rva": "0xc99fe",
+      "bytes": "c6801801000001",
+      "instruction": "mov byte ptr [rax + 0x118], 1"
+    },
+    {
+      "rva": "0xc9a7d",
+      "bytes": "c6801801000001",
+      "instruction": "mov byte ptr [rax + 0x118], 1"
+    },
+    {
+      "rva": "0xc9a99",
+      "bytes": "c6801801000001",
+      "instruction": "mov byte ptr [rax + 0x118], 1"
+    }
+  ],
+  "limits": [
+    "Global across manager instances",
+    "Counts writes, not clean-to-dirty transitions",
+    "Matching-instruction scan cannot exclude aliased writes",
+    "No invalidation suppression"
+  ],
+  "stub": "pushfq; original store; lock inc [rip+counter]; popfq; ret",
+  "unwind_info_hex": "0101010001020000",
+  "counter_storage": "separate zero-initialized RW page, aligned LONG64",
+  "code_storage": "RX page; function table registered before patching",
+  "lifetime": "process lifetime including failed install and rollback"
+}

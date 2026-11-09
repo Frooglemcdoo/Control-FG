@@ -1,0 +1,16 @@
+{
+  "status": "PASS",
+  "checks": {
+    "version_identity": true,
+    "warm_repeat_marker": true,
+    "warm_summary_marker": true,
+    "range_timing_marker": true,
+    "hair_only_guard": true,
+    "second_draw_call": true,
+    "primary_timing_excludes_repeat": true,
+    "foliage_policy": true,
+    "eye_policy": true,
+    "rr_eval_disabled": true,
+    "material_policy_unchanged": true
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "src/rr_native_frame.h": [
+    [
+      "// Verified native GI filter call at renderer+0x12cd96. Never synthesize its arguments.",
+      "#include \"rr_gi_temporal_native.h\"\n// Verified native GI filter call at renderer+0x12cd96. Never synthesize its arguments."
+    ],
+    [
+      " control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIFilterEntry);\n rrNativeDiffuseFilterOriginal(color,history,passes);",
+      " control_rr_diagnostic::Record(control_rr_diagnostic::Event::GIFilterEntry);\n RRNativeRunGIFilter(color,history,passes);"
+    ],
+    [
+      " rrNativeGIKeepThisFrame=giFiltered;",
+      " rrNativeGIKeepThisFrame=giFiltered;\n rrNativeGIHistoryZeroThisFrame=giFiltered&&native_lighting::IsNativeBlend(lightingMode);"
+    ],
+    [
+      " if(!RRAlbedoPrepareCallPatch(base+0x12ba17,",
+      " if(!RRAlbedoPrepareCallPatch(base+0x15691,reinterpret_cast<void*>(rrNativeTemporalBindOriginal),reinterpret_cast<void*>(&RRNativeHookGITemporalBind),&rrNativeGITemporalBindPatch)||\n  !rrNativeGITemporalDispatchPatch.Prepare(base+0x156d3,reinterpret_cast<void**>(base+0x5dfcc0),reinterpret_cast<void*>(rrNativeDispatchOriginal),reinterpret_cast<void*>(&RRNativeHookGITemporalDispatch))||\n  !RRAlbedoPrepareCallPatch(base+0x12ba17,"
+    ],
+    [
+      " giFilter=RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true);",
+      " const bool giTemporalBind=RRAlbedoExchangeCall(&rrNativeGITemporalBindPatch,true);\n const bool giTemporalDispatch=giTemporalBind&&rrNativeGITemporalBindPatch.writeHealthy&&rrNativeGITemporalDispatchPatch.Exchange(true)&&rrNativeGITemporalDispatchPatch.healthy;\n giFilter=giTemporalDispatch&&RRAlbedoExchangeCall(&rrNativeGIFilterPatch,true);"
+    ],
+    [
+      " if(giFilter)RRAlbedoExchangeCall(&rrNativeGIFilterPatch,false);",
+      " if(rrNativeGITemporalDispatchPatch.changed)rrNativeGITemporalDispatchPatch.Exchange(false);\n if(giTemporalBind)RRAlbedoExchangeCall(&rrNativeGITemporalBindPatch,false);\n if(giFilter)RRAlbedoExchangeCall(&rrNativeGIFilterPatch,false);"
+    ]
+  ]
+}

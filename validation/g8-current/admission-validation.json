@@ -1,0 +1,22 @@
+{
+  "schema": "ControlFG.RRNativeG8.Validation.v1",
+  "phase": "NativeG8CharacterClothAdmission",
+  "tests": {
+    "standard_material_regression": "PASS",
+    "character_exact_contract": "PASS",
+    "cloth_exact_contract": "PASS",
+    "character_nearby_mismatch_rejected": "PASS",
+    "cloth_nearby_mismatch_rejected": "PASS",
+    "foliage_rejected": "PASS",
+    "eye_rejected": "PASS",
+    "hair_rejected": "PASS",
+    "asan_ubsan": "PASS",
+    "frozen_production_hashes": "11/11 PASS"
+  },
+  "limitations": [
+    "Windows/MSVC compile pending",
+    "native gameplay/runtime pending",
+    "RR evaluation disabled",
+    "denoiser bypass disabled"
+  ]
+}

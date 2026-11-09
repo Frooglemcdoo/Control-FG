@@ -1,0 +1,12 @@
+{
+  "src/rr_native_frame.h": [
+    [
+      "#include \"rr_broad_diffuse_policy.h\"",
+      "#include \"rr_broad_diffuse_policy.h\"\n#include \"rr_diffuse_source_policy.h\""
+    ],
+    [
+      "const bool preserve=native_lighting::PreservesBroadDiffuseFiltering(mode);",
+      "const bool preserve=control_rr_diffuse_source::Preserve(native_lighting::PreservesBroadDiffuseFiltering(mode));"
+    ]
+  ]
+}

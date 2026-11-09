@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.24)
+project(ControlRTSceneProbe LANGUAGES CXX)
+add_executable(Control-RT-Scene-Probe main.cpp)
+target_compile_features(Control-RT-Scene-Probe PRIVATE cxx_std_17)
+target_compile_options(Control-RT-Scene-Probe PRIVATE /W4 /WX /EHsc)
+set_property(TARGET Control-RT-Scene-Probe PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+target_link_libraries(Control-RT-Scene-Probe PRIVATE bcrypt)

@@ -1,0 +1,38 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "version": "1.0.0-RR-Native-G12-r20t",
+  "results": {
+    "normal": "PASS r20t policy: recurring RR auxiliary work only in FULL; PARTIAL/OFF excluded; E/F live switch preserved",
+    "asan_ubsan": "PASS r20t policy: recurring RR auxiliary work only in FULL; PARTIAL/OFF excluded; E/F live switch preserved"
+  },
+  "checks": {
+    "evaluation_full_gate": true,
+    "reflection_full_gate": true,
+    "diffuse_full_gate": true,
+    "runtime_fp16_guides": true,
+    "diagnostic_readbacks_disabled": true,
+    "packed_normal_roughness": true,
+    "sparse_profiler": true,
+    "skin_experiment_blocked": true,
+    "periodic_diagnostics_off": true,
+    "observer_hooks_disabled": true,
+    "live_ef_preserved": true
+  },
+  "tested_sha256": {
+    "validation/r20t-current/mode-test.cpp": "6f67fc6ef09fd9927304f7ec54b74cfe66b2dbab14b2841e355b9e2b6101ae88",
+    "src/rr_user_control.h": "83679c8261d2c22ad90b02d30cf8fc230de8842922e37304e0aa47d83540e587",
+    "src/rr_evaluation_entry.h": "7b29448aa8524718ea4aaddc1257ebc33afc7037efdd95ca43e9b77032d89b05",
+    "src/rr_reflection_hooks.h": "2a6246214db8f467cc9407d64cc16b614114a875c844fd0a2b01c4dee53fe3fd",
+    "src/rr_reflection_handoff_windows.h": "24b720a913548f2ca9dcf53f1d23249255df575de84d7e316672e8b40c30d890",
+    "src/rr_diffuse_replay.h": "357c4fe2466e6f22e6c08ee95e529b5518af27dcf2f0aff314bfe3a50796c8ad",
+    "src/rr_live_guides.h": "3e3e7ce12ad00fe9d9d1ab8ab823e6b73be0468be37da4ea8ab698d802a08f90",
+    "src/rr_distance_runtime.h": "bdd355abb8391aaca9bcf066e03cbbd198ba0fbd785a1100ee78a129735976de",
+    "src/rr_options_r20p.h": "bf6c2fbec48b9fbc4b94da448e10f67e4abb43b541f73265e6562338535dbe2e",
+    "src/rr_performance.h": "81c93b33f7a41efe6ad82e0a758d0cf363792a3757f0c91e29e706d2ec5b332b",
+    "src/fg_overlay.h": "bbc190d39272d9aeb060a736386c6931108007d6be453e04c3086c5326708768",
+    "src/probe.cpp": "862e44af865f6f4e5ed98b7d89121e9446b8097088b9fa36d788af9bf9a45212"
+  },
+  "limitations": [
+    "Portable policy/source test only; Windows/MSVC and GPU performance/resolution transitions require user validation"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "r25 HDR/SDR transition history-reset candidate. Policy test passed normal + ASan/UBSan. Runtime adds DLSS-G eOff before HDR ResizeBuffers transitions and requires one successful common-constants reset for the new color-domain generation before FG re-enable. Windows/MSVC/live game remain host sign-off.",
+  "tests": {
+    "policy_normal": "PASS HDR transition policy: every color-domain generation blocks FG until one successful reset constants submit",
+    "policy_asan_ubsan": "PASS HDR transition policy: every color-domain generation blocks FG until one successful reset constants submit"
+  },
+  "assertions": [
+    "DLSS-G is forced to eOff before SDR->HDR and HDR->SDR ResizeBuffers/ResizeBuffers1 transitions",
+    "HDR bridge publishes a monotonically increasing color-domain transition generation",
+    "common constants force reset=true on the first valid frame of each new generation",
+    "FG re-enable remains gated until that reset constants submit succeeds",
+    "r24 compute-only HDR HUDless conversion and RR/SDR paths remain unchanged"
+  ],
+  "tested_sha256": {
+    "src/fg_hdr_transition_policy.h": "16837fa88ef4fc5e8214dd2b3bc264765c58367e54da294b382d92885b71d57e",
+    "validation/r25-hdr-transition/policy-test.cpp": "6d9aa5085a192782999873a10a56a859d4b9812bfdfd8b3a52aad9785db1e807",
+    "src/streamline_bridge.h": "2aab41326a4045bf91eace5b477e2665ffabde55bf92f76cbc8adb3d7a5e341c",
+    "src/hdr10_bridge.h": "738861fadcd56d9acbba1776ba691c20683a026b6bafc1392cd2aacc3534c2d2",
+    "src/streamline_frame.h": "b13757b7c4d1a8690477200ad065cfa148245c62909aa5cacdc976948a4e6dba",
+    "src/probe.cpp": "9c08a3c590beed1a0cf45269420039129c187a501c5a4ff220e98463598f9248",
+    "Build-Metadata.ps1": "4014ac8891aa09bc9dec4ca148d402fda8446a475790c6772cca7e991011a924",
+    "Build.cmd": "d436d7d7c824982f6a3eb65b9349d5c7f775c3bcf22ea164dd80e6aba7269732"
+  }
+}

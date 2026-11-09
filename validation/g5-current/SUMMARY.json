@@ -1,0 +1,38 @@
+{
+  "build": "1.0.0-RR-Native-G5",
+  "current_evidence_directory": "validation/g5-current",
+  "historical_evidence": "Other validation directories refer to earlier builds, not fresh G5 runs.",
+  "g4_input": {
+    "name": "Control-FG-v1.0.0-RR-Native-G4-Logs-20260913-094641-dc83d4af.zip",
+    "bytes": 56332713,
+    "sha256": "11a6ea51a253fdd62baf68c15df4936727899560aadc3e30e343fd2bd33826a7"
+  },
+  "g4_result": {
+    "material_frame": 1754,
+    "base_export_frame": 1755,
+    "replayed_batches": 468,
+    "ranges": 4,
+    "skipped_ranges": 0,
+    "native_material_images_exported": 0,
+    "replay_wall_ms": 236.024,
+    "last_periodic_aa_calls": 4992,
+    "last_periodic_aa_failures": 0,
+    "prior_ui_crash_resolved": false
+  },
+  "fresh_g5_checks": {
+    "runtime_delta_checks": 8,
+    "unchanged_frozen_files": 11,
+    "actual_code_host_cases_normal": 80,
+    "actual_code_host_cases_asan_ubsan": 80,
+    "shared_contract_cases": 79,
+    "windows_target_object_compilations": 4
+  },
+  "limits": [
+    "G5 has not been built with MSVC or linked on this host.",
+    "G5 has not been executed in Windows or on a GPU.",
+    "Host tests mock engine, D3D, locking, SEH and submission dependencies.",
+    "No UI-crash-resolution or every-frame performance claim.",
+    "RR evaluation, NGX guide writes and denoiser bypass remain disabled."
+  ],
+  "source_and_release_validation_passed": true
+}

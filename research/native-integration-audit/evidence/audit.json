@@ -1,0 +1,40 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "status": "static audit PASS; runtime behavior not changed",
+  "checks": [
+    "dlss:Enable DLSS RR (requires SR)",
+    "rt:Reflection Filter Pass Count",
+    "rt:DGI Filter Pass Count",
+    "temporal_feedback",
+    "evaluate_reflected_color",
+    "native RR option read",
+    "specular filter receives selected count",
+    "temporal dispatch precedes zero-pass check",
+    "dispatch import identity",
+    "zero count skips spatial loop",
+    "reflection color evaluation depends on fourth argument",
+    "position UAV texture field",
+    "position SRV texture field",
+    "temporal shader pass count unused",
+    "temporal shader reads history",
+    "temporal executable does not read pass-count component",
+    "position source is Texture2DArray t8",
+    "deferredlight_filtering_specular-001.dxbc:1656 ld",
+    "deferredlight_filtering_specular-001.dxbc:1664 mad",
+    "deferredlight_filtering_specular-001.dxbc:1674 dp3",
+    "deferredlight_filtering_specular-001.dxbc:1681 sqrt",
+    "deferredlight_filtering_specular-003.dxbc:559 sample_l",
+    "deferredlight_filtering_specular-003.dxbc:572 mad",
+    "deferredlight_filtering_specular-003.dxbc:581 mul",
+    "deferredlight_filtering_specular-003.dxbc:588 store_uav_typed"
+  ],
+  "shaders": {
+    "deferredlight_filtering_specular-000.dxbc": "96efef41f57ee3497c9415106b5edd29780591e0a1973e14e0b414d4a43d565e",
+    "deferredlight_filtering_specular-001.dxbc": "61838ef515a4f5643f5d872279aa88793971337dea8a37b6575893b4893c5e18",
+    "deferredlight_filtering_specular-002.dxbc": "1467761bc826bd6a3af678967c08372a8850720d44511b1615ccd6529bf6c160",
+    "deferredlight_filtering_specular-003.dxbc": "cc2f9a07b5666329921dbaf25cb11c7497cac9ccbaf17bac68206d133c5914c3"
+  },
+  "rr_enabled": false,
+  "native_bypass_implemented": false,
+  "hit_distance_proven": false
+}

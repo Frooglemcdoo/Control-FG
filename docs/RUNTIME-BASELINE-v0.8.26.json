@@ -1,0 +1,42 @@
+{
+  "ProbeVersion": "0.8.26",
+  "SourceRevision": "r1",
+  "Result": "PASS_DYNAMIC_MFG_HDR_LIFECYCLE",
+  "TestedUtc": "2026-09-10T16:07:38Z",
+  "GameplayProcessId": 49480,
+  "DynamicMFG": {
+    "CapabilitySupported": true,
+    "AutoDetectedTargetFPS": 143.999,
+    "AutoObservedMultipliers": [3],
+    "ManualTargetFPSObserved": 281.0,
+    "ManualObservedMultipliers": [5, 6],
+    "GeneratedStateSamples": 27,
+    "FirstDynamicFramesPresented": 3,
+    "MaxFramesPresentedObserved": 6,
+    "SimulationMarkerStarts": 16560,
+    "SimulationMarkerFailures": 0,
+    "Conclusion": "Adding PCL eSimulationStart at Control beginFrame unlocked native Dynamic MFG. Dynamic varies generated-frame count and remains functional across HDR transitions."
+  },
+  "HDR10Bridge": {
+    "Activations": 5,
+    "Deactivations": 5,
+    "DynamicGeneratedFramesObservedWhileActive": true
+  },
+  "DLSSG": {
+    "BackBufferIndexAttempts": 16560,
+    "BackBufferIndexSuccesses": 16560,
+    "BackBufferIndexFailures": 0,
+    "GeneratedSegments": 14,
+    "EnableTransitions": 15,
+    "DisableTransitions": 15,
+    "MaxFramesPresentedObserved": 6
+  },
+  "RegressionStatus": {
+    "Fixed2xThrough6x": "retained",
+    "Dynamic": "pass",
+    "HDR": "pass",
+    "LiveHDRToggle": "pass",
+    "TagFailures": 0,
+    "AAFailures": 0
+  }
+}

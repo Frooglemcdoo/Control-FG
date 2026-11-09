@@ -1,0 +1,18 @@
+{
+  "schema": "gi-local-candidate-roundtrip-v1",
+  "trace_sha256": "5d7992f6fa5ec78066314f35bc647b0565a5c42eb4e360083b5d39d8d1fd9efb",
+  "pixels": 3600,
+  "rays": 21600,
+  "all_miss_pixels": 363,
+  "expectation_max_absolute_error_vs_native": 1.477021303875059e-08,
+  "deliberate_negative_controls": {
+    "drop_miss_max_absolute_error": 0.009506683359745138,
+    "normalize_hits_by_hit_count_max_absolute_error": 0.6519264425661753
+  },
+  "limitations": [
+    "Offline same-pixel accounting prototype, not RTXDI integration.",
+    "Enumerates expectation over local candidate selection; does not measure convergence.",
+    "Preserves source-pixel weights; cannot be used at another pixel.",
+    "No temporal history, spatial reuse, game shader change, or quality/performance claim."
+  ]
+}

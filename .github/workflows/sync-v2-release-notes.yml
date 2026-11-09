@@ -1,0 +1,32 @@
+name: Prepare v2.0.0 release notes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/sync-v2-release-notes.yml'
+      - 'GITHUB_RELEASE.md'
+
+permissions:
+  contents: write
+
+jobs:
+  prepare-release:
+    if: github.repository == 'Frooglemcdoo/Control-FG'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create or update v2.0.0 draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view v2.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit v2.0.0 --repo "$GITHUB_REPOSITORY"               --title "Control FG v2.0.0 - Ray Reconstruction Update"               --notes-file GITHUB_RELEASE.md
+          else
+            gh release create v2.0.0 --repo "$GITHUB_REPOSITORY"               --target main               --title "Control FG v2.0.0 - Ray Reconstruction Update"               --notes-file GITHUB_RELEASE.md               --draft
+          fi
+          gh release view v2.0.0 --repo "$GITHUB_REPOSITORY" --json tagName,name,isDraft,body

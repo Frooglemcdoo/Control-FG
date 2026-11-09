@@ -1,0 +1,28 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_REQUIRED",
+  "results": {
+    "normal": "PASS: actual family selection, observed foliage keys, preserving existing bit, other families and draw range policy",
+    "asan_ubsan": "PASS: actual family selection, observed foliage keys, preserving existing bit, other families and draw range policy"
+  },
+  "snapshot_frame": 4051,
+  "vertex_rejected_batches": 27,
+  "unique_pairs": 1,
+  "original_and_replacement_equal": false,
+  "alternate_variant_runtime_match": "NOT_OBSERVED",
+  "rr_ready": false,
+  "sha256": {
+    "src/rr_albedo_prepare.h": "35177f012470c6ec3ddd0b49fdf66b5576c7fc5e009516b9ca990a2d806c531f",
+    "validation/foliage-variant/selection-test.cpp": "296a620824dd6b0e11d4f8c44d9ef234c9565e8605680c58c6be5a273a8fbbd1",
+    "validation/foliage-variant/run.py": "07273a7dc8752ce5e931c36ee12321c51b3b359c43346bf179febb01003e9537",
+    "validation/foliage-variant/evidence/pair-000-original_vs.txt": "44b9df24f9f7f32809e657fcb2a8f1c8c0aebab2e7bfcf3fb86543d18e822385",
+    "validation/foliage-variant/evidence/pair-000-replacement_vs.json": "3b9f74fd176f34b57d0547e0c81583a73e9a1fa09d313fa3087ba39d3fd6c3ba",
+    "validation/foliage-variant/evidence/pair-000-replacement_vs.dxbc": "6264375bdb79511a34d647af2ceb46387d601aae72f3dd05ee16ef9492b16d55",
+    "validation/foliage-variant/evidence/pair-000-original_vs.json": "b9082d7293d263613321720596087eb43d674a163e13141d535a4a64deeae4b7",
+    "validation/foliage-variant/evidence/pair-000-replacement_ps.txt": "24e6d3b3c7ced387fbbbb6642c805306cc9eeccbd75a1681a61764ed3ecd9924",
+    "validation/foliage-variant/evidence/pair-000-replacement_ps.json": "852165dfe19451babe408babf493969a631719c572547679adcc9a5dff2b8449",
+    "validation/foliage-variant/evidence/material-rejection-audit.json": "06c1e9b835109d942b9019b1e4b761c495944b4fd6cb9703bc0fd2ac989c27ab",
+    "validation/foliage-variant/evidence/pair-000-replacement_ps.dxbc": "cd3f9865a91912865a87dbae62a8e41f8a8a7e9281e6f123e90106e6aae73b0b",
+    "validation/foliage-variant/evidence/pair-000-replacement_vs.txt": "ab1b559a09544a3c4205950400d4f50b9e2d5a9ef59234dec2a51c3f7409ee3c",
+    "validation/foliage-variant/evidence/pair-000-original_vs.dxbc": "a954d6e56122c5c0008775c37371d1bf240c6349c89c3397c455df655cdc1ea1"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "r30 portable policy validation for pre-OS Win+Alt+B serialization. The physical B event is consumed only while DLSS-G is active; eOff must commit on a real Present before the Windows HDR shortcut is replayed. FG remains gated until the replayed HDR transition is observed by the fresh-output detector or HDR bridge generation, after which the existing two-fresh-frame warmup owns recovery.",
+  "tests": {
+    "policy_normal": "PASS r30 HDR hotkey guard policy: FG hold, safe replay timing, and bridge handoff",
+    "policy_asan_ubsan": "PASS r30 HDR hotkey guard policy: FG hold, safe replay timing, and bridge handoff",
+    "windows_msvc": "NOT_RUN",
+    "windows_keyboard_hook": "NOT_RUN",
+    "game_gpu": "NOT_RUN"
+  },
+  "tested_sha256": {
+    "src/fg_hdr_hotkey_policy.h": "29EC48AB81D9FCD682BE09518C2F923158011FA11EC0057CCF7DCB839B8B0165",
+    "validation/r30-hdr-hotkey-guard/policy-test.cpp": "0912D04DADB2FF76DA04B1DE617D0DCFAB0155C9D3DEB3215C381B60A869583B",
+    "src/streamline_bridge.h": "F3AA596183E6923F72D4F014BBA6155C0E4AFFC927BD8B9840E1B83DDB7FC712",
+    "src/hdr10_bridge.h": "97EAB731B4ADCA35893E22D596537B0F7820CD7CD6FF18E7BD048F48DFCA6793",
+    "src/fg_overlay.h": "1B19E66572191EF2AF629D54D6D597D0B8C85B141210C2D01CFCF43203D1E9B5",
+    "src/probe.cpp": "977EB421733597A2091B87C409ED946C179E84B25CF8E8FD53E6D03F30DA2386",
+    "Build-Metadata.ps1": "A5DC52FCDFB9685A9A27BE46AF585FD406F134682F7318D376A80AA7FAEFB908",
+    "Build.cmd": "6E373AB84F97E92BDCC059AEF4BCB7C68353F70A0998027BB2142B7EF3F89069"
+  },
+  "limitations": [
+    "Portable tests validate the state/replay policy but cannot prove WH_KEYBOARD_LL can suppress Win+Alt+B on the target Windows/Game Bar build.",
+    "MSVC compilation and live Control/Streamline execution require Windows sign-off."
+  ]
+}

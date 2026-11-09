@@ -1,0 +1,48 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "call_rva": "0xa8ded",
+  "call_bytes": "e83e99f7ff",
+  "target_rva": "0x22730",
+  "native_copy_bytes": "8d4101894708488b02498907",
+  "record_bytes": 8,
+  "array_header_bytes": 16,
+  "capacity_mask": "0x3fffffff",
+  "order": [
+    "increment size",
+    "load full 8-byte source",
+    "store 8-byte destination",
+    "return appended address"
+  ],
+  "source_alias_handling": "local uint64_t temporary preserves overlap and post-increment header-source reads",
+  "fallback": "capacity exhausted/invalid inputs/destination overlaps header",
+  "r219_64_byte_helper": "byte-identical source prefix verified",
+  "r219_runtime": "unchanged",
+  "isolated_native_fixture_sha256": "df3d871186d8b1264161426e3c5b15f916d211fc061ed58a2938790dcecc8261",
+  "isolated_test": "4096 unaligned appends matched original machine code using Windows x64 ABI on Linux host",
+  "candidate_over_original_microbenchmark_ratios": [
+    0.56,
+    0.476,
+    0.675,
+    0.639,
+    0.898,
+    0.657,
+    0.575,
+    0.868,
+    0.676,
+    0.632
+  ],
+  "microbenchmark_limit": "not Windows-game timing or an FPS guarantee",
+  "portable_and_asan_ubsan": "PASS (leak detection disabled for container /proc restriction)",
+  "windows_tests": "run by associated CI",
+  "r219_user_fps": {
+    "native": [
+      65,
+      67
+    ],
+    "fast": [
+      70,
+      73
+    ],
+    "caveat": "scene workloads differed; uncontrolled comparison"
+  }
+}

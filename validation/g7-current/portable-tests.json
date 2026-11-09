@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "compiler": "clang version 17.0.0 (https://github.com/swiftlang/llvm-project.git 10999b6d034fe318f3d56c83bddb6572593a8bb0)",
+  "selection_equivalence": {
+    "g5": "1:5:2:3:0,4,",
+    "g7": "1:5:2:3:0,4,",
+    "passed": true
+  },
+  "audit_reason_fixture": {
+    "ordinary": "PASS",
+    "asan_ubsan": "PASS"
+  },
+  "selection_fixture_sanitized": "PASS",
+  "scope": "Portable rr_albedo_prepare selection/audit logic only; native Windows/D3D/SEH paths are not executed."
+}

@@ -1,0 +1,124 @@
+{
+  "schema": "gi-writer-analysis-r305",
+  "pid": 52972,
+  "validation_errors": [],
+  "total_binding_observations": 34942,
+  "total_alpha_observations": 5559,
+  "snapshots": [
+    {
+      "serial": 1,
+      "frame": 1378,
+      "width": 2560,
+      "height": 1440,
+      "bindings": 7620,
+      "opaque": 6995,
+      "alpha": 625,
+      "materials": 415,
+      "index_strides": {
+        "2": 7620
+      },
+      "attribute_strides": {
+        "16": 4676,
+        "20": 2944
+      },
+      "zero_roots": 0,
+      "zero_bounds": 0,
+      "index_offset_outside": 0,
+      "sentinel_material": 0,
+      "root_layout_keys_with_multiple_materials": 58
+    },
+    {
+      "serial": 560,
+      "frame": 1937,
+      "width": 2560,
+      "height": 1440,
+      "bindings": 10126,
+      "opaque": 8634,
+      "alpha": 1492,
+      "materials": 763,
+      "index_strides": {
+        "2": 10126
+      },
+      "attribute_strides": {
+        "16": 7070,
+        "20": 3056
+      },
+      "zero_roots": 0,
+      "zero_bounds": 0,
+      "index_offset_outside": 0,
+      "sentinel_material": 0,
+      "root_layout_keys_with_multiple_materials": 78
+    },
+    {
+      "serial": 1317,
+      "frame": 2694,
+      "width": 2560,
+      "height": 1440,
+      "bindings": 5705,
+      "opaque": 5585,
+      "alpha": 120,
+      "materials": 505,
+      "index_strides": {
+        "2": 5705
+      },
+      "attribute_strides": {
+        "20": 555,
+        "16": 5150
+      },
+      "zero_roots": 0,
+      "zero_bounds": 0,
+      "index_offset_outside": 0,
+      "sentinel_material": 0,
+      "root_layout_keys_with_multiple_materials": 32
+    },
+    {
+      "serial": 2021,
+      "frame": 3398,
+      "width": 2560,
+      "height": 1440,
+      "bindings": 11491,
+      "opaque": 8169,
+      "alpha": 3322,
+      "materials": 608,
+      "index_strides": {
+        "2": 11488,
+        "4": 3
+      },
+      "attribute_strides": {
+        "16": 6897,
+        "20": 4594
+      },
+      "zero_roots": 0,
+      "zero_bounds": 0,
+      "index_offset_outside": 0,
+      "sentinel_material": 0,
+      "root_layout_keys_with_multiple_materials": 66
+    }
+  ],
+  "cross_snapshot_address_comparisons": [
+    {
+      "first": 1,
+      "second": 560,
+      "common_single_material_root_layout_keys": 665,
+      "changed_material": 661
+    },
+    {
+      "first": 560,
+      "second": 1317,
+      "common_single_material_root_layout_keys": 510,
+      "changed_material": 504
+    },
+    {
+      "first": 1317,
+      "second": 2021,
+      "common_single_material_root_layout_keys": 695,
+      "changed_material": 692
+    }
+  ],
+  "limits": [
+    "CPU input reconstruction, not a GPU SBT readback.",
+    "Cross-snapshot addresses do not prove allocation identity; address reuse is not excluded.",
+    "No mapping of a particular material ID to the pictured plant or hair.",
+    "No root cause for speckles established by table validity."
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "results": {
+    "metadata-test-normal": "PASS: 65536 material IDs; missing/null fields; layout; bounds; overflow; output clearing",
+    "metadata-test-asan_ubsan": "PASS: 65536 material IDs; missing/null fields; layout; bounds; overflow; output clearing",
+    "diagnostic-test-normal": "PASS: Part1 repeat/pair checks, mutation, inaccessible mapping, frame rejection",
+    "diagnostic-test-asan_ubsan": "PASS: Part1 repeat/pair checks, mutation, inaccessible mapping, frame rejection",
+    "resource-test-normal": "PASS: resource descriptor/address/pointer rejection, fault/mode gates, heap failure, log sampling",
+    "resource-test-asan_ubsan": "PASS: resource descriptor/address/pointer rejection, fault/mode gates, heap failure, log sampling",
+    "copy-policy-test-normal": "PASS: 65536 table sizes, layout gates, all 8 recording outcomes, restoration and fence gates",
+    "copy-policy-test-asan_ubsan": "PASS: 65536 table sizes, layout gates, all 8 recording outcomes, restoration and fence gates",
+    "copy-runtime-test-normal": "PASS: exact emitter, byte copy, C0/8C0 transitions, faults before/after each command, native command count",
+    "copy-runtime-test-asan_ubsan": "PASS: exact emitter, byte copy, C0/8C0 transitions, faults before/after each command, native command count",
+    "runtime-adapter-normal": "PASS: frame gating, log format, last-error preservation (host stubs)",
+    "runtime-adapter-asan_ubsan": "PASS: frame gating, log format, last-error preservation (host stubs)",
+    "export-normal": "PASS: exact exporter, raw bytes, JSON, optional omission, invalid sizes, failed-write commit suppression (POSIX shim)",
+    "export-asan_ubsan": "PASS: exact exporter, raw bytes, JSON, optional omission, invalid sizes, failed-write commit suppression (POSIX shim)"
+  },
+  "tested_sha256": {
+    "src/rr_part1_metadata.h": "1cdbcbc29f14a05a65d09f4e295e51d8c4b8d1f9c9210b7a6aa5db2afba6c3dd",
+    "src/rr_part1_diagnostic.h": "6dde5cf76b1673dbfafb4d51f7a9491613babae19b8c8a9103ec55be13c727dc",
+    "src/rr_part1_resource.h": "a5346362be9bb87e37437b41053ed2459149e9697c3b4757632aecb86dfdbbe8",
+    "src/rr_part1_readback.h": "760285fb5129aea5a00b001634cbcb08401c1ed7c8cd46873a6c9ca32c2f1f8b",
+    "src/rr_part1_copy_policy.h": "90d6c4d052a1d45bd0553edd8850ca8e7ad966773115ca17cabf53f150757c82",
+    "src/rr_albedo_capture.h": "8cdf308aeff93b10a0816ccd6be41c92c4ac32552ad9855c27ec21e785270da2",
+    "src/rr_guide_render.h": "ab871cd47fce3e846cf37ba19de430c0e844ccaa3acc2ad7c65bce1f96699833",
+    "src/rr_guide_export.h": "e4b5f586c20c6e6ad53b2e2a750c1f42345ea0cb46d9ccd155ae7c6bf828a829",
+    "validation/part1/metadata-test.cpp": "2a027de5b81a50dd5fcffcf9604d9bd0e750b3dbc47f1c4fb4db820b05c252d1",
+    "validation/part1/diagnostic-test.cpp": "5d57e687df262cd2e3ba291953415b2e47b50ad8b5b0b100c4017e21c6a57f77",
+    "validation/part1/resource-test.cpp": "a404f4012e4b0e5d9fe7fb6f256fa3d0b34d22ebce8c4cad0b2fc750aa57b15f",
+    "validation/part1/copy-policy-test.cpp": "18f6b6668c099e5b947a07e8d6e59f39dfc288b9a713f8af231f72f4bfd01a22",
+    "validation/part1/copy-runtime-test.cpp": "39a7311aa04b646d8e5c5245beb88a63395ae15b4f703344c03c39c49100e6be",
+    "validation/part1/export-test.cpp": "e07ebbb36e0cb8d7e8f209433bab4298a0806619cad4ccaf0fc134b91091736c",
+    "validation/part1/shim/windows.h": "65cf56c2f4b69f086776c09d41cbb3ae26064366316b38609d6615485a7c538f",
+    "validation/part1/run.py": "eec8152201e5c9155df740290294e1e67e0f86d6b4457258cc352181da7de7eb"
+  },
+  "windows_build": "NOT_RUN",
+  "gpu_resource_lifetime": "NOT_PROVEN",
+  "rr_evaluation_enabled": false
+}

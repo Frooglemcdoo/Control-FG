@@ -1,0 +1,8 @@
+{
+  "src/probe.cpp": [
+    [
+      "        control_native_menu::Install();\n        StartFGSettingsService();",
+      "        control_native_menu::Install();\n        Log(\"FREE_CAMERA_INSTALL ready=%u steam_only=1\",unsigned(native_lighting::free_camera::Install(exe,steamTarget)));\n        StartFGSettingsService();"
+    ]
+  ]
+}

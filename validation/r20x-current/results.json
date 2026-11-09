@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "checks": 16,
+  "tested_sha256": {
+    "src/rr_user_control.h": "3A2BE51B35624AA9AA1C805F33D70B92DC287A324D81AC37A1F38E468B0679AD",
+    "src/rr_native_frame.h": "3B1E96871115058B39F895DADCD7C13A0FA376B28D596FB77C18AADE418729C6",
+    "src/rr_native_preset.h": "AA1BE23E72218053C4E265665230B9A6602A18950A557F3A413C90EBEC7861EC",
+    "src/rr_options_r20p.h": "11FEA4F8B96BBAC0D8F0C8CED492C0328F17F6AE3D8952B5C646D45D430DF9D0",
+    "src/fg_overlay.h": "F2AFB4AAEB968D111765AD1F1D08E7D2F64A6922D81E6FF9A2943CD76F33C688",
+    "validation/r20x-current/mode-test.cpp": "ED0B8D0BD9ED1BFB18E671EB87E1A5F339366AB47CFA13B200778C412CFDEB92"
+  },
+  "contract": "E/F transition pauses before preset publication, drains old RR-consumption leases, rebuilds Streamline options while auxiliary work remains paused, resynchronizes shared NGX preset parameters, then activates fresh history."
+}

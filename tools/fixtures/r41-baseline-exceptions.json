@@ -1,0 +1,24 @@
+{
+  "src/fg_overlay.h": [
+    [
+      "#pragma once\n\n#include \"control_fg_logo_resource.h\"\n",
+      "#include <mutex>\n#pragma once\n\n#include \"control_fg_logo_resource.h\"\n"
+    ],
+    [
+      "static bool fgOverlaySliderDragging = false;\nstatic bool fgOverlayClampDragging = false;\nstatic unsigned fgOverlayClampPreview = 60;\nstatic bool fgOverlaySettingsDirty = false;\nstatic ULONGLONG fgOverlaySettingsDirtyMs = 0;\nstatic ULONGLONG fgOverlaySettingsSavedPulseUntilMs = 0;\nstatic std::wstring fgOverlaySettingsPath;\nstatic std::atomic<unsigned int> fgOverlaySettingsLoaded{0};\nstatic bool fgOverlayOptionsPage = false;\n",
+      "static bool fgOverlaySliderDragging = false;\nstatic bool fgOverlayClampDragging = false;\nstatic unsigned fgOverlayClampPreview = 60;\nstatic std::atomic<bool> fgOverlaySettingsDirty{false};\nstatic std::recursive_mutex fgSettingsMutex;\nstatic std::atomic<bool> fgNativeMenuReady{false};\nstatic std::atomic<ULONGLONG> fgOverlaySettingsDirtyMs{0};\nstatic std::atomic<ULONGLONG> fgOverlaySettingsSavedPulseUntilMs{0};\nstatic std::wstring fgOverlaySettingsPath;\nstatic std::atomic<unsigned int> fgOverlaySettingsLoaded{0};\nstatic bool fgOverlayOptionsPage = false;\n"
+    ],
+    [
+      "}\n\nstatic bool FGOverlaySaveSettingsNow() noexcept {\n    if (!FGOverlayResolveSettingsPath()) {\n        Log(\"FG_SETTINGS_SAVE success=0 reason=path_unavailable ui=fg_full_rr_toggle_only\");\n        return false;\n",
+      "}\n\nstatic bool FGOverlaySaveSettingsNow() noexcept {\n    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);\n    if (!FGOverlayResolveSettingsPath()) {\n        Log(\"FG_SETTINGS_SAVE success=0 reason=path_unavailable ui=fg_full_rr_toggle_only\");\n        return false;\n"
+    ],
+    [
+      "}\n\nstatic void FGOverlayMarkSettingsDirty() noexcept {\n    fgOverlaySettingsDirty = true;\n    fgOverlaySettingsDirtyMs = GetTickCount64();\n}\n\nstatic void FGOverlayFlushSettingsIfDue(bool force = false) noexcept {\n    if (!fgOverlaySettingsDirty) return;\n    const ULONGLONG now = GetTickCount64();\n    if (!force && now - fgOverlaySettingsDirtyMs < kFGSettingsDebounceMs) return;\n",
+      "}\n\nstatic void FGOverlayMarkSettingsDirty() noexcept {\n    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);\n    fgOverlaySettingsDirty = true;\n    fgOverlaySettingsDirtyMs = GetTickCount64();\n}\n\nstatic void FGOverlayFlushSettingsIfDue(bool force = false) noexcept {\n    std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);\n    if (!fgOverlaySettingsDirty) return;\n    const ULONGLONG now = GetTickCount64();\n    if (!force && now - fgOverlaySettingsDirtyMs < kFGSettingsDebounceMs) return;\n"
+    ],
+    [
+      "                if (!fgOverlayBindingCapture) InvalidateRect(overlay, nullptr, FALSE);\n            }\n            const bool toggleDown = (GetAsyncKeyState(static_cast<int>(fgOverlayToggleKey)) & 0x8000) != 0;\n            if (!capturingBinding && gameForeground && toggleDown && !fgOverlayToggleWasDown) {\n                const unsigned int next = fgOverlayVisible.load(std::memory_order_acquire) ? 0u : 1u;\n                fgOverlayVisible.store(next, std::memory_order_release);\n                Log(\"FG_OVERLAY_TOGGLE visible=%u key=%u input=nonexclusive\", next, fgOverlayToggleKey);\n            }\n            fgOverlayToggleWasDown = toggleDown;\n            const bool show = gameForeground && fgOverlayVisible.load(std::memory_order_acquire);\n            FGOverlaySetShown(overlay, game, show);\n            if (show) {\n                if (now - fgOverlayLastPlacementPollMs >= kFGOverlayPlacementPollIntervalMs) {\n",
+      "                if (!fgOverlayBindingCapture) InvalidateRect(overlay, nullptr, FALSE);\n            }\n            const bool toggleDown = (GetAsyncKeyState(static_cast<int>(fgOverlayToggleKey)) & 0x8000) != 0;\n            if (!fgNativeMenuReady.load() && !capturingBinding && gameForeground && toggleDown && !fgOverlayToggleWasDown) {\n                const unsigned int next = fgOverlayVisible.load(std::memory_order_acquire) ? 0u : 1u;\n                fgOverlayVisible.store(next, std::memory_order_release);\n                Log(\"FG_OVERLAY_TOGGLE visible=%u key=%u input=nonexclusive\", next, fgOverlayToggleKey);\n            }\n            fgOverlayToggleWasDown = toggleDown;\n            const bool show = !fgNativeMenuReady.load() && gameForeground && fgOverlayVisible.load(std::memory_order_acquire);\n            FGOverlaySetShown(overlay, game, show);\n            if (show) {\n                if (now - fgOverlayLastPlacementPollMs >= kFGOverlayPlacementPollIntervalMs) {\n"
+    ]
+  ]
+}

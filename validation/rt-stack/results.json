@@ -1,0 +1,59 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "checks": [
+    "RR selects GI history release and jumps over filter",
+    "shared history release detaches before pool release",
+    "gi-radius:0x180914570",
+    "gi-radius:test   al,al",
+    "gi-radius:jne",
+    "gi-radius:mulss  xmm0,xmm10",
+    "gi-history-recreate:cmp    QWORD PTR [rsi],0x0",
+    "gi-history-recreate:0x1800a9760",
+    "gi-history-recreate:0x1805dfd40",
+    "transparent-producer:0x250",
+    "transparent-producer:0x1800a5390",
+    "gi-composite-source:0x18090e9f8",
+    "gi-composite-source:0x1805dff90",
+    "debris-menu:0x6f0",
+    "debris-menu:0x18090e9d0",
+    "rt:Enable Reflections:value",
+    "rt:Enable Reflections:name",
+    "rt:Enable indirect diffuse:value",
+    "rt:Enable indirect diffuse:name",
+    "rt:Enable Spot Contact Shadows:value",
+    "rt:Enable Spot Contact Shadows:name",
+    "rt:Enable Sun Shadows:value",
+    "rt:Enable Sun Shadows:name",
+    "rt:Enable AO:value",
+    "rt:Enable AO:name",
+    "rt:Enable Raytraced Transparents:value",
+    "rt:Enable Raytraced Transparents:name",
+    "rt:Enable mesh particles:value",
+    "rt:Enable mesh particles:name"
+  ],
+  "results": {
+    "policy:normal": "PASS 64 admitted RT combinations; GI/frame/settings rejection; 2000 settings changes; OFF/history-reset/ON",
+    "hook:normal": "PASS actual GI observer: native called once, exact history/frame/stage, duplicate/read failure, exception propagation, LastError and evaluation readiness",
+    "policy:asan_ubsan": "PASS 64 admitted RT combinations; GI/frame/settings rejection; 2000 settings changes; OFF/history-reset/ON",
+    "hook:asan_ubsan": "PASS actual GI observer: native called once, exact history/frame/stage, duplicate/read failure, exception propagation, LastError and evaluation readiness",
+    "native": "PASS exact native GI RR/SR branch, option getter, detach-before-release, empty/populated history and repeated bypass"
+  },
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "scope": "Full game RT menu compatibility; native GI bypass; existing shadow/transparency/debris paths retained",
+  "limits": [
+    "Native pool release and GPU calls mocked",
+    "Windows hooks and full-stack GPU image quality not run",
+    "Opaque reflection guide does not describe secondary transparent surfaces"
+  ],
+  "tested_sha256": {
+    "src/rr_rt_stack.h": "d464c0cbc4f378f91d16f30d9bad87142307e086f557416abe9e255173d03ec7",
+    "src/rr_native_frame.h": "d9e54d838e7f4e9680021ed4fdec5f193389f6a6c6dfc3c9c140a453e0d2b17d",
+    "src/rr_frame_coordinator.h": "1c2f1058fb6360ae06ac32b760aeecddd5bd54891d167b6b90ec38a8769a9e71",
+    "src/rr_evaluation_entry.h": "7b29448aa8524718ea4aaddc1257ebc33afc7037efdd95ca43e9b77032d89b05",
+    "src/rr_user_control.h": "83679c8261d2c22ad90b02d30cf8fc230de8842922e37304e0aa47d83540e587",
+    "validation/rt-stack/hook.cpp": "366b61c170467b328234534a163752ada3652cc7225b7d73d323a642a5202936",
+    "validation/rt-stack/native.cpp": "bc0ca1303d3138da21c604bf9991ee0b203b1f9ceff680bf249d795a2555709c",
+    "validation/rt-stack/policy.cpp": "c5f37c9ce83381af57dbf0bf5ad156ecf53f282c2d17554ffabb8f8a1bd45e8c",
+    "validation/rt-stack/run.py": "7eb9f943535d0d25466cc0ee1d7aa10e7c98d8d2f221d03c5513725f05308c7f"
+  }
+}

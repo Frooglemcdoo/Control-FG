@@ -1,0 +1,11 @@
+# R210 — GI motion-aware history
+
+R209 runtime evidence: 14,038 successful RR evaluations, zero failures; all 62 sampled overrides applied and restored successfully. User reports reduced but remaining trails, no bright speckles, and new dark-shadow boiling. This motivates retaining temporal stabilization for stable pixels rather than suppressing all GI history.
+
+R210 replaces only the audited diffuse temporal compute shader in Native Blend with RR active. It changes exactly two immediate operands: motion rejection scale 40 to 400 (history reaches zero at 0.0025 normalized UV displacement), and relative depth tolerance 0.03 to 0.01. These are experimental thresholds, not proven optimal settings. Camera motion also contributes to the native motion metric. Native 70% maximum history, camera-cut handling, reprojection, current-frame energy clamp, bindings and six spatial passes remain unchanged. No provider overrides or history clears.
+
+The exact SHA-locked source is cloned through the existing native shader-record transport at compute slot 0x60, stage 5. One immutable clone is retained for the process; changed or unknown records and unavailable transport fall back to native filtering without disabling RR. The shader-get trace confirms retrieval of replacement bytecode; adaptive trace counts bind/dispatch selection, not GPU image quality. The R205 projection rays, MAP GUARD OFF, angled reflections and other accepted settings remain unchanged.
+
+Validation: exact two-token difference and unchanged other DXBC chunks; checksum and decoded instruction audit; actual production shader D3D12 WARP pipeline creation; scoped runtime mocks covering immutable clone reuse, rejection fallback, exceptions and mode gates; existing full build checks. WARP pipeline creation does not establish image quality or numerical scene output.
+
+Test Native Blend with RR ON and FG OFF. Hold the camera still in the dark corner, then move Jesse over the patterned carpet and pan the camera. Check shadow boiling, moving trails and bright speckles. Save the F10 log; expect gi_temporal_shader_get build=R210, gi_temporal_adaptive applied=1 and continuing rr_success counts. This test is not a complete ghosting fix until validated in game.

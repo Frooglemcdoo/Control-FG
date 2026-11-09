@@ -1,0 +1,1919 @@
+{
+  "file": "pair-000-original_vs.dxbc",
+  "sha256": "a954d6e56122c5c0008775c37371d1bf240c6349c89c3397c455df655cdc1ea1",
+  "bytes": 7692,
+  "bindings": [
+    {
+      "name": "g_sbInstanceObjectData",
+      "kind": 5,
+      "return_type": 6,
+      "dimension": 1,
+      "samples": 64,
+      "slot": 0,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 0
+    },
+    {
+      "name": "g_sbInstanceLocalToView",
+      "kind": 5,
+      "return_type": 6,
+      "dimension": 1,
+      "samples": 16,
+      "slot": 1,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 1
+    },
+    {
+      "name": "g_sbMaterialDataPart3",
+      "kind": 5,
+      "return_type": 6,
+      "dimension": 1,
+      "samples": 336,
+      "slot": 2,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 2
+    },
+    {
+      "name": "sys_constants",
+      "kind": 0,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 0,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 0
+    },
+    {
+      "name": "mid_general",
+      "kind": 0,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 1,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 1
+    },
+    {
+      "name": "material_wind",
+      "kind": 0,
+      "return_type": 0,
+      "dimension": 0,
+      "samples": 0,
+      "slot": 2,
+      "count": 1,
+      "flags": 0,
+      "space": 0,
+      "identifier": 2
+    }
+  ],
+  "constant_buffers": [
+    {
+      "name": "sys_constants",
+      "size": 1136,
+      "flags": 0,
+      "kind": 0,
+      "variables": [
+        {
+          "name": "g_vScreenRes",
+          "offset": 0,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1856,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vInvScreenRes",
+          "offset": 8,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1856,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vOutputRes",
+          "offset": 16,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1856,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vInvOutputRes",
+          "offset": 24,
+          "size": 8,
+          "flags": 0,
+          "type": {
+            "type_offset": 1856,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 2,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mWorldToView",
+          "offset": 32,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToWorld",
+          "offset": 96,
+          "size": 64,
+          "flags": 2,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToClip",
+          "offset": 160,
+          "size": 64,
+          "flags": 2,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToView",
+          "offset": 224,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mWorldToClip",
+          "offset": 288,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToWorld",
+          "offset": 352,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToPreviousClip",
+          "offset": 416,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToPreviousClip",
+          "offset": 480,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousViewToView",
+          "offset": 544,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousWorldToClip",
+          "offset": 608,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousViewToClip",
+          "offset": 672,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mClipToPreviousClipNoJitter",
+          "offset": 736,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mPreviousClipToClipNoJitter",
+          "offset": 800,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vViewPoint",
+          "offset": 864,
+          "size": 16,
+          "flags": 2,
+          "type": {
+            "type_offset": 2264,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fInvNear",
+          "offset": 880,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mViewToCameraView",
+          "offset": 896,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mCameraViewToCameraClip",
+          "offset": 960,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_mCameraClipToView",
+          "offset": 1024,
+          "size": 64,
+          "flags": 0,
+          "type": {
+            "type_offset": 1964,
+            "cls": 3,
+            "base": 3,
+            "rows": 4,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fWorldTime",
+          "offset": 1088,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fWorldTimeDelta",
+          "offset": 1092,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fRealTime",
+          "offset": 1096,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fRealTimeDelta",
+          "offset": 1100,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fLastValidWorldTimeDelta",
+          "offset": 1104,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_uTemporalFrame",
+          "offset": 1108,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2532,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_uCurrentFrame",
+          "offset": 1112,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2532,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_bHDR",
+          "offset": 1116,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2596,
+            "cls": 0,
+            "base": 1,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fHDRSDRSceneBrightnessMultiplier",
+          "offset": 1120,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        },
+        {
+          "name": "g_fHDRSDRUIBrightnessMultiplier",
+          "offset": 1124,
+          "size": 4,
+          "flags": 0,
+          "type": {
+            "type_offset": 2320,
+            "cls": 0,
+            "base": 3,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "mid_general",
+      "size": 16,
+      "flags": 0,
+      "kind": 0,
+      "variables": [
+        {
+          "name": "g_uMaterialID",
+          "offset": 0,
+          "size": 4,
+          "flags": 2,
+          "type": {
+            "type_offset": 2532,
+            "cls": 0,
+            "base": 19,
+            "rows": 1,
+            "cols": 1,
+            "array": 0,
+            "members": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "material_wind",
+      "size": 1536,
+      "flags": 0,
+      "kind": 0,
+      "variables": [
+        {
+          "name": "g_vSmallWindTable",
+          "offset": 0,
+          "size": 512,
+          "flags": 2,
+          "type": {
+            "type_offset": 2936,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 4,
+            "array": 32,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vLargeWindTable",
+          "offset": 512,
+          "size": 512,
+          "flags": 0,
+          "type": {
+            "type_offset": 2992,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 4,
+            "array": 32,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vTrunkWindTable",
+          "offset": 1024,
+          "size": 256,
+          "flags": 2,
+          "type": {
+            "type_offset": 3048,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 4,
+            "array": 16,
+            "members": []
+          }
+        },
+        {
+          "name": "g_vLeafWindTable",
+          "offset": 1280,
+          "size": 252,
+          "flags": 0,
+          "type": {
+            "type_offset": 3108,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 3,
+            "array": 16,
+            "members": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "g_sbInstanceObjectData",
+      "size": 64,
+      "flags": 0,
+      "kind": 3,
+      "variables": [
+        {
+          "name": "$Element",
+          "offset": 0,
+          "size": 64,
+          "flags": 2,
+          "type": {
+            "type_offset": 3664,
+            "cls": 5,
+            "base": 0,
+            "rows": 1,
+            "cols": 16,
+            "array": 0,
+            "members": [
+              {
+                "name": "g_fPerLODDissolve",
+                "byte_offset": 0,
+                "type": {
+                  "type_offset": 3232,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 8,
+                  "members": []
+                }
+              },
+              {
+                "name": "g_vWindIndex_Base_Trunk",
+                "byte_offset": 32,
+                "type": {
+                  "type_offset": 3300,
+                  "cls": 1,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "g_uMask",
+                "byte_offset": 40,
+                "type": {
+                  "type_offset": 3344,
+                  "cls": 0,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "g_iCharacterLightRigIndex",
+                "byte_offset": 44,
+                "type": {
+                  "type_offset": 3412,
+                  "cls": 0,
+                  "base": 2,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "g_fDepthMultiply",
+                "byte_offset": 48,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "g_fExtraDepthMultiply",
+                "byte_offset": 52,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "padTo16Bytes",
+                "byte_offset": 56,
+                "type": {
+                  "type_offset": 3544,
+                  "cls": 1,
+                  "base": 2,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "g_sbInstanceLocalToView",
+      "size": 16,
+      "flags": 0,
+      "kind": 3,
+      "variables": [
+        {
+          "name": "$Element",
+          "offset": 0,
+          "size": 16,
+          "flags": 2,
+          "type": {
+            "type_offset": 3740,
+            "cls": 1,
+            "base": 3,
+            "rows": 1,
+            "cols": 4,
+            "array": 0,
+            "members": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "g_sbMaterialDataPart3",
+      "size": 336,
+      "flags": 0,
+      "kind": 3,
+      "variables": [
+        {
+          "name": "$Element",
+          "offset": 0,
+          "size": 336,
+          "flags": 2,
+          "type": {
+            "type_offset": 5176,
+            "cls": 5,
+            "base": 0,
+            "rows": 1,
+            "cols": 84,
+            "array": 0,
+            "members": [
+              {
+                "name": "fClothDiffScatterAmount",
+                "byte_offset": 0,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fClothFuzzWrap",
+                "byte_offset": 4,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vClothScatterColor",
+                "byte_offset": 8,
+                "type": {
+                  "type_offset": 3892,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 3,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fHairSmoothness",
+                "byte_offset": 20,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vSpecularColor2",
+                "byte_offset": 24,
+                "type": {
+                  "type_offset": 3892,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 3,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fHairSpecularShift",
+                "byte_offset": 36,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fHairDiffuseWrap",
+                "byte_offset": 40,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fPAD1",
+                "byte_offset": 44,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fEmissionIntensity",
+                "byte_offset": 48,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vColorMultiplier",
+                "byte_offset": 52,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vSmoothnessRange",
+                "byte_offset": 68,
+                "type": {
+                  "type_offset": 4056,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vShadowSoftnessRange",
+                "byte_offset": 76,
+                "type": {
+                  "type_offset": 4056,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vScatterWidthRange",
+                "byte_offset": 84,
+                "type": {
+                  "type_offset": 4056,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fHairDepthOffsetAmount",
+                "byte_offset": 92,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fHairNormalAmount",
+                "byte_offset": 96,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vEmissionMultiplier",
+                "byte_offset": 100,
+                "type": {
+                  "type_offset": 3892,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 3,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vColorMultiplier2",
+                "byte_offset": 112,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vBaseDetailUVScale",
+                "byte_offset": 128,
+                "type": {
+                  "type_offset": 4056,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vSmoothnessRange2",
+                "byte_offset": 136,
+                "type": {
+                  "type_offset": 4056,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vBlendDetailUVScale",
+                "byte_offset": 144,
+                "type": {
+                  "type_offset": 4056,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 2,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fBaseDetailAmount",
+                "byte_offset": 152,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fBlendUVMultiplier",
+                "byte_offset": 156,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fBlendDetailAmount",
+                "byte_offset": 160,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fFuzzUVMultiplier",
+                "byte_offset": 164,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fPupilDilation",
+                "byte_offset": 168,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fPupilOuterRadius",
+                "byte_offset": 172,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vIntensity",
+                "byte_offset": 176,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vWrinkleWeights0",
+                "byte_offset": 192,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vWrinkleWeights1",
+                "byte_offset": 208,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vWrinkleWeights2",
+                "byte_offset": 224,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vWrinkleWeights3",
+                "byte_offset": 240,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vWrinkleWeights4",
+                "byte_offset": 256,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vWrinkleWeights5",
+                "byte_offset": 272,
+                "type": {
+                  "type_offset": 3740,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 4,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "uDisableBackfaceFlip",
+                "byte_offset": 288,
+                "type": {
+                  "type_offset": 3344,
+                  "cls": 0,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fEdgeSharpness",
+                "byte_offset": 292,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fTrunkBendFactor",
+                "byte_offset": 296,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fTrunkPivotOffset",
+                "byte_offset": 300,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "vColorRgbMultiplier",
+                "byte_offset": 304,
+                "type": {
+                  "type_offset": 3892,
+                  "cls": 1,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 3,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fWindFactor",
+                "byte_offset": 316,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fDecalMaterialBlendFactor",
+                "byte_offset": 320,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "fDecalAlbedoBlendFactor",
+                "byte_offset": 324,
+                "type": {
+                  "type_offset": 3468,
+                  "cls": 0,
+                  "base": 3,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "uStableHash",
+                "byte_offset": 328,
+                "type": {
+                  "type_offset": 3344,
+                  "cls": 0,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              },
+              {
+                "name": "pad",
+                "byte_offset": 332,
+                "type": {
+                  "type_offset": 3344,
+                  "cls": 0,
+                  "base": 19,
+                  "rows": 1,
+                  "cols": 1,
+                  "array": 0,
+                  "members": []
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "instructions": [
+    {
+      "dword": 2,
+      "name": "dcl_global_flags",
+      "operands": [
+        "raw:"
+      ]
+    },
+    {
+      "dword": 3,
+      "name": "dcl_constant_buffer",
+      "operands": [
+        "raw:0x308e46,0x0,0x0,0x0,0x37,0x0"
+      ]
+    },
+    {
+      "dword": 10,
+      "name": "dcl_constant_buffer",
+      "operands": [
+        "raw:0x308e46,0x1,0x1,0x1,0x1,0x0"
+      ]
+    },
+    {
+      "dword": 17,
+      "name": "dcl_constant_buffer",
+      "operands": [
+        "raw:0x308e46,0x2,0x2,0x2,0x50,0x0"
+      ]
+    },
+    {
+      "dword": 24,
+      "name": "dcl_resource_structured",
+      "operands": [
+        "raw:0x307e46,0x0,0x0,0x0,0x40,0x0"
+      ]
+    },
+    {
+      "dword": 31,
+      "name": "dcl_resource_structured",
+      "operands": [
+        "raw:0x307e46,0x1,0x1,0x1,0x10,0x0"
+      ]
+    },
+    {
+      "dword": 38,
+      "name": "dcl_resource_structured",
+      "operands": [
+        "raw:0x307e46,0x2,0x2,0x2,0x150,0x0"
+      ]
+    },
+    {
+      "dword": 45,
+      "name": "dcl_input",
+      "operands": [
+        "raw:0x1010f2,0x0"
+      ]
+    },
+    {
+      "dword": 48,
+      "name": "dcl_input",
+      "operands": [
+        "raw:0x101032,0x3"
+      ]
+    },
+    {
+      "dword": 51,
+      "name": "dcl_input",
+      "operands": [
+        "raw:0x101032,0x4"
+      ]
+    },
+    {
+      "dword": 54,
+      "name": "dcl_input",
+      "operands": [
+        "raw:0x101032,0x5"
+      ]
+    },
+    {
+      "dword": 57,
+      "name": "dcl_output",
+      "operands": [
+        "raw:0x1020f2,0x0"
+      ]
+    },
+    {
+      "dword": 60,
+      "name": "dcl_output",
+      "operands": [
+        "raw:0x102032,0x1"
+      ]
+    },
+    {
+      "dword": 63,
+      "name": "dcl_output",
+      "operands": [
+        "raw:0x1020c2,0x1"
+      ]
+    },
+    {
+      "dword": 66,
+      "name": "dcl_output",
+      "operands": [
+        "raw:0x102032,0x2"
+      ]
+    },
+    {
+      "dword": 69,
+      "name": "dcl_output_siv",
+      "operands": [
+        "raw:0x1020f2,0x3,0x1"
+      ]
+    },
+    {
+      "dword": 73,
+      "name": "dcl_temps",
+      "operands": [
+        "raw:0x4"
+      ]
+    },
+    {
+      "dword": 75,
+      "name": "itof",
+      "operands": [
+        "r[0].xy",
+        "v[3].xyxx"
+      ]
+    },
+    {
+      "dword": 80,
+      "name": "mul",
+      "operands": [
+        "o[1].xy",
+        "r[0].xyxx",
+        "l(0.000244200259,0.000244200259,0,0)"
+      ]
+    },
+    {
+      "dword": 90,
+      "name": "ld_structured",
+      "operands": [
+        "r[0].xy",
+        "v[5].x",
+        "l(32)",
+        "t[0][0].xyxx"
+      ]
+    },
+    {
+      "dword": 100,
+      "name": "utof",
+      "operands": [
+        "r[0].x",
+        "r[0].x"
+      ]
+    },
+    {
+      "dword": 105,
+      "name": "mad",
+      "operands": [
+        "r[0].x",
+        "v[4].x",
+        "l(255)",
+        "r[0].x"
+      ]
+    },
+    {
+      "dword": 114,
+      "name": "mul",
+      "operands": [
+        "r[0].z",
+        "r[0].x",
+        "l(32)"
+      ]
+    },
+    {
+      "dword": 121,
+      "name": "ge",
+      "operands": [
+        "r[0].z",
+        "r[0].z",
+        "-r[0].z"
+      ]
+    },
+    {
+      "dword": 129,
+      "name": "movc",
+      "operands": [
+        "r[0].zw",
+        "r[0].zzzz",
+        "l(0,0,32,0.03125)",
+        "l(0,0,-32,-0.03125)"
+      ]
+    },
+    {
+      "dword": 144,
+      "name": "mul",
+      "operands": [
+        "r[0].x",
+        "r[0].w",
+        "r[0].x"
+      ]
+    },
+    {
+      "dword": 151,
+      "name": "frc",
+      "operands": [
+        "r[0].x",
+        "r[0].x"
+      ]
+    },
+    {
+      "dword": 156,
+      "name": "mul",
+      "operands": [
+        "r[0].x",
+        "r[0].x",
+        "r[0].z"
+      ]
+    },
+    {
+      "dword": 163,
+      "name": "ftou",
+      "operands": [
+        "r[0].x",
+        "r[0].x"
+      ]
+    },
+    {
+      "dword": 168,
+      "name": "ld_structured",
+      "operands": [
+        "r[0].zw",
+        "cb[1][1][0].x",
+        "l(296)",
+        "t[2][2].xxxy"
+      ]
+    },
+    {
+      "dword": 180,
+      "name": "ld_structured",
+      "operands": [
+        "r[1].x",
+        "cb[1][1][0].x",
+        "l(316)",
+        "t[2][2].xxxx"
+      ]
+    },
+    {
+      "dword": 192,
+      "name": "mul",
+      "operands": [
+        "r[1].yzw",
+        "r[1].xxxx",
+        "cb[2][2][r[0].x].xxyz"
+      ]
+    },
+    {
+      "dword": 202,
+      "name": "and",
+      "operands": [
+        "r[0].x",
+        "r[0].y",
+        "l(15)"
+      ]
+    },
+    {
+      "dword": 209,
+      "name": "mul",
+      "operands": [
+        "r[2].xyz",
+        "r[1].xxxx",
+        "cb[2][2][64+r[0].x].xyzx"
+      ]
+    },
+    {
+      "dword": 220,
+      "name": "add",
+      "operands": [
+        "r[0].x",
+        "-r[0].w",
+        "v[0].y"
+      ]
+    },
+    {
+      "dword": 228,
+      "name": "mul",
+      "operands": [
+        "r[0].xyw",
+        "r[0].xxxx",
+        "r[2].xyxz"
+      ]
+    },
+    {
+      "dword": 235,
+      "name": "mul",
+      "operands": [
+        "r[0].xyz",
+        "r[0].zzzz",
+        "r[0].xywx"
+      ]
+    },
+    {
+      "dword": 242,
+      "name": "mad",
+      "operands": [
+        "r[0].xyz",
+        "r[1].yzwy",
+        "v[4].yyyy",
+        "r[0].xyzx"
+      ]
+    },
+    {
+      "dword": 251,
+      "name": "add",
+      "operands": [
+        "r[0].xyz",
+        "r[0].xyzx",
+        "v[0].xyzx"
+      ]
+    },
+    {
+      "dword": 258,
+      "name": "imul",
+      "operands": [
+        "null",
+        "r[1].x",
+        "v[5].x",
+        "l(3)"
+      ]
+    },
+    {
+      "dword": 266,
+      "name": "ld_structured",
+      "operands": [
+        "r[1].xyzw",
+        "r[1].x",
+        "l(0)",
+        "t[1][1].xyzw"
+      ]
+    },
+    {
+      "dword": 276,
+      "name": "imad",
+      "operands": [
+        "r[2].xy",
+        "v[5].xxxx",
+        "l(3,3,0,0)",
+        "l(1,2,0,0)"
+      ]
+    },
+    {
+      "dword": 291,
+      "name": "ld_structured",
+      "operands": [
+        "r[3].xyzw",
+        "r[2].x",
+        "l(0)",
+        "t[1][1].xyzw"
+      ]
+    },
+    {
+      "dword": 301,
+      "name": "ld_structured",
+      "operands": [
+        "r[2].xyzw",
+        "r[2].y",
+        "l(0)",
+        "t[1][1].xyzw"
+      ]
+    },
+    {
+      "dword": 311,
+      "name": "mov",
+      "operands": [
+        "r[0].w",
+        "v[0].w"
+      ]
+    },
+    {
+      "dword": 316,
+      "name": "dp4",
+      "operands": [
+        "r[1].x",
+        "r[1].xyzw",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 323,
+      "name": "dp4",
+      "operands": [
+        "r[1].y",
+        "r[3].xyzw",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 330,
+      "name": "dp4",
+      "operands": [
+        "r[1].z",
+        "r[2].xyzw",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 337,
+      "name": "mul",
+      "operands": [
+        "r[0].xyz",
+        "r[1].yyyy",
+        "cb[0][0][7].xyzx"
+      ]
+    },
+    {
+      "dword": 346,
+      "name": "mad",
+      "operands": [
+        "r[0].xyz",
+        "cb[0][0][6].xyzx",
+        "r[1].xxxx",
+        "r[0].xyzx"
+      ]
+    },
+    {
+      "dword": 357,
+      "name": "mad",
+      "operands": [
+        "r[0].xyz",
+        "cb[0][0][8].xyzx",
+        "r[1].zzzz",
+        "r[0].xyzx"
+      ]
+    },
+    {
+      "dword": 368,
+      "name": "add",
+      "operands": [
+        "r[0].xyz",
+        "r[0].xyzx",
+        "cb[0][0][9].xyzx"
+      ]
+    },
+    {
+      "dword": 377,
+      "name": "add",
+      "operands": [
+        "o[0].xyz",
+        "r[0].xyzx",
+        "-cb[0][0][54].xyzx"
+      ]
+    },
+    {
+      "dword": 387,
+      "name": "dp3",
+      "operands": [
+        "r[0].x",
+        "r[1].xyzx",
+        "r[1].xyzx"
+      ]
+    },
+    {
+      "dword": 394,
+      "name": "sqrt",
+      "operands": [
+        "o[0].w",
+        "r[0].x"
+      ]
+    },
+    {
+      "dword": 399,
+      "name": "mul",
+      "operands": [
+        "r[0].xyzw",
+        "r[1].yyyy",
+        "cb[0][0][11].xyzw"
+      ]
+    },
+    {
+      "dword": 408,
+      "name": "mad",
+      "operands": [
+        "r[0].xyzw",
+        "cb[0][0][10].xyzw",
+        "r[1].xxxx",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 419,
+      "name": "mad",
+      "operands": [
+        "r[0].xyzw",
+        "cb[0][0][12].xyzw",
+        "r[1].zzzz",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 430,
+      "name": "mad",
+      "operands": [
+        "r[0].xyzw",
+        "cb[0][0][13].xyzw",
+        "v[0].wwww",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 441,
+      "name": "mov",
+      "operands": [
+        "o[1].zw",
+        "r[0].zzzw"
+      ]
+    },
+    {
+      "dword": 446,
+      "name": "mov",
+      "operands": [
+        "o[3].xyzw",
+        "r[0].xyzw"
+      ]
+    },
+    {
+      "dword": 451,
+      "name": "mov",
+      "operands": [
+        "o[2].xy",
+        "v[5].xyxx"
+      ]
+    },
+    {
+      "dword": 456,
+      "name": "ret",
+      "operands": []
+    }
+  ]
+}

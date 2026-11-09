@@ -1,0 +1,66 @@
+{
+  "status": "PASS",
+  "dll_sha256": "cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5",
+  "checks": [
+    {
+      "rva": "0x261a0",
+      "bytes": "48890e"
+    },
+    {
+      "rva": "0x261ab",
+      "bytes": "ff5058"
+    },
+    {
+      "rva": "0x261b3",
+      "bytes": "48894648"
+    },
+    {
+      "rva": "0x261ba",
+      "bytes": "4c896628"
+    },
+    {
+      "rva": "0x261be",
+      "bytes": "48895e30"
+    },
+    {
+      "rva": "0x26101",
+      "bytes": "894620"
+    },
+    {
+      "rva": "0x26b84",
+      "bytes": "4d8b4d00"
+    },
+    {
+      "rva": "0x26b8c",
+      "bytes": "498b1424"
+    },
+    {
+      "rva": "0x26b93",
+      "bytes": "41ff5278"
+    }
+  ],
+  "conclusion": "NativeBuffer+0 is resource, +0x48 GPU VA, +0x20 native state bookkeeping. Mode2 uses separate staging allocation.",
+  "limits": "No live identity, state transition, CPU data freshness, or GPU lifetime proof.",
+  "excerpts": [
+    {
+      "rva": "0x26101",
+      "text": "\nupload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64\n\n\nDisassembly of section .text:\n\n0000000180026101 <.text+0x25101>:\n   180026101:\t89 46 20             \tmov    DWORD PTR [rsi+0x20],eax\n   180026104:\t83 e1 08             \tand    ecx,0x8\n   180026107:\t44 8b c0             \tmov    r8d,eax\n   18002610a:\t89 4d 8f             \tmov    DWORD PTR [rbp-0x71],ecx\n   18002610d:\t41 8b c2             \tmov    eax,r10d\n   180026110:\t75 22                \tjne    0x180026134\n   180026112:\t41 f6 c1 10          \ttest   r9b,0x10\n   180026116:\t74 07                \tje     0x18002611f\n   180026118:\tb8 02 00 00 00       \tmov    eax,0x2\n   18002611d:\teb 0b                \tjmp    0x18002612a\n   18002611f:\t41 f6 c1 20          \ttest   r9b,0x20\n   180026123:\t74 0f                \tje     0x180026134\n   180026125:\tb8 03 00 00 00       \tmov    eax,0x3\n   18002612a:\t41 b8 00 04 00 00    \tmov    r8d,0x400\n   180026130:\t44 89 46 20          \tmov    DWORD PTR [rsi+0x20],r8d\n   180026134:\t48 8b 0d cd ba 0e 00 \tmov    rcx,QWORD PTR [rip+0xebacd]        # 0x180111c08\n   18002613b:\t48 8d 55 97          \tlea    rdx,[rbp-0x69]\n   18002613f:\t48 89 54 24 38       \tmov    QWORD PTR [rsp+0x38],rdx\n   180026144:\t4c 8d 4d cf          \tlea    r9,[rbp-0x31]\n   180026148:\t48 8d 15 b1 ca 03 00 \tlea    rdx,[rip+0x3cab1]        # 0x180062c00\n   18002614f:\t89 45 a7             \tmov    DWORD PTR [rbp-0x59],eax\n   180026152:\t48 89 54 24 30       \tmov    QWORD PTR [rsp+0x30],rdx\n   180026157:\t48 8d 55 a7          \tlea    rdx,[rbp-0x59]\n   18002615b:\t48 89 7d ab          \tmov    QWORD PTR [rbp-0x55],rdi\n   18002615f:\t44 89 55 b3          \tmov    DWORD PTR [rbp-0x4d],r10d\n   180026163:\t44 89 55 b7          \tmov    DWORD PTR [rbp-0x49],r10d\n   180026167:\t48 8b 01             \tmov    rax,QWORD PTR [rcx]\n   18002616a:\t48 89 7c 24 28       \tmov    QWORD PTR [rsp+0x28],rdi\n   18002616f:\t44 89 44 24 20       \tmov    DWORD PTR [rsp+0x20],r8d\n   180026174:\t45 33 c0             \txor    r8d,r8d\n   180026177:\tff 90 d8 00 00 00    \tcall   QWORD PTR [rax+0xd8]\n   18002617d:\t8b d0                \tmov    edx,eax\n   18002617f:\t3d 0e 00 07 80       \tcmp    eax,0x8007000e\n   180026184:\t74 0a                \tje     0x180026190\n   180026186:\t05 fb ff 85 77       \tadd    eax,0x7785fffb\n   18002618b:\t83 f8 02             \tcmp    eax,0x2\n   18002618e:\t77 0c                \tja     0x18002619c\n   180026190:\t48 8d 0d 09 ca 03 00 \tlea    rcx,[rip+0x3ca09]        # 0x180062ba0\n   180026197:\te8 c4 d4 ff ff       \tcall   0x180023660\n   18002619c:\t48 8b 4d 97          \tmov    rcx,QWORD PTR [rbp-0x69]\n   1800261a0:\t48 89 0e             \tmov    QWORD PTR [rsi],rcx\n   1800261a3:\t48 85 c9             \ttest   rcx,rcx\n   1800261a6:\t74 08                \tje     0x1800261b0\n   1800261a8:\t48 8b 01             \tmov    rax,QWORD PTR [rcx]\n   1800261ab:\tff 50 58             \tcall   QWORD PTR [rax+0x58]\n   1800261ae:\teb 03                \tjmp    0x1800261b3\n   1800261b0:\t48 8b c7             \tmov    rax,rdi\n   1800261b3:\t48 89 46 48          \tmov    QWORD PTR [rsi+0x48],rax\n   1800261b7:\t4c 8b f7             \tmov    r14,rdi\n   1800261ba:\t4c 89 66 28          \tmov    QWORD PTR [rsi+0x28],r12\n   1800261be:\t48 89 5e 30          \tmov    QWORD PTR [rsi+0x30],rbx\n   1800261c2:\t44 89 7e 38          \tmov    DWORD PTR [rsi+0x38],r15d\n"
+    },
+    {
+      "rva": "0x26ad6",
+      "text": "\nupload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64\n\n\nDisassembly of section .text:\n\n0000000180026ad6 <.text+0x25ad6>:\n   180026ad6:\t41 8b 4d 20          \tmov    ecx,DWORD PTR [r13+0x20]\n   180026ada:\t81 f9 00 08 00 00    \tcmp    ecx,0x800\n   180026ae0:\t74 0c                \tje     0x180026aee\n   180026ae2:\t81 f9 c3 0a 00 00    \tcmp    ecx,0xac3\n   180026ae8:\t74 04                \tje     0x180026aee\n   180026aea:\tb3 01                \tmov    bl,0x1\n   180026aec:\teb 02                \tjmp    0x180026af0\n   180026aee:\t32 db                \txor    bl,bl\n   180026af0:\t45 8b 74 24 20       \tmov    r14d,DWORD PTR [r12+0x20]\n   180026af5:\t45 33 ff             \txor    r15d,r15d\n   180026af8:\t84 db                \ttest   bl,bl\n   180026afa:\t74 32                \tje     0x180026b2e\n   180026afc:\t49 8b 45 00          \tmov    rax,QWORD PTR [r13+0x0]\n   180026b00:\t48 c7 45 f8 00 08 00 \tmov    QWORD PTR [rbp-0x8],0x800\n   180026b07:\t00 \n   180026b08:\t4c 89 7d e0          \tmov    QWORD PTR [rbp-0x20],r15\n   180026b0c:\t48 89 45 e8          \tmov    QWORD PTR [rbp-0x18],rax\n   180026b10:\t89 4d f4             \tmov    DWORD PTR [rbp-0xc],ecx\n   180026b13:\tc7 45 f0 ff ff ff ff \tmov    DWORD PTR [rbp-0x10],0xffffffff\n   180026b1a:\t48 8b 06             \tmov    rax,QWORD PTR [rsi]\n   180026b1d:\t4c 8d 45 e0          \tlea    r8,[rbp-0x20]\n   180026b21:\t41 8d 57 01          \tlea    edx,[r15+0x1]\n   180026b25:\t48 8b ce             \tmov    rcx,rsi\n   180026b28:\tff 90 d0 00 00 00    \tcall   QWORD PTR [rax+0xd0]\n   180026b2e:\t41 81 fe 00 04 00 00 \tcmp    r14d,0x400\n   180026b35:\t74 38                \tje     0x180026b6f\n   180026b37:\t49 8b 04 24          \tmov    rax,QWORD PTR [r12]\n   180026b3b:\t41 8b 4c 24 20       \tmov    ecx,DWORD PTR [r12+0x20]\n   180026b40:\t48 c7 45 f8 00 04 00 \tmov    QWORD PTR [rbp-0x8],0x400\n   180026b47:\t00 \n   180026b48:\t4c 89 7d e0          \tmov    QWORD PTR [rbp-0x20],r15\n   180026b4c:\t48 89 45 e8          \tmov    QWORD PTR [rbp-0x18],rax\n   180026b50:\t89 4d f4             \tmov    DWORD PTR [rbp-0xc],ecx\n   180026b53:\tc7 45 f0 ff ff ff ff \tmov    DWORD PTR [rbp-0x10],0xffffffff\n   180026b5a:\t48 8b 06             \tmov    rax,QWORD PTR [rsi]\n   180026b5d:\t4c 8d 45 e0          \tlea    r8,[rbp-0x20]\n   180026b61:\tba 01 00 00 00       \tmov    edx,0x1\n   180026b66:\t48 8b ce             \tmov    rcx,rsi\n   180026b69:\tff 90 d0 00 00 00    \tcall   QWORD PTR [rax+0xd0]\n   180026b6f:\t4c 8b 16             \tmov    r10,QWORD PTR [rsi]\n   180026b72:\t48 8b 45 60          \tmov    rax,QWORD PTR [rbp+0x60]\n   180026b76:\t48 89 44 24 28       \tmov    QWORD PTR [rsp+0x28],rax\n   180026b7b:\t48 8b 45 58          \tmov    rax,QWORD PTR [rbp+0x58]\n   180026b7f:\t48 89 44 24 20       \tmov    QWORD PTR [rsp+0x20],rax\n   180026b84:\t4d 8b 4d 00          \tmov    r9,QWORD PTR [r13+0x0]\n   180026b88:\t4c 8b 45 48          \tmov    r8,QWORD PTR [rbp+0x48]\n   180026b8c:\t49 8b 14 24          \tmov    rdx,QWORD PTR [r12]\n   180026b90:\t48 8b ce             \tmov    rcx,rsi\n   180026b93:\t41 ff 52 78          \tcall   QWORD PTR [r10+0x78]\n"
+    },
+    {
+      "rva": "0x25899",
+      "text": "\nupload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64\n\n\nDisassembly of section .text:\n\n0000000180025899 <.text+0x24899>:\n   180025899:\t83 e9 01             \tsub    ecx,0x1\n   18002589c:\t74 58                \tje     0x1800258f6\n   18002589e:\t83 f9 01             \tcmp    ecx,0x1\n   1800258a1:\t0f 85 d4 03 00 00    \tjne    0x180025c7b\n   1800258a7:\t49 c7 c0 fe ff ff ff \tmov    r8,0xfffffffffffffffe\n   1800258ae:\t49 8b d2             \tmov    rdx,r10\n   1800258b1:\t48 8d 4d b0          \tlea    rcx,[rbp-0x50]\n   1800258b5:\te8 06 d3 ff ff       \tcall   0x180022bc0\n   1800258ba:\t0f 10 00             \tmovups xmm0,XMMWORD PTR [rax]\n   1800258bd:\t0f 10 48 10          \tmovups xmm1,XMMWORD PTR [rax+0x10]\n   1800258c1:\t0f 10 50 20          \tmovups xmm2,XMMWORD PTR [rax+0x20]\n   1800258c5:\t0f 10 58 30          \tmovups xmm3,XMMWORD PTR [rax+0x30]\n   1800258c9:\t0f 10 60 40          \tmovups xmm4,XMMWORD PTR [rax+0x40]\n   1800258cd:\t0f 10 68 50          \tmovups xmm5,XMMWORD PTR [rax+0x50]\n   1800258d1:\t0f 11 43 20          \tmovups XMMWORD PTR [rbx+0x20],xmm0\n   1800258d5:\t0f 11 4b 30          \tmovups XMMWORD PTR [rbx+0x30],xmm1\n   1800258d9:\t0f 11 53 40          \tmovups XMMWORD PTR [rbx+0x40],xmm2\n   1800258dd:\t0f 11 5b 50          \tmovups XMMWORD PTR [rbx+0x50],xmm3\n   1800258e1:\t0f 11 63 60          \tmovups XMMWORD PTR [rbx+0x60],xmm4\n   1800258e5:\t0f 11 6b 70          \tmovups XMMWORD PTR [rbx+0x70],xmm5\n   1800258e9:\t48 8b 43 70          \tmov    rax,QWORD PTR [rbx+0x70]\n   1800258ed:\t48 89 43 18          \tmov    QWORD PTR [rbx+0x18],rax\n   1800258f1:\te9 85 03 00 00       \tjmp    0x180025c7b\n"
+    },
+    {
+      "rva": "0x25d1a",
+      "text": "\nupload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64\n\n\nDisassembly of section .text:\n\n0000000180025d1a <.text+0x24d1a>:\n   180025d1a:\t48 8d 55 fe          \tlea    rdx,[rbp-0x2]\n   180025d1e:\t48 8d 4b 20          \tlea    rcx,[rbx+0x20]\n   180025d22:\te8 09 d1 ff ff       \tcall   0x180022e30\n   180025d27:\t48 85 ff             \ttest   rdi,rdi\n   180025d2a:\t0f 84 57 01 00 00    \tje     0x180025e87\n   180025d30:\t44 8b 4b 78          \tmov    r9d,DWORD PTR [rbx+0x78]\n   180025d34:\t48 89 7c 24 20       \tmov    QWORD PTR [rsp+0x20],rdi\n   180025d39:\t4c 8d 43 20          \tlea    r8,[rbx+0x20]\n   180025d3d:\t48 8b 53 08          \tmov    rdx,QWORD PTR [rbx+0x8]\n   180025d41:\t48 8b 8b d8 00 00 00 \tmov    rcx,QWORD PTR [rbx+0xd8]\n   180025d48:\te8 43 0c 00 00       \tcall   0x180026990\n   180025d4d:\te9 35 01 00 00       \tjmp    0x180025e87\n"
+    },
+    {
+      "rva": "0x269c2",
+      "text": "\nupload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64\n\n\nDisassembly of section .text:\n\n00000001800269c2 <.text+0x259c2>:\n   1800269c2:\t44 8b 15 33 ac 0e 00 \tmov    r10d,DWORD PTR [rip+0xeac33]        # 0x1801115fc\n   1800269c9:\t65 48 8b 04 25 58 00 \tmov    rax,QWORD PTR gs:0x58\n   1800269d0:\t00 00 \n   1800269d2:\t4e 8b 34 d0          \tmov    r14,QWORD PTR [rax+r10*8]\n   1800269d6:\t41 bf 08 00 00 00    \tmov    r15d,0x8\n   1800269dc:\t4d 03 fe             \tadd    r15,r14\n   1800269df:\t4d 8b 17             \tmov    r10,QWORD PTR [r15]\n   1800269e2:\t48 8b 1d 37 b2 0e 00 \tmov    rbx,QWORD PTR [rip+0xeb237]        # 0x180111c20\n   1800269e9:\tb9 10 00 00 00       \tmov    ecx,0x10\n   1800269ee:\t4d 85 d2             \ttest   r10,r10\n   1800269f1:\t74 06                \tje     0x1800269f9\n   1800269f3:\t4a 8b 3c 31          \tmov    rdi,QWORD PTR [rcx+r14*1]\n   1800269f7:\teb 03                \tjmp    0x1800269fc\n   1800269f9:\t48 8b fb             \tmov    rdi,rbx\n"
+    }
+  ]
+}

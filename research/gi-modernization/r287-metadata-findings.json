@@ -1,0 +1,44 @@
+{
+  "source_sha256": "f9eb6a9e0250264f6d1ad77a876a69cdd31b56760e839bc0c52d3f85d403f5db",
+  "reports": 22,
+  "first_metadata_fault": {
+    "ms": 183411250,
+    "present": 2719,
+    "status": "INCOMPLETE",
+    "reason": "build_journal_capacity",
+    "builds": 11836,
+    "copies": 1640,
+    "buffer_owners": 405,
+    "retained_bytes": 526235552,
+    "owner_limit": 0,
+    "geometry_owners": 0,
+    "cache_evictions": 6893,
+    "resolved_ranges": 0,
+    "missing_ranges": 1642,
+    "gpu_bytes_captured": 0,
+    "reuse_ready": 0
+  },
+  "last_report": {
+    "ms": 183486468,
+    "present": 8443,
+    "status": "INCOMPLETE",
+    "reason": "build_journal_capacity",
+    "builds": 179548,
+    "copies": 2810,
+    "buffer_owners": 2048,
+    "retained_bytes": 422246092,
+    "owner_limit": 0,
+    "geometry_owners": 0,
+    "cache_evictions": 9727,
+    "resolved_ranges": 0,
+    "missing_ranges": 1642,
+    "gpu_bytes_captured": 0,
+    "reuse_ready": 0
+  },
+  "conclusion": "The first specific failure is build_journal_capacity. Before detailed tracking stopped, zero ranges resolved and 1642 were missing. Churn occurred without owner_limit. Missing-range causes are not individually identified by this log; copy-only observation and retention policy are coverage risks confirmed in code. Later build/copy counters count hooks, not validated journal entries.",
+  "r288_change": "Heap-growing 65536-event journals; base resource creation and native barrier observations; scene-priority retention within unchanged owner budget. No GPU geometry read or replacement GI enabled.",
+  "focused_validation": {
+    "run": 41477747314,
+    "result": "success"
+  }
+}

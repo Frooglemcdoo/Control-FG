@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "sha256": "cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5",
+  "checks": {
+    "auto_backbuffer": "0x317d0",
+    "present_native_target": "0x31c20",
+    "present_swapchain_call": "0x31cd2",
+    "advance_after_present": "0x31db2",
+    "barrier_native_resource": "0x3a691"
+  },
+  "interpretation": "Native target device+0x138 -> device+0x140+index*8 -> texture+0x88, transitioned before swapchain Present and index incremented after return. Source identity is read inside wrapper Present."
+}

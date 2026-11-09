@@ -1,0 +1,11 @@
+{
+  "status": "RESEARCH_LEADS_ONLY",
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "string_reference_rvas": {
+    "postprocess_dejitter": "0x11e28c",
+    "ssaa_current": "0x130458",
+    "ssaa_offset_a": "0x1473b4",
+    "ssaa_offset_b": "0x14790f"
+  },
+  "unresolved": "Native raster jitter to inverse guide-ray sign and sampling convention"
+}

@@ -1,0 +1,33 @@
+name: Package R246 combat capture
+on:
+  push:
+    branches: [work/r246-combat-capture]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Windows PowerShell 5.1 syntax and safe load
+        shell: powershell
+        run: |
+          $tokens = $null; $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$pwd/Capture-Combat-R246.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count) { throw ($errors | Out-String) }
+          & ./Capture-Combat-R246.ps1 -ValidateOnly
+          if ($LASTEXITCODE) { throw 'Validation failed' }
+          Write-Host 'PASS: Windows PowerShell 5.1 parse and validation entry point'
+      - name: Package capture tools only
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory package | Out-Null
+          Copy-Item Capture-Combat-R246.cmd,Capture-Combat-R246.ps1,docs/combat-capture-r246.md package/
+          Get-ChildItem package -File | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String -Width 300 | Set-Content package/SHA256.txt
+          if (@(Get-ChildItem package -Filter *.dll).Count) { throw 'Capture package must not contain a DLL' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-FG-Combat-Capture-R246
+          path: package/*
+          if-no-files-found: error

@@ -1,0 +1,153 @@
+{
+  "source": "research/native-integration-audit/reflection-000.ll",
+  "source_sha256": "e4034de303e7fcb1b61f70ad4d5e22575f046b146accaa84f165992b138b1a8c",
+  "temporal_counter_byte_offset": 1108,
+  "primary_index": "temporal_counter * sample_count + sample_index",
+  "retry_index": "temporal_counter + 10 * retry_number",
+  "radial_cdf_limit": 0.4000000059604645,
+  "rejection_ndotl_threshold": 0.004999999888241291,
+  "angular_bounds": [
+    {
+      "roughness": 0.26,
+      "maximum_half_vector_angle_degrees": 3.159244647247161,
+      "rejection_excluded_below_view_angle_degrees": 83.39503062066815
+    },
+    {
+      "roughness": 0.278,
+      "maximum_half_vector_angle_degrees": 3.6106979255703413,
+      "rejection_excluded_below_view_angle_degrees": 82.4921240640218
+    },
+    {
+      "roughness": 0.31762695,
+      "maximum_half_vector_angle_degrees": 4.70903892069472,
+      "rejection_excluded_below_view_angle_degrees": 80.29544207377305
+    },
+    {
+      "roughness": 0.356689,
+      "maximum_half_vector_angle_degrees": 5.930639410866382,
+      "rejection_excluded_below_view_angle_degrees": 77.85224109342971
+    },
+    {
+      "roughness": 0.36,
+      "maximum_half_vector_angle_degrees": 6.040443496066339,
+      "rejection_excluded_below_view_angle_degrees": 77.6326329230298
+    },
+    {
+      "roughness": 0.46,
+      "maximum_half_vector_angle_degrees": 9.80226357989607,
+      "rejection_excluded_below_view_angle_degrees": 70.10899275537034
+    }
+  ],
+  "conditional_coverage": [
+    {
+      "counter_period": 1,
+      "spec": 2,
+      "maximum_primary_indices_per_cycle": 2
+    },
+    {
+      "counter_period": 1,
+      "spec": 4,
+      "maximum_primary_indices_per_cycle": 4
+    },
+    {
+      "counter_period": 1,
+      "spec": 8,
+      "maximum_primary_indices_per_cycle": 8
+    },
+    {
+      "counter_period": 1,
+      "spec": 16,
+      "maximum_primary_indices_per_cycle": 16
+    },
+    {
+      "counter_period": 8,
+      "spec": 2,
+      "maximum_primary_indices_per_cycle": 16
+    },
+    {
+      "counter_period": 8,
+      "spec": 4,
+      "maximum_primary_indices_per_cycle": 32
+    },
+    {
+      "counter_period": 8,
+      "spec": 8,
+      "maximum_primary_indices_per_cycle": 64
+    },
+    {
+      "counter_period": 8,
+      "spec": 16,
+      "maximum_primary_indices_per_cycle": 128
+    },
+    {
+      "counter_period": 16,
+      "spec": 2,
+      "maximum_primary_indices_per_cycle": 32
+    },
+    {
+      "counter_period": 16,
+      "spec": 4,
+      "maximum_primary_indices_per_cycle": 64
+    },
+    {
+      "counter_period": 16,
+      "spec": 8,
+      "maximum_primary_indices_per_cycle": 128
+    },
+    {
+      "counter_period": 16,
+      "spec": 16,
+      "maximum_primary_indices_per_cycle": 256
+    },
+    {
+      "counter_period": 32,
+      "spec": 2,
+      "maximum_primary_indices_per_cycle": 64
+    },
+    {
+      "counter_period": 32,
+      "spec": 4,
+      "maximum_primary_indices_per_cycle": 128
+    },
+    {
+      "counter_period": 32,
+      "spec": 8,
+      "maximum_primary_indices_per_cycle": 256
+    },
+    {
+      "counter_period": 32,
+      "spec": 16,
+      "maximum_primary_indices_per_cycle": 512
+    },
+    {
+      "counter_period": 64,
+      "spec": 2,
+      "maximum_primary_indices_per_cycle": 128
+    },
+    {
+      "counter_period": 64,
+      "spec": 4,
+      "maximum_primary_indices_per_cycle": 256
+    },
+    {
+      "counter_period": 64,
+      "spec": 8,
+      "maximum_primary_indices_per_cycle": 512
+    },
+    {
+      "counter_period": 64,
+      "spec": 16,
+      "maximum_primary_indices_per_cycle": 1024
+    }
+  ],
+  "actual_counter_period_observed": false,
+  "actual_view_angles_observed": false,
+  "game_quality_verified": false,
+  "runtime_changed": false,
+  "limitations": [
+    "Analytic real-arithmetic bounds; allow float error near boundary.",
+    "Index support is not independent ray count or quality.",
+    "A changing world-space noise texel can change directions even with repeating indices.",
+    "Captured roughness values are prior analysis inputs, not remeasured by this script."
+  ]
+}

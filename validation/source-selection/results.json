@@ -1,0 +1,26 @@
+{
+  "status": "PASS",
+  "tests": {
+    "native_policy": "PASS local runtime -Wall -Wextra -Werror",
+    "native_reader_headers": "PASS Windows x64 cross-compile -Wall -Wextra -Werror",
+    "native_dll_audit": "PASS exact supported hash and target/Present/index-advance/resource instruction bytes",
+    "rr_unchanged": 79,
+    "overlay_unchanged": true,
+    "ui_recomposition": "restored byte-identical to R5; only R6 observer removed",
+    "source_destination_contract": "PASS"
+  },
+  "msvc_build": "NOT_RUN",
+  "gpu_runtime": "NOT_RUN",
+  "changed_source_files": [
+    "src/fg_ui_recomposition.h",
+    "src/fg_native_source_policy.h",
+    "src/probe.cpp",
+    "src/fg_native_source.h",
+    "src/fg_pixel_capture.h",
+    "src/hdr10_bridge.h"
+  ],
+  "archived_source_files": [
+    "src/fg_source_tracker.h",
+    "src/fg_source_policy.h"
+  ]
+}

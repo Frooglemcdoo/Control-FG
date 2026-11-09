@@ -1,0 +1,20 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_REQUIRED",
+  "results": {
+    "normal": "PASS: actual Session capture, strict rejection, opt-in, cache, owned bytes, JSON, dedup, byte/pair/reference caps; actual exporter >256KiB audit, metadata lengths, byte-exact extractor, overwrite rejection",
+    "asan_ubsan": "PASS: actual Session capture, strict rejection, opt-in, cache, owned bytes, JSON, dedup, byte/pair/reference caps; actual exporter >256KiB audit, metadata lengths, byte-exact extractor, overwrite rejection"
+  },
+  "sha256": {
+    "tools/extract-vertex-evidence.py": "4b4f464c9f03a14ce17373320284acfb7653de1dd5aa002ca6eddb803144dde5",
+    "validation/vertex-evidence/export-test.cpp": "684dee9ffeb51b54c19b40929fa8e6d08683ca68adb42d4018353fcafdb7a545",
+    "src/rr_vertex_evidence.h": "25afa892617b1df5ada61d13c65e3a7ca3511f65e366f633d9de7fb94b51b108",
+    "src/rr_albedo_shader.h": "8b4bfdbe92097fed0719c7952c68d85501abc86c28c86c6f5c17ff118738cd0b",
+    "src/rr_albedo_capture.h": "8cdf308aeff93b10a0816ccd6be41c92c4ac32552ad9855c27ec21e785270da2",
+    "src/rr_guide_export.h": "e4b5f586c20c6e6ad53b2e2a750c1f42345ea0cb46d9ccd155ae7c6bf828a829",
+    "Build-Metadata.ps1": "892a328119bb0f82e0bbbc128c83a903294fabe60498cd7036ec60f7e8d43941",
+    "validation/vertex-evidence/test.cpp": "73c3d772618adbab1faaefb4d81b1a80091aa1057239a885024fdfe33e97ab81",
+    "validation/vertex-evidence/run.py": "f4cb3afddae7ab9215437678b6ee607734c1dd1ef691a973d41460916119a004",
+    "validation/vertex-evidence/shim/windows.h": "ea9fa5aef6573244dfbb4e1b0f4744dff36ea0d4ab1e4b07e2b4864f5022225a"
+  },
+  "limits": "Native descriptor reads use valid synthetic objects and a C++ exception shim, not Windows SEH or a GPU."
+}

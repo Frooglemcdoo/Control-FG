@@ -1,0 +1,522 @@
+{
+  "containers": [
+    {
+      "file": "rt_reflection-000.dxbc",
+      "sha256": "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 2.405254171050935e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.090819581323778e-14
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "negative_checks": [
+        "wrong hit-position math rejected",
+        "wrong miss sentinel rejected"
+      ]
+    },
+    {
+      "file": "rt_reflection-001.dxbc",
+      "sha256": "ab8df1c9b3263f534b6d43f1beb90acb5e7d0b8956844047e6abbd83aa964ed6",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-002.dxbc",
+      "sha256": "a2ed39a3d4c1eaa9a2e401bc1f04df468007a77a97b6105215991622005a5ecb",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 2.1304171902949947e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 9.355734731918103e-15
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-003.dxbc",
+      "sha256": "9d8bf04e11cafae08916137cf8e4dd66730d8beac6daa2fd6add19e8dc9b5da5",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-004.dxbc",
+      "sha256": "7e701da941303a50fa89f2e6fce276d11788e718c3e93a221e7a17a883ea968d",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 3.0105980394365218e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 3.3365313743543023e-15
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-005.dxbc",
+      "sha256": "707337cbef486f61e0577b70e021b98397f6085e4069982d78591883b6b04585",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-006.dxbc",
+      "sha256": "0411098fa35a9f6e388bc2f30e2dd79240cb0fb39654f53ab8b54d1d4785f00a",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 3.1276156095697065e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 6.1560838029421125e-16
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-007.dxbc",
+      "sha256": "bd8cd8bd7d87cca2d1e5f6ddb2bb3a239d4e69422d2e9777979b1d29791a2727",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-008.dxbc",
+      "sha256": "3b58fb0edaac252905cfce5533c82c275cba7752e074449e1ac6fe8bc640f95a",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 4.509128739314946e-16
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 5.264638295151387e-16
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-009.dxbc",
+      "sha256": "dc43fec4e661fa830db96d9f1187ae10d45f135c6e7f97a197cce88a44154ba2",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-010.dxbc",
+      "sha256": "3f999b7dea64a02cd195f9af515a5e034508a548571d86beed62d1421d0fd8a9",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 2.029099174815669e-14
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 5.877920697529261e-16
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-011.dxbc",
+      "sha256": "814a8027eaccd5af570435800a72ea93e39631ee8a7ad81a6e5ac1d4c5cb9564",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-012.dxbc",
+      "sha256": "2a86923b674f36c6df3928dbb3396b0616fa9a9feb224ded9f66580585d49bae",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 2.4959434178694017e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 2.0682015812118687e-15
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-013.dxbc",
+      "sha256": "5b9d5e7f3fa0065d1f338eed7f523740c6c3cb239352789c7d64d843870add7a",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-014.dxbc",
+      "sha256": "b71d5079430b9721802cbb17aa3d4544ac0eb98388782f179669e5f30523e1a6",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.2792012360675478e-14
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 4.825984100277249e-15
+        }
+      ],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-015.dxbc",
+      "sha256": "9c61d79b9a042510a13b14acdc00e28fb30b870955c0167977242d24059082d0",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": false,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one"
+    },
+    {
+      "file": "rt_reflection-016.dxbc",
+      "sha256": "4ef8cbe9e4fc81b5ced1026e6681732d4518db1aa96d26d4ae41fd13965bce91",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.562757800712054e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.2691892459058325e-14
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %198, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-017.dxbc",
+      "sha256": "b188002bdb6ab4feb7af2d4cc95e5c40b7671d746028059ddfd97ab326295dbf",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %198, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-018.dxbc",
+      "sha256": "4b26c839a2fe5397922ebebe722b0fbf54f94bfaa2bdeb2f7984250f27454423",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 9.933879680453493e-16
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 2.2434353311098792e-15
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %200, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-019.dxbc",
+      "sha256": "799ac13dbfbb26e703179c95d2a9bbfaf91c6d3cc17cf4c394fcee0575ac2297",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %200, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-020.dxbc",
+      "sha256": "b2549f5c5005000cfd548ad1977fad632cf5f6dae5f4784055e7c5072102d4a1",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 4.660390100854876e-16
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.035277417685758e-15
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %190, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-021.dxbc",
+      "sha256": "6c98b4e52a114ffa64a4416b16f4fa3f7e35cb15b1aed9b225a55de2c5500373",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %190, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-022.dxbc",
+      "sha256": "f92bb7c2703f220f474b5f9e26337b08a81e8271a525df0d0b45160912b5930c",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %129, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, float %120, float %122, float %124, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %127, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %126, i32 %15, i32 %15, i32 %15, i32 %15, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.2270260949635604e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 8.962942611354334e-16
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %192, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-023.dxbc",
+      "sha256": "ec647c1608fc6d3268720378d287f936de6f4dd8bdfcb21ee64f7b0516e4c571",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %192, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-024.dxbc",
+      "sha256": "265bc062fcf2129a404ce56dc15c0883da0d52c3c22a78bd1b02d5c54f7c5645",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 3.068220227352284e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.0694230084884054e-15
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %198, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-025.dxbc",
+      "sha256": "f20ed1cb40ef15b74e94101dcf16ea137315ad96d475b09a595b0e03cbb6238e",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %198, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-026.dxbc",
+      "sha256": "4104edb9538ee61c94b0f814e61d5b3d6caa96d106c8b1f9b26a92808ac8570e",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.140566757510675e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.0948549621314214e-15
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %200, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-027.dxbc",
+      "sha256": "429c3b507ec77d5b616c299fbbfd1d531c069b31cbf77da459295d0f147914d6",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %200, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-028.dxbc",
+      "sha256": "0550895d74dccae3ba8766cfe7f6437bf2fe24e9a404cc4325713314d3b6d8a6",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 9.518491571797511e-15
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 3.216783875608215e-15
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %190, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-029.dxbc",
+      "sha256": "075d43923bd074702bdfd28bbfeb5dff2ff35e6f91510566328de5b5f0f279ac",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %190, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex162, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-030.dxbc",
+      "sha256": "f6a84e6fad328e1e994b442c0556f8e2815eeab14acc813fb6eff3fc7324bfbe",
+      "position_writer": true,
+      "writers": [
+        {
+          "kind": "reflectionClosestHit",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %130, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, float %121, float %123, float %125, float %tmp157, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %128, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex39, i32 %127, i32 %16, i32 %16, i32 %16, i32 %16, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 6.392136804729913e-16
+        },
+        {
+          "kind": "reflectionMiss",
+          "position_store": "call void @dx.op.textureStore.f32(i32 67, %dx.types.Handle %29, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, float %21, float %23, float %25, float 0.000000e+00, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "material_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %28, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex16, i32 %27, i32 65535, i32 65535, i32 65535, i32 65535, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)",
+          "matrix_trials": 64,
+          "worst_error": 1.4249087324293817e-15
+        }
+      ],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %192, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    },
+    {
+      "file": "rt_reflection-031.dxbc",
+      "sha256": "039a1dfd754cf675aafab55d979f612d82000f872c04844232dc24eb80e2eebe",
+      "position_writer": false,
+      "writers": [],
+      "adaptive_end_marker": true,
+      "layer_rule": "payload receives zero-based reflection-ray loop index, incremented by one",
+      "end_marker_store": "call void @dx.op.textureStore.i32(i32 67, %dx.types.Handle %192, i32 %DispatchRaysIndex, i32 %DispatchRaysIndex169, i32 %IMin, i32 65534, i32 65534, i32 65534, i32 65534, i8 15)  ; TextureStore(srv,coord0,coord1,coord2,value0,value1,value2,value3,mask)"
+    }
+  ],
+  "scope": "static SSA dataflow; not runtime identity/lifetime proof",
+  "checks": "32 variants; 16 position writers; 2048 writer matrix trials"
+}

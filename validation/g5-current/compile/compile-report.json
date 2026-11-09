@@ -1,0 +1,224 @@
+{
+  "schema": "ControlFG.G3.WindowsTargetCompile.v1",
+  "utc": "2026-09-13T14:58:37.807724+00:00",
+  "source": "/workspace/scratch/36fa93863a31/g5-release",
+  "passed": true,
+  "compiler": "Ubuntu clang version 18.1.3 (1ubuntu1)\nTarget: x86_64-pc-linux-gnu\nThread model: posix\nInstalledDir: /tmp/control-fg-validation-toolchain-36fa93863a31/usr/bin\n",
+  "target": "x86_64-w64-windows-gnu",
+  "headers": "MinGW-w64 11.0.1; pinned NVIDIA Streamline2.14.1",
+  "packages": [
+    {
+      "package": "binutils-mingw-w64-x86-64",
+      "version": "2.41.90.20240122-1ubuntu1+11.4",
+      "sha256": "28bfabbf64a68813a56360bca056072af9ff71ef4090a4b8a8a085afcda3e4dd",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/b/binutils-mingw-w64/binutils-mingw-w64-x86-64_2.41.90.20240122-1ubuntu1+11.4_amd64.deb"
+    },
+    {
+      "package": "clang-18",
+      "version": "1:18.1.3-1ubuntu1",
+      "sha256": "628b16701014ef7ad648380b20ea74b90dd543857f933b3e34d2fc042783de25",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/l/llvm-toolchain-18/clang-18_18.1.3-1ubuntu1_amd64.deb"
+    },
+    {
+      "package": "g++-mingw-w64-x86-64-posix",
+      "version": "13.2.0-6ubuntu1+26.1",
+      "sha256": "52c3613f386e462ae71105d1a0b2a48d866ccb048ad253acff629c5a2291252d",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/g/gcc-mingw-w64/g++-mingw-w64-x86-64-posix_13.2.0-6ubuntu1+26.1_amd64.deb"
+    },
+    {
+      "package": "gcc-mingw-w64-base",
+      "version": "13.2.0-6ubuntu1+26.1",
+      "sha256": "a30c07e807e9874ea93909448c5d6d37f9569ebe60ad32de8e490aad198538a3",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/g/gcc-mingw-w64/gcc-mingw-w64-base_13.2.0-6ubuntu1+26.1_amd64.deb"
+    },
+    {
+      "package": "gcc-mingw-w64-x86-64-posix-runtime",
+      "version": "13.2.0-6ubuntu1+26.1",
+      "sha256": "aca6b438e0b55b11cedcf1170a1ee26e7979e34192e34f6e6389e560908a5bfc",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix-runtime_13.2.0-6ubuntu1+26.1_amd64.deb"
+    },
+    {
+      "package": "gcc-mingw-w64-x86-64-posix",
+      "version": "13.2.0-6ubuntu1+26.1",
+      "sha256": "0855fa1d4a618550faac3a3e4352aa3226833b28184ad3c3b496a68a22c4eda2",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/g/gcc-mingw-w64/gcc-mingw-w64-x86-64-posix_13.2.0-6ubuntu1+26.1_amd64.deb"
+    },
+    {
+      "package": "libclang-common-18-dev",
+      "version": "1:18.1.3-1ubuntu1",
+      "sha256": "d41631bb752815a8196261d1030c096591c59678c8adfbf2e6a740a691b49e80",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/l/llvm-toolchain-18/libclang-common-18-dev_18.1.3-1ubuntu1_amd64.deb"
+    },
+    {
+      "package": "libclang-cpp18",
+      "version": "1:18.1.3-1ubuntu1",
+      "sha256": "e91eda104813ee0468d145d010a4a4e142401f3f17f9a65596c66d416298d018",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/main/l/llvm-toolchain-18/libclang-cpp18_18.1.3-1ubuntu1_amd64.deb"
+    },
+    {
+      "package": "libclang1-18",
+      "version": "1:18.1.3-1ubuntu1",
+      "sha256": "1ed67106d743ab4f12db2726c5fc11c436c5e1fba613e9f1006bf3fa05cc69bd",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/main/l/llvm-toolchain-18/libclang1-18_18.1.3-1ubuntu1_amd64.deb"
+    },
+    {
+      "package": "libllvm18",
+      "version": "1:18.1.3-1ubuntu1",
+      "sha256": "af6197096ce3b89aab86de59f01c1b5feb008b2ae1514a03906c0664edb8b0b1",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/main/l/llvm-toolchain-18/libllvm18_18.1.3-1ubuntu1_amd64.deb"
+    },
+    {
+      "package": "mingw-w64-common",
+      "version": "11.0.1-3build1",
+      "sha256": "4a42fd30fbc3838c58c929d8a4882682fc12408bb7a0e6cafa913c0f0a57c187",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/m/mingw-w64/mingw-w64-common_11.0.1-3build1_all.deb"
+    },
+    {
+      "package": "mingw-w64-x86-64-dev",
+      "version": "11.0.1-3build1",
+      "sha256": "018480a62907fcca19c6bf2975ae01f5c92c23dee8c3cf7a8355c10bf7d42c6f",
+      "source": "https://snapshot.ubuntu.com/ubuntu/20260828T000000Z/pool/universe/m/mingw-w64/mingw-w64-x86-64-dev_11.0.1-3build1_all.deb"
+    }
+  ],
+  "validation_adapter": {
+    "file": "/workspace/scratch/36fa93863a31/g3-validation-setup/clang_mingw_seh_compat.h",
+    "purpose": "Preload MinGW STL before undefining its __try C++ macro. Actual project SEH keywords remain unchanged."
+  },
+  "checks": [
+    {
+      "name": "abi_check",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/bin/clang++-18",
+        "--target=x86_64-w64-windows-gnu",
+        "--sysroot=/tmp/control-fg-validation-toolchain-36fa93863a31/usr/x86_64-w64-mingw32",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++/x86_64-w64-mingw32",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/streamline-2.14.1/include",
+        "-std=c++17",
+        "-fms-extensions",
+        "-DUNICODE",
+        "-D_UNICODE",
+        "-include",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/clang_mingw_seh_compat.h",
+        "-O2",
+        "-c",
+        "/workspace/scratch/36fa93863a31/g5-release/src/abi_check.cpp",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g5-release/src",
+        "-o",
+        "/workspace/scratch/36fa93863a31/g5-validation/compile/abi_check.obj"
+      ],
+      "log": "/workspace/scratch/36fa93863a31/g5-validation/compile/abi_check.log",
+      "object_sha256": "089851f6020907fe9209d20b03d2f99728d83774039744cb241f7fb0ef223c62"
+    },
+    {
+      "name": "smoke",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/bin/clang++-18",
+        "--target=x86_64-w64-windows-gnu",
+        "--sysroot=/tmp/control-fg-validation-toolchain-36fa93863a31/usr/x86_64-w64-mingw32",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++/x86_64-w64-mingw32",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/streamline-2.14.1/include",
+        "-std=c++17",
+        "-fms-extensions",
+        "-DUNICODE",
+        "-D_UNICODE",
+        "-include",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/clang_mingw_seh_compat.h",
+        "-O2",
+        "-c",
+        "/workspace/scratch/36fa93863a31/g5-release/src/smoke.cpp",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g5-release/src",
+        "-o",
+        "/workspace/scratch/36fa93863a31/g5-validation/compile/smoke.obj"
+      ],
+      "log": "/workspace/scratch/36fa93863a31/g5-validation/compile/smoke.log",
+      "object_sha256": "f4f0c559c675397a85aee4c053103ad98c2831035cdc419f36718280b666289b"
+    },
+    {
+      "name": "probe",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/bin/clang++-18",
+        "--target=x86_64-w64-windows-gnu",
+        "--sysroot=/tmp/control-fg-validation-toolchain-36fa93863a31/usr/x86_64-w64-mingw32",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++/x86_64-w64-mingw32",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/streamline-2.14.1/include",
+        "-std=c++17",
+        "-fms-extensions",
+        "-DUNICODE",
+        "-D_UNICODE",
+        "-include",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/clang_mingw_seh_compat.h",
+        "-O2",
+        "-c",
+        "/workspace/scratch/36fa93863a31/g5-release/src/probe.cpp",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g5-release/src",
+        "-o",
+        "/workspace/scratch/36fa93863a31/g5-validation/compile/probe.obj"
+      ],
+      "log": "/workspace/scratch/36fa93863a31/g5-validation/compile/probe.log",
+      "object_sha256": "eb6335da06057272cb9331a3a8856febc5541ff93d59d205cf750b77dab746d9"
+    },
+    {
+      "name": "leaf_windows",
+      "passed": true,
+      "exit_code": 0,
+      "command": [
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/bin/clang++-18",
+        "--target=x86_64-w64-windows-gnu",
+        "--sysroot=/tmp/control-fg-validation-toolchain-36fa93863a31/usr/x86_64-w64-mingw32",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++",
+        "-isystem",
+        "/tmp/control-fg-validation-toolchain-36fa93863a31/usr/lib/gcc/x86_64-w64-mingw32/13-posix/include/c++/x86_64-w64-mingw32",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/streamline-2.14.1/include",
+        "-std=c++17",
+        "-fms-extensions",
+        "-DUNICODE",
+        "-D_UNICODE",
+        "-include",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/clang_mingw_seh_compat.h",
+        "-O2",
+        "-c",
+        "/workspace/scratch/36fa93863a31/g3-validation-setup/leaf_windows.cpp",
+        "-I",
+        "/workspace/scratch/36fa93863a31/g5-release/src",
+        "-o",
+        "/workspace/scratch/36fa93863a31/g5-validation/compile/leaf_windows.obj",
+        "-Wall",
+        "-Wextra",
+        "-Wconversion",
+        "-Werror"
+      ],
+      "log": "/workspace/scratch/36fa93863a31/g5-validation/compile/leaf_windows.log",
+      "object_sha256": "4ada5380b6d416e802deaf0f0921abe79cdadf369a5712dbe0851693190e473d"
+    }
+  ],
+  "msvc_executed": false,
+  "linked": false,
+  "windows_executed": false,
+  "gpu_execution": false,
+  "limitations": [
+    "Compile-only using Clang and real MinGW Windows headers; this is not an MSVC compiler/link/smoke/game validation."
+  ]
+}

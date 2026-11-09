@@ -1,0 +1,1502 @@
+{
+  "schema": "ControlFG.RRGuideG2.LogAssessment.v1",
+  "verdict": "Native build, asynchronous normal-guide preparation, shader-bytecode capture and normal-guide fallback export succeeded. Material replay stopped before target preparation/drawing because every material batch failed shader-model validation. This is not a material GPU execution or RR image-quality pass.",
+  "scope": "Uploaded Windows build and process logs plus independently rehashed capture files; shader equations and image semantics are separately reviewed.",
+  "build": {
+    "native_msvc": true,
+    "environment": "Visual Studio 2026 Developer Command Prompt v18.9.2 x64",
+    "warnings": [
+      "C:\\Users\\mattn\\Downloads\\FSR\\src\\rr_guide_export.h(522): warning C4456: declaration of 'stem' hides previous local declaration",
+      "C:\\Users\\mattn\\Downloads\\FSR\\src\\rr_guide_render.h(70): warning C4459: declaration of 'frequency' hides global declaration",
+      "C:\\Users\\mattn\\Downloads\\FSR\\src\\streamline_bridge.h(250): warning C4505: 'GetFGRequestedGeneratedFrames': unreferenced function with internal linkage has been removed",
+      "C:\\Users\\mattn\\Downloads\\FSR\\src\\streamline_bridge.h(280): warning C4505: 'GetFGLastStatePresentForOverlay': unreferenced function with internal linkage has been removed",
+      "C:\\Users\\mattn\\Downloads\\FSR\\src\\streamline_bridge.h(354): warning C4505: 'AdjustFGDynamicManualTargetFps': unreferenced function with internal linkage has been removed",
+      "C:\\Users\\mattn\\Downloads\\FSR\\src\\semantic_capture.h(285): warning C4505: 'PrepareNativeNgxPostSetupHook': unreferenced function with internal linkage has been removed"
+    ],
+    "errors": [],
+    "sdk_cache_hit": true,
+    "abi_pass": true,
+    "link_pass": true,
+    "smoke_pass": true,
+    "package_validation_pass": true,
+    "dll_sha256": "a1ca533c9624137a85039388af6bea897efb7e83bcaa1c56e9b92ad03030d45f",
+    "built_installed_hash_records_match": true,
+    "version": "1.0.0-RR-Native-G2",
+    "revision": "r1-rr-native-g2",
+    "phase": "NativeG2MaterialGuideImages",
+    "installed_runtime_vs_sdk_records": [
+      {
+        "file": "ControlFGStreamline/sl.interposer.dll",
+        "receipt_sha256": "8c87c9499461da561edd529aa9bf7831d67d7b94ebb1c1a5ed54ef4934e1ea4c",
+        "sdk_sha256": "8c87c9499461da561edd529aa9bf7831d67d7b94ebb1c1a5ed54ef4934e1ea4c",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/sl.common.dll",
+        "receipt_sha256": "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d",
+        "sdk_sha256": "82924a8954dd671e09351c5de0eb87ad0eb25b944cc9f9ab955ca1d9950de15d",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/sl.pcl.dll",
+        "receipt_sha256": "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582",
+        "sdk_sha256": "f13d51cfa05f4cd514df2026049e2db8adf359221713170ad386fd499915b582",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/sl.reflex.dll",
+        "receipt_sha256": "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0",
+        "sdk_sha256": "0ce9725e3e03ea9e7f81d008b57f33ee365973d2e349131c8b1c3e3378fe2db0",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/sl.dlss_g.dll",
+        "receipt_sha256": "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c",
+        "sdk_sha256": "f4a6b2b14dcc0b1485989e430d3b4e3a44ac1800b92ba1ad74f476e64fb2b09c",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/nvngx_dlssg.dll",
+        "receipt_sha256": "ff6e90eb78b827927dff5b4ecc6b1c870c2e9bca29ed9f48c7d348cc9e170b82",
+        "sdk_sha256": "ff6e90eb78b827927dff5b4ecc6b1c870c2e9bca29ed9f48c7d348cc9e170b82",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/sl.dlss_d.dll",
+        "receipt_sha256": "026b9f4f9ea848f2f5aa0e2024fc6b1c885f57eea5d41078124dba14f873b86b",
+        "sdk_sha256": "026b9f4f9ea848f2f5aa0e2024fc6b1c885f57eea5d41078124dba14f873b86b",
+        "passed": true
+      },
+      {
+        "file": "ControlFGStreamline/nvngx_dlssd.dll",
+        "receipt_sha256": "4bc7ea5fcb2f32cf86bc2cb072e8d2860914a0be511cbdcb2fc206c1d9d83b80",
+        "sdk_sha256": "4bc7ea5fcb2f32cf86bc2cb072e8d2860914a0be511cbdcb2fc206c1d9d83b80",
+        "passed": true
+      }
+    ],
+    "limitation": "DLL binaries are not in the log ZIP; build/installation/runtime file identities are compared as recorded metadata, not independently rehashed installed binaries."
+  },
+  "probes": [
+    {
+      "pid": 51412,
+      "file": "probe/probe-20260913-042713-833-51412.log",
+      "physical_lines": 8,
+      "qpc_span_seconds": 0.0107899,
+      "maximum_logged_present": 0,
+      "maximum_logged_aa": 0,
+      "marker_counts": {
+        "PROBE": 1,
+        "LIMITS": 1,
+        "PROBE_DISABLED": 1,
+        "SL_FACTORY_NATIVE": 1,
+        "SL_BOOTSTRAP_BEGIN": 1,
+        "SL_DISABLED": 1,
+        "SL_FACTORY_UPGRADE_SKIP": 1,
+        "SL_FACTORY_RETURN": 1
+      }
+    },
+    {
+      "pid": 51344,
+      "file": "probe/probe-20260913-042736-038-51344.log",
+      "physical_lines": 242,
+      "qpc_span_seconds": 14.131137,
+      "maximum_logged_present": 120,
+      "maximum_logged_aa": 0,
+      "marker_counts": {
+        "PROBE": 1,
+        "LIMITS": 1,
+        "TARGET_HASHES_MATCH": 1,
+        "D3D12_CREATE_DEVICE_TARGET": 1,
+        "CONTROL_NGX_INIT_TARGET": 1,
+        "SL_QUEUE_CTOR_TARGET": 1,
+        "CONTROL_NGX_INIT_RELAY": 1,
+        "SL_QUEUE_CTOR_RELAY": 1,
+        "HOOK_INSTALLED": 9,
+        "RR_OBSERVER_TARGET": 3,
+        "RR_OBSERVER_INSTALLED": 3,
+        "RR_OBSERVER_SUMMARY": 1,
+        "RR_GUIDE_G2_ALBEDO_HOOKS_READY": 1,
+        "RR_GUIDE_G2_NATIVE_PATH": 1,
+        "RR_GUIDE_G2_READY": 1,
+        "FG_SETTINGS_LOAD": 1,
+        "FG_OVERLAY_THREAD_STARTED": 1,
+        "PROBE_ACTIVE": 1,
+        "FG_OVERLAY_READY": 1,
+        "FG_OVERLAY_STABILITY_TEST": 1,
+        "FG_OVERLAY_LOGO_LOAD": 1,
+        "SL_FACTORY_NATIVE": 4,
+        "SL_BOOTSTRAP_BEGIN": 1,
+        "SL_SIGNATURE": 1,
+        "SL_LOAD_BEGIN": 1,
+        "SL_LOAD_END": 1,
+        "SL_NGX_SEARCH_PATHS": 1,
+        "SL_IDENTITY": 1,
+        "SL_INIT_BEGIN": 1,
+        "FG_DISPLAY_REFRESH": 1,
+        "SL_BOOTSTRAP_REENTRY_SKIPPED": 1,
+        "SL_FACTORY_UPGRADE_SKIP": 1,
+        "SL_FACTORY_RETURN": 4,
+        "SL_INIT_END": 1,
+        "SL_CORE_READY": 1,
+        "SL_FACTORY_UPGRADE": 3,
+        "HDR10_FACTORY_WRAP": 3,
+        "D3D12_CREATE_DEVICE_RETURN": 1,
+        "FG_GPU_CLASS_DETECT": 1,
+        "SL_DEVICE_CAPTURED": 1,
+        "SL_DEVICE_PROXY_BEGIN": 1,
+        "SL_DEVICE_PROXY_END": 1,
+        "SL_DEVICE_PROXY_READY": 1,
+        "SL_DEVICE_BIND_BEGIN": 1,
+        "SL_DEVICE_BIND_END": 1,
+        "SL_DEVICE_READY": 1,
+        "SL_FEATURE_GATE": 1,
+        "SL_RR_FEATURE_GATE": 1,
+        "SL_FRAME_FUNCTION": 3,
+        "SL_DLSSG_FUNCTION": 2,
+        "SL_DLSSD_FUNCTION": 3,
+        "SL_RR_HANDSHAKE": 1,
+        "SL_REFLEX_OPTIONS": 1,
+        "SL_QUEUE_ROUTE_BEGIN": 3,
+        "HDR10_BRIDGE_QUEUE_CAPTURE": 1,
+        "SL_QUEUE_ROUTE_END": 3,
+        "HDR10_BRIDGE_CREATE": 1,
+        "HDR10_BRIDGE_DORMANT": 1,
+        "CONTROL_NGX_INIT_AUGMENT": 1,
+        "CONTROL_NGX_INIT_RETURN": 1,
+        "HDR10_BRIDGE_DORMANT_RESIZE": 2,
+        "HUD_DISPATCH_ENTER": 12,
+        "HUD_DISPATCH_RETURN": 12,
+        "SL_FRAME_TOKEN": 8,
+        "SL_SIMULATION_MARKER_START": 8,
+        "BEGIN_ENTER": 12,
+        "BEGIN_RETURN": 12,
+        "HUD_RENDER_ENTER": 16,
+        "HUD_RENDER_RETURN": 16,
+        "PRESENT_ENTER": 12,
+        "SL_BACKBUFFER_INDEX": 8,
+        "SL_PRESENT_FRAME_GATE": 8,
+        "PRESENT_RETURN": 12,
+        "SL_DLSSG_STATE_SAMPLE": 4,
+        "HDR10_BRIDGE_QI_DELEGATED": 4,
+        "SL_PRESENT_MANUAL_GATE": 4,
+        "COUNTERS": 1
+      }
+    },
+    {
+      "pid": 9704,
+      "file": "probe/probe-20260913-042806-028-9704.log",
+      "physical_lines": 24,
+      "qpc_span_seconds": 1.1372265,
+      "maximum_logged_present": 0,
+      "maximum_logged_aa": 0,
+      "marker_counts": {
+        "PROBE": 1,
+        "LIMITS": 1,
+        "PROBE_DISABLED": 1,
+        "SL_FACTORY_NATIVE": 3,
+        "SL_BOOTSTRAP_BEGIN": 1,
+        "SL_SIGNATURE": 1,
+        "SL_LOAD_BEGIN": 1,
+        "SL_LOAD_END": 1,
+        "SL_NGX_SEARCH_PATHS": 1,
+        "SL_IDENTITY": 1,
+        "SL_INIT_BEGIN": 1,
+        "SL_BOOTSTRAP_REENTRY_SKIPPED": 1,
+        "SL_FACTORY_UPGRADE_SKIP": 1,
+        "SL_FACTORY_RETURN": 3,
+        "SL_INIT_END": 1,
+        "SL_CORE_READY": 1,
+        "SL_FACTORY_UPGRADE": 2,
+        "HDR10_FACTORY_WRAP": 2
+      }
+    },
+    {
+      "pid": 51652,
+      "file": "probe/probe-20260913-042809-347-51652.log",
+      "physical_lines": 4112,
+      "qpc_span_seconds": 90.8189887,
+      "maximum_logged_present": 8520,
+      "maximum_logged_aa": 3225,
+      "marker_counts": {
+        "PROBE": 1,
+        "LIMITS": 1,
+        "TARGET_HASHES_MATCH": 1,
+        "D3D12_CREATE_DEVICE_TARGET": 1,
+        "CONTROL_NGX_INIT_TARGET": 1,
+        "SL_QUEUE_CTOR_TARGET": 1,
+        "CONTROL_NGX_INIT_RELAY": 1,
+        "SL_QUEUE_CTOR_RELAY": 1,
+        "HOOK_INSTALLED": 9,
+        "RR_OBSERVER_TARGET": 3,
+        "RR_OBSERVER_INSTALLED": 3,
+        "RR_OBSERVER_SUMMARY": 1,
+        "RR_GUIDE_G2_ALBEDO_HOOKS_READY": 1,
+        "RR_GUIDE_G2_NATIVE_PATH": 1,
+        "RR_GUIDE_G2_READY": 1,
+        "FG_SETTINGS_LOAD": 1,
+        "FG_OVERLAY_THREAD_STARTED": 1,
+        "PROBE_ACTIVE": 1,
+        "FG_OVERLAY_READY": 1,
+        "FG_OVERLAY_STABILITY_TEST": 1,
+        "FG_OVERLAY_LOGO_LOAD": 1,
+        "SL_FACTORY_NATIVE": 4,
+        "SL_BOOTSTRAP_BEGIN": 1,
+        "SL_SIGNATURE": 1,
+        "SL_LOAD_BEGIN": 1,
+        "SL_LOAD_END": 1,
+        "SL_NGX_SEARCH_PATHS": 1,
+        "SL_IDENTITY": 1,
+        "SL_INIT_BEGIN": 1,
+        "FG_DISPLAY_REFRESH": 1,
+        "SL_BOOTSTRAP_REENTRY_SKIPPED": 1,
+        "SL_FACTORY_UPGRADE_SKIP": 1,
+        "SL_FACTORY_RETURN": 4,
+        "SL_INIT_END": 1,
+        "SL_CORE_READY": 1,
+        "SL_FACTORY_UPGRADE": 3,
+        "HDR10_FACTORY_WRAP": 3,
+        "D3D12_CREATE_DEVICE_RETURN": 1,
+        "FG_GPU_CLASS_DETECT": 1,
+        "SL_DEVICE_CAPTURED": 1,
+        "SL_DEVICE_PROXY_BEGIN": 1,
+        "SL_DEVICE_PROXY_END": 1,
+        "SL_DEVICE_PROXY_READY": 1,
+        "SL_DEVICE_BIND_BEGIN": 1,
+        "SL_DEVICE_BIND_END": 1,
+        "SL_DEVICE_READY": 1,
+        "SL_FEATURE_GATE": 1,
+        "SL_RR_FEATURE_GATE": 1,
+        "SL_FRAME_FUNCTION": 3,
+        "SL_DLSSG_FUNCTION": 2,
+        "SL_DLSSD_FUNCTION": 3,
+        "SL_RR_HANDSHAKE": 1,
+        "SL_REFLEX_OPTIONS": 1,
+        "SL_QUEUE_ROUTE_BEGIN": 3,
+        "HDR10_BRIDGE_QUEUE_CAPTURE": 1,
+        "SL_QUEUE_ROUTE_END": 3,
+        "HDR10_BRIDGE_CREATE": 1,
+        "HDR10_BRIDGE_DORMANT": 1,
+        "CONTROL_NGX_INIT_AUGMENT": 1,
+        "CONTROL_NGX_INIT_RETURN": 1,
+        "HDR10_BRIDGE_DORMANT_RESIZE": 2,
+        "FG_OVERLAY_TOGGLE": 3,
+        "FG_OVERLAY_VISIBILITY_TRANSITION": 4,
+        "HUD_DISPATCH_ENTER": 23,
+        "HUD_DISPATCH_RETURN": 23,
+        "SL_FRAME_TOKEN": 43,
+        "SL_SIMULATION_MARKER_START": 43,
+        "BEGIN_ENTER": 24,
+        "BEGIN_RETURN": 24,
+        "HUD_RENDER_ENTER": 29,
+        "HUD_RENDER_RETURN": 29,
+        "PRESENT_ENTER": 24,
+        "SL_BACKBUFFER_INDEX": 43,
+        "SL_PRESENT_FRAME_GATE": 29,
+        "PRESENT_RETURN": 24,
+        "SL_DLSSG_STATE_SAMPLE": 87,
+        "HDR10_BRIDGE_QI_DELEGATED": 87,
+        "SL_PRESENT_MANUAL_GATE": 87,
+        "COUNTERS": 71,
+        "FG_RUNTIME_STATS": 36,
+        "FG_OVERLAY_CADENCE": 12,
+        "RR_PIPELINE_SETUP": 32,
+        "RR_RAYGEN_BIND": 32,
+        "RR_RAYTRACE_ENTER": 85,
+        "RR_RAYTRACE_RETURN": 85,
+        "CAMERA_SNAPSHOT": 25,
+        "CAMERA_ARRAY": 150,
+        "CAMERA_VALUES": 550,
+        "AA_ENTER": 25,
+        "RESOURCE": 125,
+        "RESOURCE_UNAVAILABLE": 100,
+        "CONTROL_DLSS_READY": 1,
+        "AA_TRANSITION": 1,
+        "SL_RR_OPTIMAL_CANDIDATE": 6,
+        "SL_RR_OPTIONS_HANDSHAKE": 1,
+        "SL_LOG": 7,
+        "SL_CONSTANTS": 25,
+        "SL_RESOURCE_TAG": 47,
+        "NGX_POST_EVAL": 25,
+        "NGX_RESOURCE": 125,
+        "NGX_RESOURCE_EMPTY": 25,
+        "NGX_FLOAT": 150,
+        "NGX_UINT": 150,
+        "NGX_INT": 100,
+        "NGX_FEATURE_FLAGS": 25,
+        "AA_RETURN": 25,
+        "SWAPCHAIN_FRAME": 178,
+        "ENGINE_HDR_STATE": 178,
+        "SWAPCHAIN": 178,
+        "SWAPCHAIN_MODE_CHANGE": 1,
+        "SWAPCHAIN_BUFFER": 178,
+        "SWAPCHAIN_COLOR_SUPPORT": 3,
+        "SWAPCHAIN_BUFFER_ALL": 6,
+        "SWAPCHAIN_DEVICE": 3,
+        "PRESENT_PATH": 178,
+        "HUD_RTT_TARGET": 128,
+        "HUD_COMMAND_CONTEXT": 64,
+        "HUD_PRE_UI_CANDIDATE": 64,
+        "HUD_RTT_FRAME_SUMMARY": 64,
+        "SWAP_TRACE_TRIGGER": 57,
+        "FG_MODE_SEGMENT": 2,
+        "SL_DLSSG_MODE": 2,
+        "SL_DLSSG_STATE": 2,
+        "SL_PRESENT_MARKER_START": 22,
+        "FG_FIRST_GENERATED_FRAME": 1,
+        "FG_GENERATION_SEGMENT_CONFIRMED": 1,
+        "FG_FIRST_TARGET_MFG_FRAME": 1,
+        "SL_PRESENT_MARKER_END": 14,
+        "RR_GUIDE_G2_PREPARE_QUEUED": 1,
+        "RR_GUIDE_G2_PREPARE_TIMING": 4,
+        "RR_GUIDE_G2_PREPARE_COMPLETE": 1,
+        "RR_GUIDE_G2_SHADER_REJECT": 8,
+        "RR_GUIDE_G2_SHADER_CONTRACT": 1,
+        "RR_GUIDE_G2_ALBEDO_STOP": 1,
+        "RR_GUIDE_G2_CAPTURE_TIMING": 1,
+        "RR_GUIDE_G2_INPUTS_COPIED": 1,
+        "RR_GUIDE_G2_DISPATCH_SUBMITTED": 1,
+        "RR_GUIDE_G2_EXPORT_COMPLETE": 1
+      }
+    }
+  ],
+  "streamline": [
+    {
+      "pid": 51344,
+      "file": "streamline/Streamline-v1.0.0-RR-Native-P9-51344/sl.log",
+      "physical_lines": 489,
+      "labelled_severity_counts": {
+        "info": 317
+      },
+      "warnings": [],
+      "errors": [],
+      "informational_model_cache_load_misses": 6
+    },
+    {
+      "pid": 51652,
+      "file": "streamline/Streamline-v1.0.0-RR-Native-P9-51652/sl.log",
+      "physical_lines": 530,
+      "labelled_severity_counts": {
+        "info": 346,
+        "warn": 6
+      },
+      "warnings": [
+        "[23-28-46][streamline][warn][tid:27044][36s:945ms:866us]dlss_dEntry.cpp:1143[slGetData] DLSSContext 'getOptimalSettings' returns invalid size (0 x 0), due to unsupported mode or output size",
+        "[23-28-46][streamline][warn][tid:27044][36s:969ms:111us]dlfgPresent.cpp:419[sanitizeResourceExtent] Invalid backbuffer resource extent, IF optionally specified by the client! Either extent not provided or one of the extent dimensions (0 x 0) is incorrectly zero. Resetting extent to full backbuffer resource size (3840 x 2160)",
+        "[23-28-46][streamline][warn][tid:27044][37s:167ms:752us]d3d12.cpp:2533[cloneResource] One or more tagged resources use an unsupported alignment that is being overridden to 0 (e.g. resource 'nv.sl.common.clone.tagVolatile.kBufferTypeHUDLessColor.0': alignment 65536). Further occurrences are not logged.",
+        "[23-28-47][streamline][warn][tid:27044][37s:849ms:169us]dlfgPresent.cpp:1321[presentCommon] Frame rate over 100.00ms, reseting frame timer",
+        "[23-29-39][streamline][warn][tid:27044][89s:726ms:870us]flipMetering.cpp:182[setFlipConfig] FC feedback: 1",
+        "[23-29-40][streamline][warn][tid:27044][90s:521ms:280us]flipMetering.cpp:182[setFlipConfig] FC feedback: 1"
+      ],
+      "errors": [],
+      "informational_model_cache_load_misses": 6
+    },
+    {
+      "pid": 9704,
+      "file": "streamline/Streamline-v1.0.0-RR-Native-P9-9704/sl.log",
+      "physical_lines": 39,
+      "labelled_severity_counts": {
+        "info": 39
+      },
+      "warnings": [],
+      "errors": [],
+      "informational_model_cache_load_misses": 0
+    }
+  ],
+  "main_pid": 51652,
+  "qpc_frequency": 10000000,
+  "main_last_counters": {
+    "line_number": 4112,
+    "qpc": 771527282807,
+    "tid": 27044,
+    "marker": "COUNTERS",
+    "fields": {
+      "begin": "8520",
+      "present": "8520",
+      "aa": "3225",
+      "aa_failures": "0",
+      "hud_dispatch": "8521",
+      "hud_render": "8520",
+      "samples": "25",
+      "transition_samples": "1",
+      "swap_samples": "57",
+      "hud_target_frames": "64",
+      "hud_target_records": "128",
+      "backbuffer_index_successes": "8520",
+      "backbuffer_index_failures": "0",
+      "fg_ready_presents": "3225",
+      "fg_enabled_presents": "3225",
+      "generated_state_samples": "56"
+    },
+    "text": "qpc=771527282807 tid=27044 COUNTERS begin=8520 present=8520 aa=3225 aa_failures=0 hud_dispatch=8521 hud_render=8520 samples=25 transition_samples=1 swap_samples=57 hud_target_frames=64 hud_target_records=128 backbuffer_index_successes=8520 backbuffer_index_failures=0 fg_ready_presents=3225 fg_enabled_presents=3225 generated_state_samples=56"
+  },
+  "main_last_fg_stats": {
+    "line_number": 4095,
+    "qpc": 771516502832,
+    "tid": 27044,
+    "marker": "FG_RUNTIME_STATS",
+    "fields": {
+      "present": "8400",
+      "selected_selection": "2x",
+      "selected_code": "2",
+      "requested_generated": "1",
+      "target_multiplier": "2x",
+      "dynamic_target_policy": "n/a",
+      "dynamic_target_fps": "0.000",
+      "manual_target_fps": "124",
+      "detected_refresh_fps": "143.999",
+      "fg_ready_presents": "3225",
+      "fg_enabled_presents": "3225",
+      "generated_state_samples": "56",
+      "target_multiplier_state_samples": "56",
+      "dynamic_generated_state_samples": "0",
+      "last_frames_presented": "1",
+      "max_frames_presented_observed": "2",
+      "mfg_capability_known": "1",
+      "mfg_supported": "1",
+      "mfg_max_generated": "5",
+      "mfg_max_multiplier": "6x",
+      "mfg_capability_checks": "0",
+      "dynamic_capability_known": "1",
+      "dynamic_supported": "1",
+      "dynamic_capability_checks": "0",
+      "dynamic_target_changes": "0",
+      "display_refresh_changes": "1",
+      "backbuffer_index_attempts": "8400",
+      "backbuffer_index_successes": "8400",
+      "backbuffer_index_failures": "0",
+      "enable_transitions": "1",
+      "disable_transitions": "1",
+      "selection_changes": "0",
+      "generated_segments": "1",
+      "resolution_transitions": "0",
+      "simulation_marker_attempts": "8400",
+      "simulation_marker_starts": "8400",
+      "simulation_marker_failures": "0",
+      "suppressed_info_callbacks": "332"
+    },
+    "text": "qpc=771516502832 tid=27044 FG_RUNTIME_STATS present=8400 selected_selection=2x selected_code=2 requested_generated=1 target_multiplier=2x dynamic_target_policy=n/a dynamic_target_fps=0.000 manual_target_fps=124 detected_refresh_fps=143.999 fg_ready_presents=3225 fg_enabled_presents=3225 generated_state_samples=56 target_multiplier_state_samples=56 dynamic_generated_state_samples=0 last_frames_presented=1 max_frames_presented_observed=2 mfg_capability_known=1 mfg_supported=1 mfg_max_generated=5 mfg_max_multiplier=6x mfg_capability_checks=0 dynamic_capability_known=1 dynamic_supported=1 dynamic_capability_checks=0 dynamic_target_changes=0 display_refresh_changes=1 backbuffer_index_attempts=8400 backbuffer_index_successes=8400 backbuffer_index_failures=0 enable_transitions=1 disable_transitions=1 selection_changes=0 generated_segments=1 resolution_transitions=0 simulation_marker_attempts=8400 simulation_marker_starts=8400 simulation_marker_failures=0 suppressed_info_callbacks=332"
+  },
+  "main_last_dlssg_state": {
+    "line_number": 4094,
+    "qpc": 771516502673,
+    "tid": 27044,
+    "marker": "SL_DLSSG_STATE_SAMPLE",
+    "fields": {
+      "present": "8400",
+      "result": "0",
+      "status": "0x0",
+      "frames_presented": "1",
+      "selected_selection": "2x",
+      "selected_code": "2",
+      "requested_generated": "1",
+      "target_multiplier": "2x",
+      "dynamic_target_policy": "n/a",
+      "dynamic_target_fps": "0.000",
+      "detected_refresh_fps": "143.999",
+      "max_generated": "5",
+      "max_multiplier": "6x",
+      "dynamic_supported": "1",
+      "min_dimension": "100",
+      "constants_successes": "3225",
+      "tag_successes": "6450",
+      "tag_failures": "0",
+      "frame_tag_mask": "0x0",
+      "simulation_marker_starts": "8400",
+      "simulation_marker_failures": "0",
+      "marker_starts": "3225",
+      "marker_ends": "3225",
+      "fg_api_enabled": "0",
+      "backbuffer_index_successes": "8400",
+      "backbuffer_index_failures": "0",
+      "last_backbuffer_index": "1",
+      "generated_segments": "1",
+      "target_multiplier_state_samples": "56",
+      "dynamic_generated_state_samples": "0",
+      "max_frames_presented_observed": "2"
+    },
+    "text": "qpc=771516502673 tid=27044 SL_DLSSG_STATE_SAMPLE present=8400 result=0 status=0x0 frames_presented=1 selected_selection=2x selected_code=2 requested_generated=1 target_multiplier=2x dynamic_target_policy=n/a dynamic_target_fps=0.000 detected_refresh_fps=143.999 max_generated=5 max_multiplier=6x dynamic_supported=1 min_dimension=100 constants_successes=3225 tag_successes=6450 tag_failures=0 frame_tag_mask=0x0 simulation_marker_starts=8400 simulation_marker_failures=0 marker_starts=3225 marker_ends=3225 fg_api_enabled=0 backbuffer_index_successes=8400 backbuffer_index_failures=0 last_backbuffer_index=1 generated_segments=1 target_multiplier_state_samples=56 dynamic_generated_state_samples=0 max_frames_presented_observed=2"
+  },
+  "main_marker_counts": {
+    "PROBE": 1,
+    "LIMITS": 1,
+    "TARGET_HASHES_MATCH": 1,
+    "D3D12_CREATE_DEVICE_TARGET": 1,
+    "CONTROL_NGX_INIT_TARGET": 1,
+    "SL_QUEUE_CTOR_TARGET": 1,
+    "CONTROL_NGX_INIT_RELAY": 1,
+    "SL_QUEUE_CTOR_RELAY": 1,
+    "HOOK_INSTALLED": 9,
+    "RR_OBSERVER_TARGET": 3,
+    "RR_OBSERVER_INSTALLED": 3,
+    "RR_OBSERVER_SUMMARY": 1,
+    "RR_GUIDE_G2_ALBEDO_HOOKS_READY": 1,
+    "RR_GUIDE_G2_NATIVE_PATH": 1,
+    "RR_GUIDE_G2_READY": 1,
+    "FG_SETTINGS_LOAD": 1,
+    "FG_OVERLAY_THREAD_STARTED": 1,
+    "PROBE_ACTIVE": 1,
+    "FG_OVERLAY_READY": 1,
+    "FG_OVERLAY_STABILITY_TEST": 1,
+    "FG_OVERLAY_LOGO_LOAD": 1,
+    "SL_FACTORY_NATIVE": 4,
+    "SL_BOOTSTRAP_BEGIN": 1,
+    "SL_SIGNATURE": 1,
+    "SL_LOAD_BEGIN": 1,
+    "SL_LOAD_END": 1,
+    "SL_NGX_SEARCH_PATHS": 1,
+    "SL_IDENTITY": 1,
+    "SL_INIT_BEGIN": 1,
+    "FG_DISPLAY_REFRESH": 1,
+    "SL_BOOTSTRAP_REENTRY_SKIPPED": 1,
+    "SL_FACTORY_UPGRADE_SKIP": 1,
+    "SL_FACTORY_RETURN": 4,
+    "SL_INIT_END": 1,
+    "SL_CORE_READY": 1,
+    "SL_FACTORY_UPGRADE": 3,
+    "HDR10_FACTORY_WRAP": 3,
+    "D3D12_CREATE_DEVICE_RETURN": 1,
+    "FG_GPU_CLASS_DETECT": 1,
+    "SL_DEVICE_CAPTURED": 1,
+    "SL_DEVICE_PROXY_BEGIN": 1,
+    "SL_DEVICE_PROXY_END": 1,
+    "SL_DEVICE_PROXY_READY": 1,
+    "SL_DEVICE_BIND_BEGIN": 1,
+    "SL_DEVICE_BIND_END": 1,
+    "SL_DEVICE_READY": 1,
+    "SL_FEATURE_GATE": 1,
+    "SL_RR_FEATURE_GATE": 1,
+    "SL_FRAME_FUNCTION": 3,
+    "SL_DLSSG_FUNCTION": 2,
+    "SL_DLSSD_FUNCTION": 3,
+    "SL_RR_HANDSHAKE": 1,
+    "SL_REFLEX_OPTIONS": 1,
+    "SL_QUEUE_ROUTE_BEGIN": 3,
+    "HDR10_BRIDGE_QUEUE_CAPTURE": 1,
+    "SL_QUEUE_ROUTE_END": 3,
+    "HDR10_BRIDGE_CREATE": 1,
+    "HDR10_BRIDGE_DORMANT": 1,
+    "CONTROL_NGX_INIT_AUGMENT": 1,
+    "CONTROL_NGX_INIT_RETURN": 1,
+    "HDR10_BRIDGE_DORMANT_RESIZE": 2,
+    "FG_OVERLAY_TOGGLE": 3,
+    "FG_OVERLAY_VISIBILITY_TRANSITION": 4,
+    "HUD_DISPATCH_ENTER": 23,
+    "HUD_DISPATCH_RETURN": 23,
+    "SL_FRAME_TOKEN": 43,
+    "SL_SIMULATION_MARKER_START": 43,
+    "BEGIN_ENTER": 24,
+    "BEGIN_RETURN": 24,
+    "HUD_RENDER_ENTER": 29,
+    "HUD_RENDER_RETURN": 29,
+    "PRESENT_ENTER": 24,
+    "SL_BACKBUFFER_INDEX": 43,
+    "SL_PRESENT_FRAME_GATE": 29,
+    "PRESENT_RETURN": 24,
+    "SL_DLSSG_STATE_SAMPLE": 87,
+    "HDR10_BRIDGE_QI_DELEGATED": 87,
+    "SL_PRESENT_MANUAL_GATE": 87,
+    "COUNTERS": 71,
+    "FG_RUNTIME_STATS": 36,
+    "FG_OVERLAY_CADENCE": 12,
+    "RR_PIPELINE_SETUP": 32,
+    "RR_RAYGEN_BIND": 32,
+    "RR_RAYTRACE_ENTER": 85,
+    "RR_RAYTRACE_RETURN": 85,
+    "CAMERA_SNAPSHOT": 25,
+    "CAMERA_ARRAY": 150,
+    "CAMERA_VALUES": 550,
+    "AA_ENTER": 25,
+    "RESOURCE": 125,
+    "RESOURCE_UNAVAILABLE": 100,
+    "CONTROL_DLSS_READY": 1,
+    "AA_TRANSITION": 1,
+    "SL_RR_OPTIMAL_CANDIDATE": 6,
+    "SL_RR_OPTIONS_HANDSHAKE": 1,
+    "SL_LOG": 7,
+    "SL_CONSTANTS": 25,
+    "SL_RESOURCE_TAG": 47,
+    "NGX_POST_EVAL": 25,
+    "NGX_RESOURCE": 125,
+    "NGX_RESOURCE_EMPTY": 25,
+    "NGX_FLOAT": 150,
+    "NGX_UINT": 150,
+    "NGX_INT": 100,
+    "NGX_FEATURE_FLAGS": 25,
+    "AA_RETURN": 25,
+    "SWAPCHAIN_FRAME": 178,
+    "ENGINE_HDR_STATE": 178,
+    "SWAPCHAIN": 178,
+    "SWAPCHAIN_MODE_CHANGE": 1,
+    "SWAPCHAIN_BUFFER": 178,
+    "SWAPCHAIN_COLOR_SUPPORT": 3,
+    "SWAPCHAIN_BUFFER_ALL": 6,
+    "SWAPCHAIN_DEVICE": 3,
+    "PRESENT_PATH": 178,
+    "HUD_RTT_TARGET": 128,
+    "HUD_COMMAND_CONTEXT": 64,
+    "HUD_PRE_UI_CANDIDATE": 64,
+    "HUD_RTT_FRAME_SUMMARY": 64,
+    "SWAP_TRACE_TRIGGER": 57,
+    "FG_MODE_SEGMENT": 2,
+    "SL_DLSSG_MODE": 2,
+    "SL_DLSSG_STATE": 2,
+    "SL_PRESENT_MARKER_START": 22,
+    "FG_FIRST_GENERATED_FRAME": 1,
+    "FG_GENERATION_SEGMENT_CONFIRMED": 1,
+    "FG_FIRST_TARGET_MFG_FRAME": 1,
+    "SL_PRESENT_MARKER_END": 14,
+    "RR_GUIDE_G2_PREPARE_QUEUED": 1,
+    "RR_GUIDE_G2_PREPARE_TIMING": 4,
+    "RR_GUIDE_G2_PREPARE_COMPLETE": 1,
+    "RR_GUIDE_G2_SHADER_REJECT": 8,
+    "RR_GUIDE_G2_SHADER_CONTRACT": 1,
+    "RR_GUIDE_G2_ALBEDO_STOP": 1,
+    "RR_GUIDE_G2_CAPTURE_TIMING": 1,
+    "RR_GUIDE_G2_INPUTS_COPIED": 1,
+    "RR_GUIDE_G2_DISPATCH_SUBMITTED": 1,
+    "RR_GUIDE_G2_EXPORT_COMPLETE": 1
+  },
+  "material": {
+    "hook_ready": {
+      "line_number": 25,
+      "qpc": 770622830195,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_ALBEDO_HOOKS_READY",
+      "fields": {
+        "prepare": "0x632008",
+        "join": "0x631C18",
+        "serial": "0x12E29E",
+        "worker": "0x126591",
+        "captures": "1",
+        "rr_eval": "disabled"
+      },
+      "text": "qpc=770622830195 tid=27044 RR_GUIDE_G2_ALBEDO_HOOKS_READY prepare=0x632008 join=0x631C18 serial=0x12E29E worker=0x126591 captures=1 rr_eval=disabled"
+    },
+    "native_path": {
+      "line_number": 26,
+      "qpc": 770622830251,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_NATIVE_PATH",
+      "fields": {
+        "ready": "1",
+        "normal_fallback": "1",
+        "semantics_verified": "0",
+        "rr_eval": "disabled"
+      },
+      "text": "qpc=770622830251 tid=27044 RR_GUIDE_G2_NATIVE_PATH ready=1 normal_fallback=1 semantics_verified=0 rr_eval=disabled"
+    },
+    "contract": {
+      "line_number": 2401,
+      "qpc": 771015696186,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_SHADER_CONTRACT",
+      "fields": {
+        "frame": "3166",
+        "source_batches": "494",
+        "accepted_batches": "0",
+        "rejected_batches": "494",
+        "targets": "0",
+        "shader_count": "3",
+        "cpu_ms": "4.245",
+        "semantics_verified": "0"
+      },
+      "text": "qpc=771015696186 tid=27044 RR_GUIDE_G2_SHADER_CONTRACT frame=3166 source_batches=494 accepted_batches=0 rejected_batches=494 targets=0 shader_count=3 cpu_ms=4.245 semantics_verified=0"
+    },
+    "rejection_samples": [
+      {
+        "line_number": 2393,
+        "qpc": 771015694563,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "0",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015694563 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=0 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2394,
+        "qpc": 771015694751,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "1",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015694751 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=1 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2395,
+        "qpc": 771015694788,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "2",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015694788 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=2 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2396,
+        "qpc": 771015694815,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "3",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015694815 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=3 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2397,
+        "qpc": 771015694841,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "4",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015694841 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=4 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2398,
+        "qpc": 771015694867,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "5",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015694867 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=5 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2399,
+        "qpc": 771015695302,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "6",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015695302 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=6 reason=dxbc_unsupported_model"
+      },
+      {
+        "line_number": 2400,
+        "qpc": 771015695339,
+        "tid": 27044,
+        "marker": "RR_GUIDE_G2_SHADER_REJECT",
+        "fields": {
+          "index": "7",
+          "reason": "dxbc_unsupported_model"
+        },
+        "text": "qpc=771015695339 tid=27044 RR_GUIDE_G2_SHADER_REJECT index=7 reason=dxbc_unsupported_model"
+      }
+    ],
+    "stop": {
+      "line_number": 2402,
+      "qpc": 771015696234,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_ALBEDO_STOP",
+      "fields": {
+        "reason": "no_validated_albedo_shaders",
+        "exception": "0x00000000",
+        "allocations_retained": "1",
+        "rr_eval": "disabled"
+      },
+      "text": "qpc=771015696234 tid=27044 RR_GUIDE_G2_ALBEDO_STOP reason=no_validated_albedo_shaders exception=0x00000000 allocations_retained=1 rr_eval=disabled"
+    },
+    "targets_prepared": 0,
+    "replay_joins": 0,
+    "target_copies": 0,
+    "material_gpu_execution_demonstrated": false,
+    "source_batches": 494,
+    "accepted_batches": 0,
+    "rejected_batches": 494,
+    "saved_shader_count": 3,
+    "saved_shader_bytes": 9708,
+    "shader_integrity": [
+      {
+        "index": 0,
+        "file": "native-albedo-ps-000.dxbc",
+        "bytes": 2908,
+        "fnv1a64": "92a2f8a7629c3ee4",
+        "source_frame": 3166,
+        "declared_render_target_count": 0,
+        "actual_fnv1a64": "92a2f8a7629c3ee4",
+        "actual_bytes": 2908,
+        "passed": true
+      },
+      {
+        "index": 1,
+        "file": "native-albedo-ps-001.dxbc",
+        "bytes": 3580,
+        "fnv1a64": "e9eecbed200c5f99",
+        "source_frame": 3166,
+        "declared_render_target_count": 0,
+        "actual_fnv1a64": "e9eecbed200c5f99",
+        "actual_bytes": 3580,
+        "passed": true
+      },
+      {
+        "index": 2,
+        "file": "native-albedo-ps-002.dxbc",
+        "bytes": 3220,
+        "fnv1a64": "77ceb0dd99baf331",
+        "source_frame": 3166,
+        "declared_render_target_count": 0,
+        "actual_fnv1a64": "77ceb0dd99baf331",
+        "actual_bytes": 3220,
+        "passed": true
+      }
+    ],
+    "metadata_counts_explanation": "Capture counts are zero because no native target image was exported. The earlier CPU shader-contract log records 494 examined batches. Shader declared_render_target_count=0 is unknown after validation rejection, not evidence of a zero-target shader."
+  },
+  "guide": {
+    "queued": {
+      "line_number": 2387,
+      "qpc": 771015134475,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_PREPARE_QUEUED",
+      "fields": {
+        "attempt": "1",
+        "aa": "120",
+        "width": "2560",
+        "height": "1440",
+        "render_ms": "0.065",
+        "borrowed_inputs_retained": "0"
+      },
+      "text": "qpc=771015134475 tid=27044 RR_GUIDE_G2_PREPARE_QUEUED attempt=1 aa=120 width=2560 height=1440 render_ms=0.065 borrowed_inputs_retained=0"
+    },
+    "preparation_stages": [
+      {
+        "line_number": 2388,
+        "qpc": 771015354110,
+        "tid": 44772,
+        "marker": "RR_GUIDE_G2_PREPARE_TIMING",
+        "fields": {
+          "stage": "resources",
+          "ms": "21.198",
+          "hr": "0x00000000",
+          "width": "2560",
+          "height": "1440",
+          "thread": "44772"
+        },
+        "text": "qpc=771015354110 tid=44772 RR_GUIDE_G2_PREPARE_TIMING stage=resources ms=21.198 hr=0x00000000 width=2560 height=1440 thread=44772"
+      },
+      {
+        "line_number": 2389,
+        "qpc": 771015542967,
+        "tid": 44772,
+        "marker": "RR_GUIDE_G2_PREPARE_TIMING",
+        "fields": {
+          "stage": "descriptors_and_root_signature",
+          "ms": "18.849",
+          "hr": "0x00000000"
+        },
+        "text": "qpc=771015542967 tid=44772 RR_GUIDE_G2_PREPARE_TIMING stage=descriptors_and_root_signature ms=18.849 hr=0x00000000"
+      },
+      {
+        "line_number": 2390,
+        "qpc": 771015561026,
+        "tid": 44772,
+        "marker": "RR_GUIDE_G2_PREPARE_TIMING",
+        "fields": {
+          "stage": "compute_pipeline",
+          "ms": "1.765",
+          "hr": "0x00000000"
+        },
+        "text": "qpc=771015561026 tid=44772 RR_GUIDE_G2_PREPARE_TIMING stage=compute_pipeline ms=1.765 hr=0x00000000"
+      },
+      {
+        "line_number": 2391,
+        "qpc": 771015565905,
+        "tid": 44772,
+        "marker": "RR_GUIDE_G2_PREPARE_TIMING",
+        "fields": {
+          "stage": "command_objects",
+          "ms": "0.471",
+          "hr": "0x00000000"
+        },
+        "text": "qpc=771015565905 tid=44772 RR_GUIDE_G2_PREPARE_TIMING stage=command_objects ms=0.471 hr=0x00000000"
+      }
+    ],
+    "prepared": {
+      "line_number": 2392,
+      "qpc": 771015566055,
+      "tid": 44772,
+      "marker": "RR_GUIDE_G2_PREPARE_COMPLETE",
+      "fields": {
+        "attempt": "1",
+        "retire_only": "0",
+        "ms": "42.398",
+        "hr": "0x00000000",
+        "width": "2560",
+        "height": "1440",
+        "thread": "44772"
+      },
+      "text": "qpc=771015566055 tid=44772 RR_GUIDE_G2_PREPARE_COMPLETE attempt=1 retire_only=0 ms=42.398 hr=0x00000000 width=2560 height=1440 thread=44772"
+    },
+    "capture_timing": {
+      "line_number": 2486,
+      "qpc": 771031115253,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_CAPTURE_TIMING",
+      "fields": {
+        "attempt": "2",
+        "aa": "240",
+        "copy_ms": "0.017",
+        "render_ms": "0.024",
+        "commands_started": "1"
+      },
+      "text": "qpc=771031115253 tid=27044 RR_GUIDE_G2_CAPTURE_TIMING attempt=2 aa=240 copy_ms=0.017 render_ms=0.024 commands_started=1"
+    },
+    "copy": {
+      "line_number": 2487,
+      "qpc": 771031115467,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_INPUTS_COPIED",
+      "fields": {
+        "aa": "240",
+        "frame": "3283",
+        "present": "3283",
+        "width": "2560",
+        "height": "1440",
+        "source_states_restored": "1",
+        "shader_sha256": "1f2e8a2baf6c8dd0e912e9c057d3924485aa5d5aead5abffb6b2cc5abeb042bf"
+      },
+      "text": "qpc=771031115467 tid=27044 RR_GUIDE_G2_INPUTS_COPIED aa=240 frame=3283 present=3283 width=2560 height=1440 source_states_restored=1 shader_sha256=1f2e8a2baf6c8dd0e912e9c057d3924485aa5d5aead5abffb6b2cc5abeb042bf"
+    },
+    "submitted": {
+      "line_number": 2488,
+      "qpc": 771031143538,
+      "tid": 27044,
+      "marker": "RR_GUIDE_G2_DISPATCH_SUBMITTED",
+      "fields": {
+        "present": "3284",
+        "frame": "3283",
+        "width": "2560",
+        "height": "1440",
+        "engine_descriptor_state_changed": "0"
+      },
+      "text": "qpc=771031143538 tid=27044 RR_GUIDE_G2_DISPATCH_SUBMITTED present=3284 frame=3283 width=2560 height=1440 engine_descriptor_state_changed=0"
+    },
+    "exported": {
+      "line_number": 2489,
+      "qpc": 771032812752,
+      "tid": 53524,
+      "marker": "RR_GUIDE_G2_EXPORT_COMPLETE",
+      "fields": {
+        "directory": "C:\\Users\\mattn\\AppData\\Local\\ControlFGProbe\\rr-guide-g2-20260913-042850-566-51652",
+        "frame": "3283",
+        "width": "2560",
+        "height": "1440",
+        "rr_evaluate": "0"
+      },
+      "text": "qpc=771032812752 tid=53524 RR_GUIDE_G2_EXPORT_COMPLETE directory=C:\\Users\\mattn\\AppData\\Local\\ControlFGProbe\\rr-guide-g2-20260913-042850-566-51652 frame=3283 width=2560 height=1440 rr_evaluate=0"
+    },
+    "adverse_marker_counts": {
+      "RR_GUIDE_G2_CAPTURE_SKIP": 0,
+      "RR_GUIDE_G2_STOP": 0,
+      "RR_GUIDE_G2_EXPORT_FAILED": 0,
+      "RR_GUIDE_G2_PREPARE_DISCARD": 0,
+      "RR_GUIDE_G2_SUBMIT_FAULT": 0,
+      "RR_GUIDE_G2_ALBEDO_STOP": 1,
+      "RR_GUIDE_G2_ALBEDO_DRAW_FAULT": 0,
+      "RR_GUIDE_G2_ALBEDO_EXPORT_SKIP": 0
+    },
+    "previous_prepare_render_event": {
+      "line_number": 2386,
+      "qpc": 771015031170,
+      "tid": 27044,
+      "marker": "RR_RAYTRACE_RETURN",
+      "fields": {
+        "call": "480",
+        "arg0": "2560",
+        "arg1": "1440",
+        "raygen": "spotRayGeneration",
+        "duration_us": "94.500",
+        "begin": "3163",
+        "present": "3162",
+        "aa": "119"
+      },
+      "text": "qpc=771015031170 tid=27044 RR_RAYTRACE_RETURN call=480 arg0=2560 arg1=1440 raygen=spotRayGeneration duration_us=94.500 begin=3163 present=3162 aa=119"
+    },
+    "previous_copy_render_event": {
+      "line_number": 2419,
+      "qpc": 771030998532,
+      "tid": 27044,
+      "marker": "RR_RAYTRACE_RETURN",
+      "fields": {
+        "call": "960",
+        "arg0": "2560",
+        "arg1": "1440",
+        "raygen": "spotRayGeneration",
+        "duration_us": "101.500",
+        "begin": "3283",
+        "present": "3282",
+        "aa": "239"
+      },
+      "text": "qpc=771030998532 tid=27044 RR_RAYTRACE_RETURN call=960 arg0=2560 arg1=1440 raygen=spotRayGeneration duration_us=101.500 begin=3283 present=3282 aa=239"
+    },
+    "previous_render_to_queued_ms": 10.3305,
+    "queued_to_prepare_complete_ms": 43.158,
+    "previous_render_to_copy_complete_ms": 11.6935,
+    "copy_complete_to_submitted_ms": 2.8071,
+    "submitted_to_export_complete_ms": 166.9214,
+    "copy_complete_to_export_complete_ms": 169.7285,
+    "preparation_to_native_preflight_complete_ms": 13.0131,
+    "native_preflight_to_normal_copy_complete_ms": 1541.9281,
+    "nearby_counter_windows": [
+      {
+        "start_present": 3120,
+        "end_present": 3240,
+        "seconds": 1.4193316,
+        "game_presents_per_second": 84.54683880778812
+      },
+      {
+        "start_present": 3240,
+        "end_present": 3360,
+        "seconds": 1.569914,
+        "game_presents_per_second": 76.43730803088577
+      },
+      {
+        "start_present": 3360,
+        "end_present": 3480,
+        "seconds": 1.3644585,
+        "game_presents_per_second": 87.94697676770674
+      },
+      {
+        "start_present": 3480,
+        "end_present": 3600,
+        "seconds": 1.2266112,
+        "game_presents_per_second": 97.83051059700091
+      },
+      {
+        "start_present": 3600,
+        "end_present": 3720,
+        "seconds": 1.3539684,
+        "game_presents_per_second": 88.62836089823071
+      }
+    ],
+    "capture_count": 1,
+    "capture_bytes": 121665342,
+    "capture_file_count": 10,
+    "capture_total_bytes_match": true,
+    "capture_exact_members_match": true,
+    "capture_integrity": [
+      {
+        "file": "gbuffer1.rgba8",
+        "recorded_bytes": 14745600,
+        "actual_bytes": 14745600,
+        "recorded_sha256": "33b8c7c62a00ea4831a3fd8ae6e31ed0a8844bd41c2083cf84aae9bad40a9b45",
+        "actual_sha256": "33b8c7c62a00ea4831a3fd8ae6e31ed0a8844bd41c2083cf84aae9bad40a9b45",
+        "passed": true
+      },
+      {
+        "file": "gbuffer2.rgba8",
+        "recorded_bytes": 14745600,
+        "actual_bytes": 14745600,
+        "recorded_sha256": "b743edfcf8142f366849a70bd8502ec6a24f3ccce0bc02a3c9f4fe0a3201fac7",
+        "actual_sha256": "b743edfcf8142f366849a70bd8502ec6a24f3ccce0bc02a3c9f4fe0a3201fac7",
+        "passed": true
+      },
+      {
+        "file": "normal-roughness.rgba32f",
+        "recorded_bytes": 58982400,
+        "actual_bytes": 58982400,
+        "recorded_sha256": "0eb1e2af44343a2794e7224ffd8b375e27cf40e70f4e926086ed0a6380342a1e",
+        "actual_sha256": "0eb1e2af44343a2794e7224ffd8b375e27cf40e70f4e926086ed0a6380342a1e",
+        "passed": true
+      },
+      {
+        "file": "world-normal.bmp",
+        "recorded_bytes": 11059254,
+        "actual_bytes": 11059254,
+        "recorded_sha256": "dcda0f2657804a6c85b2ae6d008318b130966aea4f67c659fb52c6aa0eb6d5b1",
+        "actual_sha256": "dcda0f2657804a6c85b2ae6d008318b130966aea4f67c659fb52c6aa0eb6d5b1",
+        "passed": true
+      },
+      {
+        "file": "roughness.bmp",
+        "recorded_bytes": 11059254,
+        "actual_bytes": 11059254,
+        "recorded_sha256": "68344e0c3188aab7524819f5cea64f2794fe344052e2ed60c335bd01d287d528",
+        "actual_sha256": "68344e0c3188aab7524819f5cea64f2794fe344052e2ed60c335bd01d287d528",
+        "passed": true
+      },
+      {
+        "file": "material-id.bmp",
+        "recorded_bytes": 11059254,
+        "actual_bytes": 11059254,
+        "recorded_sha256": "7a0f86887081d08d894ce6c2c2496ab4ffddccae2227271d412413ef7bd505dd",
+        "actual_sha256": "7a0f86887081d08d894ce6c2c2496ab4ffddccae2227271d412413ef7bd505dd",
+        "passed": true
+      },
+      {
+        "file": "metadata.json",
+        "recorded_bytes": 4272,
+        "actual_bytes": 4272,
+        "recorded_sha256": "7eedbbc583a614e3f1a82c215c3b00ed79c90675fded919026cdb0d3d28728c3",
+        "actual_sha256": "7eedbbc583a614e3f1a82c215c3b00ed79c90675fded919026cdb0d3d28728c3",
+        "passed": true
+      },
+      {
+        "file": "native-albedo-ps-000.dxbc",
+        "recorded_bytes": 2908,
+        "actual_bytes": 2908,
+        "recorded_sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+        "actual_sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+        "passed": true
+      },
+      {
+        "file": "native-albedo-ps-001.dxbc",
+        "recorded_bytes": 3580,
+        "actual_bytes": 3580,
+        "recorded_sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+        "actual_sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+        "passed": true
+      },
+      {
+        "file": "native-albedo-ps-002.dxbc",
+        "recorded_bytes": 3220,
+        "actual_bytes": 3220,
+        "recorded_sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+        "actual_sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+        "passed": true
+      }
+    ],
+    "camera_frame_matches_capture": true,
+    "timing_limitations": "Measured render-thread queue/copy costs and worker preparation time are distinct. QPC event gaps include scheduling/frame boundaries; export includes GPU waiting, mapping and disk work, not GPU-only duration. G1 and G2 are uncontrolled separate runs; shader cache conditions may differ, and G2 material drawing did not execute."
+  },
+  "rr": {
+    "feature_gate": {
+      "line_number": 70,
+      "qpc": 770656191108,
+      "tid": 27044,
+      "marker": "SL_RR_FEATURE_GATE",
+      "fields": {
+        "loaded": "1",
+        "supported": "1",
+        "support_known": "1",
+        "sdk": "2.14.1",
+        "model_target": "preset_f_transformer",
+        "evaluate": "0",
+        "native_denoiser_bypass": "0"
+      },
+      "text": "qpc=770656191108 tid=27044 SL_RR_FEATURE_GATE loaded=1 supported=1 support_known=1 sdk=2.14.1 model_target=preset_f_transformer evaluate=0 native_denoiser_bypass=0"
+    },
+    "runtime_handshake": {
+      "line_number": 79,
+      "qpc": 770656191417,
+      "tid": 27044,
+      "marker": "SL_RR_HANDSHAKE",
+      "fields": {
+        "loaded": "1",
+        "supported": "1",
+        "functions_ready": "1",
+        "set_options": "00007FFC4F0857F0",
+        "get_state": "00007FFC4F0857E0",
+        "get_optimal": "00007FFC4F0857E0",
+        "evaluate": "0",
+        "denoiser_bypass": "0"
+      },
+      "text": "qpc=770656191417 tid=27044 SL_RR_HANDSHAKE loaded=1 supported=1 functions_ready=1 set_options=00007FFC4F0857F0 get_state=00007FFC4F0857E0 get_optimal=00007FFC4F0857E0 evaluate=0 denoiser_bypass=0"
+    },
+    "options_handshake": {
+      "line_number": 437,
+      "qpc": 770992887458,
+      "tid": 27044,
+      "marker": "SL_RR_OPTIONS_HANDSHAKE",
+      "fields": {
+        "call": "1",
+        "present": "3043",
+        "attempt": "1",
+        "success": "1",
+        "mode": "quality",
+        "mode_value": "3",
+        "render": "2560x1440",
+        "output": "3840x2160",
+        "optimal": "2560x1440",
+        "pre_exposure": "5.55555534",
+        "exposure_scale": "1",
+        "hdr_input": "1",
+        "normal_roughness": "unpacked",
+        "preset": "dlaa:F,quality:F,balanced:F,performance:F,ultra_performance:F,ultra_quality:F",
+        "set_result": "0",
+        "state_result": "0",
+        "estimated_vram": "0",
+        "rr_evaluate": "0",
+        "native_denoiser_bypass": "0"
+      },
+      "text": "qpc=770992887458 tid=27044 SL_RR_OPTIONS_HANDSHAKE call=1 present=3043 attempt=1 success=1 mode=quality mode_value=3 render=2560x1440 output=3840x2160 optimal=2560x1440 pre_exposure=5.55555534 exposure_scale=1 hdr_input=1 normal_roughness=unpacked preset=dlaa:F,quality:F,balanced:F,performance:F,ultra_performance:F,ultra_quality:F set_result=0 state_result=0 estimated_vram=0 rr_evaluate=0 native_denoiser_bypass=0"
+    },
+    "optimal_candidates": [
+      {
+        "line_number": 431,
+        "qpc": 770992886787,
+        "tid": 27044,
+        "marker": "SL_RR_OPTIMAL_CANDIDATE",
+        "fields": {
+          "call": "1",
+          "present": "3043",
+          "mode": "dlaa",
+          "mode_value": "6",
+          "result": "0",
+          "output": "3840x2160",
+          "current_render": "2560x1440",
+          "optimal": "3840x2160",
+          "min": "3802x2138",
+          "max": "3840x2160",
+          "sharpness": "0.349999994",
+          "error_pixels": "2000"
+        },
+        "text": "qpc=770992886787 tid=27044 SL_RR_OPTIMAL_CANDIDATE call=1 present=3043 mode=dlaa mode_value=6 result=0 output=3840x2160 current_render=2560x1440 optimal=3840x2160 min=3802x2138 max=3840x2160 sharpness=0.349999994 error_pixels=2000"
+      },
+      {
+        "line_number": 432,
+        "qpc": 770992886949,
+        "tid": 27044,
+        "marker": "SL_RR_OPTIMAL_CANDIDATE",
+        "fields": {
+          "call": "1",
+          "present": "3043",
+          "mode": "quality",
+          "mode_value": "3",
+          "result": "0",
+          "output": "3840x2160",
+          "current_render": "2560x1440",
+          "optimal": "2560x1440",
+          "min": "1920x1080",
+          "max": "3840x2160",
+          "sharpness": "0.349999994",
+          "error_pixels": "0"
+        },
+        "text": "qpc=770992886949 tid=27044 SL_RR_OPTIMAL_CANDIDATE call=1 present=3043 mode=quality mode_value=3 result=0 output=3840x2160 current_render=2560x1440 optimal=2560x1440 min=1920x1080 max=3840x2160 sharpness=0.349999994 error_pixels=0"
+      },
+      {
+        "line_number": 433,
+        "qpc": 770992887019,
+        "tid": 27044,
+        "marker": "SL_RR_OPTIMAL_CANDIDATE",
+        "fields": {
+          "call": "1",
+          "present": "3043",
+          "mode": "balanced",
+          "mode_value": "2",
+          "result": "0",
+          "output": "3840x2160",
+          "current_render": "2560x1440",
+          "optimal": "2227x1253",
+          "min": "1920x1080",
+          "max": "3840x2160",
+          "sharpness": "0.349999994",
+          "error_pixels": "520"
+        },
+        "text": "qpc=770992887019 tid=27044 SL_RR_OPTIMAL_CANDIDATE call=1 present=3043 mode=balanced mode_value=2 result=0 output=3840x2160 current_render=2560x1440 optimal=2227x1253 min=1920x1080 max=3840x2160 sharpness=0.349999994 error_pixels=520"
+      },
+      {
+        "line_number": 434,
+        "qpc": 770992887076,
+        "tid": 27044,
+        "marker": "SL_RR_OPTIMAL_CANDIDATE",
+        "fields": {
+          "call": "1",
+          "present": "3043",
+          "mode": "performance",
+          "mode_value": "1",
+          "result": "0",
+          "output": "3840x2160",
+          "current_render": "2560x1440",
+          "optimal": "1920x1080",
+          "min": "1920x1080",
+          "max": "3840x2160",
+          "sharpness": "0.349999994",
+          "error_pixels": "1000"
+        },
+        "text": "qpc=770992887076 tid=27044 SL_RR_OPTIMAL_CANDIDATE call=1 present=3043 mode=performance mode_value=1 result=0 output=3840x2160 current_render=2560x1440 optimal=1920x1080 min=1920x1080 max=3840x2160 sharpness=0.349999994 error_pixels=1000"
+      },
+      {
+        "line_number": 435,
+        "qpc": 770992887132,
+        "tid": 27044,
+        "marker": "SL_RR_OPTIMAL_CANDIDATE",
+        "fields": {
+          "call": "1",
+          "present": "3043",
+          "mode": "ultra_performance",
+          "mode_value": "4",
+          "result": "0",
+          "output": "3840x2160",
+          "current_render": "2560x1440",
+          "optimal": "1280x720",
+          "min": "1280x720",
+          "max": "1280x720",
+          "sharpness": "0.349999994",
+          "error_pixels": "2000"
+        },
+        "text": "qpc=770992887132 tid=27044 SL_RR_OPTIMAL_CANDIDATE call=1 present=3043 mode=ultra_performance mode_value=4 result=0 output=3840x2160 current_render=2560x1440 optimal=1280x720 min=1280x720 max=1280x720 sharpness=0.349999994 error_pixels=2000"
+      },
+      {
+        "line_number": 436,
+        "qpc": 770992887298,
+        "tid": 27044,
+        "marker": "SL_RR_OPTIMAL_CANDIDATE",
+        "fields": {
+          "call": "1",
+          "present": "3043",
+          "mode": "ultra_quality",
+          "mode_value": "5",
+          "result": "25",
+          "output": "3840x2160",
+          "current_render": "2560x1440",
+          "optimal": "0x0",
+          "min": "0x0",
+          "max": "0x0",
+          "sharpness": "0.349999994",
+          "error_pixels": "18446744073709551615"
+        },
+        "text": "qpc=770992887298 tid=27044 SL_RR_OPTIMAL_CANDIDATE call=1 present=3043 mode=ultra_quality mode_value=5 result=25 output=3840x2160 current_render=2560x1440 optimal=0x0 min=0x0 max=0x0 sharpness=0.349999994 error_pixels=18446744073709551615"
+      }
+    ],
+    "evaluation_performed": false,
+    "denoiser_bypassed": false
+  },
+  "fg": {
+    "settings": "[ControlFG]\nSchema=1\n[FrameGeneration]\nMode=2\nDynamicTargetFPS=124\nBackend=1\n",
+    "settings_load": {
+      "line_number": 28,
+      "qpc": 770622834816,
+      "tid": 27044,
+      "marker": "FG_SETTINGS_LOAD",
+      "fields": {
+        "success": "1",
+        "path": "C:\\Users\\mattn\\AppData\\Local\\ControlFG\\settings.ini",
+        "selection": "2x",
+        "selected_code": "2",
+        "target_policy": "manual",
+        "manual_target_fps": "124",
+        "schema": "1"
+      },
+      "text": "qpc=770622834816 tid=27044 FG_SETTINGS_LOAD success=1 path=C:\\Users\\mattn\\AppData\\Local\\ControlFG\\settings.ini selection=2x selected_code=2 target_policy=manual manual_target_fps=124 schema=1"
+    },
+    "display_refresh": {
+      "line_number": 42,
+      "qpc": 770623498945,
+      "tid": 55084,
+      "marker": "FG_DISPLAY_REFRESH",
+      "fields": {
+        "previous_millihz": "0",
+        "detected_millihz": "143999",
+        "detected_fps": "143.999",
+        "source": "QueryDisplayConfig",
+        "changes": "1",
+        "dynamic_policy": "manual",
+        "apply": "next_present_if_dynamic"
+      },
+      "text": "qpc=770623498945 tid=55084 FG_DISPLAY_REFRESH previous_millihz=0 detected_millihz=143999 detected_fps=143.999 source=QueryDisplayConfig changes=1 dynamic_policy=manual apply=next_present_if_dynamic"
+    },
+    "mode_segments": [
+      {
+        "line_number": 496,
+        "qpc": 770993118659,
+        "tid": 27044,
+        "marker": "FG_MODE_SEGMENT",
+        "fields": {
+          "present": "3044",
+          "segment": "1",
+          "mode": "fixed",
+          "selected_selection": "2x",
+          "requested_generated": "1",
+          "target_multiplier": "2x",
+          "dynamic_target_policy": "n/a",
+          "dynamic_target_fps": "0.000",
+          "detected_refresh_fps": "143.999",
+          "input": "2560x1440",
+          "color": "3840x2160",
+          "resolution_changed": "0",
+          "previous_input": "0x0",
+          "enable_transitions": "1",
+          "disable_transitions": "0"
+        },
+        "text": "qpc=770993118659 tid=27044 FG_MODE_SEGMENT present=3044 segment=1 mode=fixed selected_selection=2x requested_generated=1 target_multiplier=2x dynamic_target_policy=n/a dynamic_target_fps=0.000 detected_refresh_fps=143.999 input=2560x1440 color=3840x2160 resolution_changed=0 previous_input=0x0 enable_transitions=1 disable_transitions=0"
+      },
+      {
+        "line_number": 3804,
+        "qpc": 771319437284,
+        "tid": 27044,
+        "marker": "FG_MODE_SEGMENT",
+        "fields": {
+          "present": "6269",
+          "segment": "1",
+          "mode": "off",
+          "selected_selection": "2x",
+          "last_applied_mode": "fixed",
+          "last_requested_generated": "1",
+          "last_input": "2560x1440",
+          "enable_transitions": "1",
+          "disable_transitions": "1",
+          "generated_segments": "1"
+        },
+        "text": "qpc=771319437284 tid=27044 FG_MODE_SEGMENT present=6269 segment=1 mode=off selected_selection=2x last_applied_mode=fixed last_requested_generated=1 last_input=2560x1440 enable_transitions=1 disable_transitions=1 generated_segments=1"
+      }
+    ],
+    "generation_confirmations": [
+      {
+        "line_number": 1213,
+        "qpc": 770999636009,
+        "tid": 27044,
+        "marker": "FG_GENERATION_SEGMENT_CONFIRMED",
+        "fields": {
+          "present": "3050",
+          "segment": "1",
+          "confirmed_segments": "1",
+          "frames_presented": "2",
+          "requested_generated": "1",
+          "target_multiplier": "2x",
+          "status": "0x0",
+          "input": "2560x1440",
+          "color": "3840x2160",
+          "enable_transitions": "1",
+          "resolution_transitions": "0"
+        },
+        "text": "qpc=770999636009 tid=27044 FG_GENERATION_SEGMENT_CONFIRMED present=3050 segment=1 confirmed_segments=1 frames_presented=2 requested_generated=1 target_multiplier=2x status=0x0 input=2560x1440 color=3840x2160 enable_transitions=1 resolution_transitions=0"
+      }
+    ],
+    "selected_mode": "fixed 2x",
+    "selection_changes": 0,
+    "higher_multipliers_tested": false,
+    "dynamic_tested": false,
+    "build_default_4x_does_not_override_persisted_2x": true
+  },
+  "hdr": {
+    "sample_count": 178,
+    "enabled_value_counts": {
+      "0": 178
+    },
+    "bridge": "dormant passthrough",
+    "active_hdr_tested": false,
+    "internal_hdr_input_flag_does_not_imply_hdr_display": true
+  },
+  "frame_timer_warnings": [
+    {
+      "qpc": 771001920945,
+      "relative_to_prepare_queued_ms": -1321.353,
+      "text": "qpc=771001920945 tid=54976 SL_LOG type=1 message=[23-28-47][streamline][warn][tid:27044][37s:849ms:169us]dlfgPresent.cpp:1321[presentCommon] Frame rate over 100.00ms, reseting frame timer"
+    }
+  ],
+  "limits": [
+    "No native material target image or material GPU replay completed.",
+    "RR evaluation and denoiser bypass remained disabled.",
+    "No final process exit status; continued logging after export is demonstrated but clean shutdown is not certified.",
+    "No active HDR, Dynamic or higher FG multiplier validation in this run.",
+    "No controlled performance benchmark; normal-path stage timing improved, but material replay cost remains unmeasured.",
+    "One unmasked normal-guide capture does not establish background coverage or RR image correctness."
+  ],
+  "g1_comparison": {
+    "g1_previous_render_to_copy_complete_seconds": 5.245405399999999,
+    "g2_previous_render_to_copy_complete_seconds": 0.0116935,
+    "g1_frame_timer_warnings": 6,
+    "g2_frame_timer_warnings": 1,
+    "interpretation": "The G1 multi-second preparation-adjacent gap did not recur in the observed G2 base-guide capture; do not attribute the difference solely to threading or claim native material replay performance was validated."
+  }
+}

@@ -1,0 +1,280 @@
+name: Validate GI modernization foundation
+on:
+  push:
+    branches: [work/gi-modernization]
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned RTXDI shader library
+        shell: powershell
+        run: |
+          git clone https://github.com/NVIDIA-RTX/RTXDI-Library.git .validation-rtxdi
+          if ($LASTEXITCODE -ne 0) { throw 'RTXDI clone failed' }
+          git -C .validation-rtxdi checkout f12037fa8e97ebc08e9e3edfd2de528ed1772a4b
+          if ($LASTEXITCODE -ne 0) { throw 'RTXDI revision unavailable' }
+      - name: CPU and GPU initial sample adapter
+        shell: powershell
+        run: |
+          $vs=& "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          if (!$dxc) { throw 'Windows SDK DXC not found' }
+          python tools/test-gi-secondary.py
+          if ($LASTEXITCODE -ne 0) { throw 'Secondary evaluator extraction tests failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_secondary.generated.hlsl -Fo gi-evaluator-secondary.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Secondary evaluator shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_producer_shading.hlsl -Fo gi-producer-shading.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Producer shading shader compile failed' }
+          python tools/test-gi-evaluator.py
+          if ($LASTEXITCODE -ne 0) { throw 'GI evaluator translation tests failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_reference.generated.hlsl -Fo gi-evaluator-reference.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Complete GI evaluator compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_initial_sample.hlsl -Fo gi-initial.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Initial shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX -I .validation-rtxdi/Include src/shaders/gi_rtxdi_initial.hlsl -Fo gi-rtxdi.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'RTXDI shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_raw_snapshot.hlsl -Fo gi-raw-snapshot.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Raw snapshot shader compile failed' }
+          & $dxc.FullName -T cs_6_2 -E main -enable-16bit-types -WX src/shaders/gi_index_snapshot.hlsl -Fo gi-index-snapshot.dxil -Fc gi-index-snapshot.asm
+          if ($LASTEXITCODE -ne 0) { throw 'Exact uint16 snapshot shader compile failed' }
+          if (!(Select-String -Path gi-index-snapshot.asm -Pattern 'call.*rawBufferLoad.i16')) { throw 'Expected exact 16-bit source reads absent' }
+          New-Item -ItemType Directory -Force build | Out-Null
+          python -c "import base64,pathlib; pathlib.Path('build/gi-evaluator-native.dxbc').write_bytes(base64.b64decode(pathlib.Path('research/gi-source-r267/gi-6.dxbc.b64').read_bytes()))"
+          if ($LASTEXITCODE -ne 0) { throw 'Native evaluator extraction failed' }
+          python tools/make-gi-candidate-fixture.py research/gi-source-r267/candidate-gpu-fixture.json build/gi_candidate_fixture.h
+          if ($LASTEXITCODE -ne 0) { throw 'Captured fixture generation failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_evaluator_replay.generated.hlsl -Fo gi-evaluator-replay.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Evaluator accounting replay compile failed' }
+          python tools/embed-gi-evaluator.py gi-evaluator-reference.dxil build/gi_evaluator.generated.h
+          if ($LASTEXITCODE -ne 0) { throw 'Evaluator embedding failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_range_proposal_test.hlsl -Fo gi-range-proposal.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Finite-range proposal shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_reuse_candidate_test.hlsl -Fo gi-reuse-candidate.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Receiver candidate shader compile failed' }
+          & $dxc.FullName -T lib_6_3 -WX -D GI_NATIVE_VISIBILITY_BINDINGS=1 src/shaders/gi_connection_visibility.hlsl -Fo gi-visibility-native.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'GI native visibility shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_receiver_shading.hlsl -Fo gi-receiver-shading.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'GI receiver shading shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_initial_reservoir.hlsl -Fo gi-initial-reservoir.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Initial reservoir shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX src/shaders/gi_output_resolve.hlsl -Fo gi-output-resolve.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'GI output resolve shader compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -WX -D GI_NATIVE_INITIAL_BINDINGS=1 src/shaders/gi_initial_reservoir.hlsl -Fo gi-initial-reservoir-native.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Native-root reservoir shader compile failed' }
+          & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_geometry.hlsl -Fo gi-producer-geometry.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit geometry shader compile failed' }
+          & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_alpha.hlsl -Fo gi-producer-alpha.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit alpha shader compile failed' }
+          & $dxc.FullName -T lib_6_5 -WX src/shaders/gi_producer_trace.hlsl -Fo gi-producer-trace.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Accepted-hit producer trace compile failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_producer_proposals.hlsl -Fo gi-producer-proposals.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Producer proposal generation compile failed' }
+          foreach($stage in 'proposals','shading','resolve','trace') {
+            $source=@{proposals='gi_producer_proposals';shading='gi_producer_shading';resolve='gi_output_resolve';trace='gi_producer_trace'}[$stage]
+            $arguments=@('-T','cs_6_0','-E','main','-WX','-HV','2018')
+            if($stage -eq 'trace'){$arguments=@('-T','lib_6_5','-WX')}
+            if($stage -eq 'resolve'){$arguments+=@('-D','GI_FUSED_INITIAL_RESOLVE=1')}
+            & $dxc.FullName @arguments -D GI_OWNED_SINGLE_USE=1 "src/shaders/$source.hlsl" -Fo "build/gi-owned-$stage.dxil"
+            if($LASTEXITCODE -ne 0){throw "Owned gated GI $stage compile failed"}
+          }
+          python tools/embed-gi-owned.py build/gi_owned.generated.h build/gi-owned-proposals.dxil build/gi-owned-trace.dxil build/gi-owned-shading.dxil build/gi-owned-resolve.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Owned GI embedding failed' }
+          python tools/test-gi-producer-alpha.py --dxc $dxc.FullName
+          if ($LASTEXITCODE -ne 0) { throw 'Native GI alpha policy audit failed' }
+          $commands=@"
+          call "$vs\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir.cpp /Fe:gi-initial-reservoir.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-reservoir.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-reservoir-gpu.cpp /Fe:gi-initial-reservoir-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-reservoir-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-producer-sampling.cpp /Fe:gi-producer-sampling.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-producer-sampling.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-producer-proposals-gpu.cpp /Fe:gi-producer-proposals-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-producer-proposals-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-output-resolve.cpp /Fe:gi-output-resolve.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-output-resolve.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-output-resolve-gpu.cpp /Fe:gi-output-resolve-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-output-resolve-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-producer-table.cpp /Fe:gi-producer-table.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-producer-table.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-visibility-table.cpp /Fe:gi-visibility-table.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-visibility-table.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-evaluator-pipeline.cpp /Fe:gi-evaluator-pipeline.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-reference.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-shading.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-producer-proposals.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-output-resolve.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-evaluator-pipeline.exe build/gi-evaluator-native.dxbc gi-evaluator-secondary.dxil gi-initial-reservoir-native.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-candidate-gpu.cpp /Fe:gi-candidate-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-candidate-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-candidate-gpu.exe gi-evaluator-replay.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-scene-hit-packet.cpp /Fe:gi-scene-hit-packet.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-scene-hit-packet.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-instance-mapping.cpp /Fe:gi-instance-mapping.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-instance-mapping.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-instance-sample.cpp /Fe:gi-instance-sample.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-instance-sample.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-triangle-sample.cpp /Fe:gi-triangle-sample.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-triangle-sample.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-metadata.cpp /Fe:gi-geometry-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-geometry-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-submission-ledger.cpp /Fe:gi-submission-ledger.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-submission-ledger.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-recovered-scene-order.cpp /Fe:gi-recovered-scene-order.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-recovered-scene-order.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-writer-handoff.cpp /Fe:gi-writer-handoff.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-writer-handoff.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-as-descriptors.cpp /Fe:gi-as-descriptors.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-as-descriptors.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-scene-catalog.cpp /Fe:gi-live-scene-catalog.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-live-scene-catalog.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-ordered-as-metadata.cpp /Fe:gi-ordered-as-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-ordered-as-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-scratch-pool.cpp /Fe:gi-scratch-pool.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-scratch-pool.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-scene-owners.cpp /Fe:gi-live-scene-owners.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-live-scene-owners.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-dispatch-gate.cpp /Fe:gi-dispatch-gate.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-dispatch-gate.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-preservation.cpp /Fe:gi-geometry-preservation.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-geometry-preservation.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-frame-tiles.cpp /Fe:gi-frame-tiles.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-frame-tiles.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-d3d12-geometry.cpp /Fe:gi-d3d12-geometry.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-d3d12-geometry.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-buffer-index.cpp /Fe:gi-buffer-index.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-buffer-index.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-only-metadata.cpp /Fe:gi-live-only-metadata.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-live-only-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-submission-runtime.cpp /Fe:gi-submission-runtime.exe /link d3d12.lib dxgi.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-submission-runtime.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-geometry-probe.cpp /Fe:gi-geometry-probe.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-geometry-probe.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-reuse-candidate.cpp /Fe:gi-reuse-candidate.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-reuse-candidate.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-finite-range.cpp /Fe:gi-finite-range.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-finite-range.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-sample.cpp /Fe:gi-initial-cpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-cpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-initial-gpu.cpp /Fe:gi-initial-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-snapshot-retirement.cpp /Fe:gi-snapshot-retirement.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-snapshot-retirement.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-snapshot-fences.cpp /Fe:gi-snapshot-fences.exe /link d3d12.lib dxgi.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-snapshot-fences.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-compute-root-arguments.cpp /Fe:gi-compute-root-arguments.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-compute-root-arguments.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-index-snapshot-plan.cpp /Fe:gi-index-snapshot-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-index-snapshot-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-index-snapshot-gpu.cpp /Fe:gi-index-snapshot-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-index-snapshot-gpu.exe gi-index-snapshot.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-raw-snapshot-plan.cpp /Fe:gi-raw-snapshot-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-plan.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-raw-snapshot-gpu.cpp /Fe:gi-raw-snapshot-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil --instances
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil --tri16
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil --tri32
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil --32
+          if errorlevel 1 exit /b 1
+          if errorlevel -2147483648 if not errorlevel 0 exit /b 1
+          gi-raw-snapshot-gpu.exe gi-raw-snapshot.dxil gi-index-snapshot.dxil
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-gpu.exe gi-initial.dxil initial
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-initial-gpu.exe gi-rtxdi.dxil rtxdi
+          if not "%errorlevel%"=="0" exit /b 1
+          "@
+          $commands | Set-Content run-gi-validation.cmd
+          cmd /c run-gi-validation.cmd
+          if ($LASTEXITCODE -ne 0) { throw 'GI adapter validation failed' }

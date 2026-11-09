@@ -1,0 +1,32 @@
+{
+  "schema": "ControlFG.G3.NonReproductionReview.v1",
+  "source_zip": "Control-G3-Heap-Capture-20260913-092659-9c0a6c2d.zip",
+  "zip_sha256": "133bd98dd7ef1c5f4fb70a4556feb23623d2286445b77fb3bbc2647191db20bc",
+  "members": [
+    {
+      "name": "Control-G3-Heap-Capture-20260913-092659-9c0a6c2d/",
+      "bytes": 0,
+      "directory": true
+    },
+    {
+      "name": "Control-G3-Heap-Capture-20260913-092659-9c0a6c2d/capture-session.json",
+      "bytes": 999,
+      "directory": false
+    },
+    {
+      "name": "Control-G3-Heap-Capture-20260913-092659-9c0a6c2d/full-dump/",
+      "bytes": 0,
+      "directory": true
+    }
+  ],
+  "watcher_duration_seconds": 79.124073,
+  "procdump_exit_code": 0,
+  "watcher_status": "NO_CONFIRMED_CAPTURE",
+  "license_flag_forwarded": true,
+  "dump_present": false,
+  "debugger_transcript_present": false,
+  "gameplay_log_present": false,
+  "attachment_confirmed_from_this_archive": false,
+  "crash_status": "UNRESOLVED_NOT_REPRODUCED",
+  "interpretation": "User reports no reproduction. Session metadata proves corrected arguments and a zero native exit, not actual attach events, gameplay duration, crash resolution, or G3/RR stability."
+}

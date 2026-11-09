@@ -1,0 +1,39 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "Control FG v1.0.0 internal r23 HDR Frame Generation HUDless/UI-recomposition candidate. Portable policy/color/static validation passed locally; Windows/MSVC compile and live HDR game execution remain host sign-off.",
+  "tests": {
+    "policy_normal": "PASS HDR FG UI policy: HDR rejects FP16 HUDless, accepts RGB10/PQ-domain HUDless, SDR behavior retained",
+    "policy_asan_ubsan": "PASS HDR FG UI policy: HDR rejects FP16 HUDless, accepts RGB10/PQ-domain HUDless, SDR behavior retained",
+    "color_normal": "PASS HDR HUDless color conversion: shared scRGB/709 -> BT.2020 -> 80-nit-scaled PQ reference vectors",
+    "color_asan_ubsan": "PASS HDR HUDless color conversion: shared scRGB/709 -> BT.2020 -> 80-nit-scaled PQ reference vectors",
+    "release_log_filter": "PASS release log filter normal + ASan/UBSan",
+    "preset_policy": "PASS r21z preset policy normal + ASan/UBSan",
+    "evaluation_gateway": "PASS inherited r21y distance-free RR evaluation gateway",
+    "native_signal_policy": "PASS inherited r21x native clamp signal policy",
+    "specular_temporal": "PASS inherited 144-pair temporal dispatch/copy guard test",
+    "performance_policy": "PASS inherited query/timing/stability segmentation test"
+  },
+  "assertions": [
+    "HDR pre-UI source remains FP16/scRGB only for local UI-alpha comparison and conversion input",
+    "HDR HUDless resource tagged to DLSS-G is RGB10/PQ/BT.2020, never raw FP16/scRGB",
+    "HDR conversion compiles the exact kHdr10BridgeShader used by final HDR presentation",
+    "HDR and SDR use separate three-slot resource sets so repeated live HDR transitions reuse allocations",
+    "HDR UI recomposition is fail-closed unless HUDless and UI-alpha tags are both present and HUDless format is RGB10",
+    "SDR UI recomposition admission behavior is unchanged",
+    "RR source files and RR model policy are unchanged by this candidate"
+  ],
+  "tested_sha256": {
+    "src/fg_hdr_ui_policy.h": "cc2f8e2702bea5591921262482e3ee3615af5ebe7ce3b8a600ad5330b51109ab",
+    "src/fg_ui_recomposition.h": "038a1bbda80cf779a6fcdc25e3e29b014bfd520a93ab2383bb529eb9d6cb609a",
+    "src/streamline_bridge.h": "c45f68fb1e5b408d8d43191ae196cb7c9b7eeafa12259cd4d2a1e0256e939e66",
+    "src/probe.cpp": "af6616b2793a0bc2a1ec958508a3794c12b4dd8f2dd8dc448d551df9fedee0da",
+    "Build-Metadata.ps1": "2495696cd6422a3e2e81c108e23e971a12b56afa9ebe6ce8bea29933f1abf18d",
+    "Build.cmd": "6282d843a0dcf25531c7324f46597d6db93c169eaf0d3e69ad860033b4e53a01",
+    "Verify-Source.ps1": "353f9609eaba404e594dacabfbf7aea37bd44a4772a190c0729392a0b5099297",
+    "Verify-Build.ps1": "010c30b0284c897adeb69515a53ccc598a3c0ecf02d5a1def76e17c067c82941",
+    "tools/validate-release.py": "3e24faf7a093106248d9b1c0ed80141af625d71b429bd1404dddf292d82e8d9d",
+    "validation/hdr-fg-ui/policy-test.cpp": "77e71313c999bf43fad2e470f4f4d42b281045dd1baba2977953b1bbd48d1622",
+    "validation/hdr-fg-ui/color-test.cpp": "b07084f9a4eee57dd8a67c794f917c8d0ff2a8b0beaa3b46ca129551124a9b99",
+    "tools/verify_source_evidence.py": "a8f247eb51a85c9e49a24a6ef5f5b65c94e43a621a5e3f71388330251e2895eb"
+  }
+}

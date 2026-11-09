@@ -1,0 +1,44 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "projection-test-normal": "PASS",
+    "compare-test-normal": "PASS",
+    "export-test-normal": "PASS",
+    "projection-test-asan_ubsan": "PASS",
+    "compare-test-asan_ubsan": "PASS",
+    "export-test-asan_ubsan": "PASS",
+    "r5_full_capture_cpu_reference_and_comparator": "PASS",
+    "r5_projection_double_reference": "PASS"
+  },
+  "r5_frame": 1966,
+  "r5_pixels": 3686400,
+  "max_double_projection_cosine_error": 2.911562638763243e-07,
+  "view_convention": "unjittered symmetric perspective pixel centers; native jitter/coverage not validated",
+  "shader_compile": "NOT_RUN_LOCAL; mandatory Build.cmd compilation/reflection gate",
+  "gpu_execution": "NOT_RUN",
+  "rr_evaluation": false,
+  "input_sha256": {
+    "gbuffer1.rgba8": "bf9a6b0fd8608e5549c02506f537bb55e7b30d74f8a00f45f0a005e4f7037f72",
+    "gbuffer2.rgba8": "9c77d9dbdb8b7a16cbbe66c2c3193cb42dc2d8c287e78bd1ab1fbe13ce2244b8",
+    "native-albedo-target0.rgba16f": "1fc4d4636e3ab33920c2b9dedd791dbfb2bbf16edb2d3739e3d2f02f2c017f91",
+    "material-part1.bin": "0b7a92ae7873ed7fac6ecad01ea6d2dde6cfacd7e212970d996658d27fabee41"
+  },
+  "tested_sha256": {
+    "src/rr_reflectance.h": "d536f65a2093f0ee24f54a7fdb19c39c4d7efd913790c145f4e91f9642531ba7",
+    "src/rr_reflectance_compare.h": "455ca6504b6af2e8cd0ddf025e1deaa1554a51ad25fe87ed31980e96ece70ea4",
+    "src/rr_reflectance_gpu.h": "f29adb0faab6c2ec8d687889ee389515aa97e206e2d5bfeee02b3c94abb20551",
+    "src/rr_reflectance_projection.h": "d27c1a587533ecedb49f41b019c67259886d09149b0f18b18b0e1ffbba7afa44",
+    "validation/reflectance-gpu/export-test.cpp": "8a134b275992aa856af84f2f2afae01c24e735fdf80d78f2c84426bcef0891c7",
+    "validation/reflectance-gpu/capture-reference.cpp": "0034597442ab985fe361adb86aeb15f351f1b20b002423d7d9e71ad3033f6cf1",
+    "validation/reflectance-gpu/compare-test.cpp": "25732f31f72c3364a19537eb1831298d0de5d11624a5bb03005ff83111828a35",
+    "validation/reflectance-gpu/projection-test.cpp": "4898a4765a952f0b0dc284735d9150d2013bf47c467d7224c74b40e9c2d9c83a",
+    "validation/reflectance-gpu/run.py": "e7a6459bfac4a7027e0c45b932a6136b4d5180fb12217efd0df1b91ace6f078d",
+    "src/shaders/rr_reflectance_capture.hlsl": "46a1808f17924fe4eed61a26925dac3cd4e1156aa30e5e84f765528a44a1a150",
+    "src/shaders/rr_envbrdf_generated.hlsli": "9abec20dacbeb8d110756453f53ed9f00d1e5881656e3e6392faefd0dc559153",
+    "src/shaders/ControlPrimaryGuideDecode.hlsli": "012867f70919960730619b041831ebf72cfba25f6f097dac48615148fd233361",
+    "tools/compile-reflectance.cpp": "94c6f43d891c9b54a809cb0df1a45b4421a8348e6c6b98fd13e349aa6bd84283",
+    "Collect-ControlFG-Logs.ps1": "e6e7b6eb0de117ea8b863dede1bf7079225092288c471d62019069a7dddcc63f",
+    "src/rr_guide_export.h": "e4b5f586c20c6e6ad53b2e2a750c1f42345ea0cb46d9ccd155ae7c6bf828a829",
+    "src/rr_guide_render.h": "1d5b74bb161e0b36bf912e81e3b535f31865740579fbeff7e6f9aae7d575d735"
+  }
+}

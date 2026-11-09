@@ -1,0 +1,16 @@
+{
+  "baseline_sha256": "26688736d38b5ea056ae6bb37dc1a738334d94c784003a67957f3677f789a246",
+  "tolerance_radius_fraction": 0.1,
+  "x": {
+    "sha256": "a0e1219c224f4e72ba76d83f7e8920b9408b2e37fd0fb88b2a49f94194419a87",
+    "bytes": 54620
+  },
+  "y": {
+    "sha256": "9df5ffaaa50da1b563418d2c502bac732d8b310e6b1414a99d99f5a14c9a642c",
+    "bytes": 54620
+  },
+  "z": {
+    "sha256": "715c30fd2e7fb05cc5c7b1b06783d3041c6ac33914d1b7c85ed55e80bb414b6e",
+    "bytes": 54620
+  }
+}

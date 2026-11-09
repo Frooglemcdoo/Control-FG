@@ -1,0 +1,42 @@
+{
+  "baseline": "R225 audit / R224 runtime",
+  "native_block": [
+    "0xc80fc",
+    "0xc81f3"
+  ],
+  "patch_bytes": 15,
+  "d3d_helper_checks": {
+    "0xea80": "488b4108c3",
+    "0x1a9a0": "488b8180000000488902488bc2c3",
+    "0x1a9c0": "4c8984d1f801000048ff4108c3",
+    "0x416a0": "4c89410885d27442",
+    "0x416ea": "4d85c0740e498b8090000000488901488bc1c3"
+  },
+  "import_slots": [
+    "0x5dfd30",
+    "0x5dfc80",
+    "0x5df640",
+    "0x5df630"
+  ],
+  "global_import": "0x5df638",
+  "preserved": [
+    "35 live resource resolutions",
+    "signed active variant",
+    "preferred/fallback container",
+    "native pointer and null handle fallback",
+    "slot order",
+    "descriptor version per slot",
+    "material animation",
+    "sort/dedup IDs",
+    "texture callbacks"
+  ],
+  "no_cache": true,
+  "unwind_info": "0104010004420000",
+  "live_outputs": {
+    "rdi": "output base",
+    "rbx": 35,
+    "r13": 0,
+    "rsi": "output base if slot table nonnull, otherwise original"
+  },
+  "performance": "unconfirmed"
+}

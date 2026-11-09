@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "normal": "PASS",
+  "asan_ubsan": "PASS",
+  "tested_sha256": {
+    "validation/r21z-preset-default/test.cpp": "58E66A96435DE6B034CC9E2E5EC81E2A0E37E44D11ACD339CE3F954A87107152",
+    "src/rr_user_control.h": "14E42B95BDC314D95907EBF01B5BD764E9DCF679CC745CE7348DDD007988390B",
+    "src/rr_native_frame.h": "CA2A1C214D61471EB7476F3860E86BB2D120FFC91BC81CC9881149E2E1E65FFD",
+    "src/fg_overlay.h": "D6553C5333A02504C37BF2CFBAA66E3398D56C6D59D04351EE98FACB2ED4ED52"
+  },
+  "notes": "Portable r21z preset policy validates Preset F as process default, live E/F transitions, and stable repeated selection. Overlay/static persistence contracts are enforced separately by Verify-Source.ps1."
+}

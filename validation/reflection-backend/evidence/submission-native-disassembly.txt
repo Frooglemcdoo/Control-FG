@@ -1,0 +1,143 @@
+
+upload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+0000000180031c3b <.text+0x30c3b>:
+   180031c3b:	b9 50 42 04 00       	mov    ecx,0x44250
+   180031c40:	48 03 cd             	add    rcx,rbp
+   180031c43:	e8 e8 ad fe ff       	call   0x18001ca30
+   180031c48:	41 bf 18 00 00 00    	mov    r15d,0x18
+   180031c4e:	49 8b 0c 2f          	mov    rcx,QWORD PTR [r15+rbp*1]
+   180031c52:	e8 f9 0b 00 00       	call   0x180032850
+   180031c57:	48 8b 0d da ff 0d 00 	mov    rcx,QWORD PTR [rip+0xdffda]        # 0x180111c38
+   180031c5e:	e8 3d 18 01 00       	call   0x1800434a0
+
+upload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+0000000180032850 <.text+0x31850>:
+   180032850:	40 55                	rex push rbp
+   180032852:	56                   	push   rsi
+   180032853:	57                   	push   rdi
+   180032854:	41 54                	push   r12
+   180032856:	41 55                	push   r13
+   180032858:	41 56                	push   r14
+   18003285a:	41 57                	push   r15
+   18003285c:	48 83 ec 60          	sub    rsp,0x60
+   180032860:	48 c7 44 24 30 fe ff 	mov    QWORD PTR [rsp+0x30],0xfffffffffffffffe
+   180032867:	ff ff 
+   180032869:	48 89 9c 24 a0 00 00 	mov    QWORD PTR [rsp+0xa0],rbx
+   180032870:	00 
+   180032871:	4c 8b f1             	mov    r14,rcx
+   180032874:	ff 15 5e ad 02 00    	call   QWORD PTR [rip+0x2ad5e]        # 0x18005d5d8
+   18003287a:	3b 05 b4 43 0c 00    	cmp    eax,DWORD PTR [rip+0xc43b4]        # 0x1800f6c34
+   180032880:	0f 85 ea 02 00 00    	jne    0x180032b70
+   180032886:	8b 15 70 ed 0d 00    	mov    edx,DWORD PTR [rip+0xded70]        # 0x1801115fc
+   18003288c:	65 48 8b 04 25 58 00 	mov    rax,QWORD PTR gs:0x58
+   180032893:	00 00 
+   180032895:	48 8b 2c d0          	mov    rbp,QWORD PTR [rax+rdx*8]
+   180032899:	41 bc 50 42 04 00    	mov    r12d,0x44250
+   18003289f:	4c 03 e5             	add    r12,rbp
+   1800328a2:	48 8b 1d 77 f3 0d 00 	mov    rbx,QWORD PTR [rip+0xdf377]        # 0x180111c20
+   1800328a9:	48 89 9c 24 b0 00 00 	mov    QWORD PTR [rsp+0xb0],rbx
+   1800328b0:	00 
+   1800328b1:	ff 15 f9 a8 02 00    	call   QWORD PTR [rip+0x2a8f9]        # 0x18005d1b0
+   1800328b7:	8b f8                	mov    edi,eax
+   1800328b9:	39 43 08             	cmp    DWORD PTR [rbx+0x8],eax
+   1800328bc:	74 0c                	je     0x1800328ca
+   1800328be:	48 8b cb             	mov    rcx,rbx
+   1800328c1:	ff 15 f1 a8 02 00    	call   QWORD PTR [rip+0x2a8f1]        # 0x18005d1b8
+   1800328c7:	89 7b 08             	mov    DWORD PTR [rbx+0x8],edi
+   1800328ca:	ff 43 0c             	inc    DWORD PTR [rbx+0xc]
+   1800328cd:	b9 18 00 00 00       	mov    ecx,0x18
+   1800328d2:	48 8b 05 3f f3 0d 00 	mov    rax,QWORD PTR [rip+0xdf33f]        # 0x180111c18
+   1800328d9:	48 83 78 08 00       	cmp    QWORD PTR [rax+0x8],0x0
+   1800328de:	75 4c                	jne    0x18003292c
+   1800328e0:	8b f9                	mov    edi,ecx
+   1800328e2:	48 8b 0c 29          	mov    rcx,QWORD PTR [rcx+rbp*1]
+   1800328e6:	49 3b ce             	cmp    rcx,r14
+   1800328e9:	75 41                	jne    0x18003292c
+   1800328eb:	e8 b0 0b 01 00       	call   0x1800434a0
+   1800328f0:	48 8b 04 2f          	mov    rax,QWORD PTR [rdi+rbp*1]
+   1800328f4:	4c 8b 70 10          	mov    r14,QWORD PTR [rax+0x10]
+   1800328f8:	48 8b 35 19 f3 0d 00 	mov    rsi,QWORD PTR [rip+0xdf319]        # 0x180111c18
+   1800328ff:	48 8b 4e 38          	mov    rcx,QWORD PTR [rsi+0x38]
+   180032903:	48 8b 7e 30          	mov    rdi,QWORD PTR [rsi+0x30]
+   180032907:	48 8b 01             	mov    rax,QWORD PTR [rcx]
+   18003290a:	ff 50 40             	call   QWORD PTR [rax+0x40]
+   18003290d:	48 3b c7             	cmp    rax,rdi
+   180032910:	0f 83 44 02 00 00    	jae    0x180032b5a
+   180032916:	49 8b 06             	mov    rax,QWORD PTR [r14]
+   180032919:	4c 8b 46 30          	mov    r8,QWORD PTR [rsi+0x30]
+   18003291d:	48 8b 56 38          	mov    rdx,QWORD PTR [rsi+0x38]
+   180032921:	49 8b ce             	mov    rcx,r14
+   180032924:	ff 50 70             	call   QWORD PTR [rax+0x70]
+   180032927:	e9 2e 02 00 00       	jmp    0x180032b5a
+   18003292c:	e8 af 05 01 00       	call   0x180042ee0
+
+upload/d3d_rmdwin10_f(4).dll:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+00000001800434a0 <.text+0x424a0>:
+   1800434a0:	48 8b c4             	mov    rax,rsp
+   1800434a3:	48 89 48 08          	mov    QWORD PTR [rax+0x8],rcx
+   1800434a7:	55                   	push   rbp
+   1800434a8:	56                   	push   rsi
+   1800434a9:	57                   	push   rdi
+   1800434aa:	41 54                	push   r12
+   1800434ac:	41 55                	push   r13
+   1800434ae:	41 56                	push   r14
+   1800434b0:	41 57                	push   r15
+   1800434b2:	48 83 ec 40          	sub    rsp,0x40
+   1800434b6:	48 c7 40 a8 fe ff ff 	mov    QWORD PTR [rax-0x58],0xfffffffffffffffe
+   1800434bd:	ff 
+   1800434be:	48 89 58 20          	mov    QWORD PTR [rax+0x20],rbx
+   1800434c2:	4c 8b e9             	mov    r13,rcx
+   1800434c5:	48 8d 69 38          	lea    rbp,[rcx+0x38]
+   1800434c9:	48 89 68 18          	mov    QWORD PTR [rax+0x18],rbp
+   1800434cd:	ff 15 dd 9c 01 00    	call   QWORD PTR [rip+0x19cdd]        # 0x18005d1b0
+   1800434d3:	8b d8                	mov    ebx,eax
+   1800434d5:	39 45 08             	cmp    DWORD PTR [rbp+0x8],eax
+   1800434d8:	74 0c                	je     0x1800434e6
+   1800434da:	48 8b cd             	mov    rcx,rbp
+   1800434dd:	ff 15 d5 9c 01 00    	call   QWORD PTR [rip+0x19cd5]        # 0x18005d1b8
+   1800434e3:	89 5d 08             	mov    DWORD PTR [rbp+0x8],ebx
+   1800434e6:	ff 45 0c             	inc    DWORD PTR [rbp+0xc]
+   1800434e9:	41 8b 7d 30          	mov    edi,DWORD PTR [r13+0x30]
+   1800434ed:	85 ff                	test   edi,edi
+   1800434ef:	0f 84 ea 00 00 00    	je     0x1800435df
+   1800434f5:	4d 8b 7d 28          	mov    r15,QWORD PTR [r13+0x28]
+   1800434f9:	4d 8b 65 10          	mov    r12,QWORD PTR [r13+0x10]
+   1800434fd:	44 8b f7             	mov    r14d,edi
+   180043500:	45 33 ed             	xor    r13d,r13d
+   180043503:	4c 89 6c 24 28       	mov    QWORD PTR [rsp+0x28],r13
+   180043508:	4c 89 6c 24 30       	mov    QWORD PTR [rsp+0x30],r13
+   18004350d:	33 db                	xor    ebx,ebx
+   18004350f:	85 ff                	test   edi,edi
+   180043511:	74 3b                	je     0x18004354e
+   180043513:	49 8b 04 df          	mov    rax,QWORD PTR [r15+rbx*8]
+   180043517:	48 c7 40 08 00 00 00 	mov    QWORD PTR [rax+0x8],0x0
+   18004351e:	00 
+   18004351f:	49 8b 04 df          	mov    rax,QWORD PTR [r15+rbx*8]
+   180043523:	48 8b 48 18          	mov    rcx,QWORD PTR [rax+0x18]
+   180043527:	48 89 8c 24 88 00 00 	mov    QWORD PTR [rsp+0x88],rcx
+   18004352e:	00 
+   18004352f:	48 8d 94 24 88 00 00 	lea    rdx,[rsp+0x88]
+   180043536:	00 
+   180043537:	48 8d 4c 24 28       	lea    rcx,[rsp+0x28]
+   18004353c:	e8 5f ee fb ff       	call   0x1800023a0
+   180043541:	48 ff c3             	inc    rbx
+   180043544:	49 3b de             	cmp    rbx,r14
+   180043547:	72 ca                	jb     0x180043513
+   180043549:	4c 8b 6c 24 28       	mov    r13,QWORD PTR [rsp+0x28]
+   18004354e:	49 8b 04 24          	mov    rax,QWORD PTR [r12]
+   180043552:	4d 8b c5             	mov    r8,r13
+   180043555:	8b d7                	mov    edx,edi
+   180043557:	49 8b cc             	mov    rcx,r12
+   18004355a:	ff 50 50             	call   QWORD PTR [rax+0x50]

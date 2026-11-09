@@ -1,0 +1,21 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "r29 portable validation for the Windows HDR pre-Present guard. r28 proved the swap-chain containing output could remain stale across Win+Alt+B; r29 instead uses a private native DXGI factory, refreshes it when IsCurrent() becomes false, enumerates the output matching Control's current monitor, and samples IDXGIOutput6::GetDesc1() before the real Present. The r27 resize-side quiesce fallback and r26 two-fresh-frame warmup are retained.",
+  "tests": {
+    "policy_normal": "PASS r29 fresh-output HDR guard policy: pre-resize domain gate, bridge handoff, resize fallback, and two-fresh-frame warmup retained",
+    "policy_asan_ubsan": "PASS r29 fresh-output HDR guard policy: pre-resize domain gate, bridge handoff, resize fallback, and two-fresh-frame warmup retained",
+    "source_contract": "PASS private native IDXGIFactory1 IsCurrent refresh + adapter/output enumeration + monitor match + IDXGIOutput6 GetDesc1; observer body contains no swapChain->GetContainingOutput call"
+  },
+  "assertions": [
+    "The Windows HDR observer no longer obtains its dynamic output state from IDXGISwapChain::GetContainingOutput().",
+    "A missing, stale, or monitor-mismatched private DXGI factory/output causes a native factory recreation and current-monitor output enumeration.",
+    "A detected SDR/HDR display-domain flip queues DLSS-G off before the same real Present and holds it off until the HDR bridge generation advances.",
+    "The committed-Present ResizeBuffers quiesce remains a fallback if the OS-led pre-Present detector does not fire.",
+    "Two fresh fully tagged frames in the new HDR/SDR domain are still required before FG can re-enable.",
+    "RR and the signed-off r24 HDR HUDless/UI recomposition path are unchanged."
+  ],
+  "tested_sha256": {
+    "src/streamline_bridge.h": "306aeec4018239f356bc17a21ccbd094173cd2c08197fa1eb4641b4790ec5073",
+    "validation/r29-fresh-output-hdr/policy-test.cpp": "08c403ca795dcd38732da823b64db6f2f733ea862a6822ba6eecf8712807c145"
+  }
+}

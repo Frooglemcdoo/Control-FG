@@ -1,0 +1,38 @@
+{
+  "src/rr_frame_coordinator.h": [
+    [
+      " bool NeedsHistoryReset() const noexcept",
+      " // Signal settings are latched immediately after Begin, before feature/lighting.\n bool ResetForSignalChange() noexcept {\n  if(!selected_||stopped_||stage_!=RRFrameStage::Selected)return false;\n  reset_=true;return true;\n }\n bool NeedsHistoryReset() const noexcept"
+    ]
+  ],
+  "src/fg_overlay.h": [
+    [
+      "#include \"pt_reflection_user_control.h\"",
+      "#include \"pt_reflection_user_control.h\"\n#include \"rr_gi_sample_control.h\""
+    ],
+    [
+      "    const bool rrEnabled = GetPrivateProfileIntW",
+      "    control_rr::GISampleSelect(GetPrivateProfileIntW(L\"RayReconstruction\", L\"GISamples\", 4, fgOverlaySettingsPath.c_str()));\n    const bool rrEnabled = GetPrivateProfileIntW"
+    ],
+    [
+      "    wchar_t rrPresetText[8]{};",
+      "    wchar_t giSamplesText[8]{};\n    swprintf_s(giSamplesText,L\"%u\",control_rr::GISampleRequested());\n    wchar_t rrPresetText[8]{};"
+    ],
+    [
+      "    ok = (WritePrivateProfileStringW(L\"RayReconstruction\", L\"ReflectionClamp\", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;",
+      "    ok = (WritePrivateProfileStringW(L\"RayReconstruction\", L\"ReflectionClamp\", clampText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;\n    ok = (WritePrivateProfileStringW(L\"RayReconstruction\", L\"GISamples\", giSamplesText, fgOverlaySettingsPath.c_str()) != FALSE) && ok;"
+    ],
+    [
+      "        PaintFGButton(dc,RECT{550,410,710,460},L\"Back\",false);",
+      "        SelectObject(dc,bodyFont);\n        RECT giTitle{30,390,710,423};\n        DrawTextW(dc,L\"Indirect diffuse samples\",-1,&giTitle,DT_LEFT|DT_SINGLELINE);\n        const unsigned giValues[5]{0,2,4,6,8};\n        const wchar_t* giLabels[5]{L\"Native\",L\"2\",L\"4\",L\"6\",L\"8\"};\n        SelectObject(dc,buttonFont);\n        for(unsigned i=0;i<5;++i){\n            const int left=30+static_cast<int>(i)*136;\n            PaintFGButton(dc,RECT{left,432,left+124,482},giLabels[i],control_rr::GISampleRequested()==giValues[i]);\n        }\n        SelectObject(dc,smallFont);\n        RECT giHelp{30,500,710,548};\n        DrawTextW(dc,L\"Applies live with RR and RT indirect diffuse lighting on. Saves automatically. Higher samples use more GPU time and VRAM.\",-1,&giHelp,DT_LEFT|DT_WORDBREAK);\n        SelectObject(dc,buttonFont);\n        PaintFGButton(dc,RECT{550,570,710,620},L\"Back\",false);"
+    ],
+    [
+      "if (fgOverlayRRSettingsPage) return 490;",
+      "if (fgOverlayRRSettingsPage) return 650;"
+    ],
+    [
+      "            } else if (x >= 550 && x < 710 && y >= 410 && y < 460) {",
+      "            } else if (y >= 432 && y < 482 && x >= 30 && x < 698) {\n                const unsigned index=static_cast<unsigned>((x-30)/136);\n                if(index<5&&(x-30)%136<124){\n                    const unsigned values[5]{0,2,4,6,8};\n                    control_rr::GISampleSelect(values[index]);\n                    FGOverlayMarkSettingsDirty();\n                    FGOverlayFlushSettingsIfDue(true);\n                    Log(\"RR_GI_SAMPLES_UI requested=%u apply=next_frame\",values[index]);\n                }\n            } else if (x >= 550 && x < 710 && y >= 570 && y < 620) {"
+    ]
+  ]
+}

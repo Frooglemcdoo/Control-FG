@@ -1,0 +1,37 @@
+{
+  "schema": "ControlFG.RRNativeG9.G8RuntimeEvidence.v1",
+  "source_log_zip": "Control-FG-v1.0.0-RR-Native-G8-Logs-20260914-065922-abaa9d9a.zip",
+  "capture_frame": 3318,
+  "source_batches": 625,
+  "accepted_batches": 585,
+  "rejected_batches": 40,
+  "selection_rejections": {
+    "unsupported_material_family": 39,
+    "albedo_technique_unreadable": 1
+  },
+  "remaining_family_examples": {
+    "foliage": 27,
+    "hair": 7,
+    "eye": 5
+  },
+  "shader_rejection_total": 0,
+  "replayed_batches": 585,
+  "draw_ranges": 5,
+  "skipped_ranges": 0,
+  "max_replay_cpu_ms": 1377.075,
+  "streamline_long_frame_warning": true,
+  "aa_failures_last_observed": 0,
+  "backbuffer_index_failures_last_observed": 0,
+  "capture_copy_succeeded": true,
+  "export_succeeded": true,
+  "zero_rgba_pixels_with_nonzero_material_id": 19818,
+  "fully_zero_nonzero_material_ids": [
+    1599,
+    1013,
+    266,
+    248
+  ],
+  "settings_ini_mode": 2,
+  "observed_fg_selection": "2x",
+  "note": "Character/cloth admission functionally passed, but the 1377.075 ms maximum replay CPU interval is a performance blocker requiring attribution before expanding more family admission."
+}

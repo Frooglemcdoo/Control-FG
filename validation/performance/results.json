@@ -1,0 +1,33 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "policy:normal": "PASS query leases: exact Present, fence reuse, abandonment, stale serials, exhaustion, device loss, 5000 cycles; timing conversion and comparison warmup/mode/resize/FG/reset/gap gates",
+    "adapter:normal": "PASS actual timestamp adapter: initialized pair only, delayed fence readback/reuse, list-change abandonment, native command count, LastError, signal failure disables profiling only",
+    "policy:asan_ubsan": "PASS query leases: exact Present, fence reuse, abandonment, stale serials, exhaustion, device loss, 5000 cycles; timing conversion and comparison warmup/mode/resize/FG/reset/gap gates",
+    "adapter:asan_ubsan": "PASS actual timestamp adapter: initialized pair only, delayed fence readback/reuse, list-change abandonment, native command count, LastError, signal failure disables profiling only"
+  },
+  "windows_execution": false,
+  "gpu_execution": false,
+  "collector_powershell_7_linux": "Collected 1.0.0-RR-Native-G12-r20m logs: 0 MiB\nUpload this ZIP: /tmp/rr performance collection y134xayh/out/Control-FG-Compact-Logs-20260915-171811-c093ce5e.zip\nPASS real PowerShell collector and performance summary: OFF/ON/OFF segments, warmup exclusion, delayed matching GPU samples, invalid pair rejection, summary inventory and bounded ZIP",
+  "windows_powershell_5_1": "NOT_RUN",
+  "tested_sha256": {
+    "src/rr_performance.h": "4e296a1e8b87161079ac7e1ae95464122f740e78c2df87a291bd3f25b6f85f89",
+    "src/rr_performance_policy.h": "1ac5de22ddd60714fa5099601a66b52009c8c81c42e07cf6a1a967bf2006a21f",
+    "src/rr_evaluation_entry.h": "53994cdf24cf210bff9435d866615308936c871f94e8837ca87f9ec06a65a5e2",
+    "src/rr_native_frame.h": "d5e67451dce62eddc3496960091901df12485f59add2c549101dcc1bf33ca3cf",
+    "src/rr_diffuse_replay.h": "45d8faa6d2a490e6a4813f345db4aebab4316bd8bd50d509ea1ed4e47e3eefa4",
+    "src/rr_diffuse_join.h": "3947d6530c67fc02f514969ae741ef87f72b41a8e99a86680441ef3f9b4dc8ef",
+    "src/rr_reflection_runtime.h": "258edb4fff12e5541b7a414cd607a2630003aff6dee3e20682604b888e58ad46",
+    "src/rr_live_guides.h": "72eae4a95db07473ef5862b7aaa454099830443dedc42f4020f5f4c6a5f208b2",
+    "src/rr_distance_runtime.h": "bdd355abb8391aaca9bcf066e03cbbd198ba0fbd785a1100ee78a129735976de",
+    "src/probe.cpp": "1a7a28de774a8ddf331b8e920422a8dc7e45602c0c1efd8483ea3bc5be81804b",
+    "validation/performance/adapter.cpp": "d003546e3fa846ae15fe4cd5f0dcc788850be828b8021be66330f16d094180e9",
+    "validation/performance/windows_compile.cpp": "dfdaa763ec04d91c30cf7e2ab4ba9ad0f7029bba1b02d1c3944f250c9a620fa4",
+    "validation/performance/policy.cpp": "0ffcf2d9ac31e212f4ce67a77ce6a700af7d381282dda1282211a149e996a243",
+    "validation/performance/run.py": "8d7e1609391c2079cca1d1ad2ac451106a4eebb4fe311166600111080884aba6",
+    "validation/performance/collector.py": "080760889a97acbc9484ab8c4f14dbe27d713ad85c11f0dc52700ef029fdc84d",
+    "Collect-ControlFG-Compact-Logs.ps1": "ab93e4f65987fdccc4dbc07c81724e119cc8ea0e3ecbd9b786d2c3aab973be81",
+    "Collect-ControlFG-Compact-Logs.cmd": "7439a7fac1c3aa1299d01c7f66b6c269f097be7884e62b52a073c1d621d7e342",
+    "Summarize-ControlFG-Performance.ps1": "f252fd13c1fb232fa29dced7508cec775ca1fe3c648af25eb2b3c05637bc7c86"
+  }
+}

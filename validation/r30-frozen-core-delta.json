@@ -1,0 +1,33 @@
+{
+  "status": "PASS",
+  "baseline": "r29 approved production-core checkpoint",
+  "release": "r30-win-alt-b-pre-os-fg-quiesce",
+  "expected_changed_paths": [
+    "src/streamline_bridge.h",
+    "src/hdr10_bridge.h"
+  ],
+  "changed_files": [
+    {
+      "Path": "src/streamline_bridge.h",
+      "PreviousSHA256": "306AEEC4018239F356BC17A21CCBD094173CD2C08197FA1EB4641B4790EC5073",
+      "R30SHA256": "F3AA596183E6923F72D4F014BBA6155C0E4AFFC927BD8B9840E1B83DDB7FC712"
+    },
+    {
+      "Path": "src/hdr10_bridge.h",
+      "PreviousSHA256": "72181A7DF22F6AB99D4D90C6654E65255C4E8013647C0D6D681722A77CF6884F",
+      "R30SHA256": "97EAB731B4ADCA35893E22D596537B0F7820CD7CD6FF18E7BD048F48DFCA6793"
+    }
+  ],
+  "unchanged_count": 9,
+  "total_count": 11,
+  "assertions": [
+    "Exactly 2 files changed from the r29 production-core checkpoint.",
+    "The changed files are src/streamline_bridge.h and src/hdr10_bridge.h.",
+    "The other nine checkpointed files retain their r29 hashes.",
+    "The r30 hashes recorded here match the current source."
+  ],
+  "tested_sha256": {
+    "src/streamline_bridge.h": "f3aa596183e6923f72d4f014bba6155c0e4affc927bd8b9840e1b83ddb7fc712",
+    "src/hdr10_bridge.h": "97eab731b4adca35893e22d596537b0f7820cd7cd6ff18e7bd048f48dfca6793"
+  }
+}

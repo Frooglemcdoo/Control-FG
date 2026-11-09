@@ -1,0 +1,7 @@
+LIBRARY dxgi
+EXPORTS
+    CreateDXGIFactory=ProbeCreateDXGIFactory
+    CreateDXGIFactory1=ProbeCreateDXGIFactory1
+    CreateDXGIFactory2=ProbeCreateDXGIFactory2
+    DXGIGetDebugInterface1=ProbeDXGIGetDebugInterface1
+    DXGIDeclareAdapterRemovalSupport=ProbeDXGIDeclareAdapterRemovalSupport

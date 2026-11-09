@@ -1,0 +1,278 @@
+[
+  {
+    "mode": "clamp-only",
+    "frame": 53726,
+    "plant_region_materials": [
+      {
+        "material_id": 1307,
+        "pixels": 31231,
+        "missing_replay": 31231,
+        "diffuse_rgb_min": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ],
+        "diffuse_rgb_max": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ]
+      }
+    ],
+    "plant_normal_max_error": 0.000488387299881432,
+    "plant_roughness_max_error": 0.0004863739013671875,
+    "surface_metrics": {
+      "planter_flat": {
+        "raw-gi": {
+          "mean": 0.003947279653182397,
+          "spatial_highpass_rms": 0.00014266944906583448
+        },
+        "lighting-diffuse": {
+          "mean": 0.003957886752738403,
+          "spatial_highpass_rms": 0.0001426720836642661
+        },
+        "lighting-specular": {
+          "mean": 7.579793903403557e-05,
+          "spatial_highpass_rms": 0.00015970756970357209
+        },
+        "input-color": {
+          "mean": 0.0017378181233027804,
+          "spatial_highpass_rms": 0.00017735124074683088
+        },
+        "rr-output": {
+          "mean": 0.0017121157359389157,
+          "spatial_highpass_rms": 4.285770226537912e-05
+        }
+      },
+      "rear_cabinet_flat": {
+        "raw-gi": {
+          "mean": 0.0019106212514517613,
+          "spatial_highpass_rms": 0.00012941583257289444
+        },
+        "lighting-diffuse": {
+          "mean": 0.0019106212514517613,
+          "spatial_highpass_rms": 0.00012941583257289444
+        },
+        "lighting-specular": {
+          "mean": 3.98752095156111e-05,
+          "spatial_highpass_rms": 0.00010124454199482361
+        },
+        "input-color": {
+          "mean": 0.0005249178187250224,
+          "spatial_highpass_rms": 0.00012029365622431215
+        },
+        "rr-output": {
+          "mean": 0.0005125946579329097,
+          "spatial_highpass_rms": 5.7253960983063235e-05
+        }
+      }
+    }
+  },
+  {
+    "mode": "clamp-only",
+    "frame": 53727,
+    "plant_region_materials": [
+      {
+        "material_id": 1307,
+        "pixels": 31273,
+        "missing_replay": 31273,
+        "diffuse_rgb_min": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ],
+        "diffuse_rgb_max": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ]
+      }
+    ],
+    "plant_normal_max_error": 0.000488362480847826,
+    "plant_roughness_max_error": 0.0004863739013671875,
+    "surface_metrics": {
+      "planter_flat": {
+        "raw-gi": {
+          "mean": 0.003941587626062907,
+          "spatial_highpass_rms": 0.00013874899573143546
+        },
+        "lighting-diffuse": {
+          "mean": 0.003951559534691847,
+          "spatial_highpass_rms": 0.00013874892036732343
+        },
+        "lighting-specular": {
+          "mean": 7.331499244373004e-05,
+          "spatial_highpass_rms": 0.00013502706977359537
+        },
+        "input-color": {
+          "mean": 0.0017319419814818178,
+          "spatial_highpass_rms": 0.00015313686396762236
+        },
+        "rr-output": {
+          "mean": 0.0017114836227027778,
+          "spatial_highpass_rms": 4.216245449824942e-05
+        }
+      },
+      "rear_cabinet_flat": {
+        "raw-gi": {
+          "mean": 0.0019005988925782052,
+          "spatial_highpass_rms": 0.0001255380181371656
+        },
+        "lighting-diffuse": {
+          "mean": 0.0019005988925782052,
+          "spatial_highpass_rms": 0.0001255380181371656
+        },
+        "lighting-specular": {
+          "mean": 3.669611081524298e-05,
+          "spatial_highpass_rms": 5.484216691858949e-05
+        },
+        "input-color": {
+          "mean": 0.0005141600859026575,
+          "spatial_highpass_rms": 8.560390090991701e-05
+        },
+        "rr-output": {
+          "mean": 0.0005125963201545753,
+          "spatial_highpass_rms": 5.717012257852978e-05
+        }
+      }
+    }
+  },
+  {
+    "mode": "both",
+    "frame": 58100,
+    "plant_region_materials": [
+      {
+        "material_id": 1307,
+        "pixels": 31250,
+        "missing_replay": 31250,
+        "diffuse_rgb_min": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ],
+        "diffuse_rgb_max": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ]
+      }
+    ],
+    "plant_normal_max_error": 0.0004883722176529659,
+    "plant_roughness_max_error": 0.0004863739013671875,
+    "surface_metrics": {
+      "planter_flat": {
+        "raw-gi": {
+          "mean": 0.0039040186033913724,
+          "spatial_highpass_rms": 5.886745086344701e-05
+        },
+        "lighting-diffuse": {
+          "mean": 0.0039142208033226995,
+          "spatial_highpass_rms": 5.8889777414921824e-05
+        },
+        "lighting-specular": {
+          "mean": 7.636770338178254e-05,
+          "spatial_highpass_rms": 0.00015462493046029902
+        },
+        "input-color": {
+          "mean": 0.0017200872586524256,
+          "spatial_highpass_rms": 0.00016201630904124292
+        },
+        "rr-output": {
+          "mean": 0.0017091216971247623,
+          "spatial_highpass_rms": 4.308460325128061e-05
+        }
+      },
+      "rear_cabinet_flat": {
+        "raw-gi": {
+          "mean": 0.0018851040264461624,
+          "spatial_highpass_rms": 0.00013732568673488545
+        },
+        "lighting-diffuse": {
+          "mean": 0.0018851040264461624,
+          "spatial_highpass_rms": 0.00013732568673488545
+        },
+        "lighting-specular": {
+          "mean": 4.0125533970895894e-05,
+          "spatial_highpass_rms": 9.80436637122475e-05
+        },
+        "input-color": {
+          "mean": 0.0005162357530145104,
+          "spatial_highpass_rms": 0.00011678590085685897
+        },
+        "rr-output": {
+          "mean": 0.0005103303491754027,
+          "spatial_highpass_rms": 5.965020976109806e-05
+        }
+      }
+    }
+  },
+  {
+    "mode": "both",
+    "frame": 58101,
+    "plant_region_materials": [
+      {
+        "material_id": 1306,
+        "pixels": 31265,
+        "missing_replay": 31265,
+        "diffuse_rgb_min": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ],
+        "diffuse_rgb_max": [
+          0.054901123046875,
+          0.054901123046875,
+          0.054901123046875
+        ]
+      }
+    ],
+    "plant_normal_max_error": 0.000488362480847826,
+    "plant_roughness_max_error": 0.0004863739013671875,
+    "surface_metrics": {
+      "planter_flat": {
+        "raw-gi": {
+          "mean": 0.0039038252455798478,
+          "spatial_highpass_rms": 5.581959246807865e-05
+        },
+        "lighting-diffuse": {
+          "mean": 0.0039140429382255445,
+          "spatial_highpass_rms": 5.5829418995221274e-05
+        },
+        "lighting-specular": {
+          "mean": 7.143250800955753e-05,
+          "spatial_highpass_rms": 9.904508461219858e-05
+        },
+        "input-color": {
+          "mean": 0.0017148594984928002,
+          "spatial_highpass_rms": 0.00011089635315666662
+        },
+        "rr-output": {
+          "mean": 0.0017091368612137615,
+          "spatial_highpass_rms": 4.3084211310692735e-05
+        }
+      },
+      "rear_cabinet_flat": {
+        "raw-gi": {
+          "mean": 0.001881470721206346,
+          "spatial_highpass_rms": 0.00013938798950897602
+        },
+        "lighting-diffuse": {
+          "mean": 0.001881470721206346,
+          "spatial_highpass_rms": 0.00013938798950897602
+        },
+        "lighting-specular": {
+          "mean": 4.007040087653454e-05,
+          "spatial_highpass_rms": 9.632973621445805e-05
+        },
+        "input-color": {
+          "mean": 0.0005167043975294502,
+          "spatial_highpass_rms": 0.00011796374399536058
+        },
+        "rr-output": {
+          "mean": 0.0005103201061047804,
+          "spatial_highpass_rms": 5.960371355912522e-05
+        }
+      }
+    }
+  }
+]

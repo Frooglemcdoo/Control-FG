@@ -1,0 +1,18 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "checks": {
+    "off_native": true,
+    "partial_native": true,
+    "no_rt_ao_or_sun_native": true,
+    "rt_sun_full_bypass": true,
+    "rt_ao_full_bypass": true
+  },
+  "results": [
+    "portable policy compiled and passed with g++",
+    "runtime callsite patching requires Windows build/game validation"
+  ],
+  "tested_sha256": {
+    "src/rr_broad_diffuse_policy.h": "313afbc807410984b5b1f63f9376fa56277ec4aae7550cd153838ad59330432a",
+    "validation/r20v-current/mode-test.cpp": "d685283cbc2201ada7124bdb34e0c081ce02469d4a88269dd81e6d03de4a6de6"
+  }
+}

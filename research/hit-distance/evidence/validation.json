@@ -1,0 +1,36 @@
+{
+  "commands": [
+    {
+      "name": "host-compile",
+      "returncode": 0
+    },
+    {
+      "name": "host-results",
+      "returncode": 0
+    },
+    {
+      "name": "sanitizer-compile",
+      "returncode": 0
+    },
+    {
+      "name": "sanitizer-results",
+      "returncode": 0
+    },
+    {
+      "name": "hlsl-compile",
+      "returncode": 0
+    },
+    {
+      "name": "native-writer-results",
+      "returncode": 0
+    }
+  ],
+  "source_sha256": {
+    "rr_hit_distance.hlsl": "0fa2baff392a8211f51548d59180e491469c3d8ca1c0b2dea06aaf34d0b6a066",
+    "rr_hit_distance_shared.h": "76881f2ffe5bb1318c71600d76a710be9d845cefb13e3f4a85eacbff92f385f8"
+  },
+  "runtime_wired": false,
+  "gpu_executed": false,
+  "rr_enabled": false,
+  "scope": "host numerical/classification tests, HLSL compilation, static native DXIL SSA interpretation"
+}

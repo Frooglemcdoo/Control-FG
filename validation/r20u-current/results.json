@@ -1,0 +1,30 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "version": "1.0.0-RR-Native-G12-r20u",
+  "results": {
+    "normal": "PASS r20u contact-shadow policy: FULL+contact neutralizes temporal/spatial denoising; OFF/PARTIAL/non-contact pass through",
+    "asan_ubsan": "PASS r20u contact-shadow policy: FULL+contact neutralizes temporal/spatial denoising; OFF/PARTIAL/non-contact pass through"
+  },
+  "checks": {
+    "full_contact_temporal_off": true,
+    "full_contact_spatial_zero": true,
+    "full_contact_step_one": true,
+    "off_passthrough": true,
+    "partial_passthrough_via_not_full": true,
+    "non_contact_passthrough": true,
+    "native_output_call_preserved": true,
+    "exact_contact_callsite_audited": true,
+    "broad_ssao_ssr_sun_filter_preserved": true,
+    "transparent_direct_dlf_not_found": true
+  },
+  "tested_sha256": {
+    "validation/r20u-current/mode-test.cpp": "6a625e48b96117f888ba3819d3ed81d38d8c0dd8213e34aad94ff701fd39275a",
+    "validation/r20u-current/audit.json": "a1602686d5783ed5b8a00edd6c49edaf6f0bff7630dc0963fdf6a30b214249a6",
+    "src/rr_contact_shadow_policy.h": "eaf13b464c9a0968b36abca0ab0bd020e9c542aec22d6132f18f4fe06474dca4",
+    "src/rr_native_frame.h": "d9e54d838e7f4e9680021ed4fdec5f193389f6a6c6dfc3c9c140a453e0d2b17d",
+    "Build-Metadata.ps1": "26d74f8c319683be4fa0a90f2faffd605a958bb74347e92b7ead1cd06ca5c5b5"
+  },
+  "limitations": [
+    "Portable policy/source validation plus exact static binary audit; Windows/MSVC ABI and live GPU/image-quality/performance behavior require user validation"
+  ]
+}

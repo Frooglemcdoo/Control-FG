@@ -1,0 +1,65 @@
+{
+  "analysis": "G4 scheduling review, read-only",
+  "source_sha256": {
+    "g4-release/src/probe.cpp": "573d054b57a521d772949036a0c7602bedb6f6e15378d9640edc6ab278a923a4",
+    "g4-release/src/rr_guide_render.h": "d8b7aeae94b75b0ecf39a09080024069e157bf1c7cf338a6e77841c3bc180fec",
+    "g4-release/src/rr_albedo_capture.h": "95b9b55616699b35fd31da9e904269fa1ee9f7c569aadff8b43fcfc66a554481",
+    "g4-release/src/rr_guide_inputs.h": "7e224e77528dcc1006b5dd489a170dbbe031551e2184bf0408b0991e81e5fd3f",
+    "g4-release/src/rr_albedo_native.h": "1c670e5f2a16b0ff3e662966f324b3a258b45c9c1ef3e02adbda4bb50efc8c55",
+    "g4-logs/probe/probe-20260913-144505-270-48084.log": "65356a2736ac254ac4692dbfb250989e53573cd84f25ffcbfb923691924532ca"
+  },
+  "records": [
+    {
+      "line": 2343,
+      "record": "qpc=1141040876471 tid=50672 RR_GUIDE_G3_PREPARE_QUEUED attempt=1 aa=120 width=2560 height=1440 render_ms=1.153 borrowed_inputs_retained=0"
+    },
+    {
+      "line": 2348,
+      "record": "qpc=1141041156374 tid=47652 RR_GUIDE_G3_PREPARE_COMPLETE attempt=1 retire_only=0 ms=27.991 hr=0x00000000 width=2560 height=1440 thread=47652"
+    },
+    {
+      "line": 2349,
+      "record": "qpc=1141041272492 tid=50672 RR_GUIDE_G3_SHADER_CONTRACT frame=1754 source_batches=503 accepted_batches=468 rejected_batches=35 targets=1 shader_count=3 cpu_ms=2.229 semantics_verified=0"
+    },
+    {
+      "line": 2350,
+      "record": "qpc=1141041345500 tid=50672 RR_GUIDE_G3_ALBEDO_PREPARED frame=1754 width=2560 height=1440 targets=1 allocation_clear_ms=7.271 total_ms=9.527 capture_frames=1 primary_view=00000091511FF380 camera_view=000001F7EE9B3A50"
+    },
+    {
+      "line": 2351,
+      "record": "qpc=1141043712171 tid=50672 RR_GUIDE_G3_ALBEDO_JOINED frame=1754 ranges=4 replayed_batches=468 skipped_ranges=0 max_replay_cpu_ms=236.024 resource_table_same=0 scene_coverage_validated=0"
+    },
+    {
+      "line": 2354,
+      "record": "qpc=1141043823233 tid=50672 RR_GUIDE_G3_ALBEDO_STOP reason=joined_capture_frame_expired exception=0x00000000 allocations_retained=1 rr_eval=disabled"
+    },
+    {
+      "line": 2355,
+      "record": "qpc=1141043823654 tid=50672 RR_GUIDE_G3_CAPTURE_TIMING attempt=2 aa=124 copy_ms=0.018 render_ms=0.050 commands_started=1"
+    },
+    {
+      "line": 2356,
+      "record": "qpc=1141043823719 tid=50672 RR_GUIDE_G3_INPUTS_COPIED aa=124 frame=1755 present=1755 width=2560 height=1440 source_states_restored=1 shader_sha256=1f2e8a2baf6c8dd0e912e9c057d3924485aa5d5aead5abffb6b2cc5abeb042bf"
+    },
+    {
+      "line": 2357,
+      "record": "qpc=1141043850836 tid=50672 RR_GUIDE_G3_DISPATCH_SUBMITTED present=1756 frame=1755 width=2560 height=1440 engine_descriptor_state_changed=0"
+    },
+    {
+      "line": 2358,
+      "record": "qpc=1141045661529 tid=7932 RR_GUIDE_G3_EXPORT_COMPLETE directory=C:\\Users\\mattn\\AppData\\Local\\ControlFGProbe\\rr-guide-g3-20260913-144531-841-48084 frame=1755 width=2560 height=1440 rr_evaluate=0"
+    }
+  ],
+  "status": "MATERIAL_REPLAY_JOINED_BUT_NOT_COPIED",
+  "material_frame": 1754,
+  "normal_copy_frame": 1755,
+  "source_batches": 503,
+  "accepted_batches": 468,
+  "replayed_batches": 468,
+  "ranges": 4,
+  "rejected_ranges": 0,
+  "limitations": [
+    "Logs sample RT entry/return sparsely. They do not individually timestamp every reflection dispatch in frame1754.",
+    "Native GPU pixel/material validity is not established by replay counters."
+  ]
+}

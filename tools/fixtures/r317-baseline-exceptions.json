@@ -1,0 +1,12 @@
+{
+  "src/streamline_bridge.h": [
+    [
+      "static HMODULE slInterposerModule = nullptr;",
+      "// Optional observer installed before Control constructs its command queues.\nstatic std::atomic<void(*)(ID3D12CommandQueue*) noexcept> controlGameQueueObserver{nullptr};\nstatic HMODULE slInterposerModule = nullptr;"
+    ],
+    [
+      "    if (nativeQueue) reinterpret_cast<IUnknown*>(nativeQueue)->Release();\n    return result;",
+      "    if(queue)if(const auto observe=controlGameQueueObserver.load())observe(queue);\n    if (nativeQueue) reinterpret_cast<IUnknown*>(nativeQueue)->Release();\n    return result;"
+    ]
+  ]
+}

@@ -1,0 +1,11 @@
+# R32: DLAA performance attribution
+
+User reports RR off 86-90 FPS and RR on 60-66 FPS, before extra GI samples: approximately 3.5-5.6 ms net additional frame time. The R29 log in Control-RR-GI-Audit-R28-20261019-141537.zip has 15 RR GPU evaluation samples: median 6.338784 ms, min 6.179488, max 6.967840 at 3840x2160. Live-guide median is 0.179296 ms. The sole SR GPU sample (0.425536 ms) is during startup/warmup and is not a valid matched baseline. No claim that all RR cost is unavoidable or recoverable is supported.
+
+Source inspection finds one original evaluation call in the entry wrapper, a stable Model F feature in these logs, and no per-frame feature creation or repeated reset. The timing interval wraps native evaluation and post-evaluation F9 copy if capturing; captured frames 3324/3325 are not sampled multiples of 240 in this run. GPU character replay and other engine stages are not included in the guide metric. Avoid calling 0.18 ms the entire integration cost.
+
+The stability policy previously required ready=true even for RR-off frames; NativeReady is intentionally not called while RR is off, so those frames could never become eligible. R32 accepts stable successful RR-off frames while still excluding requested-RR warmup. The performance key and CPU/GPU logs now carry the frame-latched GI request (0 is native, not zero rays). GI request changes reset the timing segment. All query cadence/lifetime and rendering logic remain unchanged.
+
+Read-only creation audit records dimensions, PerfQualityValue, DLSS.Feature.Create.Flags, node masks, denoise mode, roughness mode, hardware-depth mode and DLAA preset hint, each with getter status. No unknown flags are overwritten. The dynamic-resolution performance warning found in Streamline's DLSS_G guide concerns FG and is not evidence of an RR flag defect.
+
+Primary reference: https://github.com/NVIDIA-RTX/Streamline/blob/main/docs/ProgrammingGuideDLSS_RR.md (RR replaces SR, shares performance/quality mode and consumes render-resolution guides). Need runtime creation values and matched steady RR-off/native/four-sample segments before proposing a configuration optimization. Existing compact collector is packaged; F9 is unnecessary.

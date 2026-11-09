@@ -1,0 +1,773 @@
+{
+  "archive_sha256": "5ba68a3050774474cbbd9a3651ae6d76e514c52296979f6acb6a7b59be98e9ae",
+  "containers": [
+    {
+      "file": "rt_reflection-000.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 1250,
+      "size": 39008,
+      "sha256": "c2e4c0c4b48b191ba281595dcf11c7962c5c05c615cbe036ca6e8616c09fd30e",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1844
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1912,
+          "size": 37088
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-001.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 40302,
+      "size": 30708,
+      "sha256": "ab8df1c9b3263f534b6d43f1beb90acb5e7d0b8956844047e6abbd83aa964ed6",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1288
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1356,
+          "size": 29344
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-002.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 71054,
+      "size": 39804,
+      "sha256": "a2ed39a3d4c1eaa9a2e401bc1f04df468007a77a97b6105215991622005a5ecb",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1904
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1972,
+          "size": 37824
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-003.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 110902,
+      "size": 31572,
+      "sha256": "9d8bf04e11cafae08916137cf8e4dd66730d8beac6daa2fd6add19e8dc9b5da5",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1348
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1416,
+          "size": 30148
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-004.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 142518,
+      "size": 37256,
+      "sha256": "7e701da941303a50fa89f2e6fce276d11788e718c3e93a221e7a17a883ea968d",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1844
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1912,
+          "size": 35336
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-005.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 179818,
+      "size": 28952,
+      "sha256": "707337cbef486f61e0577b70e021b98397f6085e4069982d78591883b6b04585",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1288
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1356,
+          "size": 27588
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-006.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 208814,
+      "size": 38040,
+      "sha256": "0411098fa35a9f6e388bc2f30e2dd79240cb0fb39654f53ab8b54d1d4785f00a",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1904
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1972,
+          "size": 36060
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-007.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 246898,
+      "size": 29812,
+      "sha256": "bd8cd8bd7d87cca2d1e5f6ddb2bb3a239d4e69422d2e9777979b1d29791a2727",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1348
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1416,
+          "size": 28388
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-008.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 276754,
+      "size": 39416,
+      "sha256": "3b58fb0edaac252905cfce5533c82c275cba7752e074449e1ac6fe8bc640f95a",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1900
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1968,
+          "size": 37440
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-009.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 316214,
+      "size": 30784,
+      "sha256": "dc43fec4e661fa830db96d9f1187ae10d45f135c6e7f97a197cce88a44154ba2",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1288
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1356,
+          "size": 29420
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-010.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 347042,
+      "size": 40216,
+      "sha256": "3f999b7dea64a02cd195f9af515a5e034508a548571d86beed62d1421d0fd8a9",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1964
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2032,
+          "size": 38176
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-011.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 387302,
+      "size": 31640,
+      "sha256": "814a8027eaccd5af570435800a72ea93e39631ee8a7ad81a6e5ac1d4c5cb9564",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1348
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1416,
+          "size": 30216
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-012.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 418986,
+      "size": 37656,
+      "sha256": "2a86923b674f36c6df3928dbb3396b0616fa9a9feb224ded9f66580585d49bae",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1900
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1968,
+          "size": 35680
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-013.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 456686,
+      "size": 29028,
+      "sha256": "5b9d5e7f3fa0065d1f338eed7f523740c6c3cb239352789c7d64d843870add7a",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1288
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1356,
+          "size": 27664
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-014.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 485758,
+      "size": 38452,
+      "sha256": "b71d5079430b9721802cbb17aa3d4544ac0eb98388782f179669e5f30523e1a6",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1964
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2032,
+          "size": 36412
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-015.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 524254,
+      "size": 29880,
+      "sha256": "9c61d79b9a042510a13b14acdc00e28fb30b870955c0167977242d24059082d0",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1348
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1416,
+          "size": 28456
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-016.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 554178,
+      "size": 40764,
+      "sha256": "4ef8cbe9e4fc81b5ced1026e6681732d4518db1aa96d26d4ae41fd13965bce91",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2052
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2120,
+          "size": 38636
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-017.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 594986,
+      "size": 32816,
+      "sha256": "b188002bdb6ab4feb7af2d4cc95e5c40b7671d746028059ddfd97ab326295dbf",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1544
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1612,
+          "size": 31196
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-018.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 627846,
+      "size": 41580,
+      "sha256": "4b26c839a2fe5397922ebebe722b0fbf54f94bfaa2bdeb2f7984250f27454423",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2112
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2180,
+          "size": 39392
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-019.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 669470,
+      "size": 33680,
+      "sha256": "799ac13dbfbb26e703179c95d2a9bbfaf91c6d3cc17cf4c394fcee0575ac2297",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1604
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1672,
+          "size": 32000
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-020.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 703194,
+      "size": 38900,
+      "sha256": "b2549f5c5005000cfd548ad1977fad632cf5f6dae5f4784055e7c5072102d4a1",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2052
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2120,
+          "size": 36772
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-021.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 742138,
+      "size": 30944,
+      "sha256": "6c98b4e52a114ffa64a4416b16f4fa3f7e35cb15b1aed9b225a55de2c5500373",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1544
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1612,
+          "size": 29324
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-022.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 773126,
+      "size": 39684,
+      "sha256": "f92bb7c2703f220f474b5f9e26337b08a81e8271a525df0d0b45160912b5930c",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2112
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2180,
+          "size": 37496
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-023.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 812854,
+      "size": 31780,
+      "sha256": "ec647c1608fc6d3268720378d287f936de6f4dd8bdfcb21ee64f7b0516e4c571",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1604
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1672,
+          "size": 30100
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-024.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 844678,
+      "size": 41168,
+      "sha256": "265bc062fcf2129a404ce56dc15c0883da0d52c3c22a78bd1b02d5c54f7c5645",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2108
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2176,
+          "size": 38984
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-025.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 885890,
+      "size": 32892,
+      "sha256": "f20ed1cb40ef15b74e94101dcf16ea137315ad96d475b09a595b0e03cbb6238e",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1544
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1612,
+          "size": 31272
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-026.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 918826,
+      "size": 41984,
+      "sha256": "4104edb9538ee61c94b0f814e61d5b3d6caa96d106c8b1f9b26a92808ac8570e",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2172
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2240,
+          "size": 39736
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-027.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 960854,
+      "size": 33764,
+      "sha256": "429c3b507ec77d5b616c299fbbfd1d531c069b31cbf77da459295d0f147914d6",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1604
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1672,
+          "size": 32084
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-028.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 994662,
+      "size": 39296,
+      "sha256": "0550895d74dccae3ba8766cfe7f6437bf2fe24e9a404cc4325713314d3b6d8a6",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2108
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2176,
+          "size": 37112
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-029.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 1034002,
+      "size": 31032,
+      "sha256": "075d43923bd074702bdfd28bbfeb5dff2ff35e6f91510566328de5b5f0f279ac",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1544
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1612,
+          "size": 29412
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-030.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 1065078,
+      "size": 40084,
+      "sha256": "f6a84e6fad328e1e994b442c0556f8e2815eeab14acc813fb6eff3fc7324bfbe",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 2172
+        },
+        {
+          "tag": "DXIL",
+          "offset": 2240,
+          "size": 37836
+        }
+      ]
+    },
+    {
+      "file": "rt_reflection-031.dxbc",
+      "source": "Control-RR-Loose-Shaders-20260912-212234-687d93d6\\shaders\\data\\shaders\\build\\pc_dxil\\rt_reflection.obj",
+      "offset": 1105206,
+      "size": 31856,
+      "sha256": "039a1dfd754cf675aafab55d979f612d82000f872c04844232dc24eb80e2eebe",
+      "chunks": [
+        {
+          "tag": "SFI0",
+          "offset": 44,
+          "size": 8
+        },
+        {
+          "tag": "RDAT",
+          "offset": 60,
+          "size": 1604
+        },
+        {
+          "tag": "DXIL",
+          "offset": 1672,
+          "size": 30176
+        }
+      ]
+    }
+  ]
+}

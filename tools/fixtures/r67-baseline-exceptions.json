@@ -1,0 +1,18 @@
+{
+  "src/rr_contact_shadow_policy.h": [
+    [
+      "bool fullRR, bool contactShadowEnabled, bool temporal, int spatialSize, int spatialStep) noexcept {",
+      "bool fullRR, bool contactShadowEnabled, bool temporal, int spatialSize, int spatialStep,\n    bool fullDistanceSpotShadow = false) noexcept {"
+    ],
+    [
+      "if (fullRR && contactShadowEnabled) {",
+      "// Full-distance single-ray visibility needs native filtering before light composition.\n    // Only the original short contact-shadow signal is handed to RR unfiltered.\n    if (fullRR && contactShadowEnabled && !fullDistanceSpotShadow) {"
+    ]
+  ],
+  "src/rr_native_frame.h": [
+    [
+      " const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep);",
+      " const bool fullSpot=native_lighting::rt_spot_runtime::NeedsNativeShadowFiltering();\n const DWORD filterError=GetLastError();\n native_lighting::rt_spot_runtime::ReportShadowFiltering(full,contact,temporal,spatialSize,spatialStep);\n SetLastError(filterError);\n const auto policy=control_rr::ContactShadowFilterPolicy(full,contact,temporal,spatialSize,spatialStep,fullSpot);"
+    ]
+  ]
+}

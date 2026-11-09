@@ -1,0 +1,57 @@
+{
+  "schema": "ControlFG.RRNativeG8.G7RuntimeEvidence.v1",
+  "source_log_zip": "Control-FG-v1.0.0-RR-Native-G7-Logs-20260913-193731-7017c6e3.zip",
+  "engine_frame": 1447,
+  "source_batches": 506,
+  "accepted_batches": 427,
+  "rejected_batches": 79,
+  "selection_rejections": {
+    "unsupported_material_family": 78,
+    "albedo_technique_unreadable": 1
+  },
+  "shader_rejections": 0,
+  "reconciled": true,
+  "bounded_examples": {
+    "foliage": 46,
+    "character": 9,
+    "eye": 4,
+    "cloth": 4,
+    "unreadable": 1,
+    "hair": 0
+  },
+  "contracts": {
+    "character": {
+      "main_or": "0x02000000",
+      "main_clear": 0,
+      "main_count": 128,
+      "albedo_or": "0x02000000",
+      "albedo_clear": 64,
+      "albedo_count": 16,
+      "replacement_key_matches": true,
+      "stages": "VS+PS only"
+    },
+    "cloth": {
+      "main_or": "0x02000000",
+      "main_clear": 1,
+      "main_count": 64,
+      "albedo_or": "0x02000002",
+      "albedo_clear": 1,
+      "albedo_count": 8,
+      "replacement_key_matches": true,
+      "stages": "VS+PS only"
+    },
+    "foliage": {
+      "replacement_lookup": true,
+      "replacement_key_matches": false,
+      "note": "requested key resolves to a different actual key; remain rejected"
+    },
+    "eye": {
+      "replacement_lookup": false,
+      "note": "remain rejected"
+    },
+    "hair": {
+      "bounded_examples": 0,
+      "note": "not evaluated by G7 bounded example set; remain rejected"
+    }
+  }
+}

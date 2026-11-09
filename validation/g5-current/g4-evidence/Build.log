@@ -1,0 +1,31 @@
+Control FG v1.0.0-RR-Native-G4 - Native material guide images (production FG core frozen)
+**********************************************************************
+** Visual Studio 2026 Developer Command Prompt v18.9.2
+** Copyright (c) 2026 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+CACHE HIT: project Streamline SDK 2.14.1 staging is valid.
+PASS: Streamline SDK 2.14.1 staging and recorded hashes are intact.
+Overlay stability test R1 is already applied.
+PASS: G4 source identity, hook wiring, shared installer contract, frozen files and PowerShell syntax.
+abi_check.cpp
+PASS: MSVC argument types produce the exact game-imported DLSS symbol.
+probe.cpp
+C:\Users\mattn\Downloads\FSR\src\streamline_bridge.h(250): warning C4505: 'GetFGRequestedGeneratedFrames': unreferenced function with internal linkage has been removed
+C:\Users\mattn\Downloads\FSR\src\streamline_bridge.h(280): warning C4505: 'GetFGLastStatePresentForOverlay': unreferenced function with internal linkage has been removed
+C:\Users\mattn\Downloads\FSR\src\streamline_bridge.h(354): warning C4505: 'AdjustFGDynamicManualTargetFps': unreferenced function with internal linkage has been removed
+C:\Users\mattn\Downloads\FSR\src\semantic_capture.h(285): warning C4505: 'PrepareNativeNgxPostSetupHook': unreferenced function with internal linkage has been removed
+   Creating library build\dxgi.lib and object build\dxgi.exp
+smoke.cpp
+First DXGI adapter: NVIDIA GeForce RTX 5090
+PASS: proxy loaded and forwarded CreateDXGIFactory1 to a working DXGI factory.
+This smoke test does not load Control or validate its hooks.
+PASS: MSVC argument types produce the exact game-imported DLSS symbol.
+PASS: Streamline SDK 2.14.1 staging and recorded hashes are intact.
+PASS: G4 source identity, hook wiring, shared installer contract, frozen files and PowerShell syntax.
+PASS: G4 build validated: ABI, exports, x64 proxy, frozen FG/HDR dependencies and bounded material guide capture markers.
+Build checks do not validate live guide orientation, material coverage, GPU execution or RR image quality. Collect one short gameplay run.
+PASS: Streamline SDK 2.14.1 staging and recorded hashes are intact.
+PASS: public binary release: C:\Users\mattn\Downloads\FSR\release\Control-FG-v1.0.0-RR-Native-G4.zip
+PASS: compatibility drop-in ZIP: C:\Users\mattn\Downloads\FSR\Control-FG-v1.0.0-RR-Native-G4-DropIn.zip
+PASS: checksums: C:\Users\mattn\Downloads\FSR\release\SHA256SUMS.txt

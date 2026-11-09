@@ -1,0 +1,54 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "calls": [
+    {
+      "site": "0xa8d93",
+      "bytes": "e888dfffff",
+      "target": "0xa6d20"
+    },
+    {
+      "site": "0xa8efc",
+      "bytes": "e81fdeffff",
+      "target": "0xa6d20"
+    }
+  ],
+  "abi": "void* append(Array16*, const void* record64)",
+  "array": {
+    "data": 0,
+    "size": 8,
+    "capacity_and_flags": 12,
+    "capacity_mask": "0x3fffffff"
+  },
+  "native_no_growth": "size increments first; four interleaved 16-byte copies; return data + (size-1)*64",
+  "candidate": "same result for disjoint input/destination/header, size below masked capacity; otherwise original routine",
+  "original_fixture_size": 376,
+  "original_fixture_sha256": "f9802257c86f8bacfba053a9ccbb151ba154532c4f961c5933b9c0f5118810b5",
+  "isolated_validation": "Executed original non-growing function bytes with x64 Windows ABI on Linux host; 4096 unaligned appends byte-identical; ten alternating benchmark pairs",
+  "microbenchmark_candidate_over_original_ratios": [
+    0.699,
+    0.706,
+    0.614,
+    0.731,
+    0.755,
+    0.626,
+    0.706,
+    0.696,
+    0.667,
+    0.757
+  ],
+  "limitation": "Host/compiler microbenchmark only, no in-game speedup established",
+  "r218_log_window": {
+    "file": "Control-FG-Compact-Logs-20261029-165902-83492144.zip",
+    "present_start": 2340,
+    "present_end": 8760,
+    "calls": 6420,
+    "duration_seconds": 90.348,
+    "sample_means_ms": {
+      "material_update": 1.69438,
+      "rt_prepare": 3.50577,
+      "rt_record": 1.25285,
+      "rt_prepare_join": 2.34955
+    }
+  },
+  "validation": "Portable tests PASS; ASan/UBSan PASS with leak detection disabled because this container cannot enumerate /proc tasks; Windows checks pending CI"
+}

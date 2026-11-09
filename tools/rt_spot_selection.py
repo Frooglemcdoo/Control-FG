@@ -1,0 +1,142 @@
+"""Rank spotlight candidates before map shadowing; retain mapped nonselected light.
+
+Hash-locked to the captured direct-light/ID producer. Rays and selected-light
+composition are unchanged. Material response, frustum and cookie tests remain.
+"""
+import hashlib
+from dxbc_transform import transform_shex
+from rt_spot_history import instruction, dest, source, immediate
+
+NATIVE_SHA = 'a9e5b544d5ec48e9b439b36aafc5346645f0261d3b1df65dc09e6cce290c164f'
+
+def multiply(dst, src, weight):
+    body=dest(dst,7)+source(src)+source(weight,'xxxx')
+    return [((len(body)+1)<<24)|56,*body]
+
+def unshadowed_selection(data):
+    if hashlib.sha256(data).hexdigest()!=NATIVE_SHA:
+        raise ValueError('Unsupported spotlight selector')
+    def transform(w):
+        assert w[225]&2047==104 and w[226]==43
+        assert w[5685]&2047==48 and w[7313]&2047==57
+        assert w[7596]&2047==56 and w[10445]&2047==0
+        assert w[10453]&2047==49
+        # Extra register is private to the spotlight loop. Initialize it even
+        # when the native frustum branch rejects this candidate.
+        w[226]=44
+        edits={
+            5686:(0,instruction('mov',dest(43,1),immediate([0,0,0,0]))),
+            # Preserve final static/dynamic map visibility for native accumulation.
+            7313:(7,instruction('mov',dest(43,1),source(28,'wwww'))+
+                instruction('mov',dest(29,8),immediate([0xffffffff]*4))),
+            # Keep the native near-plane mask, omit multiplication by map visibility.
+            7596:(7,[0x0100003a]*7),
+            # Score this candidate's unshadowed diffuse+specular contribution.
+            # Do not use the old adjacent-candidate brightness difference.
+            10445:(8,instruction('mov',dest(33,1),source(13,'wwww'))),
+            # Native selection/accumulation below still receives mapped lighting.
+            10453:(0,multiply(36,36,43)+multiply(35,35,43)),
+        }
+        for at,(size,replacement) in sorted(edits.items(),reverse=True):
+            w[at:at+size]=replacement
+    return transform_shex(data,transform)
+
+
+CORRECTED_SELECTOR_SHA = '29177f00d24b7c7bc9a9563bb04de4c62f16838a198b1275342bddafc3770bc9'
+
+def map_priority_selection(data):
+    """Rank by mapped candidate energy; preserve all accumulation and normals."""
+    if hashlib.sha256(data).hexdigest()!=CORRECTED_SELECTOR_SHA:
+        raise ValueError('Unsupported corrected spotlight selector')
+    def transform(words):
+        expected=[0x05000036,*dest(33,1),*source(13,'wwww')]
+        if words[10459:10464]!=expected:
+            raise ValueError('Corrected candidate score anchor changed')
+        # r13.w is this candidate's unshadowed energy; r43.x is its saved
+        # final map visibility. Do not restore native adjacent-score ranking.
+        words[10459:10464]=[0x07000038,*dest(33,1),*source(13,'wwww'),*source(43,'xxxx')]
+    return transform_shex(data,transform)
+
+
+def map_visibility_probe(data):
+    """Diagnostic only: encode the winning spotlight's native map visibility.
+
+    Preserve ranking, IDs and every atlas sample. A private register follows
+    the same winner predicate as r34.xy. After native output dithering, replace
+    diffuse RGB with (visibility, 1-visibility, selected ID + 1). The existing
+    composition-before capture reads this payload, not ordinary radiance.
+    """
+    if hashlib.sha256(data).hexdigest()!=CORRECTED_SELECTOR_SHA:
+        raise ValueError('Unsupported map probe selector')
+    def transform(w):
+        assert w[225]&2047==104 and w[226]==44
+        assert w[10549]&2047==55 and w[14948]&2047==164
+        w[226]=45
+        # Zero means no selected candidate; z is a separate validity/ID lane.
+        init=instruction('mov',dest(44,15),immediate([0,0,0,0]))
+        # movc r44.x, r14.w, r43.x, r44.x: exact existing winner predicate.
+        winner=[0x09000037,*dest(44,1),*source(14,'wwww'),*source(43,'xxxx'),*source(44,'xxxx')]
+        # r4.x still holds the selected spotlight ID at the final store.
+        encode=[0x05000056,*dest(44,4),*source(4,'xxxx')]
+        encode += [0x07000000,*dest(44,4),*source(44,'zzzz'),0x00004001,0x3f800000]
+        encode += [0x08000000,*dest(44,2),0x80100006,0x41,44,0x00004001,0x3f800000]
+        # Match the original UAV/address operand and change only the store value.
+        assert w[14948+5:14948+7]==source(1)
+        w[14953:14955]=source(44)
+        for at,words in sorted([(231,init),(10549,winner),(14948,encode)],reverse=True):
+            w[at:at]=words
+    return transform_shex(data,transform)
+
+
+def map_visibility_sidecar(data):
+    """Capture-only instrumentation: retain every normal UAV store and add u3.
+
+    Float32 private output avoids the old R11G11B10 ID precision limit.
+    No change to ranking, native atlas samples or displayed lighting.
+    """
+    probe = map_visibility_probe(data)
+    def transform(w):
+        assert w[14985+5:14985+7] == source(44)
+        assert w[202:209] == [0x0700189c, 0x0031ee46, 0, 0, 0, 0x5555, 0]
+        declaration = list(w[202:209]); declaration[2:5] = [3,3,3]
+        store = list(w[14985:14992]); store[2:4] = [3,3]
+        # Restore native diffuse value, then independently export the probe.
+        w[14990:14992] = source(1)
+        w[14992:14992] = store
+        # Cleared/background pixels must never retain a previous capture value.
+        clear = list(w[362:372]); clear[2:4] = [3,3]
+        w[372:372] = clear
+        w[223:223] = declaration
+    return map_center_sidecar(transform_shex(probe, transform), data)
+
+
+def map_center_sidecar(sidecar, original):
+    """R202 capture-only PCF center result in u3.w; -1 means no PCF sample.
+
+    Duplicate native sample/compare instructions at the unoffset atlas center.
+    The original sixteen samples, map fade/layers and radiance are untouched.
+    """
+    native=[]
+    transform_shex(original, lambda w: native.extend(w))
+    def patch(w):
+        def locate(sequence):
+            hits=[i for i in range(len(w)-len(sequence)+1) if w[i:i+len(sequence)]==sequence]
+            if len(hits)!=1: raise ValueError('Ambiguous map center anchor')
+            return hits[0]
+        # Use the literal native output lane (.w) so the atlas swizzle is exact.
+        sample=list(native[6209:6236])
+        assert sample[0]&2047==72 and sample[13]&2047==29 and sample[20]&2047==1
+        assert [sample[i] for i in (2,15,17,22,24)]==[29]*5
+        for i in (2,15,17,22,24): sample[i]=45
+        assert sample[4]==42
+        sample[4]=40  # atlas center from the preceding native mad, before offsets
+        center_at=locate(native[6162:6171])+9
+        init_at=locate(instruction('mov',dest(43,1),immediate([0,0,0,0])))
+        winner=[0x09000037,*dest(44,1),*source(14,'wwww'),*source(43,'xxxx'),*source(44,'xxxx')]
+        winner_at=locate(winner)+len(winner)
+        temps=locate([0x02000068,45]);w[temps+1]=46
+        init=instruction('mov',dest(45,8),immediate([0xbf800000]*4))
+        save=[0x09000037,*dest(44,8),*source(14,'wwww'),*source(45,'wwww'),*source(44,'wwww')]
+        for at,extra in sorted([(center_at,sample),(init_at,init),(winner_at,save)],reverse=True):
+            w[at:at]=extra
+    return transform_shex(sidecar,patch)

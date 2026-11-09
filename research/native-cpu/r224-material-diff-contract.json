@@ -1,0 +1,32 @@
+{
+  "callsite": "0xc7987",
+  "original": "0xc7a20",
+  "call_bytes": "e894000000",
+  "entry_bytes": "4885d20f8484010000",
+  "arguments": [
+    "manager",
+    "entry handle",
+    "two-pointer material source",
+    "texture-slot structure"
+  ],
+  "manager_arrays": {
+    "keys": "0x78",
+    "entry_count": "0x80",
+    "records": "0x88",
+    "hashes": "0x98"
+  },
+  "record_bytes": 336,
+  "derived_field": "0x148",
+  "source_derived_write": "0xc7acd",
+  "stored_hash_write": "0xc7b84",
+  "original_dirty_store": "0xc7b96",
+  "sampling": "1/8 hash-changing calls per thread",
+  "queue_capacity": 1024,
+  "limits": [
+    "No lifetime retained beyond native call",
+    "Fields are raw dwords; types not inferred",
+    "Texture pointers can change without changed record bytes",
+    "Periodic sampling is not an unbiased frequency estimate",
+    "Entry IDs may be recycled"
+  ]
+}

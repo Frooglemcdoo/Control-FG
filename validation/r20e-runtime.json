@@ -1,0 +1,61 @@
+{
+  "source_zip_sha256": "d6a2f79bfeacd6b62803f79177cf9d42e7ab409cedb3e7505387b41fedd6b302",
+  "version": "r20e",
+  "windows_build": "PASS",
+  "gpu_stage_result": "handoff and distance dispatch observed; native feature creation success, no RR evaluation",
+  "diagnosis": "first RR-selected frame 2530 rejected temporal substitution before a copy attempt; detailed subreason not logged",
+  "logs": [
+    {
+      "log": "probe\\probe-20260915-210941-452-64092.log",
+      "sha256": "17565240cd98fc7c3aade396372acb84910101820c54c8816c36cda51a2ece2f",
+      "rr_create_results": [],
+      "rr_evaluations": 0,
+      "stops": [],
+      "max_sampled_distance_count": 0,
+      "last_reflection_status": []
+    },
+    {
+      "log": "probe\\probe-20260915-211108-961-66924.log",
+      "sha256": "08aac7082e7d288381c1bdd075dd5ba304ca545aa4fe8eab8efa5c26b4b71393",
+      "rr_create_results": [],
+      "rr_evaluations": 0,
+      "stops": [],
+      "max_sampled_distance_count": 0,
+      "last_reflection_status": []
+    },
+    {
+      "log": "probe\\probe-20260915-211201-192-11968.log",
+      "sha256": "19de45be47836c2512cde2f26c95f06ce6f5a366be4ae341a46b359af0b12c6f",
+      "rr_create_results": [],
+      "rr_evaluations": 0,
+      "stops": [],
+      "max_sampled_distance_count": 0,
+      "last_reflection_status": []
+    },
+    {
+      "log": "probe\\probe-20260915-211224-325-67292.log",
+      "sha256": "253d1d58cecf3bbc2e03ae2d10c385b2b19edaca779c4d13f4d44f72bf351705",
+      "rr_create_results": [],
+      "rr_evaluations": 0,
+      "stops": [],
+      "max_sampled_distance_count": 0,
+      "last_reflection_status": []
+    },
+    {
+      "log": "probe\\probe-20260915-211226-436-66660.log",
+      "sha256": "9405c510488bcd2262a948d706e32fcfeceaf7d8293f45799e631eeca7953e38",
+      "rr_create_results": [
+        "RR_PRESET_F_CREATE_RESULT result=0x00000001 preset_requested=F"
+      ],
+      "rr_evaluations": 0,
+      "stops": [
+        "RR_FRAME_STOP frame=2530 reason=temporal_substitution attempted=0",
+        "RR_FRAME_STOP reason=native_aa_argument_contract"
+      ],
+      "max_sampled_distance_count": 1680,
+      "last_reflection_status": [
+        "RR_REFLECTION_STATUS present=5760 calls=1699 rejected=0 recorded=1698 submitted=1698 retired=1698 stopped=0 stage=reflection_capture"
+      ]
+    }
+  ]
+}

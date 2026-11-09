@@ -1,0 +1,14 @@
+{
+  "release": "r31c-hdr-dlssg-hard-reset-display-only-rearm",
+  "scope": "Portable policy validation for HDR-domain DLSS-G hard reset with both bridge-generation recovery and display-only no-ResizeBuffers recovery. eOff must commit on a real Present before feature resources are freed; bridge transitions still require the normal fresh-frame settle; if the bridge does not change, a 30-Present grace plus two consecutive fresh tagged frames permits same-generation rearm. Delayed observer duplicates remain suppressed.",
+  "status": "LOCAL_PASS",
+  "tests": {
+    "policy_normal": "PASS r31c HDR hard-reset policy: off commit, resource free, bridge rearm, display-only no-resize rearm, delayed display duplicate suppression",
+    "policy_asan_ubsan": "PASS r31c HDR hard-reset policy: off commit, resource free, bridge rearm, display-only no-resize rearm, delayed display duplicate suppression"
+  },
+  "tested_sha256": {
+    "src/fg_hdr_hard_reset_policy.h": "667D6F494CA9CF842D42CCA5127C72C5622F32E1FA46BECE8AE3468B6B7D3E64",
+    "validation/r31-hdr-hard-reset/policy-test.cpp": "2FACF5EDA173DB5E39A700E27F4E4C5F40A4FDB2675FEF2AD012AEC6D302F7B5",
+    "src/fg_hdr_transition_policy.h": "07AEAE048551C2448BB653F2320F9E9C0A3C2FCB96B0EE67A3F9B9A9278F03A2"
+  }
+}

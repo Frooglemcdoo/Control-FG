@@ -1,0 +1,29 @@
+{
+  "status": "LOCAL_PASS",
+  "native_audit_groups": 8,
+  "tests": {
+    "normal": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults",
+    "asan_ubsan": "PASS reference-dispatch admission plus 144 mip-count pairs, dispatch-list handoff, frame/view/device/queue guards, malformed mips, mid-read mutation, exact copy once and no retry after faults",
+    "exact_native_copy": "PASS exact native copyRegion plus production adapter: 144 unequal/equal mip pairs, mip-zero/layer-zero copies, full base extent, both state transitions/restorations, native command count"
+  },
+  "windows_compilation": false,
+  "gpu_execution": false,
+  "hook_installed": false,
+  "tested_sha256": {
+    "src/rr_specular_noisy.h": "ddb95662755f116d6e764c5a55bb9ab3188da19a9a6a96d2c3e217114fc5ba58",
+    "src/rr_specular_noisy_windows.h": "94faafcc33863460bd161a04ffe7cfcad968734cafd39ba973479cd4047c3075",
+    "src/rr_native_frame.h": "d5e67451dce62eddc3496960091901df12485f59add2c549101dcc1bf33ca3cf",
+    "validation/specular-noisy/test.cpp": "8c40de36dbc0c9c35114874b82afaf583b24078418ac8a31f87346af96adda41",
+    "validation/specular-noisy/windows_compile.cpp": "5110f9a06d32a077f5575fd7e7d27433f616cc48abdb380a6707b604e05b19d8",
+    "validation/specular-noisy/native-copy.cpp": "9daa4a5b0e4610cf6def3b0e39dd5b791c004a18cce9efd0be06d47ec61662be",
+    "validation/specular-noisy/target.asm": "1a068d1570bd32ad5cf23eaee9ded26f19cbb89ab78be412a12f03824d8f6bef",
+    "validation/specular-noisy/mip-preparation.asm": "453a40edf392531b9264d792b112f9f1665bcf2f155fee7816058544775ae276",
+    "validation/specular-noisy/native-copy.asm": "218b27ff55441f9e59d5ec51ad64e7778e8fe35933876892a875f8b380659c05",
+    "validation/specular-noisy/source.asm": "5d388f65c206f41e17c47b4f8e247db24511f8556ca02ae88ea38914c09cb76e",
+    "validation/specular-noisy/mip-source.asm": "8cb59dfa67167f63ffdcbd08df1ef5f8e1269f12cb90f75a024a70ae1611e908",
+    "validation/specular-noisy/brdf-result.asm": "6b56a543f46a0e549caa0f6f7c213b730adf2980ab502ecd01d9e6d25c117851",
+    "validation/specular-noisy/after-temporal.asm": "dbd2e4870c5bace11c576696593e8fbeac68e761956f7d0d27b7278b3d974832",
+    "validation/specular-noisy/run.py": "57a912d87e40abb51dece291276fb86bdc547160076ec94db3c0604f7fed9c6e"
+  },
+  "retained_exact_disassembly_evidence": true
+}

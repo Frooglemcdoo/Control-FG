@@ -1,0 +1,32 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "test.cpp:normal": "PASS observed enqueue required, 3000 handoffs/retirements, stale/recycled identities, frame/view/device/queue/epoch/Present guards, exactly-once consumption",
+    "observer.cpp:normal": "PASS actual enqueue observer: identity/closed/frame/Present/thread/lock rejection, exact native forwarding, LastError, native exceptions, installer rollback and user status; Windows SEH not exercised",
+    "test.cpp:asan_ubsan": "PASS observed enqueue required, 3000 handoffs/retirements, stale/recycled identities, frame/view/device/queue/epoch/Present guards, exactly-once consumption",
+    "observer.cpp:asan_ubsan": "PASS actual enqueue observer: identity/closed/frame/Present/thread/lock rejection, exact native forwarding, LastError, native exceptions, installer rollback and user status; Windows SEH not exercised"
+  },
+  "windows_execution": false,
+  "windows_seh_exercised": false,
+  "gpu_execution": false,
+  "tested_sha256": {
+    "src/rr_reflection_capture.h": "89c497339d28288ba6db207d05c015f4bd449f41244b6f121a45979bf6a09112",
+    "src/rr_reflection_present.h": "17faa2212467723eb11cae425815a108d8325a19c1536237b8ae203b5de17c45",
+    "src/rr_reflection_handoff_windows.h": "24b720a913548f2ca9dcf53f1d23249255df575de84d7e316672e8b40c30d890",
+    "src/rr_reflection_hooks.h": "2a6246214db8f467cc9407d64cc16b614114a875c844fd0a2b01c4dee53fe3fd",
+    "src/rr_distance_runtime.h": "bdd355abb8391aaca9bcf066e03cbbd198ba0fbd785a1100ee78a129735976de",
+    "src/rr_user_control.h": "83679c8261d2c22ad90b02d30cf8fc230de8842922e37304e0aa47d83540e587",
+    "validation/primary-handoff/test.cpp": "a507e67138465692ddab80e832f0b20cbbfceba980a707bf9c746a4684693b8d",
+    "validation/primary-handoff/observer.cpp": "0c7cba94dc924a93fcc312fcda3fdb9c4f4c685e086eb88e9fff6ed06afa0c36",
+    "validation/primary-handoff/fixture.h": "8500bd66aecd3169c90830f5d54126abc4b2d5ce559f60eaef75326bd15a2d28",
+    "validation/primary-handoff/run.py": "185d259b45c34b20be806f210971498e6e2605fc3b22eb3344d44aafd27fd89f",
+    "validation/primary-handoff/audit.py": "163439dc47212698a2644650e595cb30155365615386bd26c6adc5209185878c",
+    "validation/primary-handoff/native-audit.json": "46c05f8c3f5aa5fc217a1e1a4040b4aed5c16374c211e7c4e7f5bbfc5968abc3",
+    "validation/primary-handoff/enqueue_before_replacement.asm": "311e18e8ccf8846e5a177dc357d72913db7a56a148b7cdd44c30ea7a8c0ecd8b",
+    "validation/primary-handoff/fifo_queue_to_d3d.asm": "f7ead8c2321fed3b64328fc26f218b9e7845337c9c67ddbc75caa94fb8227276",
+    "validation/primary-handoff/append_preserves_order.asm": "71699f5c9a9053fcaffffb1b50b30a98bd70c147157374b1884721fa3cbcb9c1",
+    "validation/primary-handoff/detach_and_close.asm": "5927ba4d506be4995d458074b9309675b00d87c29cd91e8a069b730a93802290",
+    "validation/primary-handoff/new_primary_context.asm": "cca3362a72ba3eb1aeff38e3dc0dfb0ca724e7fee17abf5f6e9144dd65d5a525",
+    "validation/primary-handoff/primary_thread_gate.asm": "a0c7840c141b48be2481432081d53f5cd97118593af9c4c69a153fe9e17aa340"
+  }
+}

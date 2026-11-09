@@ -1,0 +1,16 @@
+{
+  "seed": "0x534d3531",
+  "cases": 60000,
+  "accepted": 17924,
+  "sanitizers": "ASan+UBSan; leak detection disabled due container ptrace restriction",
+  "pass": true,
+  "header_sha256": "7afda0c31ae710e0f27c7b06420f54f4052e385dc7fbb32ec38df3910e1f6a35",
+  "exit_code": 0,
+  "stderr": "",
+  "generated_utc": "2026-09-13T04:43:25.219967+00:00",
+  "input_sha256": {
+    "g2-capture-review/run/rr-guides/rr-guide-g2-20260913-042850-566-51652/native-albedo-ps-000.dxbc": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+    "g2-capture-review/run/rr-guides/rr-guide-g2-20260913-042850-566-51652/native-albedo-ps-001.dxbc": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+    "g2-capture-review/run/rr-guides/rr-guide-g2-20260913-042850-566-51652/native-albedo-ps-002.dxbc": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2"
+  }
+}

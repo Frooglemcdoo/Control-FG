@@ -1,0 +1,30 @@
+{
+  "status": "DECODED_AND_EQUATIONS_VALIDATED",
+  "shaders": [
+    {
+      "file": "native-albedo-ps-000.dxbc",
+      "sha256": "6e8fdc47e77f203157c23e9f77e19b1a66f874a66e3955e29aff3181309536dd",
+      "instructions": 13,
+      "arithmetic_trials": 2000,
+      "maximum_equation_difference": 0.0,
+      "target_count": 1
+    },
+    {
+      "file": "native-albedo-ps-001.dxbc",
+      "sha256": "b2b8ab2bf331f79837bd09ef24b669cbbfbc506b4a369edabbdead78f92a7411",
+      "instructions": 31,
+      "arithmetic_trials": 2000,
+      "maximum_equation_difference": 1.7763568394002505e-15,
+      "target_count": 1
+    },
+    {
+      "file": "native-albedo-ps-002.dxbc",
+      "sha256": "27713d41a80358660ae326a31132bc6d82fec98147b31497a13d0fac9cce5db2",
+      "instructions": 21,
+      "arithmetic_trials": 2000,
+      "maximum_equation_difference": 0.0,
+      "target_count": 1
+    }
+  ],
+  "limits": "Float64 operand-level interpreter versus separately written closed equations with synthetic material/texture inputs; not game pixels or hardware sampling/rounding."
+}

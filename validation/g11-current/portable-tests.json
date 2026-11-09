@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "ordinary": {
+    "compiler": "clang++",
+    "flags": "-std=c++20 -O2",
+    "result": "PASS"
+  },
+  "sanitized": {
+    "compiler": "clang++",
+    "flags": "-std=c++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer",
+    "result": "PASS"
+  },
+  "coverage": [
+    "G10 material selection policy unchanged",
+    "hair-only warm-repeat guard",
+    "eye remains unsupported"
+  ]
+}

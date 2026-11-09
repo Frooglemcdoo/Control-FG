@@ -1,0 +1,20 @@
+{
+  "status": "LOCAL_PASS_WINDOWS_GPU_REQUIRED",
+  "results": {
+    "normal": "PASS actual native preset hook: six modes set/read back before exactly one creation, all lost setters/getters reject, argument/result/error preservation and checked installation",
+    "asan_ubsan": "PASS actual native preset hook: six modes set/read back before exactly one creation, all lost setters/getters reject, argument/result/error preservation and checked installation"
+  },
+  "native_tail": "1D457 -> 528D0 verified against exact DLL",
+  "rr_dll_version": "310.9.1",
+  "rr_dll_sha256": "4BC7EA5FCB2F32CF86BC2CB072E8D2860914A0BE511CBDCB2FC206C1D9D83B80",
+  "runtime_dll_provenance": "Downloaded official NVIDIA/DLSS v310.9.1 x86_64 rel DLL hash is identical to r19b staged DLL",
+  "official_release": "https://github.com/NVIDIA/DLSS/releases/tag/v310.9.1",
+  "preset_requested": "F (6), all six quality modes, before native creation",
+  "windows_gpu_execution": false,
+  "sha256": {
+    "src/rr_preset_f.h": "b86c3983356eaf6e8252350b2df39172f3c82fc256bc20cd7b7a4369b91f9be5",
+    "src/rr_native_preset.h": "b6166b7e0792760e6ff70aa46a2ea96a11dd93775d4f0193a2adb5103eb95161",
+    "Verify-RRRuntime.ps1": "62b483ec17154948a73ec19bd96bec72986d973df9b34199c93383b6ab3b2b02",
+    "validation/preset-f/test.cpp": "60e1acb26aab847261b71e6b2c800d3da43008195f4c00fe6e77521aa8a2b1d3"
+  }
+}

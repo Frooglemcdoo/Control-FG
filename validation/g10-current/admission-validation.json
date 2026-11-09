@@ -1,0 +1,14 @@
+{
+  "status": "PASS",
+  "ordinary": "PASS",
+  "asan_ubsan": "PASS",
+  "standardmaterial_regression": "PASS",
+  "character_regression": "PASS",
+  "cloth_regression": "PASS",
+  "foliage_exact_contract_guarded_admission": "PASS",
+  "hair_exact_contract_guarded_admission": "PASS",
+  "foliage_nearby_contract_rejected": "PASS",
+  "hair_nearby_contract_rejected": "PASS",
+  "eye_remains_rejected": "PASS",
+  "strict_runtime_shader_validator": "UNCHANGED_FROM_G9_AND_REQUIRED_AFTER_SELECTION"
+}

@@ -1,0 +1,32 @@
+{
+  "purpose": "Read-only sampled workload diagnosis; no performance improvement claimed",
+  "base": "R221 native append bypass",
+  "verified_callsite_bytes": {
+    "0xc83af": "e83c000000",
+    "0xc7ea1": "ff05e1581c01",
+    "0xa81f8": "488b01899898000000488b01899888000000"
+  },
+  "material_tail_original": "0xc83f0",
+  "material_tail_call": "0xc83af",
+  "native_counter_increment": "0xc7ea1",
+  "native_counter_address": "0x128d788",
+  "native_counter_width": 32,
+  "material_fields": {
+    "entries": "0x80:uint32",
+    "sorted": "0xd0:uint32",
+    "unique": "0x100:uint64"
+  },
+  "preparation_job_context": "job+0x18:pointer",
+  "preparation_fields": {
+    "objects": "0x18:uint32",
+    "instances": "0x78:uint32",
+    "geometry": "0x88:uint32",
+    "material_refs": "0x98:uint32"
+  },
+  "sampling": "1/64 per thread; material read under original lock, preparation after original return before callback returns",
+  "limits": [
+    "Global rebuild counter is not invalidation-reason attribution",
+    "Sampled counts are not texture uniqueness",
+    "No extra workers, pointer traversal, allocation, dirty suppression or descriptor caching"
+  ]
+}

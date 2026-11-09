@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "checks": {
+    "identity": true,
+    "visible_build_id": true,
+    "overlay_height": true,
+    "sharpness_visible": true,
+    "sharpness_bounds": true,
+    "sharpness_persistence": true,
+    "sharpness_scope_honest": true,
+    "native_aa_override": true,
+    "explicit_rr_eoff": true,
+    "mode_rebuild": true,
+    "skin_stages": true,
+    "skin_inputs": true,
+    "skin_shape_validation": true,
+    "skin_no_fake_guide": true,
+    "skin_future_paths": true,
+    "docs": true
+  },
+  "tested_sha256": {
+    "src/probe.cpp": "372ddf6145406985de751c5bd542e8957952d9d8b14ee45d1a9139dc0c1e2162",
+    "src/fg_overlay.h": "28b1d29723dbda5df8b62c189156830a8a4368ef9a5e94939f0686545ff32870",
+    "src/streamline_frame.h": "524d15c1b021af383b443b4292f77c6a075f4cbf0707a9d430069f8a5731b13d",
+    "src/rr_options_r20p.h": "c18bde07f67a1c4a56c09584b8e83b1be992786e8388a976381a31b1c2b8fba2",
+    "src/rr_skin_diagnostic.h": "3076f6b6b0cfacf364fc84164c77f8ad002e2e90db415172e562df870e6110e0",
+    "src/rr_evaluation_entry.h": "fd9dbef46f0ed98c36d1678eb8e0308a526fa4ba2ce41b052e2936227736f3bd",
+    "src/rr_user_control.h": "a9b7c6ec74d303fe040e547cec5aaa4cd1ed492ffdc62762ce43883834bc78c8",
+    "Build-Metadata.ps1": "892a328119bb0f82e0bbbc128c83a903294fabe60498cd7036ec60f7e8d43941",
+    "RR_NATIVE_G12_R20P.md": "734a7d0224db3d37d357bd0702b3f234b4fc28f21641f84d9c1c711f3cbbfcd6"
+  },
+  "limitations": [
+    "Static/portable validation only; Windows/MSVC and GPU execution remain required",
+    "Skin/SSS path is observation-only in r20p; no bypass/composite mutation is enabled"
+  ]
+}

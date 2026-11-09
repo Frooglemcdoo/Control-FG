@@ -1,0 +1,36 @@
+{
+  "status": "REFLECTION_BUDGET_BLOCKED_BEFORE_RR",
+  "archive": "Control-FG-v1.0.0-RR-Native-G12-r20g-Logs-20260915-165839-e883ac3d.zip",
+  "archive_sha256": "39debb8b286e373ecd1145df8241d0446d696ed67fcc05953e1f1c7763795e16",
+  "main_log": "probe/probe-20260915-215702-552-47112.log",
+  "log_sha256": {
+    "probe/probe-20260915-215549-739-12468.log": "3609ecac0dabbd407766566227dc31e6481d7687c992496aa65adde922a15622",
+    "probe/probe-20260915-215639-094-34296.log": "d4985e4f65b1929d52fb61c85c26251df18d83f389a0a0212899c655989a971c",
+    "probe/probe-20260915-215700-607-39316.log": "982c851f967bfaff7c7db5710d27a5cdfb9cc2aaf88c127c6869e8d3196d4ccd",
+    "probe/probe-20260915-215702-552-47112.log": "f7258d048af77753ef89be2ee2bd15fb13aa8eeb3c19f6488ffd119de9b2ac74"
+  },
+  "version": "1.0.0-RR-Native-G12-r20g",
+  "build_budget_bytes": 536870912,
+  "request": "qpc=3128344973842 tid=18248 RR_REFLECTION_PREPARE_REQUEST width=3840 height=2160 layers=4 budget_bytes=536870912 stage=reflection_capture",
+  "stop": "qpc=3128344975209 tid=45732 RR_REFLECTION_STOP reason=allocation_or_512MiB_budget_rejected resources_retained=1 stage=reflection_capture",
+  "last_reflection_status": "qpc=3128546317453 tid=18248 RR_REFLECTION_STATUS present=5760 calls=863 rejected=0 recorded=0 submitted=0 retired=0 stopped=1 stage=reflection_capture",
+  "last_counters": "qpc=3128546317951 tid=18248 COUNTERS begin=5760 present=5760 aa=863 aa_failures=0 hud_dispatch=5761 hud_render=5760 samples=15 transition_samples=1 swap_samples=23 hud_target_frames=64 hud_target_records=128 backbuffer_index_successes=5760 backbuffer_index_failures=0 fg_ready_presents=863 fg_enabled_presents=863 generated_state_samples=38",
+  "rr_evaluation_events": 0,
+  "rr_selected_mode_samples": 0,
+  "pause_events": 0,
+  "recovery_sr_events": 0,
+  "capture_shape": [
+    3840,
+    2160,
+    4
+  ],
+  "slots": 3,
+  "uncompressed_capture_payload_bytes": 995328000,
+  "uncompressed_capture_payload_mib": 949.21875,
+  "diagnosis": "The source preflights three full R16_UINT/RGBA16F array pairs against 512 MiB. The requested payload alone is 949.21875 MiB, so the budget rejects this capture before creation; no RR frames run.",
+  "limits": [
+    "The combined old stop message does not report driver allocation sizes or HRESULTs; no VRAM exhaustion is established.",
+    "Capture payload excludes device alignment and all other game/guide allocations.",
+    "Screenshot recovery was not exercised because RR never activated."
+  ]
+}

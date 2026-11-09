@@ -1,0 +1,324 @@
+{
+  "status": "PASS",
+  "cases": 79,
+  "source_root": "/workspace/scratch/36fa93863a31/g5-release",
+  "tests": [
+    {
+      "name": "Current full G5 contract accepted",
+      "passed": true
+    },
+    {
+      "name": "G5 identity advertised",
+      "passed": true
+    },
+    {
+      "name": "Joined-frame scheduling advertised",
+      "passed": true
+    },
+    {
+      "name": "View correction advertised",
+      "passed": true
+    },
+    {
+      "name": "RR evaluation disabled",
+      "passed": true
+    },
+    {
+      "name": "Denoiser bypass disabled",
+      "passed": true
+    },
+    {
+      "name": "Semantic guide mapping disabled",
+      "passed": true
+    },
+    {
+      "name": "Capture file format retained accurately",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: Version",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: Version",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: BaseProductionVersion",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: BaseProductionVersion",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: SourceRevision",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: SourceRevision",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRPhase",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRPhase",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRFeatureRequested",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRFeatureRequested",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRRuntimeHandshakeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRRuntimeHandshakeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RROptionsHandshakeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RROptionsHandshakeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRSemanticGuideMappingEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRSemanticGuideMappingEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeNgxPostSetupProbeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeNgxPostSetupProbeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeRtWindowProbeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeRtWindowProbeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeRaytracingShaderCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeRaytracingShaderCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRRendererObserverHooksEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRRendererObserverHooksEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRPrimaryGuideCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRPrimaryGuideCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRPrimaryGuideComputeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRPrimaryGuideComputeEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRPrimaryGuideExportEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRPrimaryGuideExportEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRPrimaryGuideCaptureLimit",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRPrimaryGuideCaptureLimit",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRGuideOutputs",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRGuideOutputs",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRGuideInputs",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRGuideInputs",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRAsyncGuidePreparationEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRAsyncGuidePreparationEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeOpaqueMaterialReplayEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeOpaqueMaterialReplayEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativePrimaryViewRoutingCorrected",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativePrimaryViewRoutingCorrected",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeJoinedFrameCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeJoinedFrameCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeAlbedoTargetCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeAlbedoTargetCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeAlbedoTargetLimit",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeAlbedoTargetLimit",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeSelectedPixelShaderCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeSelectedPixelShaderCaptureEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRNativeSelectedPixelShaderCaptureLimit",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRNativeSelectedPixelShaderCaptureLimit",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRDiffuseAlbedoOutputEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRDiffuseAlbedoOutputEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRSpecularAlbedoOutputEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRSpecularAlbedoOutputEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RRHitDistanceOutputEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RRHitDistanceOutputEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: RREvaluationEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: RREvaluationEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: NativeDenoiserBypassEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: NativeDenoiserBypassEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: StreamlineSDKVersion",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: StreamlineSDKVersion",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: DLSSGGenerationEnabled",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: DLSSGGenerationEnabled",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: DLSSGGeneratedFramesRequested",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: DLSSGGeneratedFramesRequested",
+      "passed": true
+    },
+    {
+      "name": "Missing field rejected: TargetMultiplier",
+      "passed": true
+    },
+    {
+      "name": "Wrong field rejected: TargetMultiplier",
+      "passed": true
+    },
+    {
+      "name": "Old G3 validation rejected",
+      "passed": true
+    }
+  ],
+  "scope": "Actual shared validator, synthetic build metadata. No Windows build/install/game or GPU execution."
+}

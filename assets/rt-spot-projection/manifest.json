@@ -1,0 +1,7 @@
+{
+  "baseline_sha256": "26688736d38b5ea056ae6bb37dc1a738334d94c784003a67957f3677f789a246",
+  "sha256": "ffecbfdae4824afcb9aeefed8df06b46ff9746e760b5088d8b72f6d6725fca29",
+  "bytes": 57356,
+  "policy": "cone_projection_origin_with_authored_clip",
+  "extra_rays": 0
+}

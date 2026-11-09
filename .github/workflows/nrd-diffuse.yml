@@ -1,0 +1,31 @@
+name: Validate NRD diffuse integration
+on:
+  push:
+    branches: [work/gi-modernization]
+    paths: ['src/nrd_diffuse*', 'src/shaders/nrd_diffuse*', 'tools/nrd/**', '.github/workflows/nrd-diffuse.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  gpu:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit native temporal motion contract
+        run: python tools/nrd/audit_native_inputs.py
+      - name: Configure actual NRD with D3D12 shaders
+        run: cmake -S tools/nrd -B nrd-build -DCONTROL_NRD_GPU=ON
+      - name: Build actual NRD and D3D12 adapter
+        run: cmake --build nrd-build --config Release --parallel 4
+      - name: Validate contracts and WARP output
+        run: ctest --test-dir nrd-build -C Release --output-on-failure -V
+      - name: Compile native receiver and NRD conversion shaders
+        shell: pwsh
+        run: |
+          $compiler = (Resolve-Path nrd-build/_deps/dxc-src/bin/x64/dxc.exe).Path
+          if (!$compiler) { throw 'NRD DXC was not found' }
+          foreach ($shader in @('receiver', 'prepare', 'finish')) {
+            & $compiler -T cs_6_0 -HV 2018 -E main -WX -I nrd-build/_deps/nrd-src/Shaders -Fo "nrd-build/nrd-$shader.dxil" "src/shaders/nrd_diffuse_$shader.hlsl"
+            if ($LASTEXITCODE -ne 0) { throw "Failed to compile $shader" }
+          }

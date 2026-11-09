@@ -1,0 +1,22 @@
+{
+  "status": "RESIZE_BLOCKED_BEFORE_RR",
+  "source_version": "r20j",
+  "log_sha256": "62771310aff11d460f35eaabee52ef66ccf750682e4b5b1161d7b1975c319134",
+  "finding": "1440p guides warmed while RR was off; 4K reflection/live allocation succeeded, but diffuse replay and distance outputs remained 1440p. Diffuse extent mismatch latched stop; returning to 1440p did not recover.",
+  "selected_evidence": [
+    "qpc=3153038778906 tid=23004 RR_G12_DIFFUSE_EXTENT_MISMATCH frame=4658 expected_width=2560 expected_height=1440 actual_width=3840 actual_height=2160",
+    "qpc=3153039136744 tid=51252 RR_G12_DIFFUSE_JOIN_FAILURE reason=join_draw_fault expected_frame=4658 actual_frame=4658 frame_readable=1 exception=0x00000000 draw_fault=1 accepted=613 replayed=0 rejected=1 draw_calls=1 frame_skips=0 range_skips=0 view_skips=0 rr_eval=disabled",
+    "qpc=3153039136896 tid=51252 RR_G12_DIFFUSE_STOP reason=join_draw_fault native_targets_retained=1 rr_eval=disabled",
+    "qpc=3152876474425 tid=46992 RR_DISTANCE_PREPARED success=1 hr=0x00000000 width=2560 height=1440 slots=3",
+    "qpc=3153365503492 tid=51252 RR_DISTANCE_SKIP count=2160 frame=6896 reason=pipeline_not_ready_or_extent_changed expected_depth=0000023E31BCE100 ngx_depth=0000023E31BCE100",
+    "qpc=3153009587659 tid=51252 RR_FRAME_MODE frame=4319 selected=0 ready=1 supported=1 active=0 reset_success=1 stopped=0 width=2560 height=1440 reset=0 rt_effects=0x1 required_effects=0x1",
+    "qpc=3153030899837 tid=51252 RR_FRAME_MODE frame=4559 selected=0 ready=0 supported=1 active=0 reset_success=1 stopped=0 width=3840 height=2160 reset=1 rt_effects=0x1 required_effects=0x1",
+    "qpc=3152874443751 tid=46992 RR_REFLECTION_PREPARED width=2560 height=1440 layers=4 bytes=452198400 slots=3 epoch=1 stage=reflection_capture",
+    "qpc=3153039371974 tid=46992 RR_REFLECTION_PREPARED width=3840 height=2160 layers=4 bytes=1002700800 slots=3 epoch=2 stage=reflection_capture",
+    "qpc=3153481982536 tid=61956 RR_REFLECTION_PREPARED width=2560 height=1440 layers=4 bytes=452198400 slots=3 epoch=3 stage=reflection_capture",
+    "qpc=3152875112391 tid=46992 RR_G12_LIVE_PREPARED success=1 hr=0x00000000 width=2560 height=1440 epoch=1 slots=3 stage=guide_generation",
+    "qpc=3153039848458 tid=61956 RR_G12_LIVE_PREPARED success=1 hr=0x00000000 width=3840 height=2160 epoch=2 slots=3 stage=guide_generation",
+    "qpc=3153482216228 tid=46992 RR_G12_LIVE_PREPARED success=1 hr=0x00000000 width=2560 height=1440 epoch=3 slots=3 stage=guide_generation"
+  ],
+  "windows_r20k_execution": "NOT_RUN"
+}

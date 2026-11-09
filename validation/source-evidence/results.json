@@ -1,0 +1,19 @@
+{
+  "status": "PASS",
+  "checks": [
+    "current source and evidence accepted",
+    "current-release-owned source supersedes stale historical milestone hash",
+    "changed guide source rejected despite refreshed package manifest",
+    "stale Part1 report rejected despite refreshed package manifest",
+    "missing report rejected"
+  ],
+  "tested_sha256": {
+    "tools/verify_source_evidence.py": "97bded116bc90d776a8601c18156892f7d754501d7822723b41fa8f5893861bb",
+    "tools/validate-release.py": "f162ecfa4c63a566cf5fd92d0b61bc3e4dd9f1fafb5f9ddf45f4d11c6850984a",
+    "Verify-Source.ps1": "61058b23669d4a413e40506cfe8ba78e980f25282a92619678c5d6f2d558b088",
+    "validation/part1/validation.json": "6d271efbcddc136fa58f3374fccd8090719afdf75c4feab6cdbd5efb3c76bd73",
+    "validation/source-evidence/run.py": "e719e21d36589066be28bb6055c8ba47ade97b5966e3a70255b29239a3a31987"
+  },
+  "powershell_execution": "NOT_RUN",
+  "scope": "Actual portable packaging evidence gate, driven by Verify-Source.ps1 JSON references; no Windows execution"
+}

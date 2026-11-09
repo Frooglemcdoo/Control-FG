@@ -1,0 +1,48 @@
+name: Audit SPEC resolve shader
+on:
+  push:
+    branches: [experiment/native-hit-capture-r118]
+    paths: ['.github/workflows/audit-spec-resolve.yml', 'research/spec-performance/**', 'tools/spec_parallel.py', 'tools/test-spec-parallel.py']
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $bytes=[Convert]::FromBase64String((Get-Content research/spec-performance/spec-resolve.dxbc.b64 -Raw))
+          [IO.File]::WriteAllBytes("$pwd/spec-resolve.dxbc",$bytes)
+          if((Get-FileHash spec-resolve.dxbc -Algorithm SHA256).Hash -ne '4fc0a0e9cd3706bcb86e29444d86fa32616138e1712c53b1b5103b30d7a1ecc9'){throw 'Shader hash mismatch'}
+          cl /nologo /EHsc research/spec-performance/disassemble.cpp /Fe:disassemble.exe /link d3dcompiler.lib
+          if($LASTEXITCODE){throw 'Compiler failed'}
+          ./disassemble.exe spec-resolve.dxbc spec-resolve.asm
+          if($LASTEXITCODE){throw 'Disassembly failed'}
+      - shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python tools/spec_parallel.py --source research/spec-performance/spec-resolve.dxbc.b64 --output spec-parallel.dxbc
+          if($LASTEXITCODE){throw 'Transform failed'}
+          ./disassemble.exe spec-parallel.dxbc spec-parallel.asm
+          if($LASTEXITCODE){throw 'Parallel disassembly failed'}
+          cl /nologo /EHsc research/spec-performance/validate.cpp /Fe:validate.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE){throw 'Validator build failed'}
+          ./validate.exe spec-resolve.dxbc
+          if($LASTEXITCODE){throw 'Native PSO failed'}
+          ./validate.exe spec-parallel.dxbc
+          if($LASTEXITCODE){throw 'Parallel PSO failed'}
+          python tools/test-spec-parallel.py build
+          if($LASTEXITCODE){throw 'Contract test failed'}
+          ./validate.exe build/spec-native-fixture.dxbc build/spec-parallel-fixture.dxbc
+          if($LASTEXITCODE){throw 'GPU differential test failed'}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spec-resolve-audit
+          path: |
+            spec-resolve.asm
+            spec-parallel.asm
+            spec-parallel.dxbc

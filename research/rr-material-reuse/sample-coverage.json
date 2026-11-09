@@ -1,0 +1,143 @@
+{
+  "trials": 131072,
+  "seed": 181,
+  "domain": "unit-square sampling coordinates, not scene radiance",
+  "runtime_changed": false,
+  "cases": {
+    "small_light": {
+      "native2": {
+        "relative_rmse": 7.938837346977047,
+        "relative_mean_error": 0.005889548166855496,
+        "zero_hit_fraction": 0.9841995239257812
+      },
+      "native4": {
+        "relative_rmse": 5.661901693390828,
+        "relative_mean_error": 0.041102967887810093,
+        "zero_hit_fraction": 0.9672927856445312
+      },
+      "native8": {
+        "relative_rmse": 3.924232176976678,
+        "relative_mean_error": 0.03478883745508732,
+        "zero_hit_fraction": 0.9349822998046875
+      },
+      "native16": {
+        "relative_rmse": 2.708456768089768,
+        "relative_mean_error": 0.06344527557282964,
+        "zero_hit_fraction": 0.866363525390625
+      },
+      "stratified4": {
+        "relative_rmse": 5.634864008098438,
+        "relative_mean_error": 0.004432441143919386,
+        "zero_hit_fraction": 0.9688339233398438
+      }
+    },
+    "broad_light": {
+      "native2": {
+        "relative_rmse": 1.7236429297112952,
+        "relative_mean_error": -0.004006637030585125,
+        "zero_hit_fraction": 0.7496795654296875
+      },
+      "native4": {
+        "relative_rmse": 0.9960299997780304,
+        "relative_mean_error": 0.0017307218722255602,
+        "zero_hit_fraction": 0.4968109130859375
+      },
+      "native8": {
+        "relative_rmse": 0.6188912907492007,
+        "relative_mean_error": -0.005919089998188687,
+        "zero_hit_fraction": 0.1935272216796875
+      },
+      "native16": {
+        "relative_rmse": 0.34751904556737634,
+        "relative_mean_error": -0.002492611764565611,
+        "zero_hit_fraction": 0.000244140625
+      },
+      "stratified4": {
+        "relative_rmse": 1.321953950538903,
+        "relative_mean_error": 0.003536927452740146,
+        "zero_hit_fraction": 0.5831069946289062
+      }
+    },
+    "vertical_strip": {
+      "native2": {
+        "relative_rmse": 2.9834545373714847,
+        "relative_mean_error": -0.0123748779296875,
+        "zero_hit_fraction": 0.9012374877929688
+      },
+      "native4": {
+        "relative_rmse": 2.026929750599953,
+        "relative_mean_error": 0.0361480712890625,
+        "zero_hit_fraction": 0.7927703857421875
+      },
+      "native8": {
+        "relative_rmse": 1.7573122117929976,
+        "relative_mean_error": 0.01886749267578125,
+        "zero_hit_fraction": 0.71875
+      },
+      "native16": {
+        "relative_rmse": 1.1921418467488571,
+        "relative_mean_error": -0.1282939910888672,
+        "zero_hit_fraction": 0.5903396606445312
+      },
+      "stratified4": {
+        "relative_rmse": 2.1748851526565933,
+        "relative_mean_error": -0.00279998779296875,
+        "zero_hit_fraction": 0.8148574829101562
+      }
+    },
+    "horizontal_strip": {
+      "native2": {
+        "relative_rmse": 2.9915244859435797,
+        "relative_mean_error": -0.00634765625,
+        "zero_hit_fraction": 0.900634765625
+      },
+      "native4": {
+        "relative_rmse": 2.0123387242492954,
+        "relative_mean_error": 0.01650238037109375,
+        "zero_hit_fraction": 0.7966995239257812
+      },
+      "native8": {
+        "relative_rmse": 1.4256427854426126,
+        "relative_mean_error": 0.032466888427734375,
+        "zero_hit_fraction": 0.6283111572265625
+      },
+      "native16": {
+        "relative_rmse": 1.2111052366186181,
+        "relative_mean_error": -0.051952362060546875,
+        "zero_hit_fraction": 0.5680770874023438
+      },
+      "stratified4": {
+        "relative_rmse": 2.1746834360143086,
+        "relative_mean_error": -0.0020751953125,
+        "zero_hit_fraction": 0.8147125244140625
+      }
+    },
+    "smooth_lobe": {
+      "native2": {
+        "relative_rmse": 0.34926638007164,
+        "relative_mean_error": 6.031990051269531e-05,
+        "zero_hit_fraction": 0.0
+      },
+      "native4": {
+        "relative_rmse": 0.14353053271770477,
+        "relative_mean_error": 0.0003172159194946289,
+        "zero_hit_fraction": 0.0
+      },
+      "native8": {
+        "relative_rmse": 0.09462182223796844,
+        "relative_mean_error": -0.0001761913299560547,
+        "zero_hit_fraction": 0.0
+      },
+      "native16": {
+        "relative_rmse": 0.017155956476926804,
+        "relative_mean_error": 2.8848648071289062e-05,
+        "zero_hit_fraction": 0.0
+      },
+      "stratified4": {
+        "relative_rmse": 0.2503130649533309,
+        "relative_mean_error": 0.00022418307867733134,
+        "zero_hit_fraction": 0.0
+      }
+    }
+  }
+}

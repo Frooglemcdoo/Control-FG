@@ -1,0 +1,29 @@
+name: Package R71 shader settings repair
+on:
+  push:
+    branches: [experiment/native-lighting-live-r54]
+    paths:
+      - tools/rt-settings-repair/**
+      - tools/test-rt-settings-repair.ps1
+      - .github/workflows/repair-rt-settings.yml
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test settings repair
+        shell: powershell
+        run: ./tools/test-rt-settings-repair.ps1
+      - name: Package
+        shell: powershell
+        run: |
+          Compress-Archive -Path tools/rt-settings-repair/* -DestinationPath Control-R71-Shader-Settings-Repair.zip
+          (Get-FileHash Control-R71-Shader-Settings-Repair.zip -Algorithm SHA256).Hash | Set-Content Control-R71-Shader-Settings-Repair.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-R71-Shader-Settings-Repair
+          path: |
+            Control-R71-Shader-Settings-Repair.zip
+            Control-R71-Shader-Settings-Repair.sha256

@@ -1,0 +1,48 @@
+{
+  "src/rr_performance_policy.h": [
+    [
+      "    bool rr=false,requested=false,ready=false;",
+      "    bool rr=false,requested=false,ready=false;\n    unsigned giRequest=0;"
+    ],
+    [
+      "requested==b.requested&&ready==b.ready;",
+      "requested==b.requested&&ready==b.ready&&giRequest==b.giRequest;"
+    ],
+    [
+      "return !transition&&success&&next.ready&&timestampFrequency",
+      "return !transition&&success&&(!next.requested||next.ready)&&timestampFrequency"
+    ]
+  ],
+  "src/rr_performance.h": [
+    [
+      "bool requested,bool selected,bool ready,unsigned effects) noexcept {",
+      "bool requested,bool selected,bool ready,unsigned effects,unsigned giRequest=0) noexcept {"
+    ],
+    [
+      "rrPerfKey={width,height,ow,oh,0,0,effects,selected,requested,ready};",
+      "rrPerfKey={width,height,ow,oh,0,0,effects,selected,requested,ready,selected?giRequest:0u};"
+    ],
+    [
+      "height=%u ms=%.6f completed=1\",s.frame,RRPerfName(p->stages[i]),k.rr?\"RR\":\"SR\",k.width,k.height,ms);",
+      "height=%u ms=%.6f gi_request=%u completed=1\",s.frame,RRPerfName(p->stages[i]),k.rr?\"RR\":\"SR\",k.width,k.height,ms,k.giRequest);"
+    ],
+    [
+      "filter_cpu_ms=%.6f gpu_skipped=%llu\",",
+      "filter_cpu_ms=%.6f gpu_skipped=%llu gi_request=%u\","
+    ],
+    [
+      "rrPerfReplayPrepareMs,rrPerfReplayWorkersMs,rrPerfReplayBatches,rrPerfFilterMs,rrPerfSkipped);",
+      "rrPerfReplayPrepareMs,rrPerfReplayWorkersMs,rrPerfReplayBatches,rrPerfFilterMs,rrPerfSkipped,key.giRequest);"
+    ]
+  ],
+  "src/rr_native_preset.h": [
+    [
+      "",
+      "// R32 read-only creation audit: never infer or change flags from performance alone.\nstatic void RRNativeLogCreateParameters(void* parameters) noexcept {\n const DWORD saved=GetLastError();\n __try {\n  const char* keys[]{\"Width\",\"Height\",\"OutWidth\",\"OutHeight\",\"PerfQualityValue\",\n   \"DLSS.Feature.Create.Flags\",\"CreationNodeMask\",\"VisibilityNodeMask\",\n   \"DLSS.Denoise.Mode\",\"DLSS.Roughness.Mode\",\"DLSS.Use.HW.Depth\",\n   \"RayReconstruction.Hint.Render.Preset.DLAA\"};\n  for(const auto* key:keys){\n   unsigned value=0;unsigned status=ngxGetUInt?ngxGetUInt(parameters,key,&value):0;\n   if(status!=1&&ngxGetInt){int signedValue=0;status=ngxGetInt(parameters,key,&signedValue);value=static_cast<unsigned>(signedValue);}\n   Log(\"RR_CREATE_AUDIT_R32 key=%s status=0x%08X value=%u hex=0x%08X read_only=1\",key,status,value,value);\n  }\n } __except(EXCEPTION_EXECUTE_HANDLER){Log(\"RR_CREATE_AUDIT_R32 failed=1 read_only=1\");}\n SetLastError(saved);\n}\n"
+    ],
+    [
+      "",
+      " RRNativeLogCreateParameters(parameters);\n"
+    ]
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "source": "Control-FG-v1.0.0-RR-Native-G10-Logs-20260914-075758-8202cfed.zip",
+  "engine_frame": 2613,
+  "source_batches": 528,
+  "accepted_batches": 495,
+  "rejected_batches": 33,
+  "accepted_families": {
+    "standardmaterial": 474,
+    "character": 13,
+    "cloth": 2,
+    "foliage": 0,
+    "hair": 6
+  },
+  "shader_rejections": {
+    "source_batch_unreadable": 0,
+    "shader_contract_rejected": 27,
+    "render_target_count_mismatch": 0,
+    "selected_shader_index_out_of_range": 0
+  },
+  "replay_ranges": [
+    {
+      "first": 256,
+      "end": 384,
+      "standard": 128,
+      "character": 0,
+      "cloth": 0,
+      "foliage": 0,
+      "hair": 0,
+      "cpu_ms": 1.457
+    },
+    {
+      "first": 128,
+      "end": 256,
+      "standard": 128,
+      "character": 0,
+      "cloth": 0,
+      "foliage": 0,
+      "hair": 0,
+      "cpu_ms": 1.372
+    },
+    {
+      "first": 0,
+      "end": 128,
+      "standard": 128,
+      "character": 0,
+      "cloth": 0,
+      "foliage": 0,
+      "hair": 0,
+      "cpu_ms": 1.754
+    },
+    {
+      "first": 512,
+      "end": 528,
+      "standard": 12,
+      "character": 0,
+      "cloth": 0,
+      "foliage": 0,
+      "hair": 2,
+      "cpu_ms": 163.924
+    },
+    {
+      "first": 384,
+      "end": 512,
+      "standard": 78,
+      "character": 13,
+      "cloth": 2,
+      "foliage": 0,
+      "hair": 4,
+      "cpu_ms": 164.04
+    }
+  ],
+  "hair_range_count": 2,
+  "hair_range_cpu_ms": [
+    163.924,
+    164.04
+  ],
+  "standard_only_cpu_ms": [
+    1.457,
+    1.372,
+    1.754
+  ]
+}

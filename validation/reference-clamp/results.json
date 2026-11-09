@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "normal": "PASS",
+  "asan_ubsan": "PASS",
+  "scope": "Portable fail-closed readiness contract plus native temporal-dispatch admission logic. No ReShade runtime, Windows add-on loading, GPU execution, or image quality is claimed.",
+  "assertions": [
+    "missing any ready bit rejects reference",
+    "any target PSO initialized unreplaced rejects reference",
+    "build identity mismatch rejects reference",
+    "zero replacement request/confirmation counts reject reference",
+    "wrong target CRC or zero replacement CRC rejects reference",
+    "valid reference dispatch performs no GPU work before admission and preserves raw-copy fallback on rejection"
+  ],
+  "tested_sha256": {
+    "diagnostic_addon/reference_clamp_contract.h": "fb69607895e333ad33510ede67c2c3e1f2e87c440d9c9ab1f779e04e339df27d",
+    "validation/reference-clamp/policy-test.cpp": "6a6398294d4c8786e7175ad38b770c341a9b373f76c527e04f230f03df738ec4",
+    "src/rr_specular_reference.h": "3721c385b38ff784e360625f4e0d1e3b8d6312a61f877c1a850fa1242189df20",
+    "src/rr_specular_noisy.h": "ddb95662755f116d6e764c5a55bb9ab3188da19a9a6a96d2c3e217114fc5ba58",
+    "validation/specular-noisy/test.cpp": "8c40de36dbc0c9c35114874b82afaf583b24078418ac8a31f87346af96adda41"
+  }
+}

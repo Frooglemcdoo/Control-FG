@@ -1,0 +1,12 @@
+{
+  "status": "LOCAL_NATIVE_ARITHMETIC_PASS",
+  "result": "PASS: exact Control matrix instructions executed under Microsoft x64 ABI; 10000 independent matrix comparisons; projection posttranslation adds jitter to m8/m9",
+  "sanitizer_limit": "Extracted machine instructions are not sanitizer-instrumented. Shared shader arithmetic is covered separately by normal/ASan/UBSan tests.",
+  "gpu_execution": "NOT_RUN",
+  "sha256": {
+    "validation/jitter-native/execute.cpp": "355ad240b2cef03159d817bcc7924b3e2c153a315ce7917b71b69823dbfcd2dd",
+    "validation/jitter-native/native-multiply.h": "d39eb26d52705860d022fb5bd15f7115730cd4dd72054d87501493759a6018e0",
+    "src/shaders/rr_jitter_ray.hlsli": "df95cff5eae948349ae740d9b4de04e63a4d61115ba1fa1d8bd64236f187ec3d",
+    "tools/audit-jitter-native.py": "bd7b8d9035132874059f1b246fc9e1780c937f37126bdeac1a2220a9a75c7dd1"
+  }
+}

@@ -1,0 +1,33 @@
+# Build output
+build/
+release/
+Build.log
+*.obj
+*.lib
+*.exp
+*.pdb
+*.ilk
+
+# Locally staged NVIDIA Streamline SDK
+third_party/streamline/
+
+# Local drop-in / test output
+Control-FG-v*-DropIn/
+Control-FG-v*-DropIn.zip
+Control-FG-v*-Logs-*.zip
+
+# Local game/runtime material
+*.exe
+*.dll
+!legal/**
+
+# Python/cache/editor
+__pycache__/
+*.pyc
+.vs/
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

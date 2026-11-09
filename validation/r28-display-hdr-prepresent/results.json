@@ -1,0 +1,21 @@
+{
+  "status": "LOCAL_PASS",
+  "scope": "r28 Windows HDR hotkey pre-Present guard. Live evidence showed Win+Alt+B changes the display output HDR domain before Control reaches ResizeBuffers, so r27 resize-side quiescing can still be too late. r28 detects the IDXGIOutput6 color-space flip at the wrapper Present boundary, queues DLSS-G off before that same real Present, holds FG off until the HDR bridge generation advances, then retains the r26 two-fresh-frame warmup. r27 resize-side quiesce remains fallback.",
+  "tests": {
+    "policy_normal": "PASS HDR display-domain pre-Present guard: output HDR flip holds FG off before ResizeBuffers; bridge generation handoff plus two fresh-domain frames retained",
+    "policy_asan_ubsan": "PASS HDR display-domain pre-Present guard: output HDR flip holds FG off before ResizeBuffers; bridge generation handoff plus two fresh-domain frames retained",
+    "source_contract": "PASS Present/Present1 sample IDXGIOutput6 before conversion/inner Present; Streamline pending gate and resize fallback both present"
+  },
+  "assertions": [
+    "No FG disable is triggered before an output-domain baseline exists.",
+    "A real SDR<->HDR output-domain flip is detected independently of Control ResizeBuffers.",
+    "The pre-resize pending state holds FG off while the HDR bridge generation is unchanged.",
+    "Once ResizeBuffers advances the bridge generation, ownership hands to the existing two-fresh-frame warmup.",
+    "The r27 committed-Present quiesce path remains available as fallback for transitions not led by an output color-space change.",
+    "RR and the r24 compute-only HDR HUDless path are outside this change."
+  ],
+  "tested_sha256": {
+    "src/fg_hdr_transition_policy.h": "c07d39338e41cc819ec39db46c604afd86fa2fd5c378999ca1297c1be2213504",
+    "validation/r28-display-hdr-prepresent/policy-test.cpp": "78e37776e2388c9eb993edf3cf60efcdd95b3783a2f807dfcbd82220287b1637"
+  }
+}

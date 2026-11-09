@@ -1,0 +1,13 @@
+# R325 — retired scratch reuse and native-mode input bypass
+
+R324 PID 70696 capture: all 15 indexed files verified. Owned preparation before the mode switch averaged 8.123 ms over 475 calls; admission averaged 13.586 ms. Inclusive CPU scopes are not GPU timings or additive frame time. After selecting native, a recording failed `build_destination_owner`, invalidating scene history permanently. The later owned request correctly refused stale history. This identifies the failure boundary, not the reason the resource was absent/ambiguous. The user reports speckles in native too; this build does not change lighting quality.
+
+R325 reuses private scratch buffers after the tile owner is destroyed. The host retains that owner through command-list references and submitted GPU work. The existing recorded tail returns default buffers to COMMON; unrecorded buffers also start COMMON. Uploads stay GENERIC_READ and are rewritten before submission. The pool matches device identity, exact size and heap type, retains at most 128 MiB/128 idle buffers and evicts only idle storage. It caches no scene identity or sample history. Active snapshot/scratch budgets remain unchanged. It does not reuse the gate or shader table. Logs report actual scratch reuse.
+
+Native mode now skips owned writer snapshots and descriptor-shadow capture, while retaining scene ownership tracking needed to return to owned mode. Stopping tracking without rebuilding the whole scene would create stale geometry. This reduces some native-mode overhead but does not promise zero overhead or restored FPS. Owned admission and native fallback rendering still cost time.
+
+The destination-owner failure now records missing versus overlapping ownership, address, registry health, owner count and retained-byte budget. The earlier capture lacks these fields. It would be unsafe to label the registry healthy, fabricate an owner, or reset its history just to clear WAIT. R325 does not claim this failure is repaired; if it recurs, the same automatic session package supplies the missing distinction.
+
+Validation: dedicated WARP test checks active-pool exclusion, exact size/heap matching, reuse after fence completion, overwritten data and resource state errors. Existing lifetime, queue, owner, GI output and baseline tests remain required. No in-game performance claim follows from CI alone.
+
+Install preserving folders. Run ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd with RR, RT indirect lighting and GI RAW BYPASS. Keep ray count fixed. Compare FPS, switch to native and back, then exit normally and send the automatic ZIP. No Capture RR or separate standalone run is needed.

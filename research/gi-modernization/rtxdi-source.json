@@ -1,0 +1,14 @@
+{
+  "sdk_repository": "https://github.com/NVIDIA-RTX/RTXDI",
+  "sdk_commit": "a6efab966b7c3b272da0461578eb56ac61c7cbff",
+  "runtime_repository": "https://github.com/NVIDIA-RTX/RTXDI-Library",
+  "runtime_commit": "f12037fa8e97ebc08e9e3edfd2de528ed1772a4b",
+  "status": "initial reservoir bridge compiled with DXC and validated on D3D12 WARP; not vendored or bound by the game",
+  "entry_point": "RTXDI_MakeGIReservoir",
+  "source_weight": "weightSum = samplePdf > 0 ? 1/samplePdf : 0",
+  "initial_M": 1,
+  "initial_age": 0,
+  "contract": "secondary radiance excludes primary throughput; initial adapter applies proposal density once",
+  "next_integration_gate": "verified producer PDF/support, unshifted geometry, direction-dependent secondary shading, native alpha visibility",
+  "validation_run": "https://github.com/Frooglemcdoo/Control-FG/actions/runs/41462051199"
+}

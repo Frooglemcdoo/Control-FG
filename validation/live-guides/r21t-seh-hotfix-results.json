@@ -1,0 +1,10 @@
+{
+  "status": "PASS",
+  "scope": "Targeted portable regression for r21t SEH wrapper hotfix. Production expands RR_SEH_TRY/RR_SEH_EXCEPT to MSVC __try/__except; test harness expands both to C++ try/catch. Windows/MSVC build remains required.",
+  "normal": "PASS",
+  "asan_ubsan": "PASS",
+  "tested_sha256": {
+    "src/rr_live_record.h": "41FF0D170084A0C939BC1AB48CCB11183CFBFD0C2B0485B78C664CCF355CE021",
+    "validation/live-guides/record-test.cpp": "F1AD6F17CB4187B6035DD869D538E04D26C856E910716B8EE46D5166E92020AB"
+  }
+}

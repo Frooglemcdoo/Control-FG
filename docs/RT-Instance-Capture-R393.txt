@@ -1,0 +1,30 @@
+CONTROL TOH R393 - NATIVE INSTANCE SOURCE CAPTURE
+
+This is a diagnostic build based on R392, not the PTLAS performance replacement.
+Keep your current settings, including native ray count.
+
+1. Close Control. Extract this package over your current R392 installation.
+2. Start Control DX12 normally and load into gameplay.
+3. Walk between rooms and destroy several objects for at least 35 seconds.
+   Capture starts after the first native instance upload, waits five seconds,
+   then takes 48 snapshots at intervals of at least half a second.
+4. A Windows notification sound indicates a successful save (system sound may
+   be muted). Close the game, then run ControlTOH\Tools\Collect-RT-Instances.cmd.
+5. Send the RT-Instances-R393.zip produced beside that collector.
+
+There is no hotkey and no settings toggle. This capture runs once per game
+process. If no capture appears, return the collector ZIP containing the logs;
+do not rerun repeatedly. Leave enough gameplay time for the snapshots to finish.
+
+Why this input is needed: existing recordings include shader binding tables,
+resource metadata, fences and query counts, but no exact 64-byte native TLAS
+instance arrays. R393 copies those CPU source bytes at the native upload call,
+while Control is already using them. It preserves the original native upload
+and rendering and adds no GPU passes. Memory is bounded to 96 MiB and released
+after saving. Diagnostic copying can affect timing; this is not an FPS test.
+
+Files are saved in %LOCALAPPDATA%\ControlFGProbe\RT-Instances-R393-*.bin.
+The collector includes the newest capture and newest probe log. The raw file
+contains transforms, masks, IDs and opaque resource addresses, not a full
+process-memory dump. The source-data snapshots do not establish GPU retirement
+or authorize skipping native preparation. PTLAS remains disabled in-game.

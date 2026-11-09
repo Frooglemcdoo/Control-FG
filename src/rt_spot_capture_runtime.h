@@ -1,0 +1,694 @@
+#pragma once
+// Included inside native_lighting after the table journal and GPU helpers.
+// Native bindings are sampled only inside the verified spotlight pass.
+namespace rt_spot_capture_runtime {
+using Microsoft::WRL::ComPtr;
+namespace gpu=rt_spot_capture_gpu;
+enum class Phase : unsigned { Idle,Armed,Recording,Recorded,Submitting,Submitted,Complete,Failed };
+inline std::atomic<Phase> phase{Phase::Idle};
+inline std::atomic<bool> ready{false};
+inline gpu::Resources resources;
+inline SRWLOCK stateLock=SRWLOCK_INIT,ownerLock=SRWLOCK_INIT;
+inline ComPtr<ID3D12Resource> tableOwner,recordedTable;
+inline ComPtr<ID3D12DescriptorHeap> recordedHeap;
+inline UINT64 tableBase=0,tableExtent=0;
+inline std::atomic<UINT64> wantedAddress{0},wantedBytes{0};
+inline UINT64 recordedGeneration=0,recordedPresent=0;
+inline ComPtr<ID3D12GraphicsCommandList4> recordedList;
+inline ComPtr<ID3D12StateObject> recordedState,captureState;
+inline ComPtr<ID3D12CommandQueue> submittedQueue;
+inline unsigned attempts=0,exportCursor=0,exportStage=0;
+inline bool exportLightPending=false,exportEligibilityPending=false,exportRawPending=false,exportProjectionPending=false;
+inline UINT64 fenceValue=1;
+inline UINT completionStatus[4]{},completionRays=0,completionHits=0;
+inline UINT frameTag=0,capturedWidth=0,capturedHeight=0,capturedTableRecords=0;
+inline bool readbackCopied=false;
+// Composition may be recorded after the ray list was already submitted/reset.
+// Each stage owns its actual recording generation, queue and completion fence.
+enum class SignalPhase : unsigned { Waiting,Recording,Recorded,Submitting,Submitted };
+inline std::atomic<SignalPhase> signalPhase{SignalPhase::Waiting};
+inline ComPtr<ID3D12GraphicsCommandList4> recordedSignalList;
+inline ComPtr<ID3D12DescriptorHeap> recordedSignalHeap;
+inline ComPtr<ID3D12PipelineState> recordedSignalPipeline,recordedSignalBeforePipeline;
+inline ComPtr<ID3D12CommandQueue> signalQueue;
+inline UINT64 signalGeneration=0,signalPresent=0;
+inline std::atomic<bool> signalReady{false},mapReady{false};
+inline bool mapRequested=false,mapBound=false;
+inline std::atomic<bool> mapRecorded{false},mapSubmitted{false};
+inline UINT mapWidth=0,mapHeight=0;
+inline UINT64 mapGeneration=0,mapPresent=0;
+inline ComPtr<ID3D12Resource> mapTexture;
+inline ComPtr<ID3D12GraphicsCommandList4> mapList;
+inline ComPtr<ID3D12DescriptorHeap> mapHeap;
+inline ComPtr<ID3D12PipelineState> mapPipeline,mapRendered;
+inline ComPtr<ID3D12CommandQueue> mapQueue;
+inline D3D12_GPU_DESCRIPTOR_HANDLE mapOriginalTable{};
+inline thread_local ID3D12GraphicsCommandList* signalList=nullptr;
+inline thread_local ComPtr<ID3D12PipelineState> signalOwner,signalRendered;
+inline unsigned char completedBytes[gpu::kReadbackBytes]{};
+inline thread_local bool inScope=false,internal=false;
+struct Context {
+    void* manager=nullptr; ID3D12GraphicsCommandList4* list=nullptr;
+    ID3D12DescriptorHeap* heap=nullptr;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu{};D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
+};
+inline thread_local Context mirrored;
+inline thread_local UINT64 observed=0;
+using Copy=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_CPU_DESCRIPTOR_HANDLE,D3D12_DESCRIPTOR_HEAP_TYPE);
+using Ranges=void(STDMETHODCALLTYPE*)(ID3D12Device*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,UINT,const D3D12_CPU_DESCRIPTOR_HANDLE*,const UINT*,D3D12_DESCRIPTOR_HEAP_TYPE);
+using Cbv=void(STDMETHODCALLTYPE*)(ID3D12Device*,const D3D12_CONSTANT_BUFFER_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+using Srv=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,const D3D12_SHADER_RESOURCE_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+using Uav=void(STDMETHODCALLTYPE*)(ID3D12Device*,ID3D12Resource*,ID3D12Resource*,const D3D12_UNORDERED_ACCESS_VIEW_DESC*,D3D12_CPU_DESCRIPTOR_HANDLE);
+inline Copy originalCopy=nullptr;inline Ranges originalRanges=nullptr;
+inline Cbv originalCbv=nullptr;inline Srv originalSrv=nullptr;inline Uav originalUav=nullptr;
+inline bool ReadContext(Context& out) noexcept {
+    out={};if(!verifiedD3d || !resources.device)return false;
+    __try {
+        auto* module=reinterpret_cast<unsigned char*>(verifiedD3d);
+        const DWORD index=*reinterpret_cast<DWORD*>(module+0x1115fc);
+        auto** vector=reinterpret_cast<unsigned char**>(__readgsqword(0x58));
+        auto* tls=vector[index];if(!tls)return false;
+        auto* manager=*reinterpret_cast<unsigned char**>(tls+0x20);
+        if(!manager)manager=*reinterpret_cast<unsigned char**>(module+0x111c10);
+        auto* context=*reinterpret_cast<unsigned char**>(tls+8);
+        if(!context)context=*reinterpret_cast<unsigned char**>(module+0x111c18);
+        if(!manager || !context)return false;
+        auto* provider=*reinterpret_cast<unsigned char**>(manager+0x50);if(!provider)return false;
+        out.list=*reinterpret_cast<ID3D12GraphicsCommandList4**>(context+0x20);
+        out.heap=*reinterpret_cast<ID3D12DescriptorHeap**>(provider);
+        out.gpu=*reinterpret_cast<D3D12_GPU_DESCRIPTOR_HANDLE*>(manager+0x30);
+        if(!out.list || !out.heap)return false;
+        const auto base=out.heap->GetGPUDescriptorHandleForHeapStart().ptr;
+        const auto desc=out.heap->GetDesc();
+        if(desc.Type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || !(desc.Flags&D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE) ||
+            out.gpu.ptr<base || (out.gpu.ptr-base)%resources.step)return false;
+        const auto slot=(out.gpu.ptr-base)/resources.step;
+        if(slot>desc.NumDescriptors || 49>desc.NumDescriptors-slot)return false;
+        out.cpu=out.heap->GetCPUDescriptorHandleForHeapStart();out.cpu.ptr+=SIZE_T(slot)*resources.step;
+        out.manager=manager;return out.list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {return false;}
+}
+inline bool Fresh(const Context& context,D3D12_GPU_DESCRIPTOR_HANDLE& gpuHandle,D3D12_CPU_DESCRIPTOR_HANDLE& cpuHandle) noexcept {
+    __try {
+        unsigned char* provider=nullptr;
+        using Allocate=void(*)(void*,UINT64,D3D12_GPU_DESCRIPTOR_HANDLE*,D3D12_CPU_DESCRIPTOR_HANDLE*,unsigned char**);
+        auto allocate=reinterpret_cast<Allocate>(reinterpret_cast<unsigned char*>(verifiedD3d)+0x1aa00);
+        allocate(context.manager,49,&gpuHandle,&cpuHandle,&provider);
+        if(!provider || *reinterpret_cast<ID3D12DescriptorHeap**>(provider)!=context.heap)return false;
+        const auto base=context.heap->GetGPUDescriptorHandleForHeapStart().ptr;
+        if(gpuHandle.ptr<base || (gpuHandle.ptr-base)%resources.step)return false;
+        const auto index=(gpuHandle.ptr-base)/resources.step;const auto desc=context.heap->GetDesc();
+        if(index<0x3b920 || index>desc.NumDescriptors || 49>desc.NumDescriptors-index)return false;
+        auto cpu=context.heap->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=SIZE_T(index)*resources.step;
+        if(cpu.ptr!=cpuHandle.ptr)return false;
+        const auto nativeIndex=(context.gpu.ptr-base)/resources.step;
+        return index+49<=nativeIndex || nativeIndex+49<=index;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {return false;}
+}
+inline void Fail(const char* reason) noexcept {
+    phase.store(Phase::Failed,std::memory_order_release);
+    Trace("rt_hit_gpu_failed reason=%s resources_retained=1",reason);
+}
+inline bool WaitingForSignal() noexcept {
+    const auto current=phase.load(std::memory_order_acquire);
+    return (current==Phase::Recorded || current==Phase::Submitting || current==Phase::Submitted) &&
+        signalPhase.load(std::memory_order_acquire)==SignalPhase::Waiting;
+}
+inline bool RecordingWasReset(ID3D12GraphicsCommandList* list,UINT64 recorded) noexcept {
+    UINT64 generation=0;UINT size=sizeof(generation);
+    return list && SUCCEEDED(list->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation!=recorded;
+}
+inline bool BothStagesCompleted() noexcept {
+    if(phase.load()!=Phase::Submitted || signalPhase.load()!=SignalPhase::Submitted)return false;
+    const auto ray=resources.fence->GetCompletedValue(),signal=resources.signalFence->GetCompletedValue();
+    if(ray==UINT64_MAX || signal==UINT64_MAX){Fail("device_removed");return false;}
+    return ray>=fenceValue && signal>=fenceValue;
+}
+// UI thread only. A failed or still-owned recording is never recycled.
+inline bool RequestFresh(bool compareMap=false) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return false;
+    if(!ready.load() || !signalReady.load() || (compareMap && !mapReady.load()))return false;
+    AcquireSRWLockExclusive(&stateLock);
+    bool accepted=false;
+    if(phase.load()==Phase::Idle)accepted=true;
+    else if(phase.load()==Phase::Complete && exportStage==3 && readbackCopied) {
+        const auto completed=resources.fence->GetCompletedValue();
+        const auto signalCompleted=resources.signalFence->GetCompletedValue();
+        if(RecordingWasReset(recordedList.Get(),recordedGeneration) &&
+           RecordingWasReset(recordedSignalList.Get(),signalGeneration) &&
+           (!mapRecorded || RecordingWasReset(mapList.Get(),mapGeneration)) &&
+           completed!=UINT64_MAX && completed>=fenceValue &&
+           signalCompleted!=UINT64_MAX && signalCompleted>=fenceValue) {
+            ++fenceValue;attempts=exportCursor=exportStage=0;exportLightPending=exportEligibilityPending=exportRawPending=exportProjectionPending=false;readbackCopied=false;
+            recordedList.Reset();recordedState.Reset();captureState.Reset();recordedTable.Reset();recordedHeap.Reset();submittedQueue.Reset();
+            recordedSignalList.Reset();recordedSignalHeap.Reset();recordedSignalPipeline.Reset();recordedSignalBeforePipeline.Reset();signalQueue.Reset();
+            accepted=true;
+        }
+    }
+    if(accepted){mapRequested=compareMap;mapRecorded=mapSubmitted=mapBound=false;
+        // Each map trace discovers the current ray table before writing a map.
+        // A retained owner from a previous trace is not current-frame evidence.
+        if(compareMap){wantedAddress.store(0);wantedBytes.store(0);}
+        mapGeneration=mapPresent=0;mapList.Reset();mapHeap.Reset();mapPipeline.Reset();mapRendered.Reset();mapQueue.Reset();
+        attempts=0;signalPhase.store(SignalPhase::Waiting);signalGeneration=signalPresent=0;phase.store(Phase::Armed,std::memory_order_release);}
+    ReleaseSRWLockExclusive(&stateLock);
+    if(accepted){rt_spot_table_audit::Request();Trace("rt_hit_gpu_requested grid=64 repeatable=1 fence=%llu",fenceValue);}
+    return accepted;
+}
+inline void CancelPending() noexcept {
+    Phase expected=Phase::Armed;
+    if(phase.compare_exchange_strong(expected,Phase::Idle))Trace("rt_hit_gpu_cancelled reason=suite_ended_before_recording");
+}
+inline bool Exported() noexcept {return phase.load()==Phase::Complete && exportStage==3 && completionRays>0;}
+inline void BeginScope() noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
+    if(inScope || !ready.load())return;
+    Phase expected=Phase::Armed;if(!phase.compare_exchange_strong(expected,Phase::Recording))return;
+    inScope=true;mirrored={};observed=0;
+}
+inline void EndScope() noexcept {
+    if(!inScope)return;
+    inScope=false;signalList=nullptr;signalOwner.Reset();signalRendered.Reset();
+    if(WaitingForSignal() || signalPhase.load()==SignalPhase::Recording){Fail("composition_signal_not_recorded");return;}
+    if(mapRecorded && phase.load()==Phase::Recording){Fail("map_without_ray_capture");return;}
+    Phase expected=Phase::Recording;
+    if(phase.compare_exchange_strong(expected,Phase::Armed) && ++attempts>=240)Fail("binding_attempt_budget");
+}
+inline bool Mirror(D3D12_CPU_DESCRIPTOR_HANDLE to,UINT count,UINT& index,UINT& skip,UINT& copied) noexcept {
+    if(!inScope || internal)return false;
+    const auto phaseNow=phase.load();
+    if(phaseNow!=Phase::Recording && !WaitingForSignal())return false;
+    Context current;if(!ReadContext(current))return false;
+    if(current.list!=mirrored.list || current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr) {
+        mirrored=current;observed=0;internal=true;
+        for(UINT i=0;i<5;++i)originalCbv(resources.device.Get(),nullptr,resources.At(i));
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R32_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
+        for(UINT i=5;i<41;++i)originalSrv(resources.device.Get(),nullptr,&srv,resources.At(i));
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32_FLOAT;uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+        for(UINT i=41;i<49;++i)originalUav(resources.device.Get(),nullptr,nullptr,&uav,resources.At(i));
+        internal=false;
+    }
+    const auto overlap=rt_lights::DescriptorOverlap(mirrored.cpu.ptr,49,to.ptr,count,resources.step);
+    index=overlap.tableIndex;skip=overlap.sourceSkip;copied=overlap.count;return copied!=0;
+}
+inline void MirrorCopy(ID3D12Device* device,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE to,D3D12_CPU_DESCRIPTOR_HANDLE from) noexcept {
+    UINT index=0,skip=0,copied=0;if(!Mirror(to,count,index,skip,copied))return;
+    from.ptr+=SIZE_T(skip)*resources.step;
+    internal=true;originalCopy(device,copied,resources.At(index),from,D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);internal=false;
+    observed|=((UINT64(1)<<copied)-1)<<index;
+}
+inline void STDMETHODCALLTYPE CopyHook(ID3D12Device* device,UINT count,D3D12_CPU_DESCRIPTOR_HANDLE to,D3D12_CPU_DESCRIPTOR_HANDLE from,D3D12_DESCRIPTOR_HEAP_TYPE type) {
+    originalCopy(device,count,to,from,type);
+    if(type==D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)MirrorCopy(device,count,to,from);
+}
+inline void STDMETHODCALLTYPE RangesHook(ID3D12Device* device,UINT nd,const D3D12_CPU_DESCRIPTOR_HANDLE* dst,const UINT* dc,
+    UINT ns,const D3D12_CPU_DESCRIPTOR_HANDLE* src,const UINT* sc,D3D12_DESCRIPTOR_HEAP_TYPE type) {
+    originalRanges(device,nd,dst,dc,ns,src,sc,type);
+    if(!inScope || internal || type!=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV)return;
+    UINT si=0,so=0;
+    for(UINT di=0;di<nd;++di) {
+        UINT offset=0,remaining=dc?dc[di]:1;
+        while(remaining && si<ns) {
+            const UINT available=sc?sc[si]:1;
+            if(so==available){++si;so=0;continue;}
+            const UINT count=(std::min)(remaining,available-so);
+            auto to=dst[di],from=src[si];to.ptr+=SIZE_T(offset)*resources.step;from.ptr+=SIZE_T(so)*resources.step;
+            MirrorCopy(device,count,to,from);offset+=count;remaining-=count;so+=count;
+        }
+    }
+}
+inline void STDMETHODCALLTYPE CbvHook(ID3D12Device* device,const D3D12_CONSTANT_BUFFER_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE to) {
+    originalCbv(device,desc,to);UINT index=0,skip=0,count=0;
+    if(Mirror(to,1,index,skip,count)){originalCbv(device,desc,resources.At(index));observed|=UINT64(1)<<index;}
+}
+inline void STDMETHODCALLTYPE SrvHook(ID3D12Device* device,ID3D12Resource* resource,const D3D12_SHADER_RESOURCE_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE to) {
+    originalSrv(device,resource,desc,to);UINT index=0,skip=0,count=0;
+    if(Mirror(to,1,index,skip,count)){originalSrv(device,resource,desc,resources.At(index));observed|=UINT64(1)<<index;}
+}
+inline void STDMETHODCALLTYPE UavHook(ID3D12Device* device,ID3D12Resource* resource,ID3D12Resource* counter,const D3D12_UNORDERED_ACCESS_VIEW_DESC* desc,D3D12_CPU_DESCRIPTOR_HANDLE to) {
+    originalUav(device,resource,counter,desc,to);UINT index=0,skip=0,count=0;
+    if(Mirror(to,1,index,skip,count)){originalUav(device,resource,counter,desc,resources.At(index));observed|=UINT64(1)<<index;}
+}
+inline void ObserveTableOwner(ID3D12Resource* resource) noexcept {
+    const auto wanted=wantedAddress.load(std::memory_order_acquire);
+    const auto current=phase.load();if(!wanted || (current!=Phase::Armed && current!=Phase::Recording) || !resource)return;
+    const auto desc=resource->GetDesc();
+    if(desc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER || desc.Width>64ull*1024*1024 || (desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))return;
+    const auto address=resource->GetGPUVirtualAddress();
+    if(!rt_spot_capture::ContainsGpuRange(address,desc.Width,wanted,wantedBytes.load()) || !TryAcquireSRWLockExclusive(&ownerLock))return;
+    tableOwner=resource;tableBase=address;tableExtent=desc.Width;ReleaseSRWLockExclusive(&ownerLock);
+}
+// The selector precedes ray dispatch. Delay its private output until a prior
+// dispatch has advertised a table range and the resource observer has resolved
+// that range. Lock contention is a retry, not an incomplete GPU recording.
+inline bool MapTableReady() noexcept {
+    const auto address=wantedAddress.load(std::memory_order_acquire);
+    const auto bytes=wantedBytes.load();
+    if(!address || !bytes || !TryAcquireSRWLockShared(&ownerLock))return false;
+    const bool available=tableOwner && rt_spot_capture::ContainsGpuRange(tableBase,tableExtent,address,bytes);
+    ReleaseSRWLockShared(&ownerLock);return available;
+}
+template<class T> inline bool Attached(ID3D12Object* owner,REFGUID key,ComPtr<T>& object) noexcept {
+    UINT size=sizeof(T*);return SUCCEEDED(owner->GetPrivateData(key,&size,object.ReleaseAndGetAddressOf())) && object;
+}
+// Bound PSOs are retained only for the current verified native spotlight pass.
+inline void BindCompute(ID3D12GraphicsCommandList* list,ID3D12PipelineState* owner,ID3D12PipelineState* rendered) noexcept {
+    if(!inScope || internal)return;
+    signalList=list;signalOwner=owner;signalRendered=rendered;
+}
+// Instrument only the hash-locked selector during this capture. The normal
+// dispatch and native UAV stores are retained; u3 is exclusively our texture.
+inline void BeginMap(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    if(!mapRequested || !inScope || internal || phase.load()!=Phase::Recording || list!=signalList)return;
+    ComPtr<ID3D12PipelineState> pipeline;
+    if(!signalOwner || !Attached(signalOwner.Get(),gpu::kMapSidecarPipeline,pipeline))return;
+    if(mapRecorded || !x || !y || z!=1 || x>1024 || y>1024 || UINT64(x)*y>262144){Fail("map_extent_or_duplicate");return;}
+    if(!MapTableReady()) {
+        if(attempts<4)Trace("native_map_pending reason=ray_table_warmup attempt=%u",attempts);
+        return;
+    }
+    Context current;D3D12_GPU_DESCRIPTOR_HANDLE table{};D3D12_CPU_DESCRIPTOR_HANDLE destination{};
+    const auto original=Lookup(list).set;
+    constexpr UINT64 required=(((1ull<<21)-1)<<5)|(7ull<<41);
+    if(!original || !signalRendered || !ReadContext(current) || current.list!=list ||
+       current.list!=mirrored.list || current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr ||
+       (observed&required)!=required || !Fresh(current,table,destination)) {
+        Trace("native_map_bindings observed=%llx required=%llx",observed,required);Fail("map_bindings");return;
+    }
+    const UINT width=x*8,height=y*8;
+    if(!mapTexture || mapWidth!=width || mapHeight!=height) {
+        // Previous ownership has been retired by RequestFresh before resizing.
+        mapTexture.Reset();D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;desc.Width=width;desc.Height=height;
+        desc.DepthOrArraySize=desc.MipLevels=desc.SampleDesc.Count=1;desc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
+        desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        if(FAILED(resources.device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&mapTexture)))){Fail("map_allocation");return;}
+        mapWidth=width;mapHeight=height;
+    }
+    mapGeneration=rt_spot_table_audit::Token(list);if(!mapGeneration){Fail("map_generation");return;}
+    mapList=current.list;mapHeap=current.heap;mapPipeline=pipeline;mapRendered=signalRendered;
+    mapOriginalTable=current.gpu;mapPresent=presentCount.load();
+    internal=true;
+    // Copy the verified CPU mirror: shader-visible heaps cannot be copy sources.
+    // Preserve all native descriptors and change only the unused u3 slot.
+    originalCopy(resources.device.Get(),49,destination,resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+    auto slot=destination;slot.ptr+=44*SIZE_T(resources.step);
+    originalUav(resources.device.Get(),mapTexture.Get(),nullptr,&uav,slot);
+    list->SetComputeRootDescriptorTable(0,table);original(list,pipeline.Get());
+    mapRecorded=mapBound=true;internal=false;
+}
+inline void EndMap(ID3D12GraphicsCommandList* list) noexcept {
+    if(!mapBound || internal || list!=mapList.Get())return;
+    internal=true;gpu::UavBarrier(list);
+    list->SetComputeRootDescriptorTable(0,mapOriginalTable);Lookup(list).set(list,mapRendered.Get());
+    mapBound=false;internal=false;
+    Trace("native_map_sidecar_recorded generation=%llu present=%llu extent=%ux%u native_stores_retained=1",mapGeneration,mapPresent,mapWidth,mapHeight);
+}
+inline void CaptureComposition(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z,bool before) noexcept {
+    if(!inScope || internal || list!=signalList || phase.load()==Phase::Failed)return;
+    if(before ? !WaitingForSignal() : signalPhase.load()!=SignalPhase::Recording)return;
+    ComPtr<ID3D12PipelineState> pipeline;
+    if(!signalOwner || !Attached(signalOwner.Get(),before?gpu::kSignalBeforePipeline:gpu::kSignalPipeline,pipeline))return;
+    constexpr UINT64 required=(1ull<<18)|(1ull<<19)|(1ull<<20)|(1ull<<41)|(1ull<<42);
+    Context current;
+    if(presentCount.load()!=recordedPresent || x!=(capturedWidth+7)/8 || y!=(capturedHeight+7)/8 || z!=1 ||
+       !ReadContext(current) || current.list!=list || current.list!=mirrored.list ||
+       current.heap!=mirrored.heap || current.gpu.ptr!=mirrored.gpu.ptr || (observed&required)!=required) {
+        Fail("composition_signal_bindings");return;
+    }
+    D3D12_GPU_DESCRIPTOR_HANDLE table{};D3D12_CPU_DESCRIPTOR_HANDLE destination{};
+    if(!Fresh(current,table,destination)){Fail("composition_signal_table");return;}
+    const auto original=Lookup(list).set;
+    if(!original || !signalRendered){Fail("composition_signal_restore");return;}
+    const auto generation=rt_spot_table_audit::Token(list);
+    if(!generation){Fail("composition_signal_generation");return;}
+    if(before && mapRequested && (!mapRecorded || mapBound || mapPresent!=recordedPresent || mapWidth!=x*8 || mapHeight!=y*8)) {
+        Fail("map_composition_provenance");return;
+    }
+    if(before) {
+        recordedSignalList=current.list;recordedSignalHeap=current.heap;recordedSignalBeforePipeline=pipeline;
+        signalGeneration=generation;signalPresent=presentCount.load();
+        signalPhase.store(SignalPhase::Recording);
+    } else if(recordedSignalList.Get()!=list || recordedSignalHeap.Get()!=current.heap ||
+              signalGeneration!=generation || signalPresent!=presentCount.load()) {
+        Fail("composition_pair_provenance");return;
+    }
+    if(!before)recordedSignalPipeline=pipeline;
+    internal=true;
+    constexpr UINT base=49*4;
+    originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cb{resources.upload->GetGPUVirtualAddress(),256};
+    originalCbv(resources.device.Get(),&cb,resources.At(base));
+    resources.RawUav(resources.signal.Get(),gpu::kSignalBytes,base+43);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC mapView{};mapView.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;mapView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
+    originalUav(resources.device.Get(),mapRequested?mapTexture.Get():nullptr,nullptr,&mapView,resources.At(base+44));
+    originalCopy(resources.device.Get(),49,destination,resources.At(base),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    // Order the native UAV writes before diagnostic reads. Native resources stay
+    // in their existing states; only our private buffer transitions for copying.
+    gpu::UavBarrier(list);
+    list->SetComputeRootDescriptorTable(0,table);original(list,pipeline.Get());
+    list->Dispatch(8,8,1);
+    if(!before) {
+        gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+        list->CopyBufferRegion(resources.signalReadback.Get(),0,resources.signal.Get(),0,gpu::kSignalBytes);
+        gpu::Transition(list,resources.signal.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    } else gpu::UavBarrier(list); // Finish diagnostic reads before native UAV writes.
+    list->SetComputeRootDescriptorTable(0,current.gpu);original(list,signalRendered.Get());
+    internal=false;
+    if(before)return;
+    signalPhase.store(SignalPhase::Recorded,std::memory_order_release);
+    Trace("composition_signal_recorded generation=%llu ray_generation=%llu present=%llu independent_submission=1",signalGeneration,recordedGeneration,signalPresent);
+}
+inline void BeforeCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    BeginMap(list,x,y,z);
+    CaptureComposition(list,x,y,z,true);
+}
+inline void AfterCompute(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
+    EndMap(list);
+    CaptureComposition(list,x,y,z,false);
+}
+inline void Record(ID3D12GraphicsCommandList4* list,ID3D12StateObject* owner,const D3D12_DISPATCH_RAYS_DESC* desc) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) return;
+    if(!inScope || phase.load()!=Phase::Recording || !desc)return;
+    if(desc->Depth!=1 || !desc->Width || desc->Width>16384 || !desc->Height || desc->Height>16384 ||
+        !rt_spot_capture::NativeHitTableLayout(desc->HitGroupTable.StartAddress,desc->HitGroupTable.SizeInBytes,desc->HitGroupTable.StrideInBytes))return;
+    wantedBytes.store(desc->HitGroupTable.SizeInBytes);wantedAddress.store(desc->HitGroupTable.StartAddress,std::memory_order_release);
+    // Publish discovery even when the earlier selector was deliberately skipped.
+    // Do not consume the capture with rays that have no same-frame map partner.
+    if(mapRequested && !mapRecorded) {
+        if(attempts<4)Trace("rt_hit_gpu_pending reason=map_warmup table_bytes=%llu",desc->HitGroupTable.SizeInBytes);
+        return;
+    }
+    Context current;const UINT64 required=(mapRequested?((1ull<<41)|(1ull<<42)):0)|(1ull<<5)|(1ull<<6)|(1ull<<7)|(1ull<<9)|(1ull<<10)|(1ull<<11)|(1ull<<12);
+    if(!ReadContext(current) || current.list!=list || current.list!=mirrored.list || current.heap!=mirrored.heap ||
+        current.gpu.ptr!=mirrored.gpu.ptr || (observed&required)!=required) {
+        if(attempts<4)Trace("rt_hit_gpu_pending reason=descriptor_snapshot observed=%llx required=%llx",observed,required);
+        return;
+    }
+    ComPtr<ID3D12Resource> source;UINT64 offset=0;
+    if(!TryAcquireSRWLockShared(&ownerLock))return;
+    if(tableOwner && rt_spot_capture::ContainsGpuRange(tableBase,tableExtent,desc->HitGroupTable.StartAddress,desc->HitGroupTable.SizeInBytes)) {
+        source=tableOwner;offset=desc->HitGroupTable.StartAddress-tableBase;
+    }
+    ReleaseSRWLockShared(&ownerLock);
+    if(!source){if(attempts<4)Trace("rt_hit_gpu_pending reason=table_resource");return;}
+    ComPtr<ID3D12StateObject> inputs,capture;ComPtr<ID3D12PipelineState> translate,clear,raw;
+    if(!Attached(owner,gpu::kInputState,inputs) || !Attached(owner,rt_spot_hit_pipeline::kPipeline,capture) ||
+        !Attached(owner,gpu::kTranslate,translate) || !Attached(owner,gpu::kClear,clear) ||
+        (mapRequested && !Attached(owner,gpu::kRawPipeline,raw))){Fail("pipelines_unavailable");return;}
+    unsigned char ids[4][32]{},inputId[32]{};UINT size=sizeof(ids);
+    if(FAILED(owner->GetPrivateData(rt_spot_hit_pipeline::kIdentifiers,&size,ids)) || size!=sizeof(ids)){Fail("capture_identifiers");return;}
+    size=32;if(FAILED(owner->GetPrivateData(gpu::kInputIdentifier,&size,inputId)) || size!=32){Fail("input_identifier");return;}
+    ComPtr<ID3D12StateObjectProperties> properties;if(FAILED(owner->QueryInterface(IID_PPV_ARGS(&properties))))return;
+    gpu::TableControls tableControls;tableControls.bytes=static_cast<UINT>(desc->HitGroupTable.SizeInBytes);tableControls.count=tableControls.bytes/96;
+    for(UINT i=0;i<2;++i) {
+        const auto* id=properties->GetShaderIdentifier(i?L"HitGroup_1_0":L"HitGroup_0_0");
+        if(!id)return;memcpy(tableControls.nativeIds[i],id,32);memcpy(tableControls.captureIds[i],ids[i],32);
+    }
+    frameTag=static_cast<UINT>(rt_spot_table_audit::Token(list));if(!frameTag){Fail("frame_tag");return;}
+    capturedTableRecords=tableControls.count;
+    const UINT inputControls[]={desc->Width,desc->Height,frameTag,64,UINT(mapRequested)};
+    const UINT captureControls[]={gpu::kRayCount,frameTag,0,2,0,1,UINT(mapRequested),0};
+    void* mapped=nullptr;D3D12_RANGE empty{0,0};
+    if(FAILED(resources.upload->Map(0,&empty,&mapped))){Fail("upload_map");return;}
+    memset(mapped,0,1024);auto* data=static_cast<unsigned char*>(mapped);
+    memcpy(data,inputControls,sizeof(inputControls));memcpy(data+256,&tableControls,sizeof(tableControls));memcpy(data+512,captureControls,sizeof(captureControls));
+    memcpy(data+768,inputId,32);memcpy(data+832,ids[2],32);memcpy(data+896,ids[3],32);
+    D3D12_RANGE written{0,1024};resources.upload->Unmap(0,&written);
+    D3D12_GPU_DESCRIPTOR_HANDLE tables[3]{};D3D12_CPU_DESCRIPTOR_HANDLE destinations[3]{};
+    for(UINT i=0;i<3;++i)if(!Fresh(current,tables[i],destinations[i])){Fail("private_table_allocation");return;}
+    for(UINT i=0;i<3;++i)for(UINT j=0;j<i;++j)
+        if(tables[i].ptr<tables[j].ptr+49ull*resources.step && tables[j].ptr<tables[i].ptr+49ull*resources.step){Fail("overlapping_private_tables");return;}
+    internal=true;
+    for(UINT i=0;i<3;++i) {
+        const UINT base=(i+1)*49;
+        originalCopy(resources.device.Get(),49,resources.At(base),resources.At(0),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        D3D12_CONSTANT_BUFFER_VIEW_DESC cb{resources.upload->GetGPUVirtualAddress()+i*256,256};originalCbv(resources.device.Get(),&cb,resources.At(base));
+    }
+    resources.RawUav(resources.inputs.Get(),gpu::kInputAllocationBytes,49+43);
+    resources.RawSrv(source.Get(),offset,tableControls.bytes,98+13);
+    resources.RawUav(resources.table.Get(),gpu::kTableBytes,98+43);
+    resources.RawUav(resources.status.Get(),16,98+44);
+    D3D12_SHADER_RESOURCE_VIEW_DESC rays{};rays.ViewDimension=D3D12_SRV_DIMENSION_BUFFER;rays.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    rays.Buffer.NumElements=gpu::kRayCount;rays.Buffer.StructureByteStride=48;
+    originalSrv(resources.device.Get(),resources.inputs.Get(),&rays,resources.At(147+13));
+    resources.RawSrv(resources.status.Get(),0,16,147+14);
+    D3D12_UNORDERED_ACCESS_VIEW_DESC output{};output.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;output.Buffer.NumElements=5*gpu::kRayCount;output.Buffer.StructureByteStride=80;
+    originalUav(resources.device.Get(),resources.results.Get(),nullptr,&output,resources.At(147+43));
+    for(UINT i=0;i<3;++i)originalCopy(resources.device.Get(),49,destinations[i],resources.At((i+1)*49),D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    internal=false;
+    recordedList=list;recordedState=owner;captureState=capture;recordedTable=source;recordedHeap=current.heap;
+    recordedGeneration=rt_spot_table_audit::Token(list);recordedPresent=presentCount.load();capturedWidth=desc->Width;capturedHeight=desc->Height;
+    const auto hooks=rt_shadow_capture::Lookup(list);
+    // Every binding change is local to this command list. Native heap, root,
+    // sampler/material tables and root constants remain bound throughout.
+    list->SetComputeRootDescriptorTable(0,tables[0]);hooks.set(list,inputs.Get());
+    D3D12_DISPATCH_RAYS_DESC inputDispatch{};inputDispatch.RayGenerationShaderRecord={resources.upload->GetGPUVirtualAddress()+768,32};
+    inputDispatch.Width=inputDispatch.Height=64;inputDispatch.Depth=1;hooks.dispatch(list,&inputDispatch);
+    if(mapRequested) {
+        // Both native outputs and capture identities are now complete. Read only;
+        // write the private input-buffer tail, covered by the existing ray fence.
+        gpu::UavBarrier(list);
+        list->SetPipelineState(raw.Get());list->Dispatch(8,8,1);
+    }
+    gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    list->SetComputeRootDescriptorTable(0,tables[1]);list->SetPipelineState(clear.Get());list->Dispatch(1,1,1);gpu::UavBarrier(list);
+    list->SetPipelineState(translate.Get());list->Dispatch((tableControls.count+63)/64,1,1);
+    gpu::Transition(list,resources.table.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    gpu::Transition(list,resources.status.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    list->SetComputeRootDescriptorTable(0,tables[2]);hooks.set(list,capture.Get());
+    D3D12_DISPATCH_RAYS_DESC hitDispatch{};hitDispatch.RayGenerationShaderRecord={resources.upload->GetGPUVirtualAddress()+832,32};
+    hitDispatch.MissShaderTable={resources.upload->GetGPUVirtualAddress()+896,32,32};
+    hitDispatch.HitGroupTable={resources.table->GetGPUVirtualAddress(),tableControls.bytes,96};
+    hitDispatch.Width=gpu::kRayCount;hitDispatch.Height=hitDispatch.Depth=1;hooks.dispatch(list,&hitDispatch);
+    gpu::Transition(list,resources.results.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    gpu::Transition(list,resources.status.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(resources.readback.Get(),0,resources.results.Get(),0,gpu::kResultBytes);
+    list->CopyBufferRegion(resources.readback.Get(),gpu::kResultBytes,resources.status.Get(),0,16);
+    gpu::Transition(list,resources.results.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gpu::Transition(list,resources.status.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+    list->CopyBufferRegion(resources.readback.Get(),gpu::kLightContextReadbackOffset,resources.inputs.Get(),gpu::kInputBytes,gpu::kLightContextBytes);
+    if(mapRequested)list->CopyBufferRegion(resources.readback.Get(),gpu::kRawReadbackOffset,resources.inputs.Get(),gpu::kRawInputOffset,gpu::kRawBytes);
+    gpu::Transition(list,resources.inputs.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    gpu::Transition(list,resources.table.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    list->SetComputeRootDescriptorTable(0,current.gpu);hooks.set(list,owner);
+    mirrored={};observed=0;
+    phase.store(Phase::Recorded,std::memory_order_release);
+    Trace("rt_hit_gpu_recording generation=%llu frame_tag=%u extent=%ux%u rays=4096 table_records=%u native_outputs_untouched=1 bindings_restored=1",recordedGeneration,frameTag,capturedWidth,capturedHeight,tableControls.count);
+}
+inline bool ContainsRecording(UINT count,ID3D12CommandList*const* lists,ID3D12CommandList* owner,UINT64 recorded) noexcept {
+    if(!owner || !recorded)return false;
+    for(UINT i=0;i<count;++i) {
+        if(lists[i]!=owner)continue;
+        UINT64 generation=0;UINT size=sizeof(generation);
+        if(SUCCEEDED(lists[i]->GetPrivateData(rt_spot_table_audit::kGeneration,&size,&generation)) && generation==recorded)return true;
+    }
+    return false;
+}
+inline void BeforeExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
+    const auto current=phase.load(std::memory_order_acquire);
+    if(current<Phase::Recording || current==Phase::Complete || current==Phase::Failed)return;
+    AcquireSRWLockExclusive(&stateLock);
+    if(mapRequested && mapRecorded && ContainsRecording(count,lists,mapList.Get(),mapGeneration)) {
+        if(mapSubmitted){Fail("map_recording_replayed");ReleaseSRWLockExclusive(&stateLock);return;}
+        mapQueue=queue;
+    }
+    if(current<Phase::Recorded){ReleaseSRWLockExclusive(&stateLock);return;}
+    if(ContainsRecording(count,lists,recordedList.Get(),recordedGeneration)) {
+        if(phase.load()==Phase::Recorded){submittedQueue=queue;phase.store(Phase::Submitting);}
+        else if(!readbackCopied)Fail("recording_replayed_before_readback");
+    }
+    if(phase.load()!=Phase::Failed && signalPhase.load()>=SignalPhase::Recorded &&
+       ContainsRecording(count,lists,recordedSignalList.Get(),signalGeneration)) {
+        if(signalPhase.load()==SignalPhase::Recorded){
+            bool ordered=mapSubmitted && mapQueue.Get()==queue;
+            if(mapRequested && !ordered && mapQueue.Get()==queue) {
+                for(UINT i=0;i<count;++i) {
+                    if(lists[i]==mapList.Get())ordered=true;
+                    if(lists[i]==recordedSignalList.Get())break;
+                }
+            }
+            if(mapRequested && !ordered)Fail("map_submission_order_or_queue");
+            else {signalQueue=queue;signalPhase.store(SignalPhase::Submitting);}
+        }
+        else if(!readbackCopied)Fail("composition_replayed_before_readback");
+    }
+    ReleaseSRWLockExclusive(&stateLock);
+}
+inline void AfterExecute(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
+    const auto current=phase.load(std::memory_order_acquire);
+    if(current<Phase::Recording || current==Phase::Complete || current==Phase::Failed)return;
+    AcquireSRWLockExclusive(&stateLock);
+    if(mapRecorded && mapQueue.Get()==queue && ContainsRecording(count,lists,mapList.Get(),mapGeneration))mapSubmitted=true;
+    if(current<Phase::Recorded){ReleaseSRWLockExclusive(&stateLock);return;}
+    if(phase.load()==Phase::Submitting && queue==submittedQueue.Get() &&
+       ContainsRecording(count,lists,recordedList.Get(),recordedGeneration)) {
+        if(SUCCEEDED(queue->Signal(resources.fence.Get(),fenceValue))) {
+            phase.store(Phase::Submitted);
+            Trace("rt_hit_gpu_submitted generation=%llu fence=%llu independent_composition=1",recordedGeneration,fenceValue);
+        } else Fail("completion_signal");
+    }
+    if(phase.load()!=Phase::Failed && signalPhase.load()==SignalPhase::Submitting && queue==signalQueue.Get() &&
+       ContainsRecording(count,lists,recordedSignalList.Get(),signalGeneration)) {
+        if(SUCCEEDED(queue->Signal(resources.signalFence.Get(),fenceValue))) {
+            signalPhase.store(SignalPhase::Submitted);
+            Trace("composition_signal_submitted generation=%llu fence=%llu",signalGeneration,fenceValue);
+        } else Fail("composition_completion_signal");
+    }
+    ReleaseSRWLockExclusive(&stateLock);
+}
+inline void ResetObserved(ID3D12GraphicsCommandList* list) noexcept {
+    if(phase.load()==Phase::Failed || phase.load()==Phase::Complete)return;
+    ID3D12CommandList* lists[]={list};
+    if(mapRecorded && !mapSubmitted && ContainsRecording(1,lists,mapList.Get(),mapGeneration))Fail("map_discarded_before_submit");
+    if(phase.load()==Phase::Recorded && ContainsRecording(1,lists,recordedList.Get(),recordedGeneration))
+        Fail("recording_discarded_before_submit");
+    if(signalPhase.load()==SignalPhase::Recorded && ContainsRecording(1,lists,recordedSignalList.Get(),signalGeneration))
+        Fail("composition_discarded_before_submit");
+}
+inline void Poll() noexcept {
+    if(phase.load()==Phase::Submitted && TryAcquireSRWLockExclusive(&stateLock)) {
+        if(BothStagesCompleted()) {
+            void* mapped=nullptr;D3D12_RANGE range{0,gpu::kReadbackBytes};
+            if(FAILED(resources.readback->Map(0,&range,&mapped)))Fail("readback_map");
+            else {
+                memcpy(completedBytes,mapped,gpu::kSignalReadbackOffset);D3D12_RANGE written{0,0};resources.readback->Unmap(0,&written);
+                D3D12_RANGE signalRange{0,gpu::kSignalBytes};
+                if(FAILED(resources.signalReadback->Map(0,&signalRange,&mapped))) {
+                    Fail("composition_readback_map");ReleaseSRWLockExclusive(&stateLock);return;
+                }
+                memcpy(completedBytes+gpu::kSignalReadbackOffset,mapped,gpu::kSignalBytes);
+                resources.signalReadback->Unmap(0,&written);
+                readbackCopied=true;phase.store(Phase::Complete);
+                UINT status[4]{};memcpy(status,completedBytes+gpu::kResultBytes,16);
+                const bool tableValid=!status[0] && !status[3] && status[1]+status[2]==capturedTableRecords;
+                UINT validRays=0,hits=0,invalidRecords=0;
+                for(UINT i=0;i<gpu::kRayCount;++i) {
+                    rt_spot_capture::CaptureResult result{};memcpy(&result,completedBytes+i*sizeof(result),sizeof(result));
+                    if(!result.valid)continue;
+                    if(result.valid!=1 || result.frameTag!=frameTag || result.pixelX>=capturedWidth || result.pixelY>=capturedHeight ||
+                        (result.hit.hitKind!=0 && result.hit.hitKind!=254 && result.hit.hitKind!=255)){++invalidRecords;continue;}
+                    if(mapRequested) {
+                        UINT identity[4]{};float raw[4]{};
+                        const auto* sample=completedBytes+gpu::kRawReadbackOffset+i*gpu::kRawStride;
+                        memcpy(identity,sample,16);memcpy(raw,sample+16,16);
+                        if(identity[0]!=result.pixelX || identity[1]!=result.pixelY || identity[2]!=frameTag || identity[3]!=result.lightId ||
+                           !std::isfinite(raw[0]) || !std::isfinite(raw[1]) || !std::isfinite(raw[2]) || !std::isfinite(raw[3]) ||
+                           raw[0]<0 || raw[0]>1 || raw[1]<0 || raw[1]>1 || raw[2]<0 || raw[3]<0)++invalidRecords;
+                    }
+                    if(mapRequested)for(UINT bank=1;bank<=2;++bank) {
+                        rt_spot_capture::CaptureResult probe{};
+                        memcpy(&probe,completedBytes+bank*gpu::kResultBankBytes+i*sizeof(probe),sizeof(probe));
+                        if(result.hit.hitKind) {if(probe.valid)++invalidRecords;}
+                        else if(probe.valid!=1 || memcmp(reinterpret_cast<const unsigned char*>(&probe)+32,
+                            reinterpret_cast<const unsigned char*>(&result)+32,48) ||
+                            (probe.hit.hitKind!=0 && probe.hit.hitKind!=254 && probe.hit.hitKind!=255))++invalidRecords;
+                    }
+                    if(mapRequested) {
+                        rt_spot_capture::CaptureResult pair[2]{};
+                        for(UINT bank=0;bank<2;++bank) {
+                            auto& probe=pair[bank];
+                            memcpy(&probe,completedBytes+(bank+3)*gpu::kResultBankBytes+i*sizeof(probe),sizeof(probe));
+                            if(!probe.valid)continue; // Explicit unsupported projection, never a miss.
+                            const float length=probe.direction.x*probe.direction.x+probe.direction.y*probe.direction.y+probe.direction.z*probe.direction.z;
+                            if(probe.valid!=1 || probe.frameTag!=result.frameTag || probe.lightId!=result.lightId ||
+                               probe.pixelX!=result.pixelX || probe.pixelY!=result.pixelY || memcmp(&probe.origin,&result.origin,sizeof(probe.origin)) ||
+                               !std::isfinite(length) || fabsf(length-1)>0.0002f || !std::isfinite(probe.maxDistance) || probe.maxDistance<=0 ||
+                               !std::isfinite(probe.hit.distance) || probe.hit.distance<0 || probe.hit.distance>probe.maxDistance ||
+                               (probe.hit.hitKind!=0 && probe.hit.hitKind!=254 && probe.hit.hitKind!=255))++invalidRecords;
+                        }
+                        if(pair[0].valid!=pair[1].valid)++invalidRecords;
+                    }
+                    ++validRays;if(result.hit.hitKind)++hits;
+                }
+                Trace("rt_hit_gpu_readback generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=%u gpu_completion_confirmed=1 gpu_hit_capture=%u",recordedGeneration,frameTag,status[0],status[1],status[2],status[3],validRays,hits,validRays-hits,invalidRecords,unsigned(tableValid && !invalidRecords));
+                memcpy(completionStatus,status,sizeof(status));completionRays=validRays;completionHits=hits;
+                if(!tableValid)Fail("gpu_table_validation");
+                else if(invalidRecords)Fail("readback_provenance");
+            }
+        }
+        ReleaseSRWLockExclusive(&stateLock);
+    }
+    if(phase.load()!=Phase::Complete || exportStage==3)return;
+    // Retry canonical headers and records if the nonblocking log queue is busy.
+    // Cursor advancement means successful enqueue, never merely an attempted write.
+    if(exportStage==0) {
+        if(!Trace("rt_hit_gpu_recorded generation=%llu frame_tag=%u extent=%ux%u table_records=%u captured_present=%llu light_context_bytes=128 signal_bytes=128 spot_record_bytes=336 signal_generation=%llu signal_present=%llu map_bytes=%u map_generation=%llu map_present=%llu eligibility_bytes=%u raw_bytes=%u map_center=%u projection_bytes=%u",recordedGeneration,frameTag,capturedWidth,capturedHeight,capturedTableRecords,recordedPresent,signalGeneration,signalPresent,mapRequested?16u:0u,mapGeneration,mapPresent,mapRequested?160u:0u,mapRequested?32u:0u,unsigned(mapRequested),mapRequested?160u:0u))return;
+        exportStage=1;
+    }
+    if(exportStage==1) {
+        if(!Trace("rt_hit_gpu_complete generation=%llu frame_tag=%u unknown=%u translated=%u null=%u invalid_layout=%u valid_rays=%u hits=%u misses=%u invalid_records=0 gpu_completion_confirmed=1 gpu_hit_capture=1",recordedGeneration,frameTag,completionStatus[0],completionStatus[1],completionStatus[2],completionStatus[3],completionRays,completionHits,completionRays-completionHits))return;
+        exportStage=2;
+    }
+    // Bounded batches share the existing asynchronous log worker, never the render thread.
+    const unsigned end=(std::min)(exportCursor+64,gpu::kRayCount);
+    for(;exportCursor<end;++exportCursor) {
+        const auto* record=completedBytes+exportCursor*80;UINT valid=0;memcpy(&valid,record+76,4);
+        if(valid) {
+            char hex[161]{};rt_spot_capture_audit::Hex(record,80,hex);
+            char contextHex[gpu::kLightContextStride*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kLightContextReadbackOffset+exportCursor*gpu::kLightContextStride,gpu::kLightContextStride,contextHex);
+            char signalHex[128*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride,128,signalHex);
+            if(!exportLightPending) {
+                if(!Trace("rt_hit_gpu_record index=%u bytes=%s light_context=%s signal=%s",exportCursor,hex,contextHex,signalHex))return;
+                exportLightPending=true;
+            }
+            char spotHex[336*2+1]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+128,336,spotHex);
+            char mapHex[33]{};
+            rt_spot_capture_audit::Hex(completedBytes+gpu::kSignalReadbackOffset+exportCursor*gpu::kSignalStride+464,16,mapHex);
+            if(!exportEligibilityPending) {
+                if(mapRequested) {if(!Trace("rt_hit_gpu_light index=%u bytes=%s map=%s",exportCursor,spotHex,mapHex))return;}
+                else if(!Trace("rt_hit_gpu_light index=%u bytes=%s",exportCursor,spotHex))return;
+                exportEligibilityPending=true;
+            }
+            if(mapRequested && !exportRawPending) {
+                char rawHex[65]{};
+                rt_spot_capture_audit::Hex(completedBytes+gpu::kRawReadbackOffset+exportCursor*gpu::kRawStride,gpu::kRawStride,rawHex);
+                if(!Trace("rt_hit_gpu_raw index=%u bytes=%s",exportCursor,rawHex))return;
+                exportRawPending=true;
+            }
+            if(mapRequested && !exportProjectionPending) {
+                char pair[321]{};
+                for(UINT bank=3;bank<=4;++bank)
+                    rt_spot_capture_audit::Hex(completedBytes+bank*gpu::kResultBankBytes+exportCursor*80,80,pair+(bank-3)*160);
+                if(!Trace("rt_hit_gpu_projection index=%u bytes=%s",exportCursor,pair))return;
+                exportProjectionPending=true;
+            }
+            UINT hitKind=0;memcpy(&hitKind,record+24,4);
+            if(mapRequested && !hitKind) {
+                char probes[321]{};
+                for(UINT bank=1;bank<=2;++bank)
+                    rt_spot_capture_audit::Hex(completedBytes+bank*gpu::kResultBankBytes+exportCursor*80,80,probes+(bank-1)*160);
+                if(!Trace("rt_hit_gpu_eligibility index=%u bytes=%s",exportCursor,probes))return;
+            }
+            exportLightPending=exportEligibilityPending=exportRawPending=exportProjectionPending=false;
+        }
+    }
+    if(exportCursor==gpu::kRayCount && Trace("rt_hit_gpu_export_complete records_examined=4096 format=CaptureResult80 frame_tag=%u",frameTag))exportStage=3;
+}
+inline void Install(ID3D12Device* device) noexcept {
+    if constexpr (!rt_spot_capture::GpuCaptureEnabled) {
+        static std::atomic<bool> reported{false};
+        if (!reported.exchange(true))
+            Trace("rt_hit_gpu_setup ready=0 disabled=build_policy descriptor_hooks=0 gpu_allocations=0");
+        return;
+    }
+    static bool attempted=false;if(attempted)return;attempted=true;
+    const HRESULT hr=resources.Initialize(device);
+    if(FAILED(hr)){Trace("rt_hit_gpu_setup ready=0 hr=0x%08lX",static_cast<unsigned long>(hr));return;}
+    auto** table=*reinterpret_cast<void***>(device);
+    originalCopy=reinterpret_cast<Copy>(table[24]);originalRanges=reinterpret_cast<Ranges>(table[23]);
+    originalCbv=reinterpret_cast<Cbv>(table[17]);originalSrv=reinterpret_cast<Srv>(table[18]);originalUav=reinterpret_cast<Uav>(table[19]);
+    bool installed=PatchSlot(&table[24],reinterpret_cast<void*>(originalCopy),reinterpret_cast<void*>(&CopyHook));
+    installed=PatchSlot(&table[23],reinterpret_cast<void*>(originalRanges),reinterpret_cast<void*>(&RangesHook))&&installed;
+    installed=PatchSlot(&table[17],reinterpret_cast<void*>(originalCbv),reinterpret_cast<void*>(&CbvHook))&&installed;
+    installed=PatchSlot(&table[18],reinterpret_cast<void*>(originalSrv),reinterpret_cast<void*>(&SrvHook))&&installed;
+    installed=PatchSlot(&table[19],reinterpret_cast<void*>(originalUav),reinterpret_cast<void*>(&UavHook))&&installed;
+    ready.store(installed);Trace("rt_hit_gpu_setup ready=%u bounded_table_bytes=%u",unsigned(installed),gpu::kTableBytes);
+}
+}
