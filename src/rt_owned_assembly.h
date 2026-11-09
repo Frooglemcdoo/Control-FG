@@ -56,10 +56,18 @@ template<unsigned Kind>inline std::uint64_t BlasAddress(void* p){
  }
  else return Method<std::uint64_t(*)(void*)>(p,0x40)(p);
 }
-template<unsigned Kind>inline Result AssembleProvider(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
+#if defined(_MSC_VER)
+#define RT_RESERVED_NOINLINE __declspec(noinline)
+#else
+#define RT_RESERVED_NOINLINE __attribute__((noinline))
+#endif
+template<unsigned Kind>RT_RESERVED_NOINLINE bool TryAssembleReserved(const Api&,void*,const void*,void*,std::int32_t,void*,unsigned char,unsigned char,std::uint32_t*,Result&);
+template<unsigned Kind,bool AllowReserved=false>inline Result AssembleProvider(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
                        void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
  Result result;auto* ctx=static_cast<unsigned char*>(context);
- const auto count=GeometryCount<Kind>(provider);result.providerKind=Kind;if constexpr(Kind!=0)result.avoidedCalls=3u+static_cast<std::uint32_t>(count>0?count:0);
+ const auto count=GeometryCount<Kind>(provider);
+ if constexpr(AllowReserved&&Kind!=0){if(count>=8&&TryAssembleReserved<Kind>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;}
+ result.providerKind=Kind;if constexpr(Kind!=0)result.avoidedCalls=3u+static_cast<std::uint32_t>(count>0?count:0);
  bool alpha=false,cull=disableCull!=0;
  for(std::int32_t index=0;index<count;++index){
   const auto* geometry=GeometryRecord<Kind>(provider,index);
@@ -99,11 +107,6 @@ inline bool FitsBatch(const void* vector,std::uint64_t amount)noexcept{
 // Reserve the whole object's existing capacity once. With verified leaf getters
 // and no allocation callbacks, vector counts need publication only at completion.
 // Every geometry/material/transform input is still read fresh for this call.
-#if defined(_MSC_VER)
-#define RT_RESERVED_NOINLINE __declspec(noinline)
-#else
-#define RT_RESERVED_NOINLINE __attribute__((noinline))
-#endif
 template<unsigned Kind>RT_RESERVED_NOINLINE bool TryAssembleReserved(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix,Result& result){
  static_assert(Kind==1||Kind==2,"verified live providers only");(void)api;
@@ -143,8 +146,8 @@ inline __attribute__((always_inline))
 #endif
 Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
- if(MatchesProvider(provider,api.staticMesh)){Result result;if(GeometryCount<1>(provider)>=8&&TryAssembleReserved<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
- if(MatchesProvider(provider,api.skinnedMesh)){Result result;if(GeometryCount<2>(provider)>=8&&TryAssembleReserved<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
+ if(MatchesProvider(provider,api.staticMesh))return AssembleProvider<1,true>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
+ if(MatchesProvider(provider,api.skinnedMesh))return AssembleProvider<2,true>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
  return AssembleProvider<0>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
 }
 // Reuse is scoped to one native instanced group. No readiness/update callback
