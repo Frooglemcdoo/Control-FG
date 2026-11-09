@@ -29,3 +29,8 @@ Zero sampled untracked changes alone does NOT prove complete invalidation covera
 Build gates test revision reuse, repeated notifications, mismatch classification,
 3,072 entry-patch calls, six-argument forwarding and Windows virtual unwinding,
 plus the existing selection, preparation and 16,384 assembly comparisons.
+
+Sampling rotates through 32 windows of 256 ordinary assemblies instead of always
+inspecting the first group. The first eight untracked changes log a changed-word
+mask and first old/new word. invalidated_same_payload measures conservative revision
+changes that did not alter the observed preparation output.

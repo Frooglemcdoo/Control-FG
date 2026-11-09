@@ -74,3 +74,8 @@ that evidence. Keep source/lifetime audits and exact validation requirements for
 any eventual cache; do not promote sampled hashes into a correctness guard.
 
 Reproduce exact patch bytes and notification edges with tools/rt-scene-probe/audit-revisions.py and the verified renderer. The script deliberately reports complete_writer_coverage=false.
+
+Sampling rotates through 32 windows of 256 ordinary assemblies instead of always
+inspecting the first group. The first eight untracked changes log a changed-word
+mask and first old/new word. invalidated_same_payload measures conservative revision
+changes that did not alter the observed preparation output.
