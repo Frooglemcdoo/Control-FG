@@ -57,6 +57,7 @@ inline std::atomic<UINT64> observed{0},cold{0},unchanged{0},invalidated{0},inval
 inline void Begin(UINT64 loop)noexcept{pending.enabled=installed&&loop%64==0;pending.remaining=256;pending.skip=static_cast<unsigned>((loop/64)%32)*256;}
 inline void Observe(void* context,void* owner,std::int32_t variant,void* provider,unsigned char alpha,unsigned char cull,const rt_owned_assembly::Result& result)noexcept{
  if(!pending.enabled)return;if(pending.skip){--pending.skip;return;}if(!pending.remaining)return;--pending.remaining;
+ struct RestoreError {DWORD value;~RestoreError(){SetLastError(value);}} restoreError{GetLastError()};
  if(result.providerKind!=1||result.geometry>4){++pending.skipped;return;}
  using namespace rt_owned_assembly;using rt_cache_revision::Mix;
  constexpr UINT64 seed=14695981039346656037ull;
