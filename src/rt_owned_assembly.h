@@ -30,18 +30,18 @@ inline bool MatchesProvider(void* provider,const ProviderBinding& binding)noexce
 }
 template<unsigned Kind>inline std::int32_t GeometryCount(void* p){
  if constexpr(Kind==1)return Read<std::int32_t>(p,0x28);
- if constexpr(Kind==2)return Read<std::int32_t>(p,0x30);
- return Method<std::int32_t(*)(void*)>(p,0x48)(p);
+ else if constexpr(Kind==2)return Read<std::int32_t>(p,0x30);
+ else return Method<std::int32_t(*)(void*)>(p,0x48)(p);
 }
 template<unsigned Kind>inline const void* GeometryRecord(void* p,std::int32_t index){
  if constexpr(Kind==1)return Read<unsigned char*>(p,0x20)+std::ptrdiff_t(index)*64;
- if constexpr(Kind==2)return Read<unsigned char*>(p,0x18)+std::ptrdiff_t(index)*80+16;
- return Method<const void*(*)(void*,std::int32_t)>(p,0x50)(p,index);
+ else if constexpr(Kind==2)return Read<unsigned char*>(p,0x18)+std::ptrdiff_t(index)*80+16;
+ else return Method<const void*(*)(void*,std::int32_t)>(p,0x50)(p,index);
 }
 template<unsigned Kind>inline std::uint32_t InstanceMask(void* p){
  if constexpr(Kind==1)return Read<std::uint32_t>(p,0x60);
- if constexpr(Kind==2)return Read<std::uint32_t>(p,0x54);
- return Method<std::uint32_t(*)(void*)>(p,0x60)(p);
+ else if constexpr(Kind==2)return Read<std::uint32_t>(p,0x54);
+ else return Method<std::uint32_t(*)(void*)>(p,0x60)(p);
 }
 template<unsigned Kind>inline std::uint64_t BlasAddress(void* p){
  if constexpr(Kind==1){
@@ -50,11 +50,11 @@ template<unsigned Kind>inline std::uint64_t BlasAddress(void* p){
   const auto offset=Read<std::int32_t>(p,alternate?0x90:0x70);
   return Read<std::uint64_t>(allocation,0x10)+static_cast<std::uint64_t>(static_cast<std::int64_t>(offset));
  }
- if constexpr(Kind==2){
+ else if constexpr(Kind==2){
   const auto* state=Read<void*>(p,0x88);const auto* allocation=Read<void*>(state,0x28);
   return Read<std::uint64_t>(allocation,0x10)+static_cast<std::uint64_t>(static_cast<std::int64_t>(Read<std::int32_t>(state,0x30)));
  }
- return Method<std::uint64_t(*)(void*)>(p,0x40)(p);
+ else return Method<std::uint64_t(*)(void*)>(p,0x40)(p);
 }
 template<unsigned Kind>inline Result AssembleProvider(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
                        void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
