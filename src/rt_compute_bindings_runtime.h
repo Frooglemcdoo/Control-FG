@@ -20,7 +20,7 @@ inline void Many(unsigned n,const std::uintptr_t* dst,const std::uintptr_t* src)
 inline void Apply(void* material){
  // These capture observers consume CopyDescriptorsSimple notifications. Preserve
  // their original path rather than bypass their descriptor shadows with batching.
- if(PTGlassRuntime::captureKind||OpaqueReflectionRuntime::captureKind||gi_dual_bridge::observing){observerFallbacks.fetch_add(1,std::memory_order_relaxed);nativeApply(material);return;}
+ if(PTGlassRuntime::captureKind||gi_dual_bridge::observing){observerFallbacks.fetch_add(1,std::memory_order_relaxed);nativeApply(material);return;}
  const auto number=calls.fetch_add(1,std::memory_order_relaxed)+1;const bool sampled=number%32==1;LARGE_INTEGER start{},end{};
  const DWORD error=GetLastError();if(sampled)QueryPerformanceCounter(&start);SetLastError(error);
  const rt_compute_bindings::ShaderApi shaderApi{retrieve,setShaders,nativeUse,finishUse};

@@ -34,8 +34,8 @@ conflict. See Microsoft documentation:
 https://learn.microsoft.com/en-us/windows/win32/direct3d12/copying-descriptors
 https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-copydescriptors
 
-Existing PTGlass and OpaqueReflection CopyDescriptorsSimple hooks also feed
-lighting shadows, and the GI dual bridge has a copy observer. When any of these
+The active PTGlass CopyDescriptorsSimple hook also feeds lighting shadows,
+and the GI dual bridge has a copy observer. When either of these
 thread-local observer scopes is active, the original entire shader application
 runs. Batching must not silently bypass their notifications. No additional
 native update, resource transition, compute dispatch or AS build is removed.
@@ -53,3 +53,7 @@ individual descriptor copies with batched copies, and checks a wrong-source
 negative control. This validates GPU-visible descriptor contents, not RTX
 performance. Production instrumentation reports eligible tables and sampled
 application time; it must be read together with the user's FPS report.
+
+The separate OpaqueReflectionRuntime header is not included by this build. If
+that module is enabled in future, its descriptor observer requires the same
+fallback guard before batching is supported alongside it.

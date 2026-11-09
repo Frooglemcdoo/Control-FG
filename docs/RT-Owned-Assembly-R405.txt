@@ -11,7 +11,7 @@ one batched copy instead of multiple driver calls. Current source handles are
 read each time. No persistent cache or reduced animation/update frequency.
 
 Unsupported texture/sampler layouts remain native. Overlapping or duplicate
-copy destinations retain individual copies. Active reflection/GI descriptor
+copy destinations retain individual copies. Active glass/GI descriptor
 capture observers keep the original shader-binding path. Constant-buffer
 updates/uploads and UAV handling remain present.
 
