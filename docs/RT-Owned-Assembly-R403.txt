@@ -1,0 +1,26 @@
+CONTROL TOH R403 - OWNED AS COMMAND RECORDING
+
+Close Control, extract into the game directory and replace the previous test files.
+Keep your usual graphics settings. Play normally, including movement and combat;
+check moving objects, destruction, reflections and lighting. After closing Control,
+run ControlTOH\Tools\Collect-RT-Assembly.cmd and send RT-Assembly-R403.zip.
+
+R403 replaces the native AS command-recording job body with owned orchestration.
+It preserves queue/thread initialization, dynamic-provider callbacks, buffer
+transitions, BLAS callbacks, parity-selected postbuild copies, current material-ID
+patching, the TLAS call, and deferred cleanup publication in their native order.
+The native body is suppressed at its verified job tail. Each job still records
+exactly one TLAS build. There is no duplicate scene or second AS build.
+
+Native GPU build routines, resource allocation/retirement and preparation joins
+remain in use. This is another ownership stage, not a full AS backend replacement
+or a promised FPS gain. PTLAS and persistent prepared-record caching stay disabled.
+
+Sparse CPU timing separates thread setup, dynamic updates, BLAS/finalization,
+material-ID patching, and TLAS/finish work. Timings are cumulative over timed_jobs
+(one job in sixteen), not GPU durations or per-frame costs. The existing logs
+measure the outer recording job but do not separate these internal costs.
+
+Expected: RT_ASSEMBLY_R403_INSTALL, RT_SELECTION_R403_INSTALL,
+RT_PREPARE_R403_INSTALL and RT_RECORD_R403_INSTALL ready=1.
+RT_CACHE_R403_INSTALL ready=0 disabled=1 remains intentional.
