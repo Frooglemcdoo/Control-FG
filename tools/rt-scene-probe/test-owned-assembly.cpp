@@ -3,7 +3,7 @@
 #include <cassert>
 #include <cstdio>
 #include <algorithm>
-#include "../../src/rt_owned_assembly.h"
+#include "../../src/rt_prepared_cache.h"
 #include "native-assembly-oracle.h"
 #include "../../src/rt_owned_provider_bytes.h"
 using namespace rt_owned_assembly;
@@ -38,6 +38,63 @@ static AssembleFn Oracle(){
  call(0xa8f10-0xa8ce0,0x440);const auto displacement=std::int32_t(0x800-(0xa8cff-0xa8ce0)-7);std::memcpy(code+(0xa8cff-0xa8ce0)+3,&displacement,4);
  DWORD old=0;assert(VirtualProtect(code,4096,PAGE_EXECUTE_READ,&old));assert(FlushInstructionCache(GetCurrentProcess(),code,4096));return reinterpret_cast<AssembleFn>(code);
 }
+
+static void TestPreparedCache(AssembleFn original,const Api& api){
+ static rt_cache_revision::Revisions revisions;
+ unsigned hits=0,rejected=0;
+ for(unsigned test=0;test<2048;++test){
+  unsigned char provider[0xb0]{},owner[0x160]{},allocation[0x20]{},otherAllocation[0x20]{};
+  std::array<std::array<unsigned char,64>,5> geometry{},otherGeometry{};
+  std::array<std::array<unsigned char,0xa30>,2> material{};
+  std::uint32_t flags=0x80000000u,otherFlags=0xffffffffu;
+  void* table[]={material[0].data(),material[1].data()};void* alternate[]={material[1].data(),material[0].data()};
+  void* variants[6]{};variants[1]=alternate;variants[4]=table;
+  Write(provider,0,api.staticMesh.table);Write(provider,0x20,geometry.data());Write(provider,0x28,static_cast<std::int32_t>(test%5));
+  Write(provider,0x68,allocation);Write(provider,0x88,otherAllocation);Write(owner,0x130,table);Write(owner,0x150,variants);Write(owner,0x158,1u);
+  for(unsigned i=0;i<2;++i){Write(material[i].data(),0x1f8,&flags);Write(material[i].data(),0x1f0,(test&1)?0x80000000u:0u);Write(material[i].data(),0x204,test%4);Write(material[i].data(),0x99e,static_cast<std::uint16_t>(i));}
+  for(unsigned i=0;i<5;++i){std::memset(geometry[i].data(),static_cast<int>(test&255),64);Write(geometry[i].data(),0,std::int32_t(i%2));}
+  std::array<std::uint32_t,12> transform{};const auto variant=static_cast<std::int32_t>(test%3);
+  const auto ignore=static_cast<unsigned char>((test/3)%2),cull=static_cast<unsigned char>((test/7)%2);
+  rt_prepared_cache::Entry entry;
+  auto capture=[&]{Fixture f(128);std::uint32_t prefix=0;auto result=Assemble(api,f.context,transform.data(),owner,variant,provider,ignore,cull,&prefix);assert(rt_prepared_cache::Capture(api,revisions,entry,f.context,owner,variant,provider,ignore,cull,result));};
+  capture();
+  // Transform, instance mask, prefix, compacted BLAS state/address remain live.
+  for(unsigned i=0;i<12;++i)transform[i]=test*0x1234567u+i;transform[5]=0x7fc01234u;
+  Write(provider,0x60,test*0x1020304u);Write(provider,0xac,static_cast<std::int32_t>(test%7)-2);
+  Write(provider,0x70,std::int32_t(-2147483647-1));Write(provider,0x90,std::int32_t(-1));
+  Write(allocation,0x10,std::uint64_t(test)*0xabcdef123456789ull);Write(otherAllocation,0x10,~std::uint64_t(test)*0x7654321ull);
+  auto compare=[&]{const auto start=test%9,cap=128u|((test%4)<<30);Fixture ref(cap),cached(cap);for(auto off:{0x78,0x88,0x98}){Write(ref.context,off,start);Write(cached.context,off,start);}auto a=test*0xfedcba9u,b=a;Result result;
+   original(ref.context,transform.data(),owner,variant,provider,ignore,cull,&a);
+   assert(rt_prepared_cache::Replay(api,revisions,entry,cached.context,transform.data(),owner,variant,provider,ignore,cull,&b,result));
+   assert(a==b&&ref.geometry==cached.geometry&&ref.instances==cached.instances&&ref.materials==cached.materials);
+   for(auto off:{0x78,0x7c,0x88,0x8c,0x98,0x9c})assert(Read<std::uint32_t>(ref.context,off)==Read<std::uint32_t>(cached.context,off));++hits;
+  };compare();
+  auto reject=[&](unsigned char requestedIgnore,unsigned char requestedCull,const Api& chosen,unsigned capacity=128){Fixture f(capacity);std::array<unsigned char,0xe0> before{};std::memcpy(before.data(),f.context,before.size());std::uint32_t prefix=17;Result result;
+   assert(!rt_prepared_cache::Replay(chosen,revisions,entry,f.context,transform.data(),owner,variant,provider,requestedIgnore,requestedCull,&prefix,result));
+   assert(prefix==17&&!std::memcmp(before.data(),f.context,before.size())&&f.geometry==Fixture(capacity).geometry&&f.instances==Fixture(capacity).instances&&f.materials==Fixture(capacity).materials);++rejected;
+  };
+  reject(ignore,cull,api,0);reject(static_cast<unsigned char>(!ignore),cull,api);reject(ignore,static_cast<unsigned char>(!cull),api);
+  auto unknown=api;unknown.staticMesh.table=nullptr;reject(ignore,cull,unknown);
+  revisions.ProviderDestroyed(provider);revisions.ProviderCreated(provider);reject(ignore,cull,api);capture();compare();
+  Write(provider,0x28,5);reject(ignore,cull,api);Write(provider,0x28,static_cast<std::int32_t>(test%5));
+  otherGeometry=geometry;Write(provider,0x20,otherGeometry.data());reject(ignore,cull,api);Write(provider,0x20,geometry.data());
+  if(test%5){
+   // Deliberately omit notifications: exact input checks must still reject changes.
+   geometry[0][17]^=1;reject(ignore,cull,api);capture();compare();
+   Write(geometry[0].data(),0,std::int32_t(1));reject(ignore,cull,api);capture();compare();
+   auto* liveTable=static_cast<void**>(rt_prepared_cache::MaterialTable(owner,variant));auto* liveMaterial=liveTable[1];
+   Write(liveMaterial,0x204,Read<std::uint32_t>(liveMaterial,0x204)^1u);reject(ignore,cull,api);capture();compare();
+   if(!ignore){Write(liveMaterial,0x1f0,Read<std::uint32_t>(liveMaterial,0x1f0)^0x80000000u);reject(ignore,cull,api);capture();compare();flags^=0x80000000u;reject(ignore,cull,api);capture();compare();Write(liveMaterial,0x1f8,&otherFlags);reject(ignore,cull,api);capture();compare();}
+   revisions.MaterialChanged(Read<std::uint16_t>(liveMaterial,0x99e));reject(ignore,cull,api);capture();compare();
+   Write(liveMaterial,0x99e,std::uint16_t(65535));reject(ignore,cull,api);capture();compare();
+   std::swap(liveTable[0],liveTable[1]);reject(ignore,cull,api);capture();compare();
+   Fixture corrupt(128);std::uint32_t prefix=0;auto result=Assemble(api,corrupt.context,transform.data(),owner,variant,provider,ignore,cull,&prefix);corrupt.geometry[0][11]^=1;
+   assert(!rt_prepared_cache::Capture(api,revisions,entry,corrupt.context,owner,variant,provider,ignore,cull,result)&&!entry.valid);
+  }
+ }
+ std::printf("PASS prepared cache: %u exact native comparisons, %u unchanged-output rejections; unnotified geometry/material changes, lifetime/ID reuse, live transforms/masks/BLAS, options, variants, capacities. Not an FPS benchmark.\n",hits,rejected);
+}
+
 // Execute the eight exact renderer leaf functions, not reimplemented mocks.
 static void TestLiveProviders(AssembleFn original){
  using namespace rt_provider_bytes;
@@ -50,6 +107,7 @@ static void TestLiveProviders(AssembleFn original){
  Api api{&MockAppend64,&MockAppend8};
  const auto binding=[&](unsigned k){return ProviderBinding{tables[k],tables[k][8],tables[k][9],tables[k][10],tables[k][12]};};
  api.staticMesh=binding(0);api.skinnedMesh=binding(1);
+ TestPreparedCache(original,api);
  unsigned cases=0;
  for(unsigned kind=0;kind<2;++kind){
   alignas(16) unsigned char provider[0xb0]{},allocationA[0x20]{},allocationB[0x20]{},state[0x38]{};

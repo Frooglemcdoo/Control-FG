@@ -1399,11 +1399,11 @@ jobs:
           build\test-performance-compare.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package performance comparison R401
+      - name: Package performance comparison R402
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R401'
+          $out='ControlTOH-R402'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1446,7 +1446,7 @@ jobs:
           Copy-Item tools/diagnostics/Collect-RT-Assembly.cmd,tools/diagnostics/Collect-RT-Assembly.ps1 $tools
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/RT-Owned-Assembly-R401.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/RT-Owned-Assembly-R402.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1459,10 +1459,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R401
+          name: ControlTOH-R402
           path: |
-            ControlTOH-R401.zip
-            ControlTOH-R401.sha256
+            ControlTOH-R402.zip
+            ControlTOH-R402.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

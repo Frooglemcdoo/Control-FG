@@ -16,13 +16,18 @@ inline void Record(const rt_owned_assembly::Result& result,UINT64 instanceCount=
   reusedGeometry.fetch_add(pending.reusedGeometry,std::memory_order_relaxed);
   const auto before=calls.fetch_add(pending.calls,std::memory_order_relaxed);const auto n=before+pending.calls;pending={};pending.started=true;
   if(!before||(before>>18)!=(n>>18)){const DWORD error=GetLastError();
-   Log("RT_ASSEMBLY_R401 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu static_providers=%llu skinned_providers=%llu virtual_providers=%llu avoided_provider_calls=%llu reused_geometry_preparations=%llu native_object_assembler_calls=0 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load(),staticProviders.load(),skinnedProviders.load(),virtualProviders.load(),avoidedCalls.load(),reusedGeometry.load());SetLastError(error);
+   Log("RT_ASSEMBLY_R402 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu static_providers=%llu skinned_providers=%llu virtual_providers=%llu avoided_provider_calls=%llu reused_geometry_preparations=%llu native_object_assembler_calls=0 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load(),staticProviders.load(),skinnedProviders.load(),virtualProviders.load(),avoidedCalls.load(),reusedGeometry.load());SetLastError(error);
   }
  }
 }
 inline void Hook(void* context,const void* transform,void* materials,std::int32_t variant,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
- const auto result=rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
- RTCacheRevision::Observe(context,materials,variant,provider,ignoreAlpha,disableCull,result);Record(result);
+ std::uint32_t count=0;
+ auto* entry=rt_prepared_cache::Eligible(api,provider,count)?RTPreparedCache::Find(context,provider,materials,variant):nullptr;rt_owned_assembly::Result result;
+ if(entry&&rt_prepared_cache::Replay(api,RTCacheRevision::revisions,*entry,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result)){++RTPreparedCache::current->hits;Record(result);return;}
+ if(entry)++RTPreparedCache::current->misses;
+ result=rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
+ if(entry&&rt_prepared_cache::Capture(api,RTCacheRevision::revisions,*entry,context,materials,variant,provider,ignoreAlpha,disableCull,result))++RTPreparedCache::current->stored;
+ Record(result);
 }
 inline std::uint32_t HookBatch(void* context,const void* transforms,std::uint32_t count,void* materials,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
  rt_owned_assembly::Result total;
