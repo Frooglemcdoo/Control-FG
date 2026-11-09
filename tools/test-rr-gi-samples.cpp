@@ -16,10 +16,11 @@ int main(){
   }
  }
  unsigned cycle=0;
- for(unsigned expected=2;expected<=16;expected+=2){
+ for(unsigned expected: {2u,4u,0u,2u,4u,0u}){
   cycle=NextGISampleRequest(cycle);assert(cycle==expected);
  }
  assert(NextGISampleRequest(cycle)==2);
+ for(unsigned legacy: {6u,8u,16u,17u,0xffffffffu})assert(NextGISampleRequest(legacy)==0);
  GISampleFrameSelection latch;
  RRFrameCoordinator frame;
  for(unsigned f=1;f<=7;++f){
@@ -53,5 +54,5 @@ int main(){
  assert(!off.Begin({1,3840,2160,3840,2160,0},false,false));
  assert(!off.ResetForSignalChange());
  assert(!off.Reset());
- puts("PASS: GI 2/4/6/8/10/12/14/16; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
+ puts("PASS: GI button Native/2/4 wrap; GI 2/4/6/8/10/12/14/16 policy; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
 }
