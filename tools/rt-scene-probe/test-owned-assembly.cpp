@@ -85,6 +85,11 @@ static void TestPreparedCache(AssembleFn original,const Api& api){
    assert(!rt_prepared_cache::Replay(chosen,revisions,entry,f.context,transform.data(),owner,variant,provider,requestedIgnore,requestedCull,&prefix,result));
    assert(prefix==17&&!std::memcmp(before.data(),f.context,before.size())&&f.geometry==Fixture(capacity).geometry&&f.instances==Fixture(capacity).instances&&f.materials==Fixture(capacity).materials);++rejected;
   };
+  for(unsigned offset:{0x7cu,0x8cu,0x9cu}){if(offset!=0x7c&&test%5==0)continue;
+   Fixture f(128);Write(f.context,offset,0u);std::array<unsigned char,0xe0> before{};std::memcpy(before.data(),f.context,before.size());std::uint32_t prefix=17;Result result;
+   assert(!TryAssembleReserved<1>(api,f.context,transform.data(),owner,variant,provider,ignore,cull,&prefix,result));
+   assert(prefix==17&&!std::memcmp(before.data(),f.context,before.size())&&f.geometry==Fixture(128).geometry&&f.instances==Fixture(128).instances&&f.materials==Fixture(128).materials);
+  }
   reject(ignore,cull,api,0);reject(static_cast<unsigned char>(!ignore),cull,api);reject(ignore,static_cast<unsigned char>(!cull),api);
   auto unknown=api;unknown.staticMesh.table=nullptr;reject(ignore,cull,unknown);
   revisions.ProviderDestroyed(provider);revisions.ProviderCreated(provider);reject(ignore,cull,api);capture();compare();
@@ -151,6 +156,7 @@ static void TestLiveProviders(AssembleFn original){
    if(test%7==0){chosen.staticMesh.table=nullptr;chosen.skinnedMesh.table=nullptr;expected=0;}
    if(test%11==0){if(kind)chosen.skinnedMesh.geometry=nullptr;else chosen.staticMesh.geometry=nullptr;expected=0;}
    const auto result=Assemble(chosen,owned.context,transform.data(),materialOwner,0,provider,static_cast<unsigned char>(test%2),0,&bPrefix);
+   assert(result.reservedObjects==static_cast<unsigned>(expected!=0&&capacity!=0));
    assert(result.providerKind==expected&&result.avoidedCalls==(expected?static_cast<unsigned>(count)+3u:0u));
    assert(aPrefix==bPrefix&&reference.geometry==owned.geometry&&reference.instances==owned.instances&&reference.materials==owned.materials);
    for(unsigned off:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(reference.context,off)==Read<std::uint32_t>(owned.context,off));

@@ -25,7 +25,7 @@ jobs:
           if ($LASTEXITCODE) { throw 'CMake configure failed' }
           cmake --build build-ptlas --config Release --parallel 2
           if ($LASTEXITCODE) { throw 'Build failed' }
-          ctest --test-dir build-ptlas -C Release --output-on-failure
+          ctest --test-dir build-ptlas -C Release --output-on-failure -V
           if ($LASTEXITCODE) { throw 'Portable tests failed' }
       - name: Package standalone GPU validation
         shell: pwsh

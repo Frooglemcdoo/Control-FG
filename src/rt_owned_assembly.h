@@ -11,7 +11,7 @@ template<class T>inline void Write(void* p,std::size_t offset,T v)noexcept{std::
 // Bind only byte-verified renderer getters. Unknown or replaced methods stay virtual.
 struct ProviderBinding {void* table=nullptr;void* address=nullptr;void* count=nullptr;void* geometry=nullptr;void* mask=nullptr;};
 struct Api {void(*append64)(void*,const void*);void(*append8)(void*,const void*);ProviderBinding staticMesh{},skinnedMesh{};};
-struct Result {std::uint32_t geometry=0,fastAppends=0,growthAppends=0,materialFastAppends=0,materialGrowthAppends=0,providerKind=0,avoidedCalls=0,reusedGeometry=0;};
+struct Result {std::uint32_t geometry=0,fastAppends=0,growthAppends=0,materialFastAppends=0,materialGrowthAppends=0,providerKind=0,avoidedCalls=0,reusedGeometry=0,reservedObjects=0;};
 inline void Append64(const Api& api,void* vector,const void* source,Result& result){
  const auto count=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
  if(count>=capacity){api.append64(vector,source);++result.growthAppends;return;}
@@ -106,8 +106,8 @@ template<unsigned Kind>inline bool TryAssembleReserved(const Api& api,void* cont
  auto* ctx=static_cast<unsigned char*>(context);
  if(!FitsBatch(ctx+0x70,1)||!FitsBatch(ctx+0x80,static_cast<std::uint32_t>(count))||!FitsBatch(ctx+0x90,static_cast<std::uint32_t>(count)))return false;
  const auto instances=Read<std::uint32_t>(ctx,0x78),geometries=Read<std::uint32_t>(ctx,0x88),materialCount=Read<std::uint32_t>(ctx,0x98);
- auto* records=Read<unsigned char*>(ctx,0x80)+std::size_t(geometries)*64;
- auto* pointers=Read<unsigned char*>(ctx,0x90)+std::size_t(materialCount)*8;
+ auto* records=count?Read<unsigned char*>(ctx,0x80)+std::size_t(geometries)*64:nullptr;
+ auto* pointers=count?Read<unsigned char*>(ctx,0x90)+std::size_t(materialCount)*8:nullptr;
  void* table=nullptr;
  if(count){
   if(variant!=0&&Read<std::uint32_t>(materials,0x158)!=0)table=Read<void*>(Read<unsigned char*>(materials,0x150)+(std::ptrdiff_t(variant)*3-2)*8);
@@ -128,7 +128,7 @@ template<unsigned Kind>inline bool TryAssembleReserved(const Api& api,void* cont
  const auto address=BlasAddress<Kind>(provider);std::memcpy(instance+14,&address,8);
  std::memcpy(Read<unsigned char*>(ctx,0x70)+std::size_t(instances)*64,instance,64);
  Write(ctx,0x78,instances+1);Write(ctx,0x88,geometries+static_cast<std::uint32_t>(count));Write(ctx,0x98,materialCount+static_cast<std::uint32_t>(count));*prefix+=static_cast<std::uint32_t>(count);
- result={};result.geometry=static_cast<std::uint32_t>(count);result.fastAppends=result.geometry+1;result.materialFastAppends=result.geometry;result.providerKind=Kind;result.avoidedCalls=result.geometry+3;return true;
+ result={};result.geometry=static_cast<std::uint32_t>(count);result.fastAppends=result.geometry+1;result.materialFastAppends=result.geometry;result.providerKind=Kind;result.avoidedCalls=result.geometry+3;result.reservedObjects=1;return true;
 }
 inline Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){

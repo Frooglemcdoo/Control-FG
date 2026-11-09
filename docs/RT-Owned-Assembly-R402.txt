@@ -1,25 +1,26 @@
-CONTROL TOH R402 - GUARDED PREPARED-RECORD REUSE
+CONTROL TOH R402 - WHOLE-OBJECT RECORD WRITES
 
-Close Control and extract this package into the game directory, replacing the
-previous test package. Start the game normally. Keep your usual RR/FG settings.
-Play the same route used for R401, including movement and combat. Check reflections,
-lighting and moving objects. After closing the game, run
-ControlTOH\Tools\Collect-RT-Assembly.cmd and send RT-Assembly-R402.zip.
+Close Control and extract into the game directory, replacing the previous test
+package. Start normally and keep your usual RR/FG settings. Play the same route,
+including movement and combat. Check reflections, lighting and moving objects.
+After closing the game, run ControlTOH\Tools\Collect-RT-Assembly.cmd and send
+RT-Assembly-R402.zip.
 
-R402 reuses completed static geometry/material records across preparation jobs.
-Every hit compares the actual current geometry bytes and material inputs. Provider
-and material lifetime revisions add conservative invalidation; notifications and
-hashes alone never authorize reuse. Transforms, selected LOD, instance masks,
-BLAS addresses and dynamic updates remain live. Unsupported providers, larger
-records, capacity growth and cache contention use ordinary owned preparation.
-Native ray count and native AS builds remain unchanged. PTLAS remains off.
+R402 checks existing output capacity once for an entire known static/skinned
+provider, writes its geometry/material/instance records directly, then publishes
+vector counts once. It reads all inputs fresh. Allocation growth and unknown
+providers retain the existing path. Native dynamic updates, LOD selection, rays,
+geometry/material availability, BLAS addresses and AS builds stay live.
 
-This is a correctness/performance experiment, not a claimed FPS improvement.
-Exact validation has a cost. The logs report reuse coverage and preparation time;
-only a comparable gameplay run can establish a useful end-to-end improvement.
-R401's sampled observer is removed from the active path.
+Persistent cross-frame caching is NOT enabled. Its exact-input validation cost
+more than ordinary preparation in the local benchmark. The experimental code is
+retained for offline tests only; provider/material tracking hooks and R401's
+sampled observer are disabled. No game test of that slower cache is requested.
 
-Expected: RT_CACHE_R402_INSTALL, RT_ASSEMBLY_R402_INSTALL,
-RT_SELECTION_R402_INSTALL and RT_PREPARE_R402_INSTALL all ready=1.
-RT_REUSE_R402 reports hits, misses, stored entries and contention fallback.
-All existing graphics settings are retained.
+This is a correctness/performance test, not a promised FPS improvement.
+A microbenchmark cannot establish end-to-end gameplay gains.
+
+Expected: RT_ASSEMBLY_R402_INSTALL, RT_SELECTION_R402_INSTALL and
+RT_PREPARE_R402_INSTALL all ready=1. RT_CACHE_R402_INSTALL ready=0 disabled=1
+is intentional. RT_ASSEMBLY_R402 reserved_objects counts the new path's coverage.
+PTLAS stays off. Existing graphics settings are retained.

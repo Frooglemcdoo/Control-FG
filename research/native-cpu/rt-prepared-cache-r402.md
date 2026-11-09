@@ -8,7 +8,7 @@ so it cannot establish complete notification coverage. 5,632 preparation loops
 handled 35,434,493 objects in 10,949,975 microseconds. Different routes/workloads
 make comparison to older cumulative averages unsuitable for FPS claims.
 
-## Implementation
+## Experimental cache (not enabled in the game build)
 Bounded shared 4,096-slot cache, known static providers with 0–4 geometries.
 One nonblocking lock per preparation job; contention and recursion bypass cache.
 Cache stores byte copies and pointer values only, never dereferences old pointers.
@@ -35,3 +35,20 @@ Windows CI also checks production patch ABI/unwind and preparation/selection.
 No claim of complete writer discovery or FPS gain: exact validation may consume
 any preparation savings. Concurrent native mutation during assembly remains under
 the native engine's lifetime/synchronization contract, as on ordinary assembly.
+
+## Final game path
+The exact-validation cache lost to ordinary preparation in the local warm-data
+microbenchmark (~49–80 ns vs ~28–39 ns for 1–4 records). It is not enabled in the
+DLL. This is synthetic CPU evidence, not the user's hardware or an FPS prediction.
+The R401 observer and revision hooks are disabled too. The cache oracle remains
+as research coverage, but its runtime wrapper is not included by the DLL.
+
+The game path now reserves the complete object's already available vector space
+once, writes live records directly and publishes each count once. No native
+allocation callback can occur within this path. Known static/skinned providers
+qualify; unknown or insufficient-capacity calls retain normal ordered appends.
+Zero-geometry calls avoid forming pointers into absent geometry/material storage.
+Direct rejection tests cover capacity exhaustion in each of the three vectors.
+The Windows oracle prints a three-way synthetic timing comparison (baseline,
+exact-validation cache, reserved writes). Timing is diagnostic, never a flaky
+pass/fail assertion. Gameplay gain remains unproven.
