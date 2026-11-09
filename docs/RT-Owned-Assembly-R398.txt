@@ -1,0 +1,27 @@
+CONTROL TOH R398 - OWNED RT OBJECT PREPARATION LOOP
+
+Close Control and extract over R397. Keep current settings and native ray count.
+Play your usual route. Move between rooms, approach and retreat from objects,
+destroy objects and include animated objects/Jesse. Check reflections and shadows
+for missing objects, stale poses, unexpected LOD changes or flicker.
+Close Control and run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+Send RT-Assembly-R398.zip and any visual or performance changes.
+
+R398 retains owned selection and assembly, and now replaces the intervening outer
+object loop. It preserves native LOD decisions, provider readiness, instancing,
+alternate providers, dynamic geometry updates, mark-updated calls and assembly
+ordering. It runs on the original preparation worker without cross-frame caches.
+The corresponding native outer loop is skipped once the checked patch installs.
+Native readback, geometry update callbacks, AS sizing/builds and upload remain.
+PTLAS is disabled. FPS gains are not established.
+
+4096 comparisons execute the original outer-loop machine code and the actual
+replacement relay. They check LOD/NaN cases, callback ordering, dynamic updates,
+instance transforms, prefix progression and restoration of continuation RCX.
+Native update/assembly callbacks are mocked in that isolated test. Existing
+selection and assembly comparison tests also remain in the build gate.
+
+Expected markers: RT_ASSEMBLY_R398_INSTALL ready=1,
+RT_SELECTION_R398_INSTALL ready=1, RT_PREPARE_R398_INSTALL ready=1,
+and active records for each. Unsupported/conflicting installations stay native.
+Query and outer-loop timings are separate scopes, not FPS comparisons.

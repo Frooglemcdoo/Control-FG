@@ -1,2 +1,0 @@
-# R337 F10 panel
-Install over R336 and launch Control DX12 normally. F10 opens and closes the panel. The panel follows the game window if Windows replaces it, and registers the F10 shortcut while the game is in front. It uses the previous key polling path if another program owns the shortcut. The panel places itself before first display and updates changed button labels separately from its background.

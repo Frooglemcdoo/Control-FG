@@ -1,7 +1,0 @@
-# R335 single-producer GI
-
-Install over R334 beside Control_DX12.exe. Start with ControlTOH/Diagnostics/Start-GI-Owned-Test.cmd, select Owned in F10, and use RECORD GI for the usual still/pan comparison. The compact report's mode line includes counts of recorded Owned ray and translated GI6 dispatches.
-
-The existing game ray dispatch selects a single ray-generation record. Owned uses the stratified samples and hemisphere basis from the private producer and writes the accepted surface position without the native 1 cm offset. The hit and miss exports clear the route bit before indexing the game's hit textures. Native keeps its original raygen and surface offset. Both paths use the game's material, UV, opacity, miss and shader-table bindings. Unsupported state descriptions and creation failures use the original pipeline.
-
-The existing GI6 dispatch consumes all hit slices once. For initial sampling at the same receiver the cosine/PDF and matching finite-range reach factors cancel. GI6 therefore accumulates the receiver throughput times secondary radiance and normalizes by the ray count. The source-hit position now passes through the precision of the engine's hit texture. The pipeline has no cross-frame sample reuse or private geometry validation. It writes GI color and hit distance at the existing GI6 boundary before RR. The R334 private producer remains available in the source for development.
