@@ -99,7 +99,12 @@ inline bool FitsBatch(const void* vector,std::uint64_t amount)noexcept{
 // Reserve the whole object's existing capacity once. With verified leaf getters
 // and no allocation callbacks, vector counts need publication only at completion.
 // Every geometry/material/transform input is still read fresh for this call.
-template<unsigned Kind>inline bool TryAssembleReserved(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
+#if defined(_MSC_VER)
+#define RT_RESERVED_NOINLINE __declspec(noinline)
+#else
+#define RT_RESERVED_NOINLINE __attribute__((noinline))
+#endif
+template<unsigned Kind>RT_RESERVED_NOINLINE bool TryAssembleReserved(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix,Result& result){
  static_assert(Kind==1||Kind==2,"verified live providers only");(void)api;
  const auto count=GeometryCount<Kind>(provider);if(count<0)return false;
@@ -130,7 +135,13 @@ template<unsigned Kind>inline bool TryAssembleReserved(const Api& api,void* cont
  Write(ctx,0x78,instances+1);Write(ctx,0x88,geometries+static_cast<std::uint32_t>(count));Write(ctx,0x98,materialCount+static_cast<std::uint32_t>(count));*prefix+=static_cast<std::uint32_t>(count);
  result={};result.geometry=static_cast<std::uint32_t>(count);result.fastAppends=result.geometry+1;result.materialFastAppends=result.geometry;result.providerKind=Kind;result.avoidedCalls=result.geometry+3;result.reservedObjects=1;return true;
 }
-inline Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
+#undef RT_RESERVED_NOINLINE
+#if defined(_MSC_VER)
+__forceinline
+#else
+inline __attribute__((always_inline))
+#endif
+Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
  if(MatchesProvider(provider,api.staticMesh)){Result result;if(GeometryCount<1>(provider)>=8&&TryAssembleReserved<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
  if(MatchesProvider(provider,api.skinnedMesh)){Result result;if(GeometryCount<2>(provider)>=8&&TryAssembleReserved<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
