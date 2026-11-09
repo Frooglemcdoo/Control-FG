@@ -1,0 +1,115 @@
+{
+  "401": {
+    "source": "probe-20261109-182815-195-64136.log",
+    "sha256": "eb4ad65cabb241692a9a5560e85c82283538bcb3c8a97915bc039be218b3adf5",
+    "bytes": 64196,
+    "install_lines": [
+      "qpc=1829477252033 tid=63476 RT_CACHE_R401_INSTALL ready=1",
+      "qpc=1829477323096 tid=63476 RT_ASSEMBLY_R401_INSTALL ready=1",
+      "qpc=1829477388134 tid=63476 RT_SELECTION_R401_INSTALL ready=1",
+      "qpc=1829477454690 tid=63476 RT_PREPARE_R401_INSTALL ready=1"
+    ],
+    "error_like_lines": [
+      "qpc=1830139480297 tid=66296 RT_CACHE_R401 active=1 creates=1615 destroys=0 material_notifications=8627 observed=255 cold=29 unchanged=226 invalidated=0 invalidated_same_payload=0 untracked_changes=0 skipped=1 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830230062348 tid=27964 RT_CACHE_R401 active=1 creates=1709 destroys=0 material_notifications=10674 observed=2042 cold=257 unchanged=1783 invalidated=2 invalidated_same_payload=2 untracked_changes=0 skipped=6 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830310209647 tid=57752 RT_CACHE_R401 active=1 creates=2117 destroys=247 material_notifications=12636 observed=4078 cold=372 unchanged=3684 invalidated=22 invalidated_same_payload=22 untracked_changes=0 skipped=18 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830377703846 tid=66296 RT_CACHE_R401 active=1 creates=2275 destroys=426 material_notifications=14325 observed=6094 cold=628 unchanged=5422 invalidated=44 invalidated_same_payload=44 untracked_changes=0 skipped=50 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830441404730 tid=34168 RT_CACHE_R401 active=1 creates=2310 destroys=745 material_notifications=15606 observed=6660 cold=715 unchanged=5897 invalidated=48 invalidated_same_payload=48 untracked_changes=0 skipped=107 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830504022864 tid=64484 RT_CACHE_R401 active=1 creates=2560 destroys=860 material_notifications=17254 observed=8699 cold=850 unchanged=7786 invalidated=63 invalidated_same_payload=63 untracked_changes=0 skipped=116 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830568553141 tid=59948 RT_CACHE_R401 active=1 creates=2721 destroys=998 material_notifications=18492 observed=10647 cold=1059 unchanged=9513 invalidated=75 invalidated_same_payload=75 untracked_changes=0 skipped=216 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830634006960 tid=54580 RT_CACHE_R401 active=1 creates=2834 destroys=1410 material_notifications=19376 observed=11536 cold=1141 unchanged=10300 invalidated=95 invalidated_same_payload=95 untracked_changes=0 skipped=351 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830696174703 tid=23076 RT_CACHE_R401 active=1 creates=2834 destroys=1669 material_notifications=19944 observed=11536 cold=1141 unchanged=10300 invalidated=95 invalidated_same_payload=95 untracked_changes=0 skipped=351 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830759557707 tid=65644 RT_CACHE_R401 active=1 creates=2834 destroys=1669 material_notifications=20728 observed=13498 cold=1277 unchanged=12082 invalidated=139 invalidated_same_payload=139 untracked_changes=0 skipped=437 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830817635433 tid=59948 RT_CACHE_R401 active=1 creates=2834 destroys=1669 material_notifications=21288 observed=14787 cold=1336 unchanged=13299 invalidated=152 invalidated_same_payload=152 untracked_changes=0 skipped=620 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0",
+      "qpc=1830873622273 tid=63580 RT_CACHE_R401 active=1 creates=2834 destroys=1669 material_notifications=21844 observed=15468 cold=1346 unchanged=13969 invalidated=153 invalidated_same_payload=153 untracked_changes=0 skipped=707 sample_period=64 max_samples=256 rotating_windows=32 cache_reuse=0"
+    ],
+    "interval_loops": [
+      512,
+      5632
+    ],
+    "objects_per_loop": 6022.4568359375,
+    "preparation_ms_per_loop": 1.8813986328124999,
+    "preparation_ns_per_object": 312.39719670313383
+  },
+  "403": {
+    "source": "probe-20261109-194758-320-60248.log",
+    "sha256": "cbcac4bf24a0866e069637ac52c9003351d0f18eb3ba3766538417e40df89726",
+    "bytes": 83491,
+    "install_lines": [
+      "qpc=1877309880651 tid=39864 RT_CACHE_R403_INSTALL ready=0 disabled=1 reason=exact_validation_cost",
+      "qpc=1877309987964 tid=39864 RT_ASSEMBLY_R403_INSTALL ready=1",
+      "qpc=1877310048774 tid=39864 RT_SELECTION_R403_INSTALL ready=1",
+      "qpc=1877310110526 tid=39864 RT_PREPARE_R403_INSTALL ready=1",
+      "qpc=1877310181156 tid=39864 RT_RECORD_R403_INSTALL ready=1"
+    ],
+    "error_like_lines": [],
+    "interval_loops": [
+      512,
+      5632
+    ],
+    "objects_per_loop": 7690.833984375,
+    "preparation_ms_per_loop": 2.2740466796875,
+    "preparation_ns_per_object": 295.682715854684,
+    "timed_jobs": 320,
+    "phase_ms_per_timed_job": {
+      "thread_setup_us": 0.052528125,
+      "dynamic_us": 0.8903312499999999,
+      "blas_finalize_us": 0.17640625,
+      "material_ids_us": 0.094878125,
+      "tlas_finish_us": 0.031228125
+    },
+    "recording_total_ms": 1.2453718749999998,
+    "last_record": {
+      "qpc": 1878824677302,
+      "tid": 64220,
+      "active": 1,
+      "jobs": 5632,
+      "instances": 43194970,
+      "dynamic_updates": 164754,
+      "blas_callbacks": 3567,
+      "secondary_callbacks": 164754,
+      "finalize_callbacks": 3567,
+      "material_ids": 55671720,
+      "postbuild_copies": 274,
+      "timed_jobs": 352,
+      "thread_setup_us": 29378,
+      "dynamic_us": 328317,
+      "blas_finalize_us": 217588,
+      "material_ids_us": 33637,
+      "tlas_finish_us": 10937,
+      "sample_period": 16,
+      "native_record_body": 0,
+      "native_gpu_callbacks": 1,
+      "native_queue": 1,
+      "native_retirement": 1,
+      "tlas_builds_per_job": 1,
+      "ptlas": 0
+    },
+    "last_prepare": {
+      "qpc": 1878824640400,
+      "tid": 68664,
+      "active": 1,
+      "loops": 5632,
+      "objects": 44007710,
+      "instances": 43194970,
+      "dynamic_updates": 2225903,
+      "total_loop_us": 12870500,
+      "batch_groups": 1180,
+      "reused_instances": 24378,
+      "native_object_loop": 0,
+      "native_dynamic_updates": 1,
+      "native_readback": 1,
+      "native_as_builds": 1,
+      "ptlas": 0
+    },
+    "fps_measured": false
+  },
+  "conclusion": {
+    "user_report": "seemed worse",
+    "regression_cause_isolated": false,
+    "controlled_comparison": false,
+    "performance_gain_established": false,
+    "next_target": "dynamic recording stage: common resource bindings, transitions, provider callbacks; do not attribute its full duration to one child call",
+    "repeat_same_capture_needed": false
+  }
+}
