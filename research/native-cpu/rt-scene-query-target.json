@@ -1,0 +1,145 @@
+{
+  "status": "PASS",
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "runtime_evidence": {
+    "sha256": "86e547bc7f1caf815681683cb3a7c02fb8eb901a89046605b7c479f8ca53c346",
+    "scope": "Target identity only; not a synchronized scene snapshot"
+  },
+  "query_rva": "0x165520",
+  "traversal_rva": "0x1655c0",
+  "bounds_refresh_rva": "0x165dc0",
+  "query_has_native_writes": true,
+  "atomic_scene_snapshot": false,
+  "native_retirement_validated": false,
+  "performance_claim": false,
+  "evidence": [
+    {
+      "rva": "0x165553",
+      "instruction": "bt r9d, 0x11"
+    },
+    {
+      "rva": "0x16555a",
+      "instruction": "bt ebx, 0x11"
+    },
+    {
+      "rva": "0x16556f",
+      "instruction": "xor edx, edx"
+    },
+    {
+      "rva": "0x165575",
+      "instruction": "call 0x1655c0"
+    },
+    {
+      "rva": "0x165589",
+      "instruction": "mov edx, 1"
+    },
+    {
+      "rva": "0x165595",
+      "instruction": "call 0x1655c0"
+    },
+    {
+      "rva": "0x165636",
+      "instruction": "shl rcx, 8"
+    },
+    {
+      "rva": "0x165642",
+      "instruction": "mov rcx, qword ptr [rcx + rdi + 0x68]"
+    },
+    {
+      "rva": "0x1657ca",
+      "instruction": "cmp byte ptr [r15 + 0x39], 0"
+    },
+    {
+      "rva": "0x1657da",
+      "instruction": "call 0x165dc0"
+    },
+    {
+      "rva": "0x165e20",
+      "instruction": "movups xmm0, xmmword ptr [rax]"
+    },
+    {
+      "rva": "0x165e26",
+      "instruction": "minps xmm6, xmm0"
+    },
+    {
+      "rva": "0x165e37",
+      "instruction": "maxps xmm7, xmm0"
+    },
+    {
+      "rva": "0x165eda",
+      "instruction": "call 0x165dc0"
+    },
+    {
+      "rva": "0x165f41",
+      "instruction": "mov byte ptr [r9 + 0x39], 1"
+    },
+    {
+      "rva": "0x165f5c",
+      "instruction": "movups xmmword ptr [r9], xmm0"
+    },
+    {
+      "rva": "0x165f63",
+      "instruction": "movups xmmword ptr [r9 + 0x10], xmm2"
+    },
+    {
+      "rva": "0x1658ff",
+      "instruction": "test dword ptr [rbx + 0x28], r12d"
+    },
+    {
+      "rva": "0x165913",
+      "instruction": "and eax, r9d"
+    },
+    {
+      "rva": "0x165916",
+      "instruction": "cmp eax, r15d"
+    },
+    {
+      "rva": "0x165929",
+      "instruction": "call qword ptr [rax + 0x28]"
+    },
+    {
+      "rva": "0x165938",
+      "instruction": "call 0x22730"
+    },
+    {
+      "rva": "0x165944",
+      "instruction": "add rbx, 0x30"
+    },
+    {
+      "rva": "0x165fd4",
+      "instruction": "test dword ptr [rcx + 8], esi"
+    },
+    {
+      "rva": "0xa81eb",
+      "instruction": "mov dword ptr [rax + 0x18], ebx"
+    },
+    {
+      "rva": "0xa81f5",
+      "instruction": "mov dword ptr [rax + 0x78], ebx"
+    },
+    {
+      "rva": "0xa81fb",
+      "instruction": "mov dword ptr [rax + 0x98], ebx"
+    },
+    {
+      "rva": "0xa8204",
+      "instruction": "mov dword ptr [rax + 0x88], ebx"
+    },
+    {
+      "rva": "0xa83af",
+      "instruction": "mov r8d, 0x100"
+    },
+    {
+      "rva": "0xa83b9",
+      "instruction": "mov r9d, 8"
+    },
+    {
+      "rva": "0xa83d5",
+      "instruction": "mov dword ptr [rsp + 0x20], ebx"
+    },
+    {
+      "rva": "0xa83d9",
+      "instruction": "call qword ptr [r10 + 0x50]"
+    }
+  ]
+}
