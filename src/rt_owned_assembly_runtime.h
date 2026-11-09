@@ -16,12 +16,13 @@ inline void Record(const rt_owned_assembly::Result& result,UINT64 instanceCount=
   reusedGeometry.fetch_add(pending.reusedGeometry,std::memory_order_relaxed);
   const auto before=calls.fetch_add(pending.calls,std::memory_order_relaxed);const auto n=before+pending.calls;pending={};pending.started=true;
   if(!before||(before>>18)!=(n>>18)){const DWORD error=GetLastError();
-   Log("RT_ASSEMBLY_R400 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu static_providers=%llu skinned_providers=%llu virtual_providers=%llu avoided_provider_calls=%llu reused_geometry_preparations=%llu native_object_assembler_calls=0 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load(),staticProviders.load(),skinnedProviders.load(),virtualProviders.load(),avoidedCalls.load(),reusedGeometry.load());SetLastError(error);
+   Log("RT_ASSEMBLY_R401 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu static_providers=%llu skinned_providers=%llu virtual_providers=%llu avoided_provider_calls=%llu reused_geometry_preparations=%llu native_object_assembler_calls=0 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load(),staticProviders.load(),skinnedProviders.load(),virtualProviders.load(),avoidedCalls.load(),reusedGeometry.load());SetLastError(error);
   }
  }
 }
 inline void Hook(void* context,const void* transform,void* materials,std::int32_t variant,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
- Record(rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix));
+ const auto result=rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
+ RTCacheRevision::Observe(context,materials,variant,provider,ignoreAlpha,disableCull,result);Record(result);
 }
 inline std::uint32_t HookBatch(void* context,const void* transforms,std::uint32_t count,void* materials,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
  rt_owned_assembly::Result total;

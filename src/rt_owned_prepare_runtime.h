@@ -13,14 +13,15 @@ inline std::atomic<UINT64> calls{0},ticks{0},objects{0},instances{0},updates{0},
 inline UINT64 frequency=0;
 __declspec(noinline) inline void Hook(void* capture){
  const rt_owned_prepare::Options options{base[0x90e480],base[0x90e300],base[0x90e3c0],rt_owned_assembly::Read<float>(base,0x67ed44)};
+ RTCacheRevision::Begin(calls.load(std::memory_order_relaxed));
  LARGE_INTEGER begin{},end{};QueryPerformanceCounter(&begin);
  const auto stats=rt_owned_prepare::Run(api,rt_owned_assembly::Read<void*>(capture),rt_owned_assembly::Read<unsigned char>(capture,0x18),options);
- QueryPerformanceCounter(&end);
+ QueryPerformanceCounter(&end);RTCacheRevision::End();
  batchGroups.fetch_add(stats.batchGroups,std::memory_order_relaxed);reusedInstances.fetch_add(stats.reusedInstances,std::memory_order_relaxed);
  objects.fetch_add(stats.objects,std::memory_order_relaxed);instances.fetch_add(stats.instances,std::memory_order_relaxed);updates.fetch_add(stats.dynamicUpdates,std::memory_order_relaxed);ticks.fetch_add(static_cast<UINT64>(end.QuadPart-begin.QuadPart),std::memory_order_relaxed);
  const auto n=calls.fetch_add(1,std::memory_order_relaxed)+1;
  if(n==1||n%512==0){const DWORD error=GetLastError();const auto elapsed=ticks.load();const auto us=elapsed/frequency*1000000+(elapsed%frequency)*1000000/frequency;
-  Log("RT_PREPARE_R400 active=1 loops=%llu objects=%llu instances=%llu dynamic_updates=%llu total_loop_us=%llu batch_groups=%llu reused_instances=%llu native_object_loop=0 native_dynamic_updates=1 native_readback=1 native_as_builds=1 ptlas=0",n,objects.load(),instances.load(),updates.load(),us,batchGroups.load(),reusedInstances.load());SetLastError(error);
+  Log("RT_PREPARE_R401 active=1 loops=%llu objects=%llu instances=%llu dynamic_updates=%llu total_loop_us=%llu batch_groups=%llu reused_instances=%llu native_object_loop=0 native_dynamic_updates=1 native_readback=1 native_as_builds=1 ptlas=0",n,objects.load(),instances.load(),updates.load(),us,batchGroups.load(),reusedInstances.load());RTCacheRevision::Report();SetLastError(error);
  }
 }
 inline bool ExchangeLoop(bool install)noexcept{

@@ -1,0 +1,31 @@
+CONTROL TOH R401 - CROSS-FRAME INVALIDATION VALIDATION
+
+This is a validation build, not an FPS improvement build. R400's rendering and
+preparation remain active. Cross-frame cache reuse/suppression is DISABLED.
+
+Close Control and extract over R400. Keep your settings and native ray count.
+Play a route with room/area changes, repeated props, destruction and animated
+objects. Check that reflections and shadows remain correct. Then close Control
+and run ControlTOH\Tools\Collect-RT-Assembly.cmd. Send RT-Assembly-R401.zip.
+
+Why this check: R400's batch reuse covered only 0.23% of geometry. The larger
+individual-object cache needs verified lifetime/material invalidation. Existing
+logs do not record those events or compare revision tracking against live records.
+
+R401 counts static provider creation/destruction and material dirty notifications,
+including repeated dirty calls and native material ID reuse. Once per 64 preparation
+loops, it observes at most 256 ordinary assemblies and compares prepared geometry
+and flags with prior observations. Transforms, live BLAS addresses and contribution
+prefixes remain live and are excluded from this diagnostic comparison. Unknown or
+skinned providers and geometry counts above four are skipped. Hashes are diagnostic
+only and NEVER authorize reuse. Samples persist per worker as copied numbers;
+no cached native pointer is dereferenced. Sampling can add a small measurement cost.
+
+Expected: RT_CACHE_R401_INSTALL ready=1 plus the existing three INSTALL ready=1
+markers. RT_CACHE_R401 includes creates, destroys, material_notifications,
+observed, unchanged, invalidated and untracked_changes. cache_reuse=0 is intentional.
+Zero sampled untracked changes alone does NOT prove complete invalidation coverage.
+
+Build gates test revision reuse, repeated notifications, mismatch classification,
+3,072 entry-patch calls, six-argument forwarding and Windows virtual unwinding,
+plus the existing selection, preparation and 16,384 assembly comparisons.
