@@ -23,7 +23,7 @@ struct GPU {
   for(UINT i=0;factory->EnumAdapters1(i,&adapter)!=DXGI_ERROR_NOT_FOUND;++i){
    DXGI_ADAPTER_DESC1 desc{};Check(adapter->GetDesc1(&desc),"adapter desc");
    if(desc.VendorId==0x10de && !(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE) && SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_1,IID_PPV_ARGS(&device)))){
-    std::wcout<<L"Adapter: "<<desc.Description<<L"\n";break;
+    std::cout<<"NVIDIA adapter device_id="<<desc.DeviceId<<" dedicated_vram="<<desc.DedicatedVideoMemory<<"\n";break;
    }adapter.Reset();
   }
   if(!device)throw std::runtime_error("No NVIDIA DXR device");

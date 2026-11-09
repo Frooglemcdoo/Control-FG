@@ -3,6 +3,7 @@
 // Not installed in Control's hooks until native preparation/consumers are owned.
 #include <windows.h>
 #include <d3d12.h>
+#include <dxgi1_6.h>
 #include <wrl/client.h>
 #include <nvapi.h>
 #include "rt_ptlas_plan.h"
