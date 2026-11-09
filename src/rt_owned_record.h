@@ -5,11 +5,13 @@ using rt_owned_assembly::Read;using rt_owned_assembly::Write;using rt_owned_asse
 struct ThreadInit {const void* inherited=nullptr;std::uint32_t flags=0,padding=0;void* queue=nullptr;};
 static_assert(sizeof(ThreadInit)==24,"native ThreadInit");
 struct Api {
- void*(*queue)(std::int32_t);void(*initialize)(const ThreadInit*);void*(*device)();void(*flush)(void*);
+ void*(*queue)(std::int32_t);void(*initialize)(const ThreadInit*);void*(*device)();void(*bindCommon)(void*);
  void(*consumeToUav)(void*,std::int32_t);void(*uavToConsume)(void*,std::int32_t);
  void(*uavToCopy)(void*);void(*copy)(void*,void*);void(*copyToUav)(void*);
  void(*barrier)();void(*build)(std::uint32_t,void*,std::int32_t,void*,void*,bool);void*(*finish)();
- // Optional coarse phase boundary, never inside a provider/material loop.
+ // Optional boundaries: thread, device, common bindings, transition-in,
+ // provider updates, transition-out, BLAS/finalize, material IDs, TLAS/finish.
+ // Never inside a provider/material loop. CPU intervals, not GPU durations.
  void(*phase)(unsigned)=nullptr;
 };
 struct Globals {const unsigned char* asyncQueue;const void* inherited;void* const* skinning;void* const* postbuild;void** cleanup;};
@@ -20,13 +22,16 @@ inline Stats Run(const Api& api,const Globals& globals,void* capture){
  if(api.phase)api.phase(0);
  if(stats.instances>0){
   if(Read<std::uint32_t>(ctx,0x28)){
-   auto* device=api.device();api.flush(static_cast<unsigned char*>(*globals.skinning)+8);
+   auto* device=api.device();if(api.phase)api.phase(1);
+   api.bindCommon(static_cast<unsigned char*>(*globals.skinning)+8);if(api.phase)api.phase(2);
    ctx=context();api.consumeToUav(Read<void*>(ctx,0x30),Read<std::int32_t>(ctx,0x38));
+   if(api.phase)api.phase(3);
    ctx=context();auto* list=Read<unsigned char*>(ctx,0x20);const auto count=Read<std::uint32_t>(ctx,0x28);
    for(std::uint32_t i=0;i<count;++i){auto* p=Read<void*>(list,std::size_t(i)*8);Method<void(*)(void*,void*)>(p,0x28)(p,device);++stats.updates;}
+   if(api.phase)api.phase(4);
    ctx=context();api.uavToConsume(Read<void*>(ctx,0x30),Read<std::int32_t>(ctx,0x38));ctx=context();
-  }
-  if(api.phase)api.phase(1);
+  }else if(api.phase){for(unsigned i=1;i<5;++i)api.phase(i);}
+  if(api.phase)api.phase(5);
   if(Read<std::uint32_t>(ctx,0x48)||Read<std::uint32_t>(ctx,0x58)){
    auto* list=Read<unsigned char*>(ctx,0x40);auto count=Read<std::uint32_t>(ctx,0x48);
    for(std::uint32_t i=0;i<count;++i){auto* p=Read<void*>(list,std::size_t(i)*8);Method<void(*)(void*)>(p,0x30)(p);++stats.builds;}
@@ -44,15 +49,15 @@ inline Stats Run(const Api& api,const Globals& globals,void* capture){
    for(std::uint32_t i=0;i<count;++i){auto* p=Read<void*>(list,std::size_t(i)*8);Method<void(*)(void*)>(p,0x38)(p);++stats.finalizes;}
    ctx=context();
   }
-  if(api.phase)api.phase(2);
+  if(api.phase)api.phase(6);
   if(Read<std::uint32_t>(ctx,0x88)){
    std::uint64_t i=0;do{ctx=context();auto* material=Read<void*>(Read<unsigned char*>(ctx,0x90),std::size_t(i)*8);auto* handle=Read<void*>(material,0xa20);
     Write(Read<unsigned char*>(ctx,0x80),std::size_t(i)*64+36,std::uint32_t(Read<std::uint16_t>(handle,4)));++i;++stats.materials;ctx=context();
    }while(i<Read<std::uint32_t>(ctx,0x88));
   }
- }else{if(api.phase){api.phase(1);api.phase(2);}}
- if(api.phase)api.phase(3);
+ }else{if(api.phase){for(unsigned i=1;i<=6;++i)api.phase(i);}}
+ if(api.phase)api.phase(7);
  api.barrier();ctx=context();api.build(4,Read<void*>(ctx,0xb8),stats.instances,Read<void*>(ctx,0xc0),Read<void*>(ctx,0xc8),false);
- *globals.cleanup=api.finish();if(api.phase)api.phase(4);return stats;
+ *globals.cleanup=api.finish();if(api.phase)api.phase(8);return stats;
 }
 }

@@ -33,7 +33,12 @@ static void Mutate(){
 static void Update(void* p,void* device){Add(6,p,Bits(device));Mutate();}
 static void BuildBlas(void* p){Add(8,p);Mutate();}
 static void Finalize(void* p){Add(12,p);Mutate();}
-static unsigned phaseMask=0;static void Phase(unsigned n){phaseMask|=1u<<n;}
+static unsigned phaseMask=0;static void Phase(unsigned n){
+ assert(n<9);assert(phaseMask==((1u<<n)-1u));phaseMask|=1u<<n;
+ // Verify boundaries surround the actual callbacks, including empty stages.
+ bool dynamic=false;for(const auto& e:events)dynamic|=e.op==3;
+ if(n>=1&&n<=5){const unsigned expected[]={0,3,4,5,6,7};assert(events.back().op==(dynamic?expected[n]:2u));}
+}
 using Native=void(*)(void*);
 static rt_owned_record::Api* ownedApi=nullptr;static rt_owned_record::Globals ownedGlobals{};static rt_owned_record::Stats ownedStats;
 static void OwnedHook(void* capture){ownedStats=rt_owned_record::Run(*ownedApi,ownedGlobals,capture);}
@@ -94,8 +99,8 @@ int main(){
   };
   unsigned char job[0x20]{};auto* capture= reinterpret_cast<void**>(job+0x18);
   setup();Write(job,0x18,static_cast<void*>(ctx));currentCapture=capture;events.clear();oracle.run(capture);const auto expected=events;const auto expectedGeometry=geometry,expectedSecondary=secondaryGeometry;const auto expectedCleanup=*oracle.globals.cleanup;const auto expectedCapture=*capture;
-  setup();Write(job,0x18,static_cast<void*>(ctx));events.clear();phaseMask=0;routed(job);const auto stats=ownedStats;
-  assert(events==expected&&geometry==expectedGeometry&&secondaryGeometry==expectedSecondary&&*oracle.globals.cleanup==expectedCleanup&&*capture==expectedCapture&&phaseMask==31);
+  setup();Write(job,0x18,static_cast<void*>(ctx));events.clear();phaseMask=0;api.phase=(test%2)?Phase:nullptr;routed(job);const auto stats=ownedStats;
+  assert(events==expected&&geometry==expectedGeometry&&secondaryGeometry==expectedSecondary&&*oracle.globals.cleanup==expectedCleanup&&*capture==expectedCapture&&phaseMask==((test%2)?511u:0u));
   assert(stats.instances==(test%17==0?-1:test%13==0?0:static_cast<std::int32_t>(test%100+1)));
   std::uint64_t updates=0,builds=0,finalizes=0,copies=0;for(auto e:events){updates+=e.op==6;builds+=e.op==8;finalizes+=e.op==12;copies+=e.op==10;}
   assert(stats.updates==updates&&stats.builds+stats.secondaryBuilds==builds&&stats.finalizes==finalizes&&stats.copied==(copies!=0));totalEvents+=events.size();

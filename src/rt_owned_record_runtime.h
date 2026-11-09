@@ -6,8 +6,9 @@ namespace RTOwnedRecord {
 inline rt_owned_record::Api api{};inline rt_owned_record::Globals globals{};
 inline unsigned char* site=nullptr;inline unsigned char replacement[5]{};inline UINT64 frequency=0;
 inline std::atomic<UINT64> jobs{0},instances{0},updates{0},builds{0},secondary{0},finalizes{0},materials{0},copies{0},timed{0};
-inline std::atomic<UINT64> phaseTicks[5]{};
-struct Timing {bool enabled=false;LONGLONG last=0;UINT64 ticks[5]{};};inline thread_local Timing* timing=nullptr;
+inline std::atomic<UINT64> timedUpdates{0},timedDynamicJobs{0};
+inline std::atomic<UINT64> phaseTicks[9]{};
+struct Timing {bool enabled=false;LONGLONG last=0;UINT64 ticks[9]{};};inline thread_local Timing* timing=nullptr;
 inline void Phase(unsigned phase){if(!timing||!timing->enabled)return;const DWORD error=GetLastError();LARGE_INTEGER now{};QueryPerformanceCounter(&now);timing->ticks[phase]=static_cast<UINT64>(now.QuadPart-timing->last);timing->last=now.QuadPart;SetLastError(error);}
 inline UINT64 Micros(UINT64 ticks)noexcept{return ticks/frequency*1000000+(ticks%frequency)*1000000/frequency;}
 inline void Hook(void* capture){
@@ -15,9 +16,10 @@ inline void Hook(void* capture){
  struct Restore {Timing* previous;~Restore(){timing=previous;}} restore{timing};timing=&local;if(local.enabled){const DWORD error=GetLastError();LARGE_INTEGER start{};QueryPerformanceCounter(&start);local.last=start.QuadPart;SetLastError(error);}
  const auto stats=rt_owned_record::Run(api,globals,capture);
  instances.fetch_add(stats.instances>0?static_cast<UINT64>(stats.instances):0,std::memory_order_relaxed);updates.fetch_add(stats.updates,std::memory_order_relaxed);builds.fetch_add(stats.builds,std::memory_order_relaxed);secondary.fetch_add(stats.secondaryBuilds,std::memory_order_relaxed);finalizes.fetch_add(stats.finalizes,std::memory_order_relaxed);materials.fetch_add(stats.materials,std::memory_order_relaxed);copies.fetch_add(stats.copied?1u:0u,std::memory_order_relaxed);
- if(local.enabled){for(unsigned i=0;i<5;++i)phaseTicks[i].fetch_add(local.ticks[i],std::memory_order_relaxed);timed.fetch_add(1,std::memory_order_relaxed);}
+ if(local.enabled){timedUpdates.fetch_add(stats.updates,std::memory_order_relaxed);timedDynamicJobs.fetch_add(stats.updates?1u:0u,std::memory_order_relaxed);for(unsigned i=0;i<9;++i)phaseTicks[i].fetch_add(local.ticks[i],std::memory_order_relaxed);timed.fetch_add(1,std::memory_order_relaxed);}
  if(n==1||n%512==0){const DWORD error=GetLastError();
-  Log("RT_RECORD_R403 active=1 jobs=%llu instances=%llu dynamic_updates=%llu blas_callbacks=%llu secondary_callbacks=%llu finalize_callbacks=%llu material_ids=%llu postbuild_copies=%llu timed_jobs=%llu thread_setup_us=%llu dynamic_us=%llu blas_finalize_us=%llu material_ids_us=%llu tlas_finish_us=%llu sample_period=16 native_record_body=0 native_gpu_callbacks=1 native_queue=1 native_retirement=1 tlas_builds_per_job=1 ptlas=0",n,instances.load(),updates.load(),builds.load(),secondary.load(),finalizes.load(),materials.load(),copies.load(),timed.load(),Micros(phaseTicks[0].load()),Micros(phaseTicks[1].load()),Micros(phaseTicks[2].load()),Micros(phaseTicks[3].load()),Micros(phaseTicks[4].load()));SetLastError(error);
+  Log("RT_RECORD_R404 active=1 jobs=%llu instances=%llu dynamic_updates=%llu blas_callbacks=%llu secondary_callbacks=%llu finalize_callbacks=%llu material_ids=%llu postbuild_copies=%llu timed_jobs=%llu thread_setup_us=%llu dynamic_us=%llu blas_finalize_us=%llu material_ids_us=%llu tlas_finish_us=%llu sample_period=16 native_record_body=0 native_gpu_callbacks=1 native_queue=1 native_retirement=1 tlas_builds_per_job=1 ptlas=0",n,instances.load(),updates.load(),builds.load(),secondary.load(),finalizes.load(),materials.load(),copies.load(),timed.load(),Micros(phaseTicks[0].load()),Micros(phaseTicks[1].load()+phaseTicks[2].load()+phaseTicks[3].load()+phaseTicks[4].load()+phaseTicks[5].load()),Micros(phaseTicks[6].load()),Micros(phaseTicks[7].load()),Micros(phaseTicks[8].load()));
+  Log("RT_RECORD_R404_DETAIL timed_jobs=%llu timed_dynamic_jobs=%llu timed_updates=%llu device_us=%llu common_bindings_us=%llu transition_in_us=%llu provider_updates_us=%llu transition_out_us=%llu sample_period=16 cpu_inclusive=1 gpu_duration=0",timed.load(),timedDynamicJobs.load(),timedUpdates.load(),Micros(phaseTicks[1].load()),Micros(phaseTicks[2].load()),Micros(phaseTicks[3].load()),Micros(phaseTicks[4].load()),Micros(phaseTicks[5].load()));SetLastError(error);
  }
 }
 inline bool Exchange(bool enable)noexcept{
@@ -48,7 +50,7 @@ inline bool Install(HMODULE renderer,HMODULE d3d)noexcept{
  RT_RECORD_IMPORT(queue,0x5df510);RT_RECORD_IMPORT(initialize,0x5df520);RT_RECORD_IMPORT(device,0x5dfcb0);
  RT_RECORD_IMPORT(consumeToUav,0x5df528);RT_RECORD_IMPORT(uavToConsume,0x5df530);RT_RECORD_IMPORT(uavToCopy,0x5df958);RT_RECORD_IMPORT(copy,0x5df960);RT_RECORD_IMPORT(copyToUav,0x5df968);RT_RECORD_IMPORT(barrier,0x5df538);RT_RECORD_IMPORT(build,0x5df540);RT_RECORD_IMPORT(finish,0x5df548);
  #undef RT_RECORD_IMPORT
- api.flush=reinterpret_cast<decltype(api.flush)>(base+0x10f160);api.phase=&Phase;
+ api.bindCommon=reinterpret_cast<decltype(api.bindCommon)>(base+0x10f160);api.phase=&Phase;
  globals={base+0x7ec040,base+0x1291c60,reinterpret_cast<void* const*>(base+0x802950),reinterpret_cast<void* const*>(base+0x128d350),reinterpret_cast<void**>(base+0x8028c0)};
  LARGE_INTEGER f{};if(!QueryPerformanceFrequency(&f)||f.QuadPart<=0)return false;frequency=static_cast<UINT64>(f.QuadPart);
  auto* relay=static_cast<unsigned char*>(AllocateExecutableRelayNear(site));unsigned char stub[14]{};

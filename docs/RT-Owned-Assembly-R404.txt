@@ -1,0 +1,24 @@
+CONTROL TOH R404 - TARGETED CPU RECORDING DIAGNOSTICS
+
+This is a diagnostic build, not a claimed FPS improvement.
+Install over R403 in the same way. Keep your normal settings.
+Play in the affected area for 60-90 seconds, including movement/combat,
+then close the game and run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+Send RT-Assembly-R404.zip. No special capture hotkey or external profiler.
+
+R403 rerun confirmed no demonstrated FPS gain. Its aggregate dynamic-stage
+CPU timing did not identify the child operation responsible. R404 separates
+device retrieval, common resource binding, transition into UAV, provider
+updates, and transition back to consume. One in 16 recording jobs is timed;
+there are no timers inside the per-provider loop. Counts of updates from
+those same sampled jobs are included. Exclude startup when interpreting.
+
+The complete native-equivalence oracle still checks callback order and
+arguments, context changes, material IDs, transitions, TLAS build, and
+cleanup. No native update is skipped. No cache, PTLAS, animation decimation,
+ray-count change, or extra AS build is enabled.
+
+RT_RECORD_R404_DETAIL contains CPU-inclusive intervals, not GPU duration.
+Provider timing still includes its child bindings, shader setup, dispatch,
+and any preemption. It cannot alone identify an expensive child routine.
+Do not infer FPS gains from successful installation or these timings.

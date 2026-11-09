@@ -1,0 +1,63 @@
+{
+  "runs": [
+    {
+      "archive": "RT-Assembly-R403.zip",
+      "member": "probe-20261109-194758-320-60248.log",
+      "sha256": "cbcac4bf24a0866e069637ac52c9003351d0f18eb3ba3766538417e40df89726",
+      "phase_ms_per_timed_job": {
+        "thread_setup_us": 0.052528125,
+        "dynamic_us": 0.8903312499999999,
+        "blas_finalize_us": 0.17640625,
+        "material_ids_us": 0.094878125,
+        "tlas_finish_us": 0.031228125
+      },
+      "jobs": [
+        512,
+        5632
+      ],
+      "timed_jobs": 320,
+      "objects_per_loop": 7690.833984375,
+      "prep_ms_per_loop": 2.2740466796875,
+      "updates_per_job": 28.6158203125,
+      "errors": [],
+      "install": [
+        "qpc=1877309880651 tid=39864 RT_CACHE_R403_INSTALL ready=0 disabled=1 reason=exact_validation_cost",
+        "qpc=1877309987964 tid=39864 RT_ASSEMBLY_R403_INSTALL ready=1",
+        "qpc=1877310048774 tid=39864 RT_SELECTION_R403_INSTALL ready=1",
+        "qpc=1877310110526 tid=39864 RT_PREPARE_R403_INSTALL ready=1",
+        "qpc=1877310181156 tid=39864 RT_RECORD_R403_INSTALL ready=1"
+      ]
+    },
+    {
+      "archive": "RT-Assembly-R403(1).zip",
+      "member": "probe-20261109-195900-897-66828.log",
+      "sha256": "615da4a8fc3e1acd04d1837b29f5de4eebd4085d57a7c4e9fc3699c8cc98034a",
+      "phase_ms_per_timed_job": {
+        "thread_setup_us": 0.055223214285714285,
+        "dynamic_us": 0.8869017857142857,
+        "blas_finalize_us": 0.17283482142857143,
+        "material_ids_us": 0.08626785714285713,
+        "tlas_finish_us": 0.03168303571428571
+      },
+      "jobs": [
+        512,
+        4096
+      ],
+      "timed_jobs": 224,
+      "objects_per_loop": 7063.056919642857,
+      "prep_ms_per_loop": 2.1777427455357143,
+      "updates_per_job": 25.889787946428573,
+      "errors": [],
+      "install": [
+        "qpc=1883939677936 tid=65104 RT_CACHE_R403_INSTALL ready=0 disabled=1 reason=exact_validation_cost",
+        "qpc=1883939742522 tid=65104 RT_ASSEMBLY_R403_INSTALL ready=1",
+        "qpc=1883939802170 tid=65104 RT_SELECTION_R403_INSTALL ready=1",
+        "qpc=1883939861166 tid=65104 RT_PREPARE_R403_INSTALL ready=1",
+        "qpc=1883939916929 tid=65104 RT_RECORD_R403_INSTALL ready=1"
+      ]
+    }
+  ],
+  "fps_gain_demonstrated": false,
+  "controlled_comparison": false,
+  "dynamic_child_timing_available": false
+}
