@@ -85,9 +85,41 @@ static void TestLiveProviders(AssembleFn original){
    assert(aPrefix==bPrefix&&reference.geometry==owned.geometry&&reference.instances==owned.instances&&reference.materials==owned.materials);
    for(unsigned off:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(reference.context,off)==Read<std::uint32_t>(owned.context,off));
    ++cases;
+   if(kind==0){
+    const auto batchCount=(test/9)%9,recordCount=test%9,start=test%8;
+    Write(provider,0x28,static_cast<std::int32_t>(recordCount));
+    for(unsigned j=0;j<recordCount;++j)Write(reinterpret_cast<unsigned char*>(storage.data())+j*64,0,std::int32_t(0));
+    std::array<std::array<std::uint32_t,12>,8> transforms{};
+    for(unsigned i=0;i<8;++i)for(unsigned j=0;j<12;++j)transforms[i][j]=test*0x9876543u+i*0x1234567u+j;
+    transforms[3][4]=0x7fc01234u;
+    const auto cap=((test%3)?128u:start)|((test%4)<<30);
+    Fixture batchReference(cap),batchOwned(cap);
+    for(unsigned off:{0x78u,0x88u,0x98u}){Write(batchReference.context,off,start);Write(batchOwned.context,off,start);}
+    auto nativePrefix=test*0x13579bdu,ownedPrefix=nativePrefix;
+    std::array<unsigned char,0xe0> before{};std::memcpy(before.data(),batchOwned.context,before.size());
+    Result aggregate;
+    const bool batched=TryAssembleBatch(chosen,batchOwned.context,transforms.data(),batchCount,materialOwner,provider,static_cast<unsigned char>(test%2),static_cast<unsigned char>((test/2)%2),&ownedPrefix,aggregate);
+    const bool expectedBatch=batchCount>=2&&expected==1&&(test%3)!=0;
+    assert(batched==expectedBatch);
+    if(!batched){
+     assert(!std::memcmp(before.data(),batchOwned.context,before.size())&&ownedPrefix==nativePrefix);
+     assert(batchOwned.geometry==Fixture(cap).geometry&&batchOwned.materials==Fixture(cap).materials&&batchOwned.instances==Fixture(cap).instances);
+    }else{assert(aggregate.reusedGeometry==(batchCount-1)*recordCount&&aggregate.geometry==batchCount*recordCount&&aggregate.fastAppends==batchCount*(recordCount+1)&&aggregate.materialFastAppends==batchCount*recordCount);}
+    for(unsigned i=0;i<batchCount;++i){
+     original(batchReference.context,transforms[i].data(),materialOwner,0,provider,static_cast<unsigned char>(test%2),static_cast<unsigned char>((test/2)%2),&nativePrefix);
+     if(!batched)Assemble(chosen,batchOwned.context,transforms[i].data(),materialOwner,0,provider,static_cast<unsigned char>(test%2),static_cast<unsigned char>((test/2)%2),&ownedPrefix);
+    }
+    assert(nativePrefix==ownedPrefix&&batchReference.geometry==batchOwned.geometry&&batchReference.instances==batchOwned.instances&&batchReference.materials==batchOwned.materials);
+    for(unsigned off:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(batchReference.context,off)==Read<std::uint32_t>(batchOwned.context,off));
+   }else{
+    Result untouched;std::uint32_t prefix=7;std::array<std::uint32_t,24> rejectedTransforms{};
+    assert(!TryAssembleBatch(api,owned.context,rejectedTransforms.data(),2,materialOwner,provider,0,0,&prefix,untouched));assert(prefix==7);
+   }
   }
  }
+ unsigned char invalidVector[16]{};Write(invalidVector,8,11u);Write(invalidVector,12,10u);assert(!FitsBatch(invalidVector,0));
  assert(VirtualFree(code,0,MEM_RELEASE));
+ std::puts("PASS 4096 native repeated-assembly/batch comparisons; prefix wrap, transforms, flags, capacities/growth fallback, unknown/skinned rejection and unchanged outputs on rejection.");
  std::printf("PASS %u live-provider native-machine-code comparisons; static/skinned layouts, signed BLAS branches/offsets, changing live data, and virtual fallback. Not an FPS benchmark.\n",cases);
 }
 

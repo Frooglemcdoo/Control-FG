@@ -11,7 +11,7 @@ template<class T>inline void Write(void* p,std::size_t offset,T v)noexcept{std::
 // Bind only byte-verified renderer getters. Unknown or replaced methods stay virtual.
 struct ProviderBinding {void* table=nullptr;void* address=nullptr;void* count=nullptr;void* geometry=nullptr;void* mask=nullptr;};
 struct Api {void(*append64)(void*,const void*);void(*append8)(void*,const void*);ProviderBinding staticMesh{},skinnedMesh{};};
-struct Result {std::uint32_t geometry=0,fastAppends=0,growthAppends=0,materialFastAppends=0,materialGrowthAppends=0,providerKind=0,avoidedCalls=0;};
+struct Result {std::uint32_t geometry=0,fastAppends=0,growthAppends=0,materialFastAppends=0,materialGrowthAppends=0,providerKind=0,avoidedCalls=0,reusedGeometry=0;};
 inline void Append64(const Api& api,void* vector,const void* source,Result& result){
  const auto count=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
  if(count>=capacity){api.append64(vector,source);++result.growthAppends;return;}
@@ -97,4 +97,43 @@ inline Result Assemble(const Api& api,void* context,const void* transform,void* 
  if(MatchesProvider(provider,api.skinnedMesh))return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
  return AssembleProvider<0>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
 }
+// Reuse is scoped to one native instanced group. No readiness/update callback
+// occurs inside that loop. Require a known static provider and enough existing
+// output capacity for the WHOLE group, so replay invokes no native allocator.
+inline bool FitsBatch(const void* vector,std::uint64_t amount)noexcept{
+ const auto used=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
+ return used<=capacity&&amount<=std::uint64_t(capacity-used);
+}
+inline bool TryAssembleBatch(const Api& api,void* context,const void* transforms,std::uint32_t instances,
+ void* materials,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix,Result& total){
+ if(instances<2||!MatchesProvider(provider,api.staticMesh))return false;
+ const auto geometry=GeometryCount<1>(provider);if(geometry<0)return false;
+ const auto records=std::uint64_t(static_cast<std::uint32_t>(geometry))*instances;
+ auto* ctx=static_cast<unsigned char*>(context);
+ if(!FitsBatch(ctx+0x70,instances)||!FitsBatch(ctx+0x80,records)||!FitsBatch(ctx+0x90,records))return false;
+ const auto instanceStart=Read<std::uint32_t>(ctx,0x78),geometryStart=Read<std::uint32_t>(ctx,0x88),materialStart=Read<std::uint32_t>(ctx,0x98);
+ const auto first=AssembleProvider<1>(api,context,transforms,materials,0,provider,ignoreAlpha,disableCull,prefix);
+ auto* instanceData=Read<unsigned char*>(ctx,0x70);
+ auto* geometryData=Read<unsigned char*>(ctx,0x80);
+ auto* materialData=Read<unsigned char*>(ctx,0x90);
+ const auto* instanceTemplate=instanceData+std::size_t(instanceStart)*64;
+ // No pointer is retained after this call. Output order and duplicated records
+ // remain exactly native; downstream material-ID patching still visits each one.
+ for(std::uint32_t i=1;i<instances;++i){
+  const auto destination=std::size_t(i)*static_cast<std::uint32_t>(geometry);
+  if(geometry){
+   std::memcpy(geometryData+(geometryStart+destination)*64,geometryData+std::size_t(geometryStart)*64,std::size_t(geometry)*64);
+   std::memcpy(materialData+(materialStart+destination)*8,materialData+std::size_t(materialStart)*8,std::size_t(geometry)*8);
+  }
+  auto* instance=instanceData+(std::size_t(instanceStart)+i)*64;std::memcpy(instance,instanceTemplate,64);
+  const auto* transform=static_cast<const unsigned char*>(transforms)+std::size_t(i)*48;
+  for(unsigned column=0;column<4;++column)for(unsigned row=0;row<3;++row)Write(instance,(row*4+column)*4,Read<std::uint32_t>(transform,(column*3+row)*4));
+  Write(instance,52,(Read<std::uint32_t>(instance,52)&0xff000000u)|((*prefix*2u)&0xffffffu));
+  *prefix+=static_cast<std::uint32_t>(geometry);
+ }
+ Write(ctx,0x78,instanceStart+instances);Write(ctx,0x88,geometryStart+static_cast<std::uint32_t>(records));Write(ctx,0x98,materialStart+static_cast<std::uint32_t>(records));
+ total=first;total.reusedGeometry=static_cast<std::uint32_t>(geometry)*(instances-1);total.geometry*=instances;total.fastAppends*=instances;total.materialFastAppends*=instances;total.avoidedCalls*=instances;
+ return true;
+}
+
 }

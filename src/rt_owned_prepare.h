@@ -4,9 +4,10 @@ namespace rt_owned_prepare {
 using rt_owned_assembly::Read;
 using rt_owned_assembly::Method;
 using Assemble=void(*)(void*,const void*,void*,std::int32_t,void*,unsigned char,unsigned char,std::uint32_t*);
-struct Api {std::uint32_t(*count)(void*);void(*markUpdated)(void*);Assemble assemble;};
+using AssembleBatch=std::uint32_t(*)(void*,const void*,std::uint32_t,void*,void*,unsigned char,unsigned char,std::uint32_t*);
+struct Api {std::uint32_t(*count)(void*);void(*markUpdated)(void*);Assemble assemble;AssembleBatch batch=nullptr;};
 struct Options {unsigned char forceLodZero=0,ignoreAlpha=0,disableCull=0;float threshold=0.001f;};
-struct Stats {std::uint64_t objects=0,instances=0,dynamicUpdates=0,marked=0;};
+struct Stats {std::uint64_t objects=0,instances=0,dynamicUpdates=0,marked=0,batchGroups=0,reusedInstances=0;};
 inline bool Ready(void* provider){using Fn=unsigned char(*)(void*);return provider&&Method<Fn>(provider,8)(provider)!=0;}
 inline Stats Run(const Api& api,void* context,unsigned char alternate,const Options& options){
  Stats stats;std::uint32_t prefix=0;
@@ -23,7 +24,8 @@ inline Stats Run(const Api& api,void* context,unsigned char alternate,const Opti
      auto* provider=Read<void*>(Read<void*>(Read<void*>(owner,0x230)));
      if(Ready(provider)){
       auto* transforms=Read<unsigned char*>(sub,0x360);const auto count=Read<std::uint32_t>(sub,0x368);
-      for(std::uint32_t t=0;t<count;++t){api.assemble(context,transforms+std::size_t(t)*48,owner,0,provider,options.ignoreAlpha,options.disableCull,&prefix);++stats.instances;}
+      if(api.batch&&count>1){++stats.batchGroups;stats.reusedInstances+=api.batch(context,transforms,count,owner,provider,options.ignoreAlpha,options.disableCull,&prefix);stats.instances+=count;}
+      else for(std::uint32_t t=0;t<count;++t){api.assemble(context,transforms+std::size_t(t)*48,owner,0,provider,options.ignoreAlpha,options.disableCull,&prefix);++stats.instances;}
      }
     }
     ++index;

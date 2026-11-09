@@ -21,9 +21,14 @@ static void AssembleMock(void*,const void* transform,void* owner,std::int32_t va
  for(unsigned i=0;i<12;++i)events.push_back(Read<unsigned>(transform,i*4));
  *prefix+=Read<unsigned>(provider,20);++assembled;
 }
+static std::uint32_t BatchMock(void* context,const void* transforms,std::uint32_t count,void* owner,void* provider,unsigned char alpha,unsigned char cull,std::uint32_t* prefix){
+ assert(count>1);
+ for(std::uint32_t i=0;i<count;++i)AssembleMock(context,static_cast<const unsigned char*>(transforms)+std::size_t(i)*48,owner,0,provider,alpha,cull,prefix);
+ return count-1;
+}
 static Options liveOptions;
 static Stats liveStats;
-static void OwnedHook(void* capture){liveStats=Run({&Count,&Mark,&AssembleMock},Read<void*>(capture),Read<unsigned char>(capture,0x18),liveOptions);}
+static void OwnedHook(void* capture){liveStats=Run({&Count,&Mark,&AssembleMock,&BatchMock},Read<void*>(capture),Read<unsigned char>(capture,0x18),liveOptions);}
 struct OracleCode {unsigned char* code;RunFn run;};
 static OracleCode Oracle(bool owned){
  auto* code=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE));assert(code);

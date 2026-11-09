@@ -1,0 +1,27 @@
+CONTROL TOH R400 - PREPARE SHARED INSTANCE DATA ONCE
+
+Close Control and extract over R399. Keep current settings and native ray count.
+Play your usual route, including repeated props/foliage, room changes, destruction
+and animated objects. Check reflections and shadows for missing/stale objects.
+Close Control and run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+Send RT-Assembly-R400.zip and any visual or performance changes.
+
+R399 avoided getter calls but did not demonstrate an FPS benefit. R400 targets
+repeated geometry/material preparation inside native static instanced groups.
+It prepares the first instance, then reuses its shared records while writing each
+remaining transform and contribution index. Record counts and order stay native.
+Reuse ends at the group boundary. Nothing is cached across frames or update calls.
+
+Reuse requires the verified static provider and sufficient existing capacity for
+the entire group. Unknown/skinned providers and growth cases use the existing path.
+Native readiness checks, dynamic updates, material-ID patching and AS builds remain.
+PTLAS stays OFF. No FPS gain is claimed before in-game measurement.
+
+Build gates include 16,384 original-machine-code assembly comparisons, including
+4,096 repeated-assembly/batch cases, plus the existing selection and outer-loop
+comparisons. Batch cases check transforms, flags, prefix wrap, output bytes/order,
+capacity flags, allocator fallback and side-effect-free rejection.
+
+Expected INSTALL ready=1 markers: RT_ASSEMBLY_R400, RT_SELECTION_R400,
+RT_PREPARE_R400. Preparation summaries include batch_groups/reused_instances;
+assembly summaries include reused_geometry_preparations. Timing scopes match R399.
