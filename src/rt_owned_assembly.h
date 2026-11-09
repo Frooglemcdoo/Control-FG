@@ -9,11 +9,17 @@ namespace rt_owned_assembly {
 template<class T>inline T Read(const void* p,std::size_t offset=0)noexcept{T v;std::memcpy(&v,static_cast<const unsigned char*>(p)+offset,sizeof(v));return v;}
 template<class T>inline void Write(void* p,std::size_t offset,T v)noexcept{std::memcpy(static_cast<unsigned char*>(p)+offset,&v,sizeof(v));}
 struct Api {void(*append64)(void*,const void*);void(*append8)(void*,const void*);};
-struct Result {std::uint32_t geometry=0,fastAppends=0,growthAppends=0;};
+struct Result {std::uint32_t geometry=0,fastAppends=0,growthAppends=0,materialFastAppends=0,materialGrowthAppends=0;};
 inline void Append64(const Api& api,void* vector,const void* source,Result& result){
  const auto count=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
  if(count>=capacity){api.append64(vector,source);++result.growthAppends;return;}
  auto* data=Read<unsigned char*>(vector);Write(vector,8,count+1);std::memcpy(data+std::size_t(count)*64,source,64);++result.fastAppends;
+}
+// Native 22730 fast path: increment count, then copy the pointer bits.
+inline void AppendMaterial(const Api& api,void* vector,const void* source,Result& result){
+ const auto count=Read<std::uint32_t>(vector,8),capacity=Read<std::uint32_t>(vector,12)&0x3fffffffu;
+ if(count>=capacity){api.append8(vector,source);++result.materialGrowthAppends;return;}
+ auto* data=Read<unsigned char*>(vector);Write(vector,8,count+1);std::memcpy(data+std::size_t(count)*8,source,8);++result.materialFastAppends;
 }
 template<class F>inline F Method(void* object,std::size_t offset)noexcept{return Read<F>(Read<void*>(object),offset);}
 inline Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
@@ -32,7 +38,7 @@ inline Result Assemble(const Api& api,void* context,const void* transform,void* 
    table=Read<void*>(variants+(std::ptrdiff_t(variant)*3-2)*8);
   }else table=Read<void*>(materials,0x130);
   auto* material=Read<void*>(static_cast<unsigned char*>(table)+std::ptrdiff_t(materialIndex)*8);
-  api.append8(ctx+0x90,&material);
+  AppendMaterial(api,ctx+0x90,&material,result);
   if(Read<std::uint32_t>(material,0x204)!=2)cull=true;
   bool geometryAlpha=false;
   if(!ignoreAlpha){

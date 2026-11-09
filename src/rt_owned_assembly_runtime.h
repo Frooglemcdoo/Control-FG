@@ -3,16 +3,17 @@
 namespace RTOwnedAssembly {
 inline rt_owned_assembly::Api api{};
 inline RRAlbedoCallPatch patches[3]{};
-inline std::atomic<UINT64> calls{0},geometries{0},fast{0},growth{0};
+inline std::atomic<UINT64> calls{0},geometries{0},fast{0},growth{0},materialFast{0},materialGrowth{0};
 inline void Hook(void* context,const void* transform,void* materials,std::int32_t variant,void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
  const auto result=rt_owned_assembly::Assemble(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
- struct Pending {UINT64 calls=0,geometry=0,fast=0,growth=0;};static thread_local Pending pending;
- ++pending.calls;pending.geometry+=result.geometry;pending.fast+=result.fastAppends;pending.growth+=result.growthAppends;
- if(pending.calls==4096||calls.load(std::memory_order_relaxed)==0){
+ struct Pending {UINT64 calls=0,geometry=0,fast=0,growth=0,materialFast=0,materialGrowth=0;bool started=false;};static thread_local Pending pending;
+ ++pending.calls;pending.geometry+=result.geometry;pending.fast+=result.fastAppends;pending.growth+=result.growthAppends;pending.materialFast+=result.materialFastAppends;pending.materialGrowth+=result.materialGrowthAppends;
+ if(pending.calls==4096||!pending.started){
   geometries.fetch_add(pending.geometry,std::memory_order_relaxed);fast.fetch_add(pending.fast,std::memory_order_relaxed);growth.fetch_add(pending.growth,std::memory_order_relaxed);
-  const auto before=calls.fetch_add(pending.calls,std::memory_order_relaxed);const auto n=before+pending.calls;pending={};
+  materialFast.fetch_add(pending.materialFast,std::memory_order_relaxed);materialGrowth.fetch_add(pending.materialGrowth,std::memory_order_relaxed);
+  const auto before=calls.fetch_add(pending.calls,std::memory_order_relaxed);const auto n=before+pending.calls;pending={};pending.started=true;
   if(!before||(before>>18)!=(n>>18)){const DWORD error=GetLastError();
-   Log("RT_ASSEMBLY_R395 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu native_object_assembler_calls=0 native_selection=1 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load());SetLastError(error);
+   Log("RT_ASSEMBLY_R396 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu native_object_assembler_calls=0 native_selection=1 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load());SetLastError(error);
   }
  }
 }

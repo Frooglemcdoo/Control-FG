@@ -7,14 +7,14 @@
 #include "native-assembly-oracle.h"
 using namespace rt_owned_assembly;
 using AssembleFn=void(*)(void*,const void*,void*,std::int32_t,void*,unsigned char,unsigned char,std::uint32_t*);
-static unsigned appendCalls=0;
+static unsigned appendCalls=0,materialCalls=0;
 static void Append(void* vector,const void* source,std::size_t stride){
  auto count=Read<std::uint32_t>(vector,8),cap=Read<std::uint32_t>(vector,12)&0x3fffffffu;assert(count<128);
  if(count==cap)Write(vector,12,(std::max)(8u,count+1));
  auto* data=Read<unsigned char*>(vector);Write(vector,8,count+1);std::memcpy(data+count*stride,source,stride);
 }
 static void MockAppend64(void* vector,const void* source){++appendCalls;Append(vector,source,64);}
-static void MockAppend8(void* vector,const void* source){Append(vector,source,8);}
+static void MockAppend8(void* vector,const void* source){++materialCalls;Append(vector,source,8);}
 struct Fixture {
  alignas(16) unsigned char context[0xe0]{};
  std::array<std::array<unsigned char,64>,128> geometry{},instances{};
@@ -40,9 +40,12 @@ static AssembleFn Oracle(){
 int main(){
  const auto original=Oracle();void* vtable[13]{};vtable[8]=reinterpret_cast<void*>(&Blas);vtable[9]=reinterpret_cast<void*>(&Count);vtable[10]=reinterpret_cast<void*>(&Geometry);vtable[12]=reinterpret_cast<void*>(&Mask);
  std::uint32_t seed=0x12345678;auto random=[&]{seed=seed*1664525u+1013904223u;return seed;};
- unsigned nativeAppends=0,ownedAppends=0;
+ unsigned nativeAppends=0,ownedAppends=0,nativeMaterials=0,ownedMaterials=0;
  for(unsigned test=0;test<4096;++test){
-  Fixture reference(test%2?128:0),owned(test%2?128:0);
+  const unsigned start=(test/2)%32;
+  const unsigned capacity=(test%2?128:start)|((test%4)<<30);
+  Fixture reference(capacity),owned(capacity);
+  for(auto offset:{0x78u,0x88u,0x98u}){Write(reference.context,offset,start);Write(owned.context,offset,start);}
   Provider provider;provider.table=vtable;provider.count=int(test%65);provider.mask=test%256;provider.blas=std::uint64_t(random())<<8;
   std::array<std::uint32_t,12> transform;for(auto& v:transform)v=random();if(test%3==0)transform[3]=0x7fc01234; // NaN payload, copied as bits.
   alignas(8) unsigned char materialOwner[0x160]{};
@@ -53,15 +56,17 @@ int main(){
   Write(materialOwner,0x130,base.data());Write(materialOwner,0x150,variants.data());Write(materialOwner,0x158,std::uint32_t(test%2));
   for(int i=0;i<provider.count;++i){for(auto& b:provider.geometry[i])b=static_cast<unsigned char>(random());Write(provider.geometry[i].data(),0,std::int32_t(i%7));}
   std::uint32_t aPrefix=random(),bPrefix=aPrefix;const auto variant=std::int32_t(test%3);const auto ignore=static_cast<unsigned char>((test/3)%2),cull=static_cast<unsigned char>((test/5)%2);
-  appendCalls=0;original(reference.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&aPrefix);nativeAppends+=appendCalls;
+  appendCalls=materialCalls=0;original(reference.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&aPrefix);nativeAppends+=appendCalls;nativeMaterials+=materialCalls;
   const auto expectedCalls=provider.calls;const auto expectedCount=provider.callCount;provider.callCount=0;provider.calls={};
-  appendCalls=0;const auto result=Assemble({&MockAppend64,&MockAppend8},owned.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&bPrefix);ownedAppends+=appendCalls;
+  appendCalls=materialCalls=0;const auto result=Assemble({&MockAppend64,&MockAppend8},owned.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&bPrefix);ownedAppends+=appendCalls;ownedMaterials+=materialCalls;
+  assert(result.materialFastAppends+result.materialGrowthAppends==static_cast<unsigned>(provider.count));
+  assert(result.materialGrowthAppends==materialCalls);
   assert(aPrefix==bPrefix&&expectedCalls==provider.calls&&expectedCount==provider.callCount);
   assert(result.geometry==static_cast<unsigned>(provider.count));
   assert(reference.geometry==owned.geometry&&reference.instances==owned.instances&&reference.materials==owned.materials);
   for(unsigned offset:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(reference.context,offset)==Read<std::uint32_t>(owned.context,offset));
  }
- assert(ownedAppends<nativeAppends);
+ assert(ownedAppends<nativeAppends&&ownedMaterials<nativeMaterials);
  assert(VirtualFree(reinterpret_cast<void*>(original),0,MEM_RELEASE));
- std::printf("PASS 4096 exact native-machine-code comparisons; transforms/NaNs, masks, material overrides, geometry bytes, counters, provider call order and growth. Native append calls=%u owned growth calls=%u. Not an FPS benchmark.\n",nativeAppends,ownedAppends);
+ std::printf("PASS 4096 exact native-machine-code comparisons; transforms/NaNs, masks, material overrides, geometry bytes, counters, provider call order and growth. Native append calls=%u owned growth calls=%u. Native material calls=%u owned material growth=%u. Not an FPS benchmark.\n",nativeAppends,ownedAppends,nativeMaterials,ownedMaterials);
 }
