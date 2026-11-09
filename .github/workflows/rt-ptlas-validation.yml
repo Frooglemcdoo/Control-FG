@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/rt_*'
       - 'tools/ptlas/**'
+      - 'tools/rt-scene-probe/**'
       - 'tools/test-rt-*.cpp'
       - '.github/workflows/rt-ptlas-validation.yml'
   workflow_dispatch:
