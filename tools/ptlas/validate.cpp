@@ -20,7 +20,8 @@ struct GPU {
   if(SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debug))))debug->EnableDebugLayer();
   ComPtr<IDXGIFactory6> factory;Check(CreateDXGIFactory2(0,IID_PPV_ARGS(&factory)),"DXGI factory");
   ComPtr<IDXGIAdapter1> adapter;
-  for(UINT i=0;factory->EnumAdapters1(i,&adapter)!=DXGI_ERROR_NOT_FOUND;++i){
+  for(UINT i=0;;++i){
+   const auto enumerated=factory->EnumAdapters1(i,&adapter);if(enumerated==DXGI_ERROR_NOT_FOUND)break;Check(enumerated,"enumerate adapter");
    DXGI_ADAPTER_DESC1 desc{};Check(adapter->GetDesc1(&desc),"adapter desc");
    if(desc.VendorId==0x10de && !(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE) && SUCCEEDED(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_1,IID_PPV_ARGS(&device)))){
     std::cout<<"NVIDIA adapter device_id="<<desc.DeviceId<<" dedicated_vram="<<desc.DedicatedVideoMemory<<"\n";break;
@@ -54,6 +55,15 @@ static ComPtr<ID3D12Resource> Upload(GPU& g,const void* bytes,std::size_t size){
  void* p=nullptr;D3D12_RANGE noRead{0,0};Check(r->Map(0,&noRead,&p),"upload map");std::memcpy(p,bytes,size);r->Unmap(0,nullptr);return r;
 }
 using Hits=std::array<std::array<std::uint32_t,4>,8>;
+static Hits AnalyticHits(const std::vector<Instance>& scene){
+ Hits out{};for(auto& hit:out)hit={0xffffffffu,0xffffffffu,0xffffffffu,0};
+ const float distance=2.0f;std::uint32_t distanceBits=0;std::memcpy(&distanceBits,&distance,4);
+ for(std::size_t i=0;i<scene.size();++i){const auto& instance=scene[i];if(!instance.blas||!(instance.idMask>>24))continue;
+  const auto ray=static_cast<unsigned>(instance.transform[3]/2.0f);
+  if(ray>=out.size())throw std::logic_error("invalid analytic fixture");
+  out[ray]={instance.idMask&0xffffffu,static_cast<std::uint32_t>(i),0,distanceBits};
+ }return out;
+}
 struct Probe {
  ComPtr<ID3D12RootSignature> root;
  ComPtr<ID3D12PipelineState> pipeline;
@@ -108,13 +118,16 @@ static Hits Native(GPU& g,Probe& probe,const std::vector<Instance>& instances){
 int main(){try{
  GPU g;Probe probe(g);auto blas=MakeBLAS(g);
  CheckNv(NvAPI_Initialize(),"NvAPI initialize");
+ NvU32 driver=0;NvAPI_ShortString branch{};
+ const auto driverStatus=NvAPI_SYS_GetDriverAndBranchVersion(&driver,branch);
+ std::cout<<"Driver query status="<<driverStatus<<" version="<<driver<<" branch="<<branch<<"\n";
  NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAPS cluster{};const auto clusterStatus=NvAPI_D3D12_GetRaytracingCaps(g.device.Get(),NVAPI_D3D12_RAYTRACING_CAPS_TYPE_CLUSTER_OPERATIONS,&cluster,sizeof(cluster));
  std::cout<<"Cluster query status="<<clusterStatus<<" caps="<<unsigned(cluster)<<"\n";
  std::vector<Instance> v(4);for(unsigned i=0;i<4;++i){v[i].transform[0]=v[i].transform[5]=v[i].transform[10]=1;v[i].transform[3]=float(i)*2;v[i].idMask=0xff000007;v[i].contributionFlags=0x01000000;v[i].blas=blas->GetGPUVirtualAddress();}
  std::vector<std::vector<Instance>> scenes{v,v};v[1].transform[3]=8;scenes.push_back(v);v[2].idMask=7;scenes.push_back(v);
  v.resize(2);scenes.push_back(v);v.push_back(scenes[0][2]);v[2].transform[3]=10;scenes.push_back(v);scenes.push_back({});
  const char* names[]={"initial","unchanged","rigid move","mask off","destroy/remove","slot reuse","empty scene"};
- std::vector<Hits> expected;for(const auto& s:scenes)expected.push_back(Native(g,probe,s));
+ std::vector<Hits> expected;for(const auto& s:scenes){auto hits=Native(g,probe,s);if(hits!=AnalyticHits(s))throw std::runtime_error("native reference disagrees with analytic hits");expected.push_back(hits);}
  // All native TLAS objects have been fenced and released before PTLAS exists.
  NvBackend replacement(g.device.Get(),4,2);Planner planner(4,2);
  for(std::size_t i=0;i<scenes.size();++i){std::vector<std::uint32_t> partitions(scenes[i].size());for(std::size_t j=0;j<partitions.size();++j)partitions[j]=j==1?0xffffffffu:static_cast<std::uint32_t>(j%2);
