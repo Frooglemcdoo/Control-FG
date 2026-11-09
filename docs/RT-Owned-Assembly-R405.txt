@@ -1,0 +1,25 @@
+CONTROL TOH R405 - BATCHED DYNAMIC BUFFER BINDINGS
+
+Install over R404. Keep the same settings and play the affected area, including
+movement/combat, for 60-90 seconds. Close Control and run
+ControlTOH\Tools\Collect-RT-Assembly.cmd. Send RT-Assembly-R405.zip and note
+whether FPS/frame pacing improved, worsened, or stayed the same.
+
+This build reduces individual buffer-descriptor copy calls inside the known
+skinned-provider shader-binding path. Eligible buffer-only compute tables use
+one batched copy instead of multiple driver calls. Current source handles are
+read each time. No persistent cache or reduced animation/update frequency.
+
+Unsupported texture/sampler layouts remain native. Overlapping or duplicate
+copy destinations retain individual copies. Active reflection/GI descriptor
+capture observers keep the original shader-binding path. Constant-buffer
+updates/uploads and UAV handling remain present.
+
+R404 identified the provider update loop as 94.6% of its dynamic-stage CPU
+cost, but did not isolate descriptor copies inside that loop. Therefore no
+numerical FPS gain is promised by this change. RT_BIND_R405 reports how often
+batching actually applies, descriptors copied, native fallbacks, and sampled
+shader-application CPU time. Existing R404-style phase detail remains available.
+
+Expected new marker: RT_BIND_R405_INSTALL ready=1. Exact-input scene caching
+remains intentionally disabled. PTLAS remains off and native rays are retained.
