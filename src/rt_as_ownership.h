@@ -77,6 +77,7 @@ public:
   if(previous!=issued_.end()&&value<=previous->second)throw std::logic_error("nonmonotonic private fence");
   // Fence identity cannot be shared between queues in this single-writer model.
   for(const auto& item:issued_)if(item.first.second==fence&&item.first.first!=queue)throw std::logic_error("fence has another queue owner");
+  if(submissions_.size()>=128)throw std::runtime_error("AS submission capacity");
   Submission pending;pending.queue=queue;pending.fence=fence;pending.value=value;
   for(Id id:lists){const auto& list=lists_.at(id);if(!list.closed)throw std::logic_error("open AS recording");
    for(const auto& lease:list.leases)if(std::find(pending.leases.begin(),pending.leases.end(),lease)==pending.leases.end())pending.leases.push_back(lease);

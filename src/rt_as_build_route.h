@@ -17,6 +17,16 @@ struct Coverage {
     }
 };
 
+enum class Choice {Native, Replacement, Abort};
+inline constexpr Choice Select(bool alreadyOwned,bool coverage,bool prepared) noexcept {
+ return coverage&&prepared?Choice::Replacement:(alreadyOwned?Choice::Abort:Choice::Native);
+}
+template<class Native,class Replacement,class Abort>
+inline void Record(Choice choice,Native&& native,Replacement&& replacement,Abort&& abort) {
+ switch(choice){case Choice::Native:native();return;case Choice::Replacement:replacement();return;case Choice::Abort:abort();return;}
+ abort();
+}
+
 template<class Native, class Replacement>
 inline void Record(bool replace, Native&& native, Replacement&& replacement) {
     if (replace) {

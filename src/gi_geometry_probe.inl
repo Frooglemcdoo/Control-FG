@@ -1,5 +1,28 @@
-// CPU descriptor inventory only. Does not read GPU memory or change AS builds.
+#include "rt_as_build_route.h"
+// Native observer remains unchanged unless a complete replacement is installed.
 namespace gi_geometry_probe {
+// Published once before recording starts; the backend and its state must outlive
+// every command list. Null in R392: no replacement or duplicate work is enabled.
+// Prepare is CPU-only and may reject BEFORE any replacement commands are issued.
+// Record must use unhooked API entry points and must never request native retry.
+struct ReplacementBackend {
+ rt_as_build_route::Coverage coverage;
+ bool (*owns)(ID3D12GraphicsCommandList4*,UINT64,UINT64) noexcept=nullptr;
+ bool (*prepare)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*,UINT,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC*) noexcept=nullptr;
+ void (*record)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*,UINT,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC*) noexcept=nullptr;
+ bool (*prepareCopy)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE) noexcept=nullptr;
+ void (*recordCopy)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE) noexcept=nullptr;
+ // Must discard the entire affected recording and prevent its submission.
+ // Merely skipping one build/copy does not leave a valid command list.
+ void (*abortRecording)(ID3D12GraphicsCommandList4*) noexcept=nullptr;
+};
+inline std::atomic<const ReplacementBackend*> replacementBackend{nullptr};
+inline bool PublishReplacementBackend(const ReplacementBackend* backend) noexcept {
+ if(!backend||!backend->coverage.Complete()||!backend->owns||!backend->prepare||!backend->record||
+    !backend->prepareCopy||!backend->recordCopy||!backend->abortRecording)return false;
+ const ReplacementBackend* expected=nullptr;
+ return replacementBackend.compare_exchange_strong(expected,backend,std::memory_order_release,std::memory_order_relaxed);
+}
 using IntegrationBuild=void (*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC*) noexcept;
 inline std::atomic<IntegrationBuild> integrationBuild{nullptr};
 using IntegrationReset=void (*)(ID3D12GraphicsCommandList*) noexcept;
@@ -108,13 +131,31 @@ inline void Observe(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACIN
  }
 }
 inline void STDMETHODCALLTYPE BuildHook(ID3D12GraphicsCommandList4* list,const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC* d,UINT count,const D3D12_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO_DESC* info){
- const auto h=Lookup(list);gi_reuse::runtime::RecordBuild(list,d);if(const auto build=integrationBuild.load())build(list,d);if(Enabled())Observe(list,d);h.build(list,d,count,info);
+ const auto h=Lookup(list);
+ const auto* backend=replacementBackend.load(std::memory_order_acquire);
+ const bool owned=d&&backend&&backend->owns(list,d->DestAccelerationStructureData,d->SourceAccelerationStructureData);
+ const bool covered=backend&&backend->coverage.Complete();
+ const bool prepared=d&&covered&&backend->prepare(list,d,count,info);
+ const auto choice=rt_as_build_route::Select(owned,covered,prepared);
+ rt_as_build_route::Record(choice,[&] {
+  gi_reuse::runtime::RecordBuild(list,d);
+  if(const auto build=integrationBuild.load())build(list,d);
+  if(Enabled())Observe(list,d);
+  h.build(list,d,count,info);
+ },[&] {backend->record(list,d,count,info);},[&] {backend->abortRecording(list);});
 }
 inline void STDMETHODCALLTYPE CopyHook(ID3D12GraphicsCommandList4* list,D3D12_GPU_VIRTUAL_ADDRESS dst,D3D12_GPU_VIRTUAL_ADDRESS src,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE mode){
- const auto h=Lookup(list);gi_reuse::runtime::RecordCopy(list,dst,src,mode);const auto serial=copies.fetch_add(1);
- if(serial<512)Trace("GI_GEOMETRY_R279_COPY serial=%u list=%p present=%llu dst=%llu src=%llu mode=%u cpu_descriptor_only=1",serial,list,presentCount.load(),dst,src,unsigned(mode));
- else if(serial==512)Trace("GI_GEOMETRY_R279_LIMIT kind=copy limit=512 inventory_incomplete=1");
- h.copy(list,dst,src,mode);
+ const auto h=Lookup(list);const auto* backend=replacementBackend.load(std::memory_order_acquire);
+ const bool owned=backend&&backend->owns(list,dst,src);
+ const bool covered=backend&&backend->coverage.Complete();
+ const bool prepared=covered&&backend->prepareCopy(list,dst,src,mode);
+ const auto choice=rt_as_build_route::Select(owned,covered,prepared);
+ rt_as_build_route::Record(choice,[&] {
+  gi_reuse::runtime::RecordCopy(list,dst,src,mode);const auto serial=copies.fetch_add(1);
+  if(serial<512)Trace("GI_GEOMETRY_R279_COPY serial=%u list=%p present=%llu dst=%llu src=%llu mode=%u cpu_descriptor_only=1",serial,list,presentCount.load(),dst,src,unsigned(mode));
+  else if(serial==512)Trace("GI_GEOMETRY_R279_LIMIT kind=copy limit=512 inventory_incomplete=1");
+  h.copy(list,dst,src,mode);
+ },[&] {backend->recordCopy(list,dst,src,mode);},[&] {backend->abortRecording(list);});
 }
 inline void InstallList(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled()&&!gi_reuse::runtime::Enabled())return;
