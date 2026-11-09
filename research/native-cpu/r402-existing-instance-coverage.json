@@ -1,0 +1,26 @@
+{
+  "source": "RT-Instances-R393-56996-163251531.bin",
+  "sha256": "2cdadc73398bdf8df5e51a22fcdb429672d4d85c9262cb1d23b4a79e146783cd",
+  "samples": 48,
+  "inference": "geometry count = consecutive native instance contribution-prefix difference / 2; excludes last instance of each sample",
+  "instances": 467590,
+  "odd_deltas": 0,
+  "histogram": {
+    "1": 386150,
+    "2": 60681,
+    "3": 14059,
+    "4": 4984,
+    "5": 300,
+    "6": 271,
+    "7": 594,
+    "8": 472,
+    "10": 31,
+    "11": 16,
+    "12": 32
+  },
+  "geometries": 581555,
+  "instances_ge8": 551,
+  "instance_share_ge8": 0.0011783827712312069,
+  "geometry_share_ge8": 0.007988926240854262,
+  "performance_claim": false
+}

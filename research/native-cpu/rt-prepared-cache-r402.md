@@ -61,3 +61,27 @@ volatile function pointers. It prints results for 1, 2, 4, 8, 16, 32 and 64 reco
 Windows cache timings were closer than Linux (31–43 ns vs 32–46 ns), but those
 warm-entry numbers exclude cache lookup, misses, locking and capture, so they
 still do not justify enabling the persistent cache. No global speedup is claimed.
+
+## Final evidence and handoff
+Final code commit e4161a8b53e9815328cbc70c366a2c22ccd2f71f; local 23cd114.
+The small-record dispatch regression was fixed by selecting reserved writes inside
+AssembleProvider (AllowReserved template), retaining the common result/return path.
+Windows standalone run 42678238628 passed all eight suites. Same-run baseline/new
+nanoseconds: 1 record 14.43/14.79, 2 17.35/17.32, 4 24.35/23.83,
+8 45.45/28.61, 16 61.01/41.89, 32 114.21/69.95, 64 221.17/124.71.
+These are synthetic warm-data timings on CI, not gameplay or the user's machine.
+
+Existing R393 instance upload capture has 48 samples. Consecutive contribution
+prefix differences infer 467,590 per-object geometry counts (last object excluded
+per sample); all differences even. Only 551 (0.1178%) have >=8 records, representing
+0.7989% of inferred geometry. Therefore larger-record speedups have too little
+coverage here to promise noticeable FPS improvement. Do NOT request another user
+capture solely for this optimization. Exact numbers/source hash are in the JSON.
+
+R402 is a bounded preparation cleanup and removes the R401 observer/hooks. It is
+not ownership of AS management. Native continuation A8800–A8998 still performs
+TLAS sizing, grow-if-needed buffers, map/copy/unmap of instance records. Native job
+A89C0–A8BE5 still runs provider update/finalization callbacks, material shader-ID
+patching at A8B60–A8B98 and AS submission at A8BCA. These are separate remaining
+stages; do not claim their cost is removed by R402. Future work should target a
+larger measured stage instead of another isolated append micro-optimization.
