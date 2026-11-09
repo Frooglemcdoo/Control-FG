@@ -7,8 +7,8 @@ After closing the game, run ControlTOH\Tools\Collect-RT-Assembly.cmd and send
 RT-Assembly-R402.zip.
 
 R402 checks existing output capacity once for an entire known static/skinned
-provider, writes its geometry/material/instance records directly, then publishes
-vector counts once. It reads all inputs fresh. Allocation growth and unknown
+provider with at least eight geometry records, writes its geometry/material/instance records directly, then publishes
+vector counts once. Smaller providers retain the existing path. It reads all inputs fresh. Allocation growth and unknown
 providers retain the existing path. Native dynamic updates, LOD selection, rays,
 geometry/material availability, BLAS addresses and AS builds stay live.
 

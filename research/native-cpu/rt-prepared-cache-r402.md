@@ -52,3 +52,12 @@ Direct rejection tests cover capacity exhaustion in each of the three vectors.
 The Windows oracle prints a three-way synthetic timing comparison (baseline,
 exact-validation cache, reserved writes). Timing is diagnostic, never a flaky
 pass/fail assertion. Gameplay gain remains unproven.
+
+The first Windows timings showed reserved writes slower for 1–3 records and
+roughly equal at four; broadening the local benchmark showed benefits at 8–64.
+The production route therefore uses reserved writes only for >=8 records.
+The fairer broader benchmark dispatches both baseline and new routing through
+volatile function pointers. It prints results for 1, 2, 4, 8, 16, 32 and 64 records.
+Windows cache timings were closer than Linux (31–43 ns vs 32–46 ns), but those
+warm-entry numbers exclude cache lookup, misses, locking and capture, so they
+still do not justify enabling the persistent cache. No global speedup is claimed.

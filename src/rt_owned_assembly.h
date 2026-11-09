@@ -132,8 +132,8 @@ template<unsigned Kind>inline bool TryAssembleReserved(const Api& api,void* cont
 }
 inline Result Assemble(const Api& api,void* context,const void* transform,void* materials,std::int32_t variant,
  void* provider,unsigned char ignoreAlpha,unsigned char disableCull,std::uint32_t* prefix){
- if(MatchesProvider(provider,api.staticMesh)){Result result;if(TryAssembleReserved<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
- if(MatchesProvider(provider,api.skinnedMesh)){Result result;if(TryAssembleReserved<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
+ if(MatchesProvider(provider,api.staticMesh)){Result result;if(GeometryCount<1>(provider)>=8&&TryAssembleReserved<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<1>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
+ if(MatchesProvider(provider,api.skinnedMesh)){Result result;if(GeometryCount<2>(provider)>=8&&TryAssembleReserved<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix,result))return result;return AssembleProvider<2>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);}
  return AssembleProvider<0>(api,context,transform,materials,variant,provider,ignoreAlpha,disableCull,prefix);
 }
 // Reuse is scoped to one native instanced group. No readiness/update callback

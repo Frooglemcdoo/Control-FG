@@ -40,6 +40,28 @@ static AssembleFn Oracle(){
  DWORD old=0;assert(VirtualProtect(code,4096,PAGE_EXECUTE_READ,&old));assert(FlushInstructionCache(GetCurrentProcess(),code,4096));return reinterpret_cast<AssembleFn>(code);
 }
 
+static Result BaselineAssembly(const Api& api,void* context,const void* transform,void* owner,void* provider,std::uint32_t* prefix){
+ if(MatchesProvider(provider,api.staticMesh))return AssembleProvider<1>(api,context,transform,owner,0,provider,0,0,prefix);
+ if(MatchesProvider(provider,api.skinnedMesh))return AssembleProvider<2>(api,context,transform,owner,0,provider,0,0,prefix);
+ return AssembleProvider<0>(api,context,transform,owner,0,provider,0,0,prefix);
+}
+static Result ReservedAssembly(const Api& api,void* context,const void* transform,void* owner,void* provider,std::uint32_t* prefix){return Assemble(api,context,transform,owner,0,provider,0,0,prefix);}
+static void BenchmarkReserved(const Api& api){
+ unsigned char provider[0xb0]{},owner[0x160]{},allocation[0x20]{},material[0x208]{};
+ std::array<std::array<unsigned char,64>,64> geometry{};std::array<std::uint32_t,12> transform{};
+ std::uint32_t flags=0x80000000u;void* table[]={material};Write(material,0x1f8,&flags);Write(owner,0x130,table);
+ Write(provider,0,api.staticMesh.table);Write(provider,0x20,geometry.data());Write(provider,0x68,allocation);
+ using Fn=Result(*)(const Api&,void*,const void*,void*,void*,std::uint32_t*);
+ Fn volatile methods[]={&BaselineAssembly,&ReservedAssembly};
+ for(unsigned count:{1u,2u,4u,8u,16u,32u,64u}){
+  Write(provider,0x28,static_cast<std::int32_t>(count));
+  for(unsigned mode=0;mode<2;++mode){Fixture f(128);std::uint64_t checksum=0;const auto begin=std::chrono::steady_clock::now();
+   for(unsigned n=0;n<500000;++n){for(auto off:{0x78,0x88,0x98})Write(f.context,off,0u);auto prefix=n;transform[0]=n;const auto result=methods[mode](api,f.context,transform.data(),owner,provider,&prefix);checksum+=result.geometry+Read<std::uint32_t>(f.instances[0].data());}
+   const auto end=std::chrono::steady_clock::now();std::printf("RESERVED_BENCH geometry=%u mode=%u ns=%.2f checksum=%llu\n",count,mode,std::chrono::duration<double,std::nano>(end-begin).count()/500000.,static_cast<unsigned long long>(checksum));
+  }
+ }
+}
+
 static void TestPreparedCache(AssembleFn original,const Api& api){
  static rt_cache_revision::Revisions revisions;
  unsigned hits=0,rejected=0;
@@ -124,6 +146,7 @@ static void TestLiveProviders(AssembleFn original){
  Api api{&MockAppend64,&MockAppend8};
  const auto binding=[&](unsigned k){return ProviderBinding{tables[k],tables[k][8],tables[k][9],tables[k][10],tables[k][12]};};
  api.staticMesh=binding(0);api.skinnedMesh=binding(1);
+ BenchmarkReserved(api);
  TestPreparedCache(original,api);
  unsigned cases=0;
  for(unsigned kind=0;kind<2;++kind){
@@ -156,7 +179,7 @@ static void TestLiveProviders(AssembleFn original){
    if(test%7==0){chosen.staticMesh.table=nullptr;chosen.skinnedMesh.table=nullptr;expected=0;}
    if(test%11==0){if(kind)chosen.skinnedMesh.geometry=nullptr;else chosen.staticMesh.geometry=nullptr;expected=0;}
    const auto result=Assemble(chosen,owned.context,transform.data(),materialOwner,0,provider,static_cast<unsigned char>(test%2),0,&bPrefix);
-   assert(result.reservedObjects==static_cast<unsigned>(expected!=0&&capacity!=0));
+   assert(result.reservedObjects==static_cast<unsigned>(expected!=0&&capacity!=0&&count>=8));
    assert(result.providerKind==expected&&result.avoidedCalls==(expected?static_cast<unsigned>(count)+3u:0u));
    assert(aPrefix==bPrefix&&reference.geometry==owned.geometry&&reference.instances==owned.instances&&reference.materials==owned.materials);
    for(unsigned off:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(reference.context,off)==Read<std::uint32_t>(owned.context,off));
