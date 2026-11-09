@@ -31,12 +31,12 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force ptlas-package | Out-Null
-          Copy-Item build-ptlas/Release/Control-PTLAS-Validate.exe,build-ptlas/Release/probe.dxil,tools/ptlas/Run-PTLAS-Validation.cmd,tools/ptlas/README.txt ptlas-package
+          Copy-Item build-ptlas/Release/Control-PTLAS-Validate.exe,build-ptlas/Release/probe.dxil,build-ptlas/Release/replay.dxil,build-ptlas/Release/rt-capture-replay.exe,tools/ptlas/Run-PTLAS-Validation.cmd,tools/ptlas/README.txt ptlas-package
           Copy-Item build-ptlas/_deps/nvapi-src/License.txt ptlas-package/NVIDIA-NVAPI-License.txt
           git rev-parse HEAD | Set-Content ptlas-package/source-commit.txt
           Get-ChildItem ptlas-package -File | Get-FileHash -Algorithm SHA256 | Select-Object Hash,Path | ConvertTo-Json | Set-Content ptlas-package/SHA256.json
       - uses: actions/upload-artifact@v4
         with:
-          name: Control-PTLAS-Validation
+          name: Control-PTLAS-Replay-R394
           path: ptlas-package/
           if-no-files-found: error

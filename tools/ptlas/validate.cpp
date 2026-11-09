@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include "capture.h"
+#include <limits>
 
 using namespace rt_ptlas;
 struct GPU {
@@ -54,9 +56,9 @@ static ComPtr<ID3D12Resource> Upload(GPU& g,const void* bytes,std::size_t size){
  auto r=Buffer(g.device.Get(),size,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ);
  void* p=nullptr;D3D12_RANGE noRead{0,0};Check(r->Map(0,&noRead,&p),"upload map");std::memcpy(p,bytes,size);r->Unmap(0,nullptr);return r;
 }
-using Hits=std::array<std::array<std::uint32_t,4>,8>;
+using Hits=std::vector<std::array<std::uint32_t,4>>;
 static Hits AnalyticHits(const std::vector<Instance>& scene){
- Hits out{};for(auto& hit:out)hit={0xffffffffu,0xffffffffu,0xffffffffu,0};
+ Hits out(8);for(auto& hit:out)hit={0xffffffffu,0xffffffffu,0xffffffffu,0};
  const float distance=2.0f;std::uint32_t distanceBits=0;std::memcpy(&distanceBits,&distance,4);
  for(std::size_t i=0;i<scene.size();++i){const auto& instance=scene[i];if(!instance.blas||!(instance.idMask>>24))continue;
   const auto ray=static_cast<unsigned>(instance.transform[3]/2.0f);
@@ -67,27 +69,28 @@ static Hits AnalyticHits(const std::vector<Instance>& scene){
 struct Probe {
  ComPtr<ID3D12RootSignature> root;
  ComPtr<ID3D12PipelineState> pipeline;
- ComPtr<ID3D12Resource> output,readback;
- explicit Probe(GPU& g){
-  std::ifstream f("probe.dxil",std::ios::binary);std::vector<char> code((std::istreambuf_iterator<char>(f)),{});if(code.empty())throw std::runtime_error("probe.dxil missing");
-  D3D12_ROOT_PARAMETER p[2]{};p[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;
-  for(auto& v:p){v.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;v.Descriptor.ShaderRegister=0;}
-  D3D12_ROOT_SIGNATURE_DESC desc{};desc.NumParameters=2;desc.pParameters=p;
+ ComPtr<ID3D12Resource> output,readback,rays;
+ unsigned count=8;
+ explicit Probe(GPU& g,unsigned rayCount=8,const char* shader="probe.dxil"):count(rayCount){
+  std::ifstream f(shader,std::ios::binary);std::vector<char> code((std::istreambuf_iterator<char>(f)),{});if(code.empty())throw std::runtime_error("probe.dxil missing");
+  D3D12_ROOT_PARAMETER p[3]{};p[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[2].Descriptor.ShaderRegister=1;p[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;
+  for(auto& v:p)v.ShaderVisibility=D3D12_SHADER_VISIBILITY_ALL;
+  D3D12_ROOT_SIGNATURE_DESC desc{};desc.NumParameters=3;desc.pParameters=p;
   ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error),"serialize root");
   Check(g.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)),"root");
   D3D12_COMPUTE_PIPELINE_STATE_DESC ps{};ps.pRootSignature=root.Get();ps.CS={code.data(),code.size()};
   Check(g.device->CreateComputePipelineState(&ps,IID_PPV_ARGS(&pipeline)),"probe pipeline");
-  output=Buffer(g.device.Get(),sizeof(Hits),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-  readback=Buffer(g.device.Get(),sizeof(Hits),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+  output=Buffer(g.device.Get(),count*sizeof(Hits::value_type),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+  readback=Buffer(g.device.Get(),count*sizeof(Hits::value_type),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  }
  Hits Trace(GPU& g,D3D12_GPU_VIRTUAL_ADDRESS scene){
   g.list->SetComputeRootSignature(root.Get());g.list->SetPipelineState(pipeline.Get());
-  g.list->SetComputeRootShaderResourceView(0,scene);g.list->SetComputeRootUnorderedAccessView(1,output->GetGPUVirtualAddress());g.list->Dispatch(1,1,1);
+  g.list->SetComputeRootShaderResourceView(0,scene);g.list->SetComputeRootUnorderedAccessView(1,output->GetGPUVirtualAddress());if(rays)g.list->SetComputeRootShaderResourceView(2,rays->GetGPUVirtualAddress());g.list->Dispatch((count+7)/8,1,1);
   D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=output.Get();
   b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;b.Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
   g.list->ResourceBarrier(1,&b);g.list->CopyResource(readback.Get(),output.Get());
   std::swap(b.Transition.StateBefore,b.Transition.StateAfter);g.list->ResourceBarrier(1,&b);g.Flush();
-  void* data=nullptr;D3D12_RANGE range{0,sizeof(Hits)};Check(readback->Map(0,&range,&data),"read hits");Hits hits{};std::memcpy(&hits,data,sizeof(hits));D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);return hits;
+  void* data=nullptr;D3D12_RANGE range{0,count*sizeof(Hits::value_type)};Check(readback->Map(0,&range,&data),"read hits");Hits hits(count);std::memcpy(hits.data(),data,count*sizeof(Hits::value_type));D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);return hits;
  }
 };
 static ComPtr<ID3D12Resource> MakeBLAS(GPU& g){
@@ -115,7 +118,8 @@ static Hits Native(GPU& g,Probe& probe,const std::vector<Instance>& instances){
  // Trace waits for the fence before any input, scratch or scene is released.
  return probe.Trace(g,scene->GetGPUVirtualAddress());
 }
-int main(){try{
+#include "replay-gpu.h"
+int main(int argc,char** argv){try{
  GPU g;Probe probe(g);auto blas=MakeBLAS(g);
  CheckNv(NvAPI_Initialize(),"NvAPI initialize");
  NvU32 driver=0;NvAPI_ShortString branch{};
@@ -138,5 +142,6 @@ int main(){try{
  }
  if(replacement.recordedBuilds!=6)throw std::runtime_error("Unexpected PTLAS build count; unchanged scene must not rebuild");
  std::cout<<"PASS PTLAS parity; native_tlas_builds_during_ptlas=0; ptlas_builds=6\n";
+ if(argc>1)ReplayCapture(g,argv[1],blas.Get());
  std::cout<<"Standalone synthetic validation only. Control integration and Mega Geometry are not enabled.\n";return 0;
  }catch(const std::exception& e){std::cerr<<"FAIL: "<<e.what()<<"\n";return 1;}}

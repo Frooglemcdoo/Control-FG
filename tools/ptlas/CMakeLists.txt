@@ -12,6 +12,8 @@ foreach(target rt-as-route rt-ptlas-plan)
  endif()
  add_test(NAME ${target} COMMAND ${target})
 endforeach()
+add_executable(rt-capture-replay replay-cpu.cpp)
+target_compile_features(rt-capture-replay PRIVATE cxx_std_17)
 if(WIN32)
  include(FetchContent)
  FetchContent_Declare(nvapi GIT_REPOSITORY https://github.com/NVIDIA/nvapi.git GIT_TAG 70d337db9186e968eab622f7e786de7e437faf3d)
@@ -25,5 +27,6 @@ if(WIN32)
  target_link_libraries(Control-PTLAS-Validate PRIVATE d3d12 dxgi dxguid ${nvapi_SOURCE_DIR}/amd64/nvapi64.lib)
  add_custom_command(TARGET Control-PTLAS-Validate POST_BUILD
   COMMAND ${DXC_EXECUTABLE} -T cs_6_5 -E main -O3 -WX ${CMAKE_CURRENT_SOURCE_DIR}/probe.hlsl -Fo $<TARGET_FILE_DIR:Control-PTLAS-Validate>/probe.dxil
+  COMMAND ${DXC_EXECUTABLE} -T cs_6_5 -E main -O3 -WX ${CMAKE_CURRENT_SOURCE_DIR}/replay.hlsl -Fo $<TARGET_FILE_DIR:Control-PTLAS-Validate>/replay.dxil
   VERBATIM)
 endif()

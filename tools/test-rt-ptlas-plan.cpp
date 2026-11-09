@@ -27,6 +27,14 @@ int main(){
  parts[0]=2;rejected=false;try{p.Prepare(v,parts);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);parts[0]=0;
  v[0].transform[0]=std::numeric_limits<float>::quiet_NaN();rejected=false;
  try{p.Prepare(v,parts);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);v[0]=a;
+ // Capture replay preserves NaN payload bytes without allowing infinity.
+ Planner replay(4,1,true);auto nanPlan=replay.Prepare(v,parts);
+ assert(std::isnan(nanPlan.writes[0].transform[0])==std::isnan(v[0].transform[0]));
+ v[0].transform[0]=std::numeric_limits<float>::quiet_NaN();nanPlan=replay.Prepare(v,parts);
+ assert(std::isnan(nanPlan.writes[0].transform[0]));replay.Commit(std::move(nanPlan));
+ assert(replay.Prepare(v,parts).writes.empty());
+ v[0].transform[0]=std::numeric_limits<float>::infinity();rejected=false;
+ try{replay.Prepare(v,parts);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);v[0]=a;
  v[0].blas=257;rejected=false;try{p.Prepare(v,parts);}catch(const std::invalid_argument&){rejected=true;}assert(rejected);v[0]=a;
  auto empty=p.Prepare({},{});assert(empty.writes.size()==2);p.Commit(std::move(empty));assert(p.Prepare({},{}).writes.empty());
 }

@@ -35,8 +35,11 @@ class Planner {
  std::vector<std::uint32_t> partitions_;
  std::uint32_t capacity_,partitionCount_;
  std::uint64_t revision_=0;
+ // Explicit opt-in only for standalone driver parity experiments. Live use
+ // keeps the default strict nonfinite rejection until parity is established.
+ bool validationNaN_=false;
 public:
- Planner(std::uint32_t capacity,std::uint32_t partitions):capacity_(capacity),partitionCount_(partitions) {
+ Planner(std::uint32_t capacity,std::uint32_t partitions,bool validationNaN=false):capacity_(capacity),partitionCount_(partitions),validationNaN_(validationNaN) {
   if(!capacity||capacity>(1u<<24)||!partitions||partitions>(1u<<24))throw std::invalid_argument("PTLAS capacity");
  }
  Plan Prepare(const std::vector<Instance>& next,const std::vector<std::uint32_t>& partitions) const {
@@ -52,7 +55,7 @@ public:
    if(i<next.size()) {value=next[i];partition=partitions[i];}
    if(partition>=partitionCount_&&partition!=0xffffffffu)throw std::invalid_argument("PTLAS partition");
    if(value.blas%256 || (value.contributionFlags>>24)>15)throw std::invalid_argument("PTLAS instance flags/address");
-   for(float f:value.transform)if(!std::isfinite(f))throw std::invalid_argument("PTLAS nonfinite transform");
+   for(float f:value.transform)if(!std::isfinite(f)&&!(validationNaN_&&std::isnan(f)))throw std::invalid_argument("PTLAS nonfinite transform");
    if(!p.initialize&&i<current_.size()&&i<next.size()&&partitions_[i]==partition&&
       std::memcmp(&current_[i],&value,sizeof(value))==0)continue;
    Write w;w.transform=value.transform;w.id=value.idMask&0xffffffu;w.mask=value.idMask>>24;

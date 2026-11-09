@@ -16,10 +16,10 @@ def analyze(path):
   if offset+size>len(data):raise ValueError('Truncated instance bytes')
   block=data[offset:offset+size];offset+=size
   current=[block[x:x+64] for x in range(0,size,64)]
-  active=0;blas=set();duplicates=0;ids=set();unsupported=0
-  for raw in current:
+  active=0;blas=set();duplicates=0;ids=set();unsupported=0;nonfinite=[]
+  for slot,raw in enumerate(current):
    values=INSTANCE.unpack(raw);idmask,contribution,acceleration=values[12:]
-   if not all(math.isfinite(x) for x in values[:12]):raise ValueError('Nonfinite instance transform')
+   if not all(math.isfinite(x) for x in values[:12]):nonfinite.append(slot)
    # Report flags unsupported by the current backend; do not discard data.
    if acceleration%256 or contribution>>24>15:unsupported+=1
    if idmask>>24:
@@ -30,6 +30,7 @@ def analyze(path):
   records.append(dict(index=index,elapsed_ms=tick-last if index else 0,instances=len(current),active=active,
                       changed_slots=changed,removed_tail_slots=removed,distinct_active_blas=len(blas),
                       duplicate_user_ids=duplicates,unsupported_current_backend=unsupported,address=address,
+                      nonfinite_transform_slots=nonfinite,strict_planner_compatible=not(nonfinite or unsupported),
                       source_sha256=hashlib.sha256(block).hexdigest()))
   previous=current;last=tick
  if offset!=len(data):raise ValueError('Unexpected trailing bytes')

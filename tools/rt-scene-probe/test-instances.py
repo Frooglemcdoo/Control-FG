@@ -12,9 +12,11 @@ with tempfile.TemporaryDirectory() as d:
  assert [x['changed_slots'] for x in r['records']]==[2,0,1,1,1]
  assert r['records'][3]['removed_tail_slots']==1 and r['records'][3]['active']==0
  assert r['records'][0]['duplicate_user_ids']==1
- for bad in [valid[:-1],valid+b'x',b'',capture([instance(float('nan'))])]:
+ for bad in [valid[:-1],valid+b'x',b'']:
   p.write_bytes(bad)
   try:m.analyze(p)
   except ValueError:pass
   else:raise AssertionError('Malformed capture accepted')
+ p.write_bytes(capture([instance(float('nan'))]));r=m.analyze(p)
+ assert r['records'][0]['nonfinite_transform_slots']==[0] and not r['records'][0]['strict_planner_compatible']
 print('PASS: movement, masking, shrink, slot reuse, duplicate IDs, unchanged scene, truncation and invalid transform')
