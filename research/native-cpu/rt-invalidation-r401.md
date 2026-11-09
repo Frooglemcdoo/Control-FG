@@ -49,7 +49,7 @@ volatile and these three original functions initialize it before any use.
 Code pages and unwind tables live for process lifetime, including rollback.
 
 At most 256 normal assemblies are observed per sampled loop (one every 64).
-Only known static providers with <=4 geometry records are admitted. A per-worker
+Only known static providers with <=4 geometry records are admitted. A shared
 4096-entry numeric table compares provider/owner/variant/options keys, a guard
 hash (provider lifetime revision, source pointer/count, current material pointers,
 material IDs/revisions, property mask pointer/value) and payload hash (prepared
@@ -60,7 +60,7 @@ report every 512 loops with other preparation summaries.
 
 An unchanged guard with changed payload is an untracked change and rejects the
 proposed invalidation model. Hash collisions, sampling limits, key eviction and
-worker migration mean zero observed mismatches is not proof of correctness.
+observation contention mean zero observed mismatches is not proof of correctness.
 This table never supplies rendering data or authorizes cache reuse. Original
 records, native updates, sizing/upload and AS builds all remain active.
 
@@ -79,3 +79,7 @@ Sampling rotates through 32 windows of 256 ordinary assemblies instead of always
 inspecting the first group. The first eight untracked changes log a changed-word
 mask and first old/new word. invalidated_same_payload measures conservative revision
 changes that did not alter the observed preparation output.
+
+Observation history is shared across worker threads. A nonblocking try-lock covers
+only numeric comparison/copy; contention skips the observation. No native call or
+logging happens while holding it. This avoids worker migration erasing history.

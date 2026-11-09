@@ -18,7 +18,7 @@ loops, it observes at most 256 ordinary assemblies and compares prepared geometr
 and flags with prior observations. Transforms, live BLAS addresses and contribution
 prefixes remain live and are excluded from this diagnostic comparison. Unknown or
 skinned providers and geometry counts above four are skipped. Hashes are diagnostic
-only and NEVER authorize reuse. Samples persist per worker as copied numbers;
+only and NEVER authorize reuse. Samples persist across workers as copied numbers;
 no cached native pointer is dereferenced. Sampling can add a small measurement cost.
 
 Expected: RT_CACHE_R401_INSTALL ready=1 plus the existing three INSTALL ready=1
@@ -34,3 +34,7 @@ Sampling rotates through 32 windows of 256 ordinary assemblies instead of always
 inspecting the first group. The first eight untracked changes log a changed-word
 mask and first old/new word. invalidated_same_payload measures conservative revision
 changes that did not alter the observed preparation output.
+
+Observation history is shared across worker threads. A nonblocking try-lock covers
+only numeric comparison/copy; contention skips the observation. No native call or
+logging happens while holding it. This avoids worker migration erasing history.

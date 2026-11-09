@@ -1,5 +1,6 @@
 #pragma once
 #include "rt_cache_revision.h"
+#include <mutex>
 #include "rt_cache_revision_patch.h"
 #include "rt_owned_assembly.h"
 namespace RTCacheRevision {
@@ -47,7 +48,10 @@ inline bool Install(HMODULE renderer)noexcept{
  }
  installed=true;return true;
 }
-struct Pending {rt_cache_revision::Entry entries[4096]{};UINT64 words[4096][34]{};bool enabled=false;unsigned remaining=0,skip=0;UINT64 observed=0,cold=0,unchanged=0,invalidated=0,invalidatedSame=0,untracked=0,skipped=0;};
+inline std::mutex observationMutex;
+inline rt_cache_revision::Entry entries[4096]{};
+inline UINT64 snapshots[4096][34]{};
+struct Pending {bool enabled=false;unsigned remaining=0,skip=0;UINT64 observed=0,cold=0,unchanged=0,invalidated=0,invalidatedSame=0,untracked=0,skipped=0;};
 inline thread_local Pending pending;
 inline std::atomic<UINT64> observed{0},cold{0},unchanged{0},invalidated{0},invalidatedSame{0},details{0},untracked{0},skipped{0};
 inline void Begin(UINT64 loop)noexcept{pending.enabled=installed&&loop%64==0;pending.remaining=256;pending.skip=static_cast<unsigned>((loop/64)%32)*256;}
@@ -76,14 +80,20 @@ inline void Observe(void* context,void* owner,std::int32_t variant,void* provide
  // a future cache must always refresh them. No stored native pointer is dereferenced.
  rt_cache_revision::Observation value{pointer,reinterpret_cast<std::uintptr_t>(owner),variant,static_cast<std::uint32_t>(alpha)|(static_cast<std::uint32_t>(cull)<<8),guard,payload};
  const auto hash=Mix(Mix(pointer,value.owner),static_cast<std::uint32_t>(variant));const auto slot=(hash^(hash>>32)^(hash>>12))&4095;
- const auto oldPayload=pending.entries[slot].value.payload;
- const auto outcome=rt_cache_revision::Observe(pending.entries[slot],value);++pending.observed;
+ std::unique_lock<std::mutex> lock(observationMutex,std::try_to_lock);if(!lock.owns_lock()){++pending.skipped;return;}
+ const auto oldPayload=entries[slot].value.payload;
+ const auto outcome=rt_cache_revision::Observe(entries[slot],value);++pending.observed;
  switch(outcome){case rt_cache_revision::Outcome::Cold:++pending.cold;break;case rt_cache_revision::Outcome::Unchanged:++pending.unchanged;break;case rt_cache_revision::Outcome::Invalidated:++pending.invalidated;if(oldPayload==payload)++pending.invalidatedSame;break;case rt_cache_revision::Outcome::Untracked:++pending.untracked;break;}
- if(outcome==rt_cache_revision::Outcome::Untracked&&details.fetch_add(1,std::memory_order_relaxed)<8){
-  UINT64 changed=0;unsigned first=34;for(unsigned w=0;w<34;++w)if(words[w]!=pending.words[slot][w]){changed|=UINT64(1)<<w;if(first==34)first=w;}
-  if(first<34)Log("RT_CACHE_R401_UNTRACKED provider=%p owner=%p variant=%d geometry=%u changed_words=%llx first_word=%u old=%llx new=%llx reuse=0",provider,owner,variant,result.geometry,changed,first,pending.words[slot][first],words[first]);
+ UINT64 changed=0,oldWord=0,newWord=0;unsigned first=34;
+ if(outcome==rt_cache_revision::Outcome::Untracked){
+  for(unsigned w=0;w<34;++w)if(words[w]!=snapshots[slot][w]){changed|=UINT64(1)<<w;if(first==34)first=w;}
+  if(first<34){oldWord=snapshots[slot][first];newWord=words[first];}
  }
- std::memcpy(pending.words[slot],words,sizeof(words));
+ std::memcpy(snapshots[slot],words,sizeof(words));lock.unlock();
+ // Never hold the diagnostic lock while logging or invoking native work.
+ if(first<34&&details.fetch_add(1,std::memory_order_relaxed)<8)
+  Log("RT_CACHE_R401_UNTRACKED provider=%p owner=%p variant=%d geometry=%u changed_words=%llx first_word=%u old=%llx new=%llx reuse=0",provider,owner,variant,result.geometry,changed,first,oldWord,newWord);
+
 }
 inline void End()noexcept{
  if(!pending.enabled)return;pending.enabled=false;
