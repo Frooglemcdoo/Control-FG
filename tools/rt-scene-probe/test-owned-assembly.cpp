@@ -13,8 +13,8 @@ static void Append(void* vector,const void* source,std::size_t stride){
  if(count==cap)Write(vector,12,(std::max)(8u,count+1));
  auto* data=Read<unsigned char*>(vector);Write(vector,8,count+1);std::memcpy(data+count*stride,source,stride);
 }
-static void Append64(void* vector,const void* source){++appendCalls;Append(vector,source,64);}
-static void Append8(void* vector,const void* source){Append(vector,source,8);}
+static void MockAppend64(void* vector,const void* source){++appendCalls;Append(vector,source,64);}
+static void MockAppend8(void* vector,const void* source){Append(vector,source,8);}
 struct Fixture {
  alignas(16) unsigned char context[0xe0]{};
  std::array<std::array<unsigned char,64>,128> geometry{},instances{};
@@ -31,7 +31,7 @@ static AssembleFn Oracle(){
  std::memcpy(code,nativeAssemblyOracle,sizeof(nativeAssemblyOracle));
  auto call=[&](unsigned offset,unsigned target){assert(code[offset]==0xe8);const auto delta=std::int32_t(target-offset-5);std::memcpy(code+offset+1,&delta,4);};
  auto stub=[&](unsigned offset,void* target){code[offset]=0x48;code[offset+1]=0xb8;std::memcpy(code+offset+2,&target,8);code[offset+10]=0xff;code[offset+11]=0xe0;};
- stub(0x400,reinterpret_cast<void*>(&Append64));stub(0x420,reinterpret_cast<void*>(&Append8));code[0x440]=0xc3;
+ stub(0x400,reinterpret_cast<void*>(&MockAppend64));stub(0x420,reinterpret_cast<void*>(&MockAppend8));code[0x440]=0xc3;
  call(0xa8d93-0xa8ce0,0x400);call(0xa8ded-0xa8ce0,0x420);call(0xa8efc-0xa8ce0,0x400);
  // Only security-cookie mechanics are neutralized; assembly logic is unchanged.
  call(0xa8f10-0xa8ce0,0x440);const auto displacement=std::int32_t(0x800-(0xa8cff-0xa8ce0)-7);std::memcpy(code+(0xa8cff-0xa8ce0)+3,&displacement,4);
@@ -48,13 +48,14 @@ int main(){
   alignas(8) unsigned char materialOwner[0x160]{};
   std::array<std::array<unsigned char,0x208>,7> materialRecords{};std::array<std::uint32_t,7> flags{};std::array<void*,7> base{},alternate{};
   for(unsigned i=0;i<7;++i){base[i]=materialRecords[i].data();flags[i]=random();Write(base[i],0x1f0,random());Write(base[i],0x1f8,&flags[i]);Write(base[i],0x204,std::uint32_t((test+i)%4));}
-  for(unsigned i=0;i<7;++i)alternate[i]=base[6-i];std::array<void*,6> variants{};variants[1]=alternate.data();variants[4]=base.data();
+  for(unsigned i=0;i<7;++i)alternate[i]=base[6-i];
+  std::array<void*,6> variants{};variants[1]=alternate.data();variants[4]=base.data();
   Write(materialOwner,0x130,base.data());Write(materialOwner,0x150,variants.data());Write(materialOwner,0x158,std::uint32_t(test%2));
   for(int i=0;i<provider.count;++i){for(auto& b:provider.geometry[i])b=static_cast<unsigned char>(random());Write(provider.geometry[i].data(),0,std::int32_t(i%7));}
   std::uint32_t aPrefix=random(),bPrefix=aPrefix;const auto variant=std::int32_t(test%3);const auto ignore=static_cast<unsigned char>((test/3)%2),cull=static_cast<unsigned char>((test/5)%2);
   appendCalls=0;original(reference.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&aPrefix);nativeAppends+=appendCalls;
   const auto expectedCalls=provider.calls;const auto expectedCount=provider.callCount;provider.callCount=0;provider.calls={};
-  appendCalls=0;const auto result=Assemble({&Append64,&Append8},owned.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&bPrefix);ownedAppends+=appendCalls;
+  appendCalls=0;const auto result=Assemble({&MockAppend64,&MockAppend8},owned.context,transform.data(),materialOwner,variant,&provider,ignore,cull,&bPrefix);ownedAppends+=appendCalls;
   assert(aPrefix==bPrefix&&expectedCalls==provider.calls&&expectedCount==provider.callCount);
   assert(result.geometry==static_cast<unsigned>(provider.count));
   assert(reference.geometry==owned.geometry&&reference.instances==owned.instances&&reference.materials==owned.materials);
