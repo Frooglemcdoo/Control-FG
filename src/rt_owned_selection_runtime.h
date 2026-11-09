@@ -24,8 +24,8 @@ __declspec(noinline) inline void Hook(void* grid,void* volume,std::uint32_t type
  nodes.fetch_add(stats.nodes,std::memory_order_relaxed);refreshes.fetch_add(stats.refreshes,std::memory_order_relaxed);partial.fetch_add(stats.partial,std::memory_order_relaxed);
  ticks.fetch_add(static_cast<UINT64>(end.QuadPart-begin.QuadPart),std::memory_order_relaxed);
  const auto n=calls.fetch_add(1,std::memory_order_relaxed)+1;
- if(n==1||n%512==0){const DWORD error=GetLastError();
-  Log("RT_SELECTION_R397 active=1 queries=%llu nodes=%llu dirty_refreshes=%llu partial_filters=%llu total_query_us=%llu fallback=%llu owned_traversal=1 traversal_heap_allocations=0 native_bounds=1 native_partial_filters=1 native_object_updates=1 native_as_builds=1 ptlas=0",n,nodes.load(),refreshes.load(),partial.load(),frequency?ticks.load()*1000000/frequency:0,fallbacks.load());SetLastError(error);
+ if(n==1||n%512==0){const DWORD error=GetLastError();const auto elapsed=ticks.load();const auto us=elapsed/frequency*1000000+(elapsed%frequency)*1000000/frequency;
+  Log("RT_SELECTION_R397 active=1 queries=%llu nodes=%llu dirty_refreshes=%llu partial_filters=%llu total_query_us=%llu fallback=%llu owned_traversal=1 traversal_heap_allocations=0 native_bounds=1 native_partial_filters=1 native_object_updates=1 native_as_builds=1 ptlas=0",n,nodes.load(),refreshes.load(),partial.load(),us,fallbacks.load());SetLastError(error);
  }
 }
 inline bool Install(HMODULE renderer)noexcept{

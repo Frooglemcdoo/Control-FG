@@ -13,7 +13,7 @@ inline void Hook(void* context,const void* transform,void* materials,std::int32_
   materialFast.fetch_add(pending.materialFast,std::memory_order_relaxed);materialGrowth.fetch_add(pending.materialGrowth,std::memory_order_relaxed);
   const auto before=calls.fetch_add(pending.calls,std::memory_order_relaxed);const auto n=before+pending.calls;pending={};pending.started=true;
   if(!before||(before>>18)!=(n>>18)){const DWORD error=GetLastError();
-   Log("RT_ASSEMBLY_R397 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu native_object_assembler_calls=0 native_selection=1 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load());SetLastError(error);
+   Log("RT_ASSEMBLY_R397 active=1 calls=%llu geometry=%llu fast_appends=%llu native_growth_appends=%llu material_fast_appends=%llu material_growth_appends=%llu native_object_assembler_calls=0 native_updates=1 ptlas=0",n,geometries.load(),fast.load(),growth.load(),materialFast.load(),materialGrowth.load());SetLastError(error);
   }
  }
 }
