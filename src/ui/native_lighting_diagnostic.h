@@ -21,16 +21,16 @@ inline constexpr int kStatusY=746,kCaptureStatusY=766,kFooterY=812,kHeight=858;
 inline bool ButtonVisible(unsigned index) noexcept {
  if(index<kModeCount)return index!=kModeCount-1; // Native Blend moved to Visual settings.
  const unsigned local=index-kModeCount;
- return local!=7&&local!=20&&local!=25&&local!=26;
+ return local!=7&&local!=17&&local!=20&&local!=25&&local!=26;
 }
 inline RECT ButtonRect(unsigned index) noexcept {
  if(index<kModeCount)return {14+int(index%3)*156,56+int(index/3)*42,162+int(index%3)*156,92+int(index/3)*42};
  constexpr unsigned features[]={8,11,9,10,12,13,14,15,16};
- constexpr unsigned comparisons[]={21,22,23,24,17};
+ constexpr unsigned comparisons[]={21,22,23,24};
  constexpr unsigned captures[]={0,1,2,3,4,5,6,18,19,27,28,29};
  const unsigned local=index-kModeCount;unsigned row=0,col=0;int top=0;
  for(unsigned i=0;i<9;++i)if(features[i]==local){row=i/3;col=i%3;top=220;}
- for(unsigned i=0;i<5;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
+ for(unsigned i=0;i<4;++i)if(comparisons[i]==local){row=i/3;col=i%3;top=420;}
  for(unsigned i=0;i<12;++i)if(captures[i]==local){row=i/3;col=i%3;top=552;}
  return {14+int(col)*156,top+int(row)*42,162+int(col)*156,top+int(row)*42+36};
 }
@@ -177,7 +177,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R393",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R392",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);

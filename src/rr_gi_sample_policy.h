@@ -6,8 +6,7 @@ inline unsigned NormalizeGISampleRequest(unsigned requested) noexcept {
  return requested>=2 && requested<=16 && requested%2==0 ? requested : 0u;
 }
 inline unsigned NextGISampleRequest(unsigned current) noexcept {
- // Comparison button: Native -> 2 -> 4 -> Native.
- return current==0 ? 2u : current==2 ? 4u : 0u;
+ return current>=16 ? 2u : NormalizeGISampleRequest(current)+2u;
 }
 inline unsigned GISampleComparison(unsigned nativeCount,unsigned requested,bool fullRR) noexcept {
  const unsigned samples=NormalizeGISampleRequest(requested);
