@@ -16,6 +16,22 @@ static std::vector<ReplayRay> ReplayRays(const std::vector<Instance>& scene){
  while(rays.size()<128)rays.push_back(rays.front());
  return rays;
 }
+// Resolve nearest-hit ties against the owned triangle geometry, rather than
+// demanding a driver-specific choice between overlapping/coplanar instances.
+static bool ReplayTriangleAt(const Instance& instance,const ReplayRay& ray,float distance){
+ if(!instance.blas||!(instance.idMask>>24))return false;
+ using V=std::array<double,3>;
+ auto sub=[](V a,V b){return V{a[0]-b[0],a[1]-b[1],a[2]-b[2]};};
+ auto cross=[](V a,V b){return V{a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]};};
+ auto dot=[](V a,V b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];};
+ auto point=[&](double x,double y){const auto& m=instance.transform;return V{m[0]*x+m[1]*y+m[3],m[4]*x+m[5]*y+m[7],m[8]*x+m[9]*y+m[11]};};
+ const auto a=point(-0.75,-0.75),b=point(0,0.75),c=point(0.75,-0.75);
+ const V direction{ray.direction[0],ray.direction[1],ray.direction[2]},origin{ray.origin[0],ray.origin[1],ray.origin[2]};
+ const auto e1=sub(b,a),e2=sub(c,a),p=cross(direction,e2);const double det=dot(e1,p);
+ if(!std::isfinite(det)||std::abs(det)<1e-20)return false;
+ const auto t=sub(origin,a),q=cross(t,e1);const double u=dot(t,p)/det,v=dot(direction,q)/det,d=dot(e2,q)/det;
+ return u>=-0.0001&&v>=-0.0001&&u+v<=1.0001&&d>=ray.tmin&&d<=ray.tmax&&std::abs(d-distance)<=0.002;
+}
 static void ReplayCapture(GPU& g,const char* path,ID3D12Resource* triangle){
  auto snapshots=rt_capture::Read(path);std::uint32_t capacity=0;std::size_t nanInstances=0;
  std::vector<std::vector<ReplayRay>> rays;
@@ -41,13 +57,13 @@ static void ReplayCapture(GPU& g,const char* path,ID3D12Resource* triangle){
    float at=0,et=0;std::memcpy(&at,&a[3],4);std::memcpy(&et,&e[3],4);
    bool same=a[0]==e[0]&&a[2]==e[2]&&std::isfinite(at)&&std::isfinite(et)&&std::abs(at-et)<=0.002f;
    if(a[1]!=e[1]){
-    // Exact coincident fixture triangles may legally choose either instance.
-    const bool tie=a[1]<scene.size()&&e[1]<scene.size()&&std::memcmp(scene[a[1]].transform.data(),scene[e[1]].transform.data(),48)==0&&scene[a[1]].idMask==scene[e[1]].idMask;
+    // Geometrically verified equal-distance hits may choose either instance.
+    const bool tie=a[1]<scene.size()&&e[1]<scene.size()&&ReplayTriangleAt(scene[a[1]],rays[i][r],at)&&ReplayTriangleAt(scene[e[1]],rays[i][r],et)&&(scene[a[1]].idMask&0xffffffu)==a[0]&&(scene[e[1]].idMask&0xffffffu)==e[0];
     same&=tie;if(tie)++equivalentTies;
    }
    if(!same){std::cerr<<"replay mismatch snapshot="<<i<<" ray="<<r<<" native_index="<<e[1]<<" ptlas_index="<<a[1]<<" native_t="<<et<<" ptlas_t="<<at<<"\n";throw std::runtime_error("captured descriptor parity failed");}++checked;
   }
   std::cout<<"PASS captured snapshot="<<i<<" instances="<<scene.size()<<" rays="<<actual.size()<<"\n";
  }
- std::cout<<"PASS capture replay snapshots="<<snapshots.size()<<" rays="<<checked<<" native_hits="<<nativeHits<<" nan_instances="<<nanInstances<<" exact_coincident_ties="<<equivalentTies<<" geometry_substituted=1 native_tlas_builds_during_replay_ptlas=0 native_retirement=0 performance_claim=0\n";
+ std::cout<<"PASS capture replay snapshots="<<snapshots.size()<<" rays="<<checked<<" native_hits="<<nativeHits<<" nan_instances="<<nanInstances<<" verified_equal_distance_ties="<<equivalentTies<<" geometry_substituted=1 native_tlas_builds_during_replay_ptlas=0 native_retirement=0 performance_claim=0\n";
 }
