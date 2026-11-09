@@ -1,0 +1,25 @@
+CONTROL TOH R399 - LIVE RT PROVIDER READS
+
+Close Control and extract over R398. Keep current settings and native ray count.
+Play your usual route, including room changes, destruction and animated objects.
+Check reflections/shadows for missing objects, stale poses, LOD changes or flicker.
+Close Control and run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+Send RT-Assembly-R399.zip and any visual or performance changes.
+
+R399 removes repeated getter calls for verified static and skinned RT providers.
+Geometry counts, descriptors, instance masks and BLAS addresses are read directly
+from current provider state. No geometry, material or address data is cached across
+frames. Native readiness checks, dynamic updates and AS builds remain intact.
+Unknown providers or changed vtable slots automatically keep native getter calls.
+Owned selection, outer-loop preparation and assembly remain enabled; PTLAS is OFF.
+
+12,288 assembly comparisons execute original native machine code, including 8,192
+static/skinned provider cases with changing live data, both static BLAS branches,
+signed offsets, geometry layouts, masks, growth and fallback. Selection and outer
+loop comparison tests remain in the build gate. These are not game FPS benchmarks.
+
+Expected markers: RT_ASSEMBLY_R399_INSTALL ready=1,
+RT_SELECTION_R399_INSTALL ready=1, RT_PREPARE_R399_INSTALL ready=1.
+Assembly records include static_providers, skinned_providers, virtual_providers,
+and avoided_provider_calls. Query and outer-loop timings retain R398 scope.
+FPS gains are not established; the next run measures coverage and preparation cost.

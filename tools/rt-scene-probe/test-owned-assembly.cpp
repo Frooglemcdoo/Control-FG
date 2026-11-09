@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "../../src/rt_owned_assembly.h"
 #include "native-assembly-oracle.h"
+#include "../../src/rt_owned_provider_bytes.h"
 using namespace rt_owned_assembly;
 using AssembleFn=void(*)(void*,const void*,void*,std::int32_t,void*,unsigned char,unsigned char,std::uint32_t*);
 static unsigned appendCalls=0,materialCalls=0;
@@ -37,6 +38,59 @@ static AssembleFn Oracle(){
  call(0xa8f10-0xa8ce0,0x440);const auto displacement=std::int32_t(0x800-(0xa8cff-0xa8ce0)-7);std::memcpy(code+(0xa8cff-0xa8ce0)+3,&displacement,4);
  DWORD old=0;assert(VirtualProtect(code,4096,PAGE_EXECUTE_READ,&old));assert(FlushInstructionCache(GetCurrentProcess(),code,4096));return reinterpret_cast<AssembleFn>(code);
 }
+// Execute the eight exact renderer leaf functions, not reimplemented mocks.
+static void TestLiveProviders(AssembleFn original){
+ using namespace rt_provider_bytes;
+ auto* code=static_cast<unsigned char*>(VirtualAlloc(nullptr,4096,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE));assert(code);
+ void* tables[2][13]{};unsigned cursor=0;
+ const auto install=[&](unsigned kind,unsigned slot,const auto& bytes){std::memcpy(code+cursor,bytes,sizeof(bytes));tables[kind][slot]=code+cursor;cursor+=64;};
+ install(0,8,StaticAddress);install(0,9,StaticCount);install(0,10,StaticGeometry);install(0,12,StaticMask);
+ install(1,8,SkinnedAddress);install(1,9,SkinnedCount);install(1,10,SkinnedGeometry);install(1,12,SkinnedMask);
+ DWORD old=0;assert(VirtualProtect(code,4096,PAGE_EXECUTE_READ,&old));assert(FlushInstructionCache(GetCurrentProcess(),code,4096));
+ Api api{&MockAppend64,&MockAppend8};
+ const auto binding=[&](unsigned k){return ProviderBinding{tables[k],tables[k][8],tables[k][9],tables[k][10],tables[k][12]};};
+ api.staticMesh=binding(0);api.skinnedMesh=binding(1);
+ unsigned cases=0;
+ for(unsigned kind=0;kind<2;++kind){
+  alignas(16) unsigned char provider[0xb0]{},allocationA[0x20]{},allocationB[0x20]{},state[0x38]{};
+  std::array<std::array<unsigned char,80>,64> storage{};
+  alignas(8) unsigned char materialOwner[0x160]{},material[0x208]{};
+  void* materials[]={material};std::uint32_t flags=0x80000000;Write(material,0x1f8,&flags);Write(materialOwner,0x130,materials);
+  std::array<std::uint32_t,12> transform{};
+  Write(provider,0,tables[kind]);
+  Write(provider,kind?0x18:0x20,storage.data());Write(provider,0x68,allocationA);
+  if(kind){Write(provider,0x88,state);Write(state,0x28,allocationB);}else Write(provider,0x88,allocationB);
+  for(unsigned test=0;test<4096;++test){
+   // Mutate the SAME provider on every call: addresses, count, mask and records.
+   // Static signed state selects both BLAS allocations, including negative values.
+   const auto count=static_cast<std::int32_t>(test%65);
+   Write(provider,kind?0x30:0x28,count);Write(provider,kind?0x54:0x60,test*0x1020304u);
+   Write(provider,0xac,test%5==0?std::int32_t(-2147483647-1):static_cast<std::int32_t>(test%7));
+   const auto offset=(test&1)?std::int32_t(-2147483647-1):std::int32_t(2147483647);
+   Write(provider,0x70,offset);Write(provider,0x90,std::int32_t(-1));Write(state,0x30,offset);
+   Write(allocationA,0x10,std::uint64_t(test)*0xabcdef0123456789ull);Write(allocationB,0x10,~std::uint64_t(test)*0x123456789ull);
+   for(auto& x:transform)x=test*0x1234567u+static_cast<std::uint32_t>(&x-transform.data());
+   transform[4]=0x7fc01234u;
+   Write(material,0x204,test%4);Write(material,0x1f0,(test&2)?0x80000000u:0u);
+   for(int index=0;index<count;++index){auto* record=reinterpret_cast<unsigned char*>(storage.data())+index*(kind?80:64)+(kind?16:0);std::memset(record,static_cast<int>(test&255),64);Write(record,0,std::int32_t(0));}
+   const auto capacity=(test&1)?128u:0u;
+   Fixture reference(capacity),owned(capacity);std::uint32_t aPrefix=test*0x1234567u,bPrefix=aPrefix;
+   original(reference.context,transform.data(),materialOwner,0,provider,static_cast<unsigned char>(test%2),0,&aPrefix);
+   // An unrecognized vtable or redirected slot must retain virtual calls.
+   auto chosen=api;unsigned expected=kind+1;
+   if(test%7==0){chosen.staticMesh.table=nullptr;chosen.skinnedMesh.table=nullptr;expected=0;}
+   if(test%11==0){if(kind)chosen.skinnedMesh.geometry=nullptr;else chosen.staticMesh.geometry=nullptr;expected=0;}
+   const auto result=Assemble(chosen,owned.context,transform.data(),materialOwner,0,provider,static_cast<unsigned char>(test%2),0,&bPrefix);
+   assert(result.providerKind==expected&&result.avoidedCalls==(expected?static_cast<unsigned>(count)+3u:0u));
+   assert(aPrefix==bPrefix&&reference.geometry==owned.geometry&&reference.instances==owned.instances&&reference.materials==owned.materials);
+   for(unsigned off:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(reference.context,off)==Read<std::uint32_t>(owned.context,off));
+   ++cases;
+  }
+ }
+ assert(VirtualFree(code,0,MEM_RELEASE));
+ std::printf("PASS %u live-provider native-machine-code comparisons; static/skinned layouts, signed BLAS branches/offsets, changing live data, and virtual fallback. Not an FPS benchmark.\n",cases);
+}
+
 int main(){
  const auto original=Oracle();void* vtable[13]{};vtable[8]=reinterpret_cast<void*>(&Blas);vtable[9]=reinterpret_cast<void*>(&Count);vtable[10]=reinterpret_cast<void*>(&Geometry);vtable[12]=reinterpret_cast<void*>(&Mask);
  std::uint32_t seed=0x12345678;auto random=[&]{seed=seed*1664525u+1013904223u;return seed;};
@@ -67,6 +121,7 @@ int main(){
   for(unsigned offset:{0x78u,0x7cu,0x88u,0x8cu,0x98u,0x9cu})assert(Read<std::uint32_t>(reference.context,offset)==Read<std::uint32_t>(owned.context,offset));
  }
  assert(ownedAppends<nativeAppends&&ownedMaterials<nativeMaterials);
+ TestLiveProviders(original);
  assert(VirtualFree(reinterpret_cast<void*>(original),0,MEM_RELEASE));
  std::printf("PASS 4096 exact native-machine-code comparisons; transforms/NaNs, masks, material overrides, geometry bytes, counters, provider call order and growth. Native append calls=%u owned growth calls=%u. Native material calls=%u owned material growth=%u. Not an FPS benchmark.\n",nativeAppends,ownedAppends,nativeMaterials,ownedMaterials);
 }
