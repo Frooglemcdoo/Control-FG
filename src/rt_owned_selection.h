@@ -2,6 +2,9 @@
 #include "rt_owned_assembly.h"
 #include <smmintrin.h>
 #include <cassert>
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
 namespace rt_owned_selection {
 using rt_owned_assembly::Read;
 using rt_owned_assembly::Write;
@@ -12,6 +15,13 @@ struct Api {
  void(*append)(void*,const void*);
  Partial partial[25]{};
 };
+inline unsigned FirstBit(std::uint32_t mask){
+#ifdef _MSC_VER
+ unsigned long index=0;_BitScanForward(&index,mask);return static_cast<unsigned>(index);
+#else
+ return static_cast<unsigned>(__builtin_ctz(mask));
+#endif
+}
 struct Stats {std::uint64_t layers=0,nodes=0,refreshes=0,partial=0,accepted=0,rejected=0;};
 inline bool Supported(void* grid,void* volume) {
  const auto planes=Read<std::int32_t>(volume,0x180),levels=Read<std::int32_t>(grid,0x64);
@@ -35,8 +45,8 @@ inline void Layer(const Api& api,void* grid,int layer,void* volume,std::uint32_t
   if(mask){
    const auto center=_mm_loadu_ps(static_cast<const float*>(node));
    const auto extent=_mm_loadu_ps(reinterpret_cast<const float*>(static_cast<unsigned char*>(node)+16));
-   for(unsigned index=0;index<24;++index){
-    const auto bit=1u<<index;if(!(mask&bit))continue;
+   for(auto remaining=mask;remaining;remaining&=remaining-1){
+    const auto index=FirstBit(remaining),bit=1u<<index;
     const auto plane=_mm_loadu_ps(reinterpret_cast<const float*>(static_cast<unsigned char*>(volume)+index*16));
     const auto distance=_mm_add_ps(_mm_shuffle_ps(plane,plane,0xff),_mm_dp_ps(plane,center,0x7f));
     const auto radius=_mm_dp_ps(_mm_and_ps(plane,_mm_castsi128_ps(_mm_set1_epi32(0x7fffffff))),extent,0x7f);
@@ -49,7 +59,7 @@ inline void Layer(const Api& api,void* grid,int layer,void* volume,std::uint32_t
   mask=intersect;
   if(mask){
    alignas(16) unsigned char packed[24*16];unsigned count=0;
-   for(unsigned index=0;index<24;++index)if(mask&(1u<<index)){std::memcpy(packed+count*16,static_cast<unsigned char*>(volume)+index*16,16);++count;}
+   for(auto remaining=mask;remaining;remaining&=remaining-1){const auto index=FirstBit(remaining);std::memcpy(packed+count*16,static_cast<unsigned char*>(volume)+index*16,16);++count;}
    api.partial[count](volume,mask,types,flags,required,output,node,packed);++stats.partial;
   }else{
    auto* begin=Read<unsigned char*>(node,0x20);const auto count=Read<std::uint32_t>(node,0x28);
