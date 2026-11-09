@@ -70,7 +70,13 @@ static bool ReleaseLogSuppressed(const char* body) noexcept {
 }
 
 static void Log(const char* format, ...) noexcept {
- if(!control_diagnostics::Active())return;
+ if(!control_diagnostics::Active()) {
+#ifdef CONTROL_RT_INSTANCE_CAPTURE
+  if(!format||std::strncmp(format,"RT_INSTANCE_R393",sizeof("RT_INSTANCE_R393")-1)!=0)return;
+#else
+  return;
+#endif
+ }
 #ifdef CONTROL_PERFORMANCE_BUILD
  return;
 #else
