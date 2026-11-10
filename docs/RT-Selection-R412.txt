@@ -1,0 +1,27 @@
+ControlTOH R412 - Native versus owned scene selection
+
+This is a controlled comparison build, not a claimed FPS fix.
+Extract the entire package into Control's game folder with the game closed.
+The root dxgi.dll defaults to Native scene selection.
+
+1. Run Control normally. Use the same save, graphics settings and traversal
+   route as before. Allow the initial loading to settle. Do not run the recorder.
+2. Close the game. In ControlTOH/Tools run Use-R412-Owned.cmd. Start normally
+   and repeat the same route. This restores the replacement scene query.
+3. Close the game and run Use-R412-Native.cmd. Repeat to check whether the
+   difference follows the mode rather than warmup or run order.
+
+Compare sustained FPS and the severity/frequency of sharp dips using your
+existing counter. Report which mode is better, or if they are indistinguishable.
+Do not change Steam overlay or graphics settings between these runs.
+
+Native leaves the original scene-query vtable slot untouched. Owned installs
+our existing R411 selection query. Both modes have periodic RT diagnostics
+compiled out and retain the same other rendering replacements and ray counts.
+Startup logs identify R412 selection=native or selection=owned. They confirm
+mode/installation only; they do not measure frame-time improvement.
+Use Collect-RT-Selection.cmd after testing if startup verification is needed.
+
+The R411 diagnostic tools remain available for compatibility; do not use them
+for this comparison. Switch only using the R412 Native/Owned commands above.
+No changes to the Windows message loop or scheduler are included.

@@ -1607,7 +1607,14 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RT_MODE_R411 diagnostics=%u heap_refresh=0 allocator_probe=%u",unsigned(CONTROL_RT_DIAGNOSTICS),unsigned(CONTROL_RT_DIAGNOSTICS));
         Log("RT_CACHE_R411_INSTALL ready=0 disabled=1 reason=exact_validation_cost");
         Log("RT_ASSEMBLY_R411_INSTALL ready=%u",unsigned(RTOwnedAssembly::Install(renderer)));
-        Log("RT_SELECTION_R411_INSTALL ready=%u",unsigned(RTOwnedSelection::Install(renderer)));
+#if CONTROL_RT_NATIVE_SELECTION
+        Log("RT_SELECTION_R411_INSTALL ready=0 disabled=1 reason=r412_native_selection");
+        Log("RT_MODE_R411 selection_comparison=R412 selection=native selection_hook=0");
+#else
+        const bool selectionReady=RTOwnedSelection::Install(renderer);
+        Log("RT_SELECTION_R411_INSTALL ready=%u",unsigned(selectionReady));
+        Log("RT_MODE_R411 selection_comparison=R412 selection=owned selection_hook=%u",unsigned(selectionReady));
+#endif
         Log("RT_PREPARE_R411_INSTALL ready=%u",unsigned(RTOwnedPrepare::Install(renderer)));
         Log("RT_RECORD_R411_INSTALL ready=%u",unsigned(RTOwnedRecord::Install(renderer,d3d)));
         Log("RT_BIND_R411_INSTALL ready=%u",unsigned(RTComputeBindings::Install(renderer,d3d)));
