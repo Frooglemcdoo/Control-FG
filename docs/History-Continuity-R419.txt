@@ -1,0 +1,18 @@
+ControlTOH R419 - Preserve RR history across world-guide visibility changes
+
+Fixed a reproducible reset-policy defect: the world-guide coverage flag could
+reset the whole RR history when supported surfaces left or entered the view.
+History now resets for changes to the world-guide/perspective-guide modes,
+not changes in visible draw coverage. Native resets, resize, preset changes,
+clamp changes and hit-distance binding changes retain their existing behavior.
+
+No shader filters, sample counts, lighting intensities or guide pixel values
+were changed. RELAX remains off by default. This adds no GPU pass or readback.
+
+The regression fixture reproduces five old resets versus one initial reset
+with a fixed guide mode and changing coverage. This proves the reset-policy
+defect and its correction, not that it caused the user's recorded jaw/hair noise.
+
+Install while the game is closed. No stationary capture or toggle sequence is
+requested. Any eventual visual assessment must include normal camera/character
+movement; stationary appearance cannot validate this issue.

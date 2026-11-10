@@ -1,0 +1,12 @@
+{
+  "src/rr_evaluation_entry.h": [
+    [
+      "        if(beginEvaluation)worldReset=worldHistory.Update(in.frame!=0 &&\n            rrWorldAlbedoGuideFrame.load(std::memory_order_acquire)==in.frame);",
+      "        // R419: visible replay coverage is scene content, not a global history epoch.\n        if(beginEvaluation)worldReset=worldHistory.Update(RRWorldAlbedoRequested());"
+    ],
+    [
+      "        if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(bindings.viewAngleApplied);",
+      "        if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(RRWorldPerspectiveGuideRequested());"
+    ]
+  ]
+}

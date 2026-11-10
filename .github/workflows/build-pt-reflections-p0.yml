@@ -1011,6 +1011,8 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-character-support-log.exe
           if errorlevel 1 exit /b 1
+          python tools/test-rr-history-visibility.py
+          if errorlevel 1 exit /b 1
           python tools/test-rr-character-base-evidence.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -1415,11 +1417,11 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package bounded character activation logging R418
+      - name: Package guide-history continuity correction R419
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R418'
+          $out='ControlTOH-R419'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1461,7 +1463,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/Character-Support-R418.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/History-Continuity-R419.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1474,10 +1476,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R418
+          name: ControlTOH-R419
           path: |
-            ControlTOH-R418.zip
-            ControlTOH-R418.sha256
+            ControlTOH-R419.zip
+            ControlTOH-R419.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

@@ -79,9 +79,9 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         const bool beginEvaluation=rrNativeFrame.BeginEvaluation(in.frame,guides,lighting);
         if(control_rr::DistanceEligible(beginEvaluation,bindings.projectionValid,activePreset,control_rr::RRPresetF))
             hitDistance=RRDistanceBeforeEvaluation(list,in.depth,in.frame,lighting);
-        if(beginEvaluation)worldReset=worldHistory.Update(in.frame!=0 &&
-            rrWorldAlbedoGuideFrame.load(std::memory_order_acquire)==in.frame);
-        if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(bindings.viewAngleApplied);
+        // R419: visible replay coverage is scene content, not a global history epoch.
+        if(beginEvaluation)worldReset=worldHistory.Update(RRWorldAlbedoRequested());
+        if(beginEvaluation)viewAngleReset=viewAngleHistory.Update(RRWorldPerspectiveGuideRequested());
 #ifdef CONTROL_RR_COMPACT_DISTANCE
         rr_compact_distance::lastBound.store(false);
 #endif

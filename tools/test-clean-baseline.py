@@ -41,6 +41,14 @@ for name, expected in manifest['files'].items():
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    # R419 changes only guide-mode reset triggers, never the rendering signals.
+    history_exceptions = json.loads((root/'tools/fixtures/r419-baseline-exceptions.json').read_text())
+    if name in history_exceptions:
+        text = data.decode()
+        for before, after in reversed(history_exceptions[name]):
+            assert text.count(after) == 1, (name, 'R419 history-mode trigger changed')
+            text = text.replace(after, before, 1)
+        data = text.encode()
     # R414 pauses the separate legacy profiler only during automatic comparison.
     pivot_exceptions = json.loads((root/'tools/fixtures/r414-baseline-exceptions.json').read_text())
     if name in pivot_exceptions:
