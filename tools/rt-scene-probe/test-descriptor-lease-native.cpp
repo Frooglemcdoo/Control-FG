@@ -9,12 +9,12 @@
 using rt_owned_assembly::Write;
 using namespace rt_descriptor_lease;
 static int manager,timeline,owner;
-static std::array<unsigned char,0x80> state;
+static std::array<unsigned char,0x80> testState;
 static U64 cursor=0,nativeCalls=0;
 static bool useLease=false;
 static Lease lease;
 static std::vector<std::array<U64,4>> events;
-static Snapshot Current(){return {&manager,state.data(),&timeline,1,1,32};}
+static Snapshot Current(){return {&manager,testState.data(),&timeline,1,1,32};}
 static bool Valid(const Block& b,const Snapshot&){return b.owner==&owner;}
 static void NativeAllocate(void*,U64 count,U64* gpu,U64* cpu,void** heap){++nativeCalls;*gpu=0x100000+cursor*32;*cpu=0x800000+cursor*32;*heap=&owner;cursor+=count;}
 static void Reserve(void* arg,U64 count,U64* gpu,U64* cpu,void** heap){assert(count==49);if(useLease){Api api{NativeAllocate,Current,Valid};Block output;Take(api,lease,arg,count,output);*gpu=output.gpu;*cpu=output.cpu;*heap=output.owner;}else NativeAllocate(arg,count,gpu,cpu,heap);}
@@ -30,9 +30,9 @@ int main(){
  DWORD old=0;assert(VirtualProtect(code,0x1000,PAGE_EXECUTE_READ,&old));assert(VirtualProtect(code+0x2000,0x1000,PAGE_EXECUTE_READ,&old));assert(FlushInstructionCache(GetCurrentProcess(),code,0x3000));auto prepare=reinterpret_cast<void(*)(void*,bool,bool)>(code);
  for(unsigned test=0;test<4096;++test){const auto count=1+test%32;std::vector<std::array<unsigned char,0x80>> expected;
   useLease=false;cursor=nativeCalls=0;events.clear();
-  for(unsigned i=0;i<count;++i){state.fill(0);prepare(state.data(),(test+i)%2!=0,(test+i)%3!=0);expected.push_back(state);}const auto expectedEvents=events;assert(nativeCalls==count);
+  for(unsigned i=0;i<count;++i){testState.fill(0);prepare(testState.data(),(test+i)%2!=0,(test+i)%3!=0);expected.push_back(testState);}const auto expectedEvents=events;assert(nativeCalls==count);
   useLease=true;cursor=nativeCalls=0;lease={};events.clear();
-  for(unsigned i=0;i<count;++i){state.fill(0);prepare(state.data(),(test+i)%2!=0,(test+i)%3!=0);assert(state==expected[i]);}assert(events==expectedEvents&&nativeCalls==(count+15)/16);
+  for(unsigned i=0;i<count;++i){testState.fill(0);prepare(testState.data(),(test+i)%2!=0,(test+i)%3!=0);assert(testState==expected[i]);}assert(events==expectedEvents&&nativeCalls==(count+15)/16);
  }
  assert(VirtualFree(code,0,MEM_RELEASE));std::puts("PASS 4096 native compute preparation cases: five-argument reservation ABI, unique GPU/CPU table addresses, original sampler reservations and all 49-descriptor initialization calls preserved.");
 }
