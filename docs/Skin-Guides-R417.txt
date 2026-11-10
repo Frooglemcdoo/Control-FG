@@ -1,0 +1,18 @@
+ControlTOH R417 - Skin guide coverage correction
+
+Install with the game fully closed. Keep RR ON; RELAX still starts OFF.
+The RELAX comparison button remains available.
+
+Extends the existing base-color RR guide correction from one exact skin shader
+to four captured variants with the same base-texture/tint expression. The old
+selected guide could apply an extra detail multiplier absent from native skin.
+Only the already-audited replay shader pair is eligible; unknown and genuinely
+detail-bearing skin remain unchanged. Native skin rendering is not modified.
+
+R416 fresh GI sampling and native ray counts remain. No new blur, clamp,
+responsivity hint, extra pass or temporal history is added. Projector, desk,
+plant and hair-guide code are unchanged.
+
+This is a verified coverage correction, not proof of a complete noise fix.
+Jesse's face/jaw and the red speckle burst during the turn are the visual checks.
+Hair may still need separate work. No additional capture is requested.

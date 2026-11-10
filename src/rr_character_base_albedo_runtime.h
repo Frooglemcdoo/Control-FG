@@ -1,4 +1,5 @@
 #pragma once
+#include "rr_character_base_evidence.h"
 // Only the audited character albedo record is cloned. Native records are read-only.
 struct RRCharacterBaseAlbedoRecord {
  std::uintptr_t original=0,selected=0;
@@ -19,17 +20,17 @@ static std::uintptr_t RRCharacterBaseAlbedoReplacement(std::uintptr_t original,s
   if(!PTReflectionSha256(albedo.bytes.data(),albedo.bytes.size(),hash)||
      strcmp(hash,"dc9fe7a05347aa5b570595e75e4b19b787ecb9c4ee5bd6dfcc80b1f9ed776c24"))return selected;
   RRAlbedoShader::NativeDescriptor desc{},after{};
-  if(!RRAlbedoShader::ReadDescriptor(original,0x50,&desc)||desc.stage!=4||desc.size!=30160)return selected;
+  if(!RRAlbedoShader::ReadDescriptor(original,0x50,&desc)||desc.stage!=4||!control_skin_guide::KnownSize(static_cast<size_t>(desc.size)))return selected;
   std::vector<uint8_t> bytes(static_cast<size_t>(desc.size));
   if(!RRAlbedoShader::CopyResident(&desc,bytes.data(),bytes.size())||
      !RRAlbedoShader::ReadDescriptor(original,0x50,&after)||desc.identifier!=after.identifier||desc.shaderBase!=after.shaderBase||desc.size!=after.size||
      !PTReflectionSha256(bytes.data(),bytes.size(),hash)||
-     strcmp(hash,"0cd8a4b8144f1add1eac28edb815477ad7e3b42291735aa361e2f8e77b20bb96"))return selected;
+     !control_skin_guide::Matches(static_cast<size_t>(desc.size),hash))return selected;
   auto* c=new(std::nothrow) RRCharacterBaseAlbedoRecord;if(!c)return selected;
   if(!PTReflectionCloneShaderRecord(reinterpret_cast<void*>(selected),0x50,4,kRRCharacterBaseAlbedoStorageId,
        sizeof(kRRCharacterBaseAlbedoShader),c->record,c->descriptor)){delete c;return selected;}
   c->original=original;c->selected=selected;rrCharacterBaseAlbedoRecords[rrCharacterBaseAlbedoRecordCount++]=c;
-  Log("RR_CHARACTER_BASE_ALBEDO_R19 original=%p selected=%p replacement=%p native_hash_match=1 base_texture_slot=0 tint_offset=52 detail_multiplier_removed=1 replay_only=1",reinterpret_cast<void*>(original),reinterpret_cast<void*>(selected),c->record);
+  Log("RR_CHARACTER_BASE_ALBEDO_R417 original=%p selected=%p replacement=%p native_hash_match=1 native_bytes=%llu native_sha=%s base_texture_slot=0 tint_offset=52 detail_multiplier_removed=1 replay_only=1",reinterpret_cast<void*>(original),reinterpret_cast<void*>(selected),c->record,static_cast<unsigned long long>(desc.size),hash);
   return reinterpret_cast<std::uintptr_t>(c->record);
  }catch(...){return selected;}
 }

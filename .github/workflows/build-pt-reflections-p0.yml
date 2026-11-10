@@ -1007,6 +1007,8 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           python tools/test-clean-baseline.py
           if not "%errorlevel%"=="0" exit /b 1
+          python tools/test-rr-character-base-evidence.py
+          if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-character-albedo.cpp /Febuild\test-character.exe
@@ -1409,11 +1411,11 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package fresh GI and RR-first correction R416
+      - name: Package expanded skin guide correction R417
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R416'
+          $out='ControlTOH-R417'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1455,7 +1457,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/Fresh-GI-R416.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/Skin-Guides-R417.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1468,10 +1470,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R416
+          name: ControlTOH-R417
           path: |
-            ControlTOH-R416.zip
-            ControlTOH-R416.sha256
+            ControlTOH-R417.zip
+            ControlTOH-R417.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
