@@ -1,0 +1,41 @@
+name: Build traversal recorder
+on:
+  push:
+    branches: [work/traversal-recorder-r1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch pinned PresentMon and license
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='tools/traversal'
+          Invoke-WebRequest 'https://github.com/GameTechDev/PresentMon/releases/download/v2.3.1/PresentMon-2.3.1-x64.exe' -OutFile "$root/PresentMon-2.3.1-x64.exe"
+          if((Get-FileHash "$root/PresentMon-2.3.1-x64.exe").Hash -ne '364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c'){throw 'PresentMon hash mismatch'}
+          Invoke-WebRequest 'https://raw.githubusercontent.com/GameTechDev/PresentMon/v2.3.1/LICENSE.txt' -OutFile "$root/PresentMon-LICENSE.txt"
+      - name: Validate actual Windows recorder tools
+        shell: powershell
+        run: |
+          & tools/traversal/test-recorder.ps1
+          if($LASTEXITCODE -ne 0){throw 'Recorder validation failed'}
+      - name: Package independent recorder
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory 'package/Control-Traversal-Recorder-R1' -Force | Out-Null
+          Copy-Item tools/traversal/* package/Control-Traversal-Recorder-R1
+          Remove-Item package/Control-Traversal-Recorder-R1/test-recorder.ps1
+          Compress-Archive package/Control-Traversal-Recorder-R1 -DestinationPath Control-Traversal-Recorder-R1.zip
+          (Get-FileHash Control-Traversal-Recorder-R1.zip).Hash.ToLower() | Set-Content Control-Traversal-Recorder-R1.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-Traversal-Recorder-R1
+          path: |
+            Control-Traversal-Recorder-R1.zip
+            Control-Traversal-Recorder-R1.sha256
+          retention-days: 7
