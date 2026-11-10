@@ -5,6 +5,7 @@
 #include <cstdio>
 #include "../../src/rt_owned_assembly.h"
 #include "../../src/rt_descriptor_lease.h"
+#include "../../src/rt_setup_probe.h"
 #include "../../src/rt_descriptor_lease_bytes.h"
 using rt_owned_assembly::Write;
 using namespace rt_descriptor_lease;
@@ -17,9 +18,12 @@ static std::vector<std::array<U64,4>> events;
 static Snapshot Current(){return {&manager,testState.data(),&timeline,1,1,32};}
 static bool Valid(const Block& b,const Snapshot&){return b.owner==&owner;}
 static void NativeAllocate(void*,U64 count,U64* gpu,U64* cpu,void** heap){++nativeCalls;*gpu=0x100000+cursor*32;*cpu=0x800000+cursor*32;*heap=&owner;cursor+=count;}
-static void Reserve(void* arg,U64 count,U64* gpu,U64* cpu,void** heap){assert(count==49);if(useLease){Api api{NativeAllocate,Current,Valid};Block output;Take(api,lease,arg,count,output);*gpu=output.gpu;*cpu=output.cpu;*heap=output.owner;}else NativeAllocate(arg,count,gpu,cpu,heap);}
+static void Reserve(void* arg,U64 count,U64* gpu,U64* cpu,void** heap){assert(count==49);events.push_back({0,count,0,0});if(useLease){Api api{NativeAllocate,Current,Valid};Block output;Take(api,lease,arg,count,output);*gpu=output.gpu;*cpu=output.cpu;*heap=output.owner;}else NativeAllocate(arg,count,gpu,cpu,heap);}
 static void Samplers(void*,U64 count,U64* gpu,U64* cpu,void** heap){assert(count==0||count==4);*gpu=0x900000;*cpu=0xa00000;*heap=&manager;events.push_back({1,count,0,0});}
 static void Copy(void*,unsigned count,U64 dst,U64 src,unsigned type){assert(count==49&&type==0&&src==0xb00000);events.push_back({2,count,dst,src});}
+static void InitializeTable(U64 destination){Copy(nullptr,49,destination,0xb00000,0);}
+struct Trace {std::size_t cursor=0;unsigned previous=3,marks=0;};
+static void TraceMark(void* context,unsigned phase){auto& trace=*static_cast<Trace*>(context);for(;trace.cursor<events.size();++trace.cursor)assert(events[trace.cursor][0]==trace.previous);trace.previous=phase;++trace.marks;}
 static void Rel(unsigned char* code,unsigned operand,unsigned next,unsigned target){Write(code,operand,static_cast<std::int32_t>(target-next));}
 static void Jump(unsigned char* code,void* target){const unsigned char stub[]={0xff,0x25,0,0,0,0};std::memcpy(code,stub,6);Write(code,6,target);}
 int main(){
@@ -33,6 +37,10 @@ int main(){
   for(unsigned i=0;i<count;++i){testState.fill(0);prepare(testState.data(),(test+i)%2!=0,(test+i)%3!=0);expected.push_back(testState);}const auto expectedEvents=events;assert(nativeCalls==count);
   useLease=true;cursor=nativeCalls=0;lease={};events.clear();
   for(unsigned i=0;i<count;++i){testState.fill(0);prepare(testState.data(),(test+i)%2!=0,(test+i)%3!=0);assert(testState==expected[i]);}assert(events==expectedEvents&&nativeCalls==(count+15)/16);
+  useLease=false;cursor=nativeCalls=0;events.clear();rt_setup_probe::Api setupApi{Reserve,Samplers,InitializeTable};Trace trace;
+  for(unsigned i=0;i<count;++i){testState.fill(0);rt_setup_probe::Run(setupApi,testState.data(),(test+i)%2!=0,(test+i)%3!=0,test%2?nullptr:TraceMark,&trace);assert(testState==expected[i]);}
+  assert(events==expectedEvents&&nativeCalls==count);if(test%2==0)assert(trace.marks==count*4&&trace.cursor==events.size());
+
  }
- assert(VirtualFree(code,0,MEM_RELEASE));std::puts("PASS 4096 native compute preparation cases: five-argument reservation ABI, unique GPU/CPU table addresses, original sampler reservations and all 49-descriptor initialization calls preserved.");
+ assert(VirtualFree(code,0,MEM_RELEASE));std::puts("PASS 4096 native compute preparation cases: five-argument reservation ABI, unique GPU/CPU table addresses, original sampler reservations and all 49-descriptor initialization calls preserved; sampled setup phases match original native events.");
 }

@@ -1,0 +1,31 @@
+CONTROL TOH R408 - SETUP COST AND ENGINE INTERVAL DIAGNOSTICS
+
+Install over R407 with Control closed. Play the same area for 60-90 seconds,
+including the movement that produced dips. Close Control and run
+ControlTOH\Tools\Collect-RT-Assembly.cmd. Send RT-Assembly-R408.zip.
+No manual toggles or extra capture program are required.
+
+R407's larger reservations are disabled. Native shader setup once again
+requests exactly 49 descriptors for each table. This removes the unused-space
+tradeoff; it is not a claim that larger reservations caused the reported dips.
+
+This build measures the missing evidence together:
+- native descriptor allocation, including its lock and heap management;
+- sampler setup, including calls requesting zero new samplers;
+- initialization of the complete 49-descriptor table;
+- engine present-entry intervals, with counts above 25/33/50/100 ms and the
+  four slowest timestamped intervals per 300-interval window.
+
+Setup details sample one application in 256. Ordinary applications execute
+the original native setup body. The sampled path preserves all original
+allocations, sampler calls and initialization. Existing current bindings,
+animation, geometry updates, lighting and AS work remain enabled.
+
+These are CPU-inclusive diagnostics and engine intervals. They are not GPU
+durations or generated/displayed frame timings. Menus, loading and pauses
+are included and must be excluded when interpreting gameplay performance.
+This is a diagnostic build; no FPS improvement is promised.
+
+Expected: RT_SETUP_R408_INSTALL ready=1, RT_SETUP_R408, RT_FRAME_R408.
+RT_LEASE_R408_INSTALL ready=0 disabled=1 and the disabled persistent scene
+cache are intentional. PTLAS remains off.
