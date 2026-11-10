@@ -1,5 +1,6 @@
 #pragma once
 #include "rr_performance_policy.h"
+#include "performance_compare_state.h"
 // Primary recording thread only. Queries surround owned command emissions or
 // the existing NGX call. Worker replay is measured separately as CPU work.
 // Lifetime: exact native Present -> queue Signal -> completed fence -> read/reuse.
@@ -66,7 +67,8 @@ static bool RRPerfInitialize(const RRGuideInputSnapshot& in) noexcept {
     return true;
 }
 static RRPerfTicket RRPerfBegin(const RRGuideInputSnapshot& in,RRPerfStage stage) noexcept {
-    RRPerfTicket t{};const DWORD saved=GetLastError();
+    RRPerfTicket t{};if(control_compare::running.load())return t;
+    const DWORD saved=GetLastError();
     __try {
         if(rrPerfDisabled||in.engineFrame!=rrPerfFrame||GetCurrentThreadId()!=rrPerfFrameThread||(in.engineFrame%240)!=0)__leave;
         if(!RRPerfInitialize(in))__leave;
@@ -148,7 +150,7 @@ static void RRPerfFilter(unsigned long long frame,double ms) noexcept {
 }
 static void RRPerfEvaluation(unsigned long long frame,bool rr,bool success,bool reset,long long entryTicks,
     double guidesCpuMs,double evaluationCpuMs,unsigned fg,unsigned hdr) noexcept {
-    if(frame!=rrPerfFrame||GetCurrentThreadId()!=rrPerfFrameThread)return;
+    if(control_compare::running.load()||frame!=rrPerfFrame||GetCurrentThreadId()!=rrPerfFrameThread)return;
     const DWORD saved=GetLastError();auto key=rrPerfKey;key.rr=rr;key.fg=fg;key.hdr=hdr;
     double cadence=0;
     const bool eligible=rrPerfStability.Observe(key,frame,static_cast<unsigned long long>(entryTicks),

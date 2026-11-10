@@ -15,6 +15,7 @@ class D3D12Backend {
  struct Texture {Ptr<ID3D12Resource> resource;D3D12_RESOURCE_STATES state=D3D12_RESOURCE_STATE_COMMON;};
  Ptr<ID3D12Device> device;Ptr<ID3D12RootSignature> root;
  std::vector<Ptr<ID3D12PipelineState>> pipelines;
+ std::vector<std::array<char,96>> pipelineNames;
  std::vector<Texture> permanent,transient;
  UINT increment=0,srvCount=0,uavCount=0,constantStride=0,maxSets=0;
  std::uint16_t width=0,height=0;
@@ -81,8 +82,9 @@ public:
   D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=3;rd.pParameters=params;rd.NumStaticSamplers=UINT(samplers.size());rd.pStaticSamplers=samplers.data();
   Ptr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
   Check(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
-  pipelines.resize(desc.pipelinesNum);
+  pipelines.resize(desc.pipelinesNum);pipelineNames.resize(desc.pipelinesNum);
   for(unsigned i=0;i<desc.pipelinesNum;++i){const auto&p=desc.pipelines[i];auto shader=p.computeShaderDXIL.size?p.computeShaderDXIL:p.computeShaderDXBC;
+   for(unsigned j=0;j<95&&p.shaderIdentifier[j]&&p.shaderIdentifier[j]!='|';++j)pipelineNames[i][j]=p.shaderIdentifier[j];
    if(!shader.bytecode||!shader.size)throw std::runtime_error("NRD GPU shaders are not embedded; CPU-only library cannot render");
    D3D12_COMPUTE_PIPELINE_STATE_DESC ps{};ps.pRootSignature=root.Get();ps.CS={shader.bytecode,SIZE_T(shader.size)};
    Check(device->CreateComputePipelineState(&ps,IID_PPV_ARGS(&pipelines[i])));
@@ -142,7 +144,7 @@ public:
   auto gh=[&](UINT i){return D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr+UINT64(i)*increment};};
   auto*heap=recording.heap.Get();if(!recording.borrowed)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());
   for(UINT i=0;i<plan.size();++i){const auto&d=plan[i];const UINT base=i*(srvCount+uavCount);
-   TimingScope pass(timing,TimingStage::Dispatch,i,d.pipeline,d.width,d.height);
+   TimingScope pass(timing,TimingStage::Dispatch,i,d.pipeline,d.width,d.height,pipelineNames[d.pipeline].data());
    // Deterministic null descriptors for unused entries of the shared layout.
    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=srv.Format;uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;

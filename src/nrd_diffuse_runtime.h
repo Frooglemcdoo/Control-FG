@@ -265,14 +265,15 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   const bool details=control_compare::enabled.load()&&native_lighting::performance::enabled.load()&&presentCount.load()%(interval?interval:1u)==0;
   if(details){
    detail.context=c.rays;
-   detail.begin=[](void* context,control_nrd::TimingStage stage,unsigned ordinal,unsigned pipeline,unsigned x,unsigned y) noexcept {
+   detail.begin=[](void* context,control_nrd::TimingStage stage,unsigned ordinal,unsigned pipeline,unsigned x,unsigned y,const char* shader) noexcept {
     namespace p=native_lighting::performance;
     p::Stage selected=p::Stage::RelaxDispatch;
     switch(stage){case control_nrd::TimingStage::Prepare:selected=p::Stage::RelaxPrepare;break;
      case control_nrd::TimingStage::Denoise:selected=p::Stage::RelaxDenoise;break;
      case control_nrd::TimingStage::Finish:selected=p::Stage::RelaxFinish;break;default:break;}
     const auto ticket=p::Begin(static_cast<ID3D12GraphicsCommandList4*>(context),selected,x,y,1);
-    if(ticket!=p::kInvalid){p::samples[ticket].passOrdinal=ordinal;p::samples[ticket].pipelineIndex=pipeline;}
+    if(ticket!=p::kInvalid){p::samples[ticket].passOrdinal=ordinal;p::samples[ticket].pipelineIndex=pipeline;
+     if(shader)for(unsigned i=0;i<95&&shader[i];++i)p::samples[ticket].passShader[i]=shader[i];}
     return ticket;
    };
    detail.end=[](void*,unsigned ticket) noexcept {native_lighting::performance::End(ticket);};

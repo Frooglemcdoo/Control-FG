@@ -196,10 +196,10 @@ int main(){try{
   struct TraceState {unsigned next=0,ended=0,passes=0,depth=0;unsigned stack[128]{};bool valid=true;} trace;
   control_nrd::Timing timing;
   timing.context=&trace;
-  timing.begin=[](void* context,control_nrd::TimingStage stage,unsigned ordinal,unsigned,unsigned x,unsigned y) noexcept {
+  timing.begin=[](void* context,control_nrd::TimingStage stage,unsigned ordinal,unsigned,unsigned x,unsigned y,const char* shader) noexcept {
    auto& t=*static_cast<TraceState*>(context);
    if(t.depth>=128){t.valid=false;return ~0u;}
-   if(stage==control_nrd::TimingStage::Dispatch){t.valid=t.valid&&ordinal==t.passes++&&x>0&&y>0&&t.depth==1;}
+   if(stage==control_nrd::TimingStage::Dispatch){t.valid=t.valid&&ordinal==t.passes++&&x>0&&y>0&&t.depth==1&&shader&&shader[0];}
    else t.valid=t.valid&&t.depth==0;
    const auto id=++t.next;t.stack[t.depth++]=id;return id;
   };

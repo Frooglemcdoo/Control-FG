@@ -17,7 +17,7 @@ inline std::string outcome="incomplete";
 struct Saved {Mode mode{};bool owned=false,lighting=false;unsigned rays=0,quality=0,volume=0,surface=0,request=0,manualGI=0,contact=0,spec=0;control_rr_gi::StageMode stage{};control_rr::RRUserMode rr{};} saved;
 struct Result {uint64_t evidence[settings_check::Count]{};uint64_t skipped=0;unsigned sampleMask=0;bool observed=false;std::string settings,failures;};
 inline Result results[phaseCount]{};
-struct GPU {unsigned phase;uint64_t present;unsigned stage;double ms;unsigned ordinal,pipeline,x,y;};
+struct GPU {unsigned phase;uint64_t present;unsigned stage;double ms;unsigned ordinal,pipeline,x,y;std::string shader;};
 inline std::vector<GPU> gpu;
 inline bool Active() noexcept{return state!=State::Idle;}
 inline bool Write(const wchar_t* name,const std::string& text){
@@ -50,7 +50,7 @@ inline bool Apply(){
  if(!SelectMode(p.lighting?kNativeBlendDefaultMode:Mode::Native))return false;
  expectedSignature=settings_report::Signature();return true;
 }
-inline void Emit(const performance::Sample& s,double ms){gpu.push_back({step,s.present,unsigned(s.stage),ms,s.passOrdinal,s.pipelineIndex,s.x,s.y});}
+inline void Emit(const performance::Sample& s,double ms){gpu.push_back({step,s.present,unsigned(s.stage),ms,s.passOrdinal,s.pipelineIndex,s.x,s.y,s.passShader});}
 inline void Summary(){
  std::vector<double> intervals[phaseCount];std::ostringstream cadence;
  cadence<<"phase,present,interval_ms\n";uint64_t lastTicks=0,lastPresent=0;unsigned lastPhase=~0u;
@@ -64,8 +64,8 @@ inline void Summary(){
  std::map<std::tuple<unsigned,unsigned,uint64_t>,double> perPresent;
  for(const auto& s:gpu){raw<<conditions[s.phase].name<<','<<s.present<<','<<performance::Name(performance::Stage(s.stage))<<','<<s.ms<<'\n';perPresent[{s.phase,s.stage,s.present}]+=s.ms;}
  Write(L"gpu-timings.csv",raw.str());
- std::ostringstream passes;passes<<"phase,present,ordinal,pipeline_index,dispatch_groups_x,dispatch_groups_y,gpu_ms\n";
- for(const auto& s:gpu)if(s.stage==unsigned(performance::Stage::RelaxDispatch))passes<<conditions[s.phase].name<<','<<s.present<<','<<s.ordinal<<','<<s.pipeline<<','<<s.x<<','<<s.y<<','<<s.ms<<'\n';
+ std::ostringstream passes;passes<<"phase,present,ordinal,pipeline_index,dispatch_groups_x,dispatch_groups_y,gpu_ms,shader_file\n";
+ for(const auto& s:gpu)if(s.stage==unsigned(performance::Stage::RelaxDispatch))passes<<conditions[s.phase].name<<','<<s.present<<','<<s.ordinal<<','<<s.pipeline<<','<<s.x<<','<<s.y<<','<<s.ms<<','<<s.shader<<'\n';
  Write(L"relax-dispatches.csv",passes.str());
  Statistics stats[phaseCount];for(unsigned p=0;p<phaseCount;++p)stats[p]=Summarize(intervals[p]);
  if(outcome.rfind("COMPLETE",0)==0){

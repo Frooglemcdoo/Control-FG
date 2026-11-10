@@ -23,10 +23,11 @@ What changed:
   difference with the same proxy/hooks still loaded.
 - RELAX prepare conversion, denoiser, individual dispatches and finish conversion
   have sampled GPU timestamps, one sampled Present in 64. Per-pass CSV records
-  pipeline index, ordinal and dispatch dimensions. Receiver export remains timed.
-- Full visuals also run without GPU queries or CPU span timers, then with them
+  pipeline index, shader filename, ordinal and dispatch dimensions. Receiver export remains timed.
+- Full visuals also run without comparison GPU queries or CPU span timers, then with them
   restored. Cadence/coverage collection stays active; this isolates query/timer
-  overhead only. Repeat drift over 5% marks the comparison incomplete.
+  overhead only. The older periodic RR GPU timer and its frame logging pause
+  throughout the comparison to avoid overlapping profilers. Repeat drift over 5% marks the comparison incomplete.
 - Missing execution coverage, skipped timestamps, failed RR/SR evaluations,
   dropped frame rows and profiler faults cannot produce a complete result.
 

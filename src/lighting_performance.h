@@ -17,7 +17,7 @@ struct Sample {
     ID3D12GraphicsCommandList* list=nullptr;
     State state=State::Recording;Stage stage=Stage::None;
     UINT64 capture=0,present=0,selection=0,fence=0,frequency=0,tableBytes=0;
-    char sourceShader[65]{};
+    char sourceShader[65]{},passShader[96]{};
     UINT64 raygenStart=0,raygenBytes=0,hitStart=0,hitStride=0,missStart=0,missStride=0;
     unsigned recordIndex=0,passOrdinal=~0u,pipelineIndex=~0u;
     UINT x=0,y=0,z=0;bool rr=false,current=true;unsigned effects=0;

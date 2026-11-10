@@ -13,6 +13,11 @@ NRD aggregate includes the dispatch scopes. The outer RELAX span also includes
 surrounding command recording and native binding restoration. GPU timestamp
 commands themselves may affect results; nested durations must not be added.
 
+The older periodic RR GPU timer and its frame logs pause throughout comparison;
+existing submitted queries still retire normally. Its ordinary CPU clock reads
+remain part of the fixed loaded-mod overhead. Shader filenames come from the
+pinned NRD instance description, copied once at backend creation.
+
 Callbacks are absent outside sampled automatic-comparison frames. Existing
 fence retirement, exact command-list submission and non-recycled query indices
 are retained. The query pool remains bounded at 16,384 spans. No GPU waits,
