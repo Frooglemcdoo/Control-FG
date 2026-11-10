@@ -28,7 +28,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           New-Item -ItemType Directory 'package/Control-Traversal-Recorder-R1' -Force | Out-Null
-          Copy-Item tools/traversal/* package/Control-Traversal-Recorder-R1
+          Get-ChildItem tools/traversal -File | Copy-Item -Destination package/Control-Traversal-Recorder-R1
           Remove-Item package/Control-Traversal-Recorder-R1/test-recorder.ps1
           Compress-Archive package/Control-Traversal-Recorder-R1 -DestinationPath Control-Traversal-Recorder-R1.zip
           (Get-FileHash Control-Traversal-Recorder-R1.zip).Hash.ToLower() | Set-Content Control-Traversal-Recorder-R1.sha256
