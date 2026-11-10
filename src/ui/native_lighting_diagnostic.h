@@ -1,5 +1,6 @@
 #pragma once
 #include "theme.h"
+#include "../relax_quality.h"
 #include "render_fps.h"
 #include "lighting_panel_window.h"
 #include "gi_button_capture.h"
@@ -76,7 +77,12 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
 #endif
     if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
     if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"SMOOTH: N/A":control_rr_gi::outlierRequested.load()?L"SMOOTH: ON":L"SMOOTH: OFF";
-    if(index==kModeCount+12)return rt_surface_source::manualGI.load()==4?L"GI RAW: ON":L"GI RAW: OFF";
+    if(index==kModeCount+12){
+        if(!control_rr::RRUserRequested())return L"RELAX: RR OFF";
+        if(rt_surface_source::manualGI.load()==4)return L"RELAX: OFF";
+        if(rt_surface_source::manualGI.load()==1)return L"RELAX: GI REMOVED";
+        return control_relax::requested.load()==control_relax::Profile::Balanced?L"RELAX: BALANCED":L"RELAX: ORIGINAL";
+    }
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
         const auto mode=LiveSelection::GetMode(selection.Read());
@@ -177,7 +183,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R414",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R415",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
@@ -421,7 +427,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 #ifdef CONTROL_GI_LONG_SEQUENCE
             else if(index>=kModeCount+21 && index<=kModeCount+25 && !capture_suite::active && !control_gi_button::Active()){
                 if(index==kModeCount+25){if(control_rr_gi::ownedReady.load())rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==3?0:3);}
-                else if(index==kModeCount+24)rt_surface_source::ResetManual();
+                else if(index==kModeCount+24){rt_surface_source::ResetManual();control_relax::requested=control_relax::Profile::Balanced;}
                 else if(index==kModeCount+23)rt_surface_source::manualContact.store((rt_surface_source::manualContact.load()+1)%3);
                 else {const unsigned target=index==kModeCount+21?1:2;rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==target?0:target);}
                 Trace("manual_rt_compare gi=%u contact=%u",rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load());
@@ -479,8 +485,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 Trace("gi_outlier_request build=R217 enabled=%u clamp_only=1",unsigned(next));
                 savedNotice=0;
             }
-            else if(index==kModeCount+12 && !capture_suite::active) {
-                rt_surface_source::manualGI.store(rt_surface_source::manualGI.load()==4?0:4);
+            else if(index==kModeCount+12 && !capture_suite::active && !control_gi_button::Active() && control_rr::RRUserRequested()) {
+                rt_surface_source::manualGI.store(control_relax::Cycle(rt_surface_source::manualGI.load()));
+                control_rr_gi::stageMode=control_rr_gi::StageMode::RawBypass;
+                Trace("RELAX_R415 requested=%s bypass=%u",control_relax::Name(control_relax::requested.load()),unsigned(rt_surface_source::manualGI.load()==4));
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);

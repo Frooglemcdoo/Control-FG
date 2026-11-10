@@ -1,5 +1,6 @@
 #pragma once
 #include <NRD.h>
+#include "relax_quality.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,7 @@ struct Dispatch {
  std::vector<std::uint8_t> constants;
 };
 struct Frame {
+ control_relax::Profile profile=control_relax::Profile::Original;
  std::uint64_t frame=0,view=0,producer=0;
  std::uint16_t width=0,height=0;
  nrd::CommonSettings settings{};
@@ -41,7 +43,7 @@ inline bool FiniteMatrix(const float* m) {
 }
 inline bool Valid(const Frame& f) {
  const auto&s=f.settings;
- if(!f.frame||!f.view||!f.width||!f.height||f.width>8192||f.height>8192||
+ if(!control_relax::Valid(f.profile)||!f.frame||!f.view||!f.width||!f.height||f.width>8192||f.height>8192||
     !f.sameFrameGuides||!f.worldNormals||!f.linearViewDepth||!f.unjitteredMotion||
     !f.radianceContract||!f.hitDistanceContract)return false;
  if(!FiniteMatrix(s.viewToClipMatrix)||!FiniteMatrix(s.worldToViewMatrix)||
@@ -79,7 +81,7 @@ public:
   if(!queueId||(queue&&queue!=queueId)){rejection="session_queue_changed";return false;}
   if(hasLast&&f.frame<=last.frame){rejection="session_frame_not_advancing";return false;}
   const bool restart=needsReset||!hasLast||f.frame!=last.frame+1||f.view!=last.view||
-   f.producer!=last.producer||f.width!=last.width||f.height!=last.height;
+   f.producer!=last.producer||f.width!=last.width||f.height!=last.height||f.profile!=last.profile;
   Frame effective=f;
   auto& s=effective.settings;
   // Previous camera belongs to the history actually submitted to this queue.
@@ -95,6 +97,7 @@ public:
   if(restart)s.accumulationMode=nrd::AccumulationMode::CLEAR_AND_RESTART;
   s.frameIndex=index;
   nrd::RelaxSettings relax{};
+  control_relax::Spatial(relax,f.profile);
   // Fixed accumulation time avoids frame-rate-dependent temporal lag.
   const float frames=.25f*1000.f/s.timeDeltaBetweenFrames;
   relax.diffuseMaxAccumulatedFrameNum=std::uint32_t(std::fmin(60.f,std::fmax(2.f,frames)));

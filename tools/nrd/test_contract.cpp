@@ -74,6 +74,18 @@ int main(){
  moving.frame=3;moving.settings.worldToViewMatrix[12]=4;moving.settings.cameraJitter[0]=-.25f;
  Require(cameras.Prepare(moving,7),"third camera");
  Require(cameras.PreparedFrame()->settings.worldToViewMatrixPrev[12]==3&&cameras.PreparedFrame()->settings.cameraJitterPrev[0]==.25f,"camera and jitter follow same submitted history");
+ Require(cameras.Submitted(7,3),"third camera submitted");
+ moving.frame=4;moving.profile=control_relax::Profile::Balanced;
+ Require(cameras.Prepare(moving,7),"balanced profile");
+ Require(cameras.PreparedFrame()->settings.accumulationMode==nrd::AccumulationMode::CLEAR_AND_RESTART,"profile switch must reset history");
+ Require(cameras.Submitted(7,4),"balanced reset submitted");
+ moving.frame=5;Require(cameras.Prepare(moving,7),"balanced continuous");const auto balancedCount=cameras.Plan().size();
+ Require(cameras.Submitted(7,5),"balanced continuous submitted");
+ moving.frame=6;moving.profile=control_relax::Profile::Original;Require(cameras.Prepare(moving,7),"original return");
+ Require(cameras.PreparedFrame()->settings.accumulationMode==nrd::AccumulationMode::CLEAR_AND_RESTART,"original return must reset history");
+ Require(cameras.Submitted(7,6),"original reset submitted");
+ moving.frame=7;Require(cameras.Prepare(moving,7),"original continuous");
+ Require(cameras.Plan().size()==balancedCount+2,"balanced must remove exactly two spatial dispatches");
  gi_reuse::GraphicsTableState graphics;Require(!graphics.known,"graphics admission before reset");
  graphics.Reset();graphics.Root(7);graphics.Table(3,99);graphics.Root(7);unsigned replayed=0;
  graphics.Replay([&](unsigned slot,std::uint64_t address){Require(slot==3&&address==99,"graphics table mismatch");++replayed;});Require(replayed==1,"same graphics root lost table");

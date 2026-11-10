@@ -230,7 +230,7 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   if(!control_nrd::ConvertCamera(in.camera,camera)){Reason("camera_matrix_contract");return false;}
   if(!CameraMatches(in,camera)){Reason("camera_provider_mismatch");return false;}
   if(!control_nrd::NativeClipShiftToNrdJitter(in.clipShift[0],in.clipShift[1],w,h,jitter)){Reason("camera_jitter_range");return false;}
-  control_nrd::Frame f;f.frame=pass.frame;f.view=pass.view;f.producer=guideProducer;f.width=std::uint16_t(w);f.height=std::uint16_t(h);
+  control_nrd::Frame f;f.profile=control_relax::requested.load();f.frame=pass.frame;f.view=pass.view;f.producer=guideProducer;f.width=std::uint16_t(w);f.height=std::uint16_t(h);
   f.sameFrameGuides=f.worldNormals=f.linearViewDepth=f.unjitteredMotion=f.radianceContract=f.hitDistanceContract=true;
   std::memcpy(f.settings.worldToViewMatrix,camera.worldToView.data(),64);std::memcpy(f.settings.viewToClipMatrix,camera.viewToClip.data(),64);
   f.settings.cameraJitter[0]=jitter[0];f.settings.cameraJitter[1]=jitter[1];f.settings.timeDeltaBetweenFrames=16.6667f;

@@ -1,0 +1,25 @@
+ControlTOH R415 - RELAX detail comparison
+
+Install with the game closed. RR must be ON. Open F10 and use the RELAX button
+(formerly GI RAW). It cycles BALANCED -> ORIGINAL -> OFF -> BALANCED.
+RR and native GI ray counts stay unchanged. OFF uses the existing raw-GI path.
+The button shows the requested profile; CHECK SETTINGS verifies execution.
+
+Balanced is this test build's default. It reduces the diffuse prepass radius
+from 30 to 12 input pixels, spatial wavelet iterations from five to three, and
+luminance smoothing tolerance from 2 to 1. Temporal accumulation duration and
+firefly suppression stay unchanged. There is no added sharpening or raw blend.
+
+Profile switches clear RELAX history; allow a second for it to settle before
+judging. Compare exactly the same camera position, then slowly pan. Inspect
+foliage, concrete texture, shadow edges, hair, and the earlier noisy lamp scene.
+The purpose is to preserve detail without bringing back speckles or boiling.
+The best quality/performance balance still needs live-game evaluation.
+
+Selections are session-only; restart and RESET COMPARE return to Balanced.
+No separate native/owned CPU preparation test is requested.
+
+PERF COMPARE remains available with FG OFF, RR ON. It holds the selected RELAX
+profile fixed and records its name. Stay focused for about five minutes and
+return Performance-R415-*.zip. GPU-heavy and CPU-heavy scenes should be compared
+separately. This build does not establish an FPS gain before measurement.

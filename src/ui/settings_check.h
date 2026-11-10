@@ -1,5 +1,6 @@
 #pragma once
 #include "../settings_check_state.h"
+#include "../relax_quality.h"
 #include <sstream>
 namespace native_lighting::ui::settings_report {
 inline bool active=false,recording=false,changed=false,focusLost=false,ioFailed=false;
@@ -22,7 +23,7 @@ inline std::string Signature() {
  for(auto v:control_settings::Snapshot())out<<v<<',';
  out<<unsigned(LiveSelection::GetMode(selection.Read()))<<','<<gi_reuse::ownedRequested.load()<<','
     <<rt_surface_source::request.load()<<','<<rt_surface_source::manualGI.load()<<','<<rt_surface_source::manualContact.load()<<','
-    <<unsigned(control_rr_clamp::requestedMode.load())<<','<<specularSampleChoice.load();
+    <<unsigned(control_rr_clamp::requestedMode.load())<<','<<specularSampleChoice.load()<<','<<unsigned(control_relax::requested.load());
  return out.str();
 }
 inline std::string Snapshot() {
@@ -36,6 +37,7 @@ inline std::string Snapshot() {
      <<" default="<<control_settings::Default(option)<<" available="<<control_settings::Enabled(option)<<'\n';
  }
  out<<"lighting_mode="<<unsigned(LiveSelection::GetMode(selection.Read()))<<"\nowned_requested="<<gi_reuse::ownedRequested.load()
+    <<"\nRELAX_profile="<<control_relax::Name(control_relax::requested.load())
     <<"\nGI_single_producer_route="<<gi_reuse::SingleProducerEnabled()<<"\nlegacy_additive_GI_route_enabled="<<GIOwnedPipeline::Enabled()
     <<"\nGI_capture_override="<<rt_surface_source::request.load()<<"\nGI_manual_override="<<rt_surface_source::manualGI.load()
     <<"\ncontact_manual_override="<<rt_surface_source::manualContact.load()<<"\nreflection_sample_policy="<<specularSampleChoice.load()<<" (0=Native)"

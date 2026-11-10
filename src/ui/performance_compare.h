@@ -29,6 +29,7 @@ inline std::string Constants(){
  std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);std::ostringstream out;
  for(const auto& o:control_settings::kOptions){using K=control_settings::Key;
   if(o.key!=K::RayReconstruction&&o.key!=K::GlobalIlluminationSamples&&o.key!=K::EnhancedCharacterLighting&&o.key!=K::EnhancedLighting)out<<o.id<<'='<<control_settings::Read(o.key)<<';';}
+ out<<"RELAX_profile="<<control_relax::Name(control_relax::requested.load())<<"; ";
  out<<"clamp="<<unsigned(control_rr_clamp::requestedMode.load())<<" hdr="<<IsHdr10BridgeActive()<<" preset="<<control_rr::RRUserPresetValue();return out.str();
 }
 inline void Restore(){
@@ -75,7 +76,7 @@ inline void Summary(){
   if(!stable)outcome="INCOMPLETE: repeat drift exceeds 5% or too few frame intervals";
  }
  std::ostringstream out,table,stage;
- out<<"R414 RENDERING COST COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, native GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR is ON except loaded_native_sr and its repeat. Clamp, reflection samples (Native), FG OFF and unrelated Visual settings held fixed. Glass retains the saved setting, so these are controlled feature phases, not necessarily the entire accepted visual configuration.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents except full_rr_no_gpu_queries, where GPU queries and CPU span timers are disabled; unrelated compute/rays excluded. No GPU waits or ETW stacks. Timestamp commands still have overhead; this is not a zero-overhead claim.\n\n";
+ out<<"R415 RENDERING COST COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, native GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR is ON except loaded_native_sr and its repeat. Clamp, reflection samples (Native), FG OFF and unrelated Visual settings held fixed. Glass retains the saved setting, so these are controlled feature phases, not necessarily the entire accepted visual configuration.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents except full_rr_no_gpu_queries, where GPU queries and CPU span timers are disabled; unrelated compute/rays excluded. No GPU waits or ETW stacks. Timestamp commands still have overhead; this is not a zero-overhead claim.\n\n";
  table<<"phase,intervals,mean_frame_ms,p50_ms,p95_ms,p99_ms,average_fps,one_percent_low_fps,coverage_ok,skipped_gpu_samples\n";
  for(unsigned p=0;p<phaseCount;++p){stats[p]=Summarize(intervals[p]);auto& s=stats[p];
   table<<conditions[p].name<<','<<s.count<<','<<s.mean<<','<<s.p50<<','<<s.p95<<','<<s.p99<<','<<(s.mean?1000/s.mean:0)<<','<<s.low1<<','<<results[p].observed<<','<<results[p].skipped<<'\n';
@@ -90,6 +91,7 @@ inline void Summary(){
  if(stats[8].mean&&stats[9].mean)out<<"RR minus loaded SR: "<<stats[8].mean-stats[9].mean<<" ms; conditional on identical loaded hooks and fixed settings, not untouched-engine overhead.\n";
  out<<"CPU replacement build: diagnostics="<<CONTROL_RT_DIAGNOSTICS<<" native_selection="<<CONTROL_RT_NATIVE_SELECTION<<" native_preparation="<<CONTROL_RT_NATIVE_PREPARATION<<"; owned recording/bindings remain installed in this build.\n";
  if(stats[12].mean&&stats[13].mean)out<<"Full with queries minus no-query full: "<<stats[13].mean-stats[12].mean<<" ms. Same coverage/cadence collectors remain active; this isolates sampled GPU queries and CPU span timers, NOT all diagnostic overhead. Check full repeat drift before attribution.\n";
+ out<<"RELAX profile held fixed: "<<control_relax::Name(control_relax::requested.load())<<"\n";
  out<<"Input/output dimensions (packed 16-bit W,H,W,H): "<<geometryAtStart<<"\n";
  out<<"\nStage isolation is incremental: native-sample reference confirmation -> Owned producer/reuse -> lighting policy -> RELAX -> character -> near-volume and main volume filters.\nDo not sum these deltas as independent costs: dependencies, GPU occupancy, CPU bottlenecks and clock drift can interact.\nMore than 5% repeat drift warrants rejecting the comparison. No effect is ranked if required-path coverage is missing.\n\n";
  stage<<"phase,stage,sampled_presents,mean_gpu_ms_per_sampled_present,p95_gpu_ms_per_sampled_present\n";
@@ -125,7 +127,7 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return false;qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return false;
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-R414-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
+ folder=root+L"\\Performance-R415-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
