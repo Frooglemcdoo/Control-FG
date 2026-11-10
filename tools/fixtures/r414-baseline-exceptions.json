@@ -1,0 +1,16 @@
+{
+  "src/rr_performance.h": [
+    [
+      "",
+      "#include \"performance_compare_state.h\"\n"
+    ],
+    [
+      "    RRPerfTicket t{};const DWORD saved=GetLastError();\n",
+      "    RRPerfTicket t{};if(control_compare::running.load())return t;\n    const DWORD saved=GetLastError();\n"
+    ],
+    [
+      "    if(frame!=rrPerfFrame||GetCurrentThreadId()!=rrPerfFrameThread)return;\n",
+      "    if(control_compare::running.load()||frame!=rrPerfFrame||GetCurrentThreadId()!=rrPerfFrameThread)return;\n"
+    ]
+  ]
+}
