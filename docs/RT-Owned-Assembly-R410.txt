@@ -1,0 +1,32 @@
+CONTROL TOH R410 - INCREMENTAL MATERIAL DESCRIPTOR HEAP REFRESH
+
+Install over R409 with Control closed. Play the same area for 60-90 seconds,
+including traversal and the movement that produced dips. Close Control and run
+ControlTOH\Tools\Collect-RT-Assembly.cmd. Send RT-Assembly-R410.zip.
+Watch for missing/wrong textures, materials or reflections as well as FPS.
+
+R409 found that refreshing recycled descriptor heaps dominated sampled
+allocator lock work. R410 replaces the unconditional full material-table copy
+with tracked 256-slot page refreshes.
+
+Every native material descriptor publication is retained, including writes of
+the same source handle. First use of a heap performs a full copy. Subsequent
+copies update pages published since that heap's last refresh. Unchanged heaps
+skip the copy. Unknown history, changed table size, unobserved generations,
+large changes or excessive fragmentation use the full native-equivalent copy.
+
+Heap selection, fence checks, retirement, allocation size and all geometry,
+animation, lighting and acceleration-structure work remain native. R407 large
+leases remain disabled. R409's per-allocation lock probes are removed.
+
+RT_HEAP_R410 reports full/partial/skipped refreshes, native versus copied
+descriptor counts, publication counts and fallback counts. Existing sampled
+setup costs and engine present-entry intervals remain available.
+This is the first optimization of the measured refill cost; an FPS gain still
+needs to be demonstrated in-game. Engine intervals include loading and menus
+and are not generated/displayed frame timings.
+
+Expected: RT_HEAP_R410_INSTALL ready=1, RT_SETUP_R410_INSTALL ready=1,
+RT_HEAP_R410, RT_SETUP_R410 and RT_FRAME_R410.
+RT_LEASE_R410_INSTALL ready=0 disabled=1 and the disabled persistent scene
+cache remain intentional. PTLAS remains off.
