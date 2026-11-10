@@ -1,4 +1,5 @@
 #pragma once
+#include "rt_diagnostics_mode.h"
 #include "rt_compute_bindings.h"
 #include "rt_compute_bindings_bytes.h"
 #include "native_cpu_call_patch.h"
@@ -29,7 +30,12 @@ inline void Many(unsigned n,const std::uintptr_t* dst,const std::uintptr_t* src)
 inline void Apply(void* material){
  // These capture observers consume CopyDescriptorsSimple notifications. Preserve
  // their original path rather than bypass their descriptor shadows with batching.
- if(PTGlassRuntime::captureKind||gi_dual_bridge::observing){observerFallbacks.fetch_add(1,std::memory_order_relaxed);nativeApply(material);return;}
+ if(PTGlassRuntime::captureKind||gi_dual_bridge::observing){
+#if CONTROL_RT_DIAGNOSTICS
+ observerFallbacks.fetch_add(1,std::memory_order_relaxed);
+#endif
+ nativeApply(material);return;}
+#if CONTROL_RT_DIAGNOSTICS
  const auto number=calls.fetch_add(1,std::memory_order_relaxed)+1;const bool detailed=number%256==1;const bool sampled=number%32==1&&!detailed;LARGE_INTEGER start{},end{};
  Detail detail;const rt_compute_bindings::Probe probe{MarkDetail,&detail};
  const DWORD error=GetLastError();if(sampled)QueryPerformanceCounter(&start);if(detailed){detail={};QueryPerformanceCounter(&detail.last);}SetLastError(error);
@@ -40,8 +46,12 @@ inline void Apply(void* material){
  if(detailed){MarkDetail(&detail,rt_compute_bindings::Phase::Other);for(unsigned i=0;i<phaseCount;++i)phaseTicks[i].fetch_add(detail.duration[i],std::memory_order_relaxed);detailCalls.fetch_add(1,std::memory_order_relaxed);}
  const DWORD after=GetLastError();if(sampled){QueryPerformanceCounter(&end);ticks.fetch_add(static_cast<UINT64>(end.QuadPart-start.QuadPart),std::memory_order_relaxed);timedCalls.fetch_add(1,std::memory_order_relaxed);}SetLastError(after);
  tables.fetch_add(result.handled,std::memory_order_relaxed);batched.fetch_add(result.batches,std::memory_order_relaxed);descriptors.fetch_add(result.descriptors,std::memory_order_relaxed);fallbacks.fetch_add(result.native,std::memory_order_relaxed);
- if(number==1||number%16384==0){RTSetupProbe::Report();const auto value=ticks.load();Log("RT_BIND_R410 calls=%llu handled_tables=%llu batches=%llu descriptors=%llu native_tables=%llu sampled_calls=%llu apply_us=%llu observer_fallbacks=%llu persistent_cache=0 skipped_updates=0",number,tables.load(),batched.load(),descriptors.load(),fallbacks.load(),timedCalls.load(),value/frequency*1000000+(value%frequency)*1000000/frequency,observerFallbacks.load());
- Log("RT_BIND_R410_DETAIL calls=%llu other_us=%llu retrieve_us=%llu shaders_us=%llu eligibility_us=%llu constants_us=%llu cbv_us=%llu resolve_us=%llu copy_us=%llu uav_us=%llu native_us=%llu sample_period=256 cpu_inclusive=1 gpu_duration=0 ordinary_samples_exclude_detail=1",detailCalls.load(),Micros(phaseTicks[0].load()),Micros(phaseTicks[1].load()),Micros(phaseTicks[2].load()),Micros(phaseTicks[3].load()),Micros(phaseTicks[4].load()),Micros(phaseTicks[5].load()),Micros(phaseTicks[6].load()),Micros(phaseTicks[7].load()),Micros(phaseTicks[8].load()),Micros(phaseTicks[9].load()));SetLastError(after);}
+ if(number==1||number%16384==0){RTSetupProbe::Report();const auto value=ticks.load();Log("RT_BIND_R411 calls=%llu handled_tables=%llu batches=%llu descriptors=%llu native_tables=%llu sampled_calls=%llu apply_us=%llu observer_fallbacks=%llu persistent_cache=0 skipped_updates=0",number,tables.load(),batched.load(),descriptors.load(),fallbacks.load(),timedCalls.load(),value/frequency*1000000+(value%frequency)*1000000/frequency,observerFallbacks.load());
+ Log("RT_BIND_R411_DETAIL calls=%llu other_us=%llu retrieve_us=%llu shaders_us=%llu eligibility_us=%llu constants_us=%llu cbv_us=%llu resolve_us=%llu copy_us=%llu uav_us=%llu native_us=%llu sample_period=256 cpu_inclusive=1 gpu_duration=0 ordinary_samples_exclude_detail=1",detailCalls.load(),Micros(phaseTicks[0].load()),Micros(phaseTicks[1].load()),Micros(phaseTicks[2].load()),Micros(phaseTicks[3].load()),Micros(phaseTicks[4].load()),Micros(phaseTicks[5].load()),Micros(phaseTicks[6].load()),Micros(phaseTicks[7].load()),Micros(phaseTicks[8].load()),Micros(phaseTicks[9].load()));SetLastError(after);}
+#else
+ const rt_compute_bindings::ShaderApi shaderApi{retrieve,setShaders,nativeUse,finishUse};
+ rt_compute_bindings::ApplyShader(api,shaderApi,material,nullptr);
+#endif
 }
 inline bool Install(HMODULE renderer,HMODULE d3d)noexcept{
  if(!renderer||renderer!=verifiedRenderer||!d3d||d3d!=verifiedD3d||!HashMatches(renderer,kRendererHash)||!HashMatches(d3d,kD3dHash))return false;

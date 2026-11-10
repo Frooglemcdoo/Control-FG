@@ -1,4 +1,5 @@
 #pragma once
+#include "rt_diagnostics_mode.h"
 #include "rt_owned_selection.h"
 #include <intrin.h>
 namespace RTOwnedSelection {
@@ -14,10 +15,16 @@ __declspec(noinline) inline void Hook(void* grid,void* volume,std::uint32_t type
  // preparation caller may enter the owned path; all other callers stay native.
  if(_ReturnAddress()!=returnSite){original(grid,volume,types,flags,required,output);return;}
  if(!rt_owned_selection::Supported(grid,volume)){
+#if CONTROL_RT_DIAGNOSTICS
   const auto n=fallbacks.fetch_add(1,std::memory_order_relaxed)+1;
+#endif
   original(grid,volume,types,flags,required,output);
-  if(n==1)Log("RT_SELECTION_R410 fallback=1 reason=unsupported_shape");return;
+#if CONTROL_RT_DIAGNOSTICS
+  if(n==1)Log("RT_SELECTION_R411 fallback=1 reason=unsupported_shape");
+#endif
+  return;
  }
+#if CONTROL_RT_DIAGNOSTICS
  LARGE_INTEGER begin{},end{};QueryPerformanceCounter(&begin);
  const auto stats=rt_owned_selection::Query(api,grid,volume,types,flags,required,output);
  QueryPerformanceCounter(&end);
@@ -25,8 +32,11 @@ __declspec(noinline) inline void Hook(void* grid,void* volume,std::uint32_t type
  ticks.fetch_add(static_cast<UINT64>(end.QuadPart-begin.QuadPart),std::memory_order_relaxed);
  const auto n=calls.fetch_add(1,std::memory_order_relaxed)+1;
  if(n==1||n%512==0){const DWORD error=GetLastError();const auto elapsed=ticks.load();const auto us=elapsed/frequency*1000000+(elapsed%frequency)*1000000/frequency;
-  Log("RT_SELECTION_R410 active=1 queries=%llu nodes=%llu dirty_refreshes=%llu partial_filters=%llu total_query_us=%llu fallback=%llu owned_traversal=1 traversal_heap_allocations=0 native_bounds=1 native_partial_filters=1 native_object_updates=1 native_as_builds=1 ptlas=0",n,nodes.load(),refreshes.load(),partial.load(),us,fallbacks.load());SetLastError(error);
+  Log("RT_SELECTION_R411 active=1 queries=%llu nodes=%llu dirty_refreshes=%llu partial_filters=%llu total_query_us=%llu fallback=%llu owned_traversal=1 traversal_heap_allocations=0 native_bounds=1 native_partial_filters=1 native_object_updates=1 native_as_builds=1 ptlas=0",n,nodes.load(),refreshes.load(),partial.load(),us,fallbacks.load());SetLastError(error);
  }
+#else
+ rt_owned_selection::Query(api,grid,volume,types,flags,required,output);
+#endif
 }
 inline bool Install(HMODULE renderer)noexcept{
  if(!renderer||renderer!=verifiedRenderer||!HashMatches(renderer,kRendererHash))return false;

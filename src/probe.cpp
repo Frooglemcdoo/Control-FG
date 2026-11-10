@@ -9,6 +9,7 @@
 #include <dxgi1_6.h>
 #include <atomic>
 #include "diagnostic_activity.h"
+#include "rt_diagnostics_mode.h"
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -72,7 +73,7 @@ static bool ReleaseLogSuppressed(const char* body) noexcept {
 static void Log(const char* format, ...) noexcept {
  if(!control_diagnostics::Active()) {
 #if defined(CONTROL_RT_OWNED_ASSEMBLY)
-  if(!format||(std::strncmp(format,"RT_HEAP_R410",sizeof("RT_HEAP_R410")-1)!=0&&std::strncmp(format,"RT_SETUP_R410",sizeof("RT_SETUP_R410")-1)!=0&&std::strncmp(format,"RT_FRAME_R410",sizeof("RT_FRAME_R410")-1)!=0&&std::strncmp(format,"RT_LEASE_R410",sizeof("RT_LEASE_R410")-1)!=0&&std::strncmp(format,"RT_ASSEMBLY_R410",sizeof("RT_ASSEMBLY_R410")-1)!=0&&std::strncmp(format,"RT_SELECTION_R410",sizeof("RT_SELECTION_R410")-1)!=0&&std::strncmp(format,"RT_PREPARE_R410",sizeof("RT_PREPARE_R410")-1)!=0&&std::strncmp(format,"RT_CACHE_R410",sizeof("RT_CACHE_R410")-1)!=0&&std::strncmp(format,"RT_RECORD_R410",sizeof("RT_RECORD_R410")-1)!=0&&std::strncmp(format,"RT_BIND_R410",sizeof("RT_BIND_R410")-1)!=0))return;
+  if(!format||(std::strncmp(format,"RT_MODE_R411",sizeof("RT_MODE_R411")-1)!=0&&std::strncmp(format,"RT_ALLOC_R411",sizeof("RT_ALLOC_R411")-1)!=0&&std::strncmp(format,"RT_HEAP_R411",sizeof("RT_HEAP_R411")-1)!=0&&std::strncmp(format,"RT_SETUP_R411",sizeof("RT_SETUP_R411")-1)!=0&&std::strncmp(format,"RT_FRAME_R411",sizeof("RT_FRAME_R411")-1)!=0&&std::strncmp(format,"RT_LEASE_R411",sizeof("RT_LEASE_R411")-1)!=0&&std::strncmp(format,"RT_ASSEMBLY_R411",sizeof("RT_ASSEMBLY_R411")-1)!=0&&std::strncmp(format,"RT_SELECTION_R411",sizeof("RT_SELECTION_R411")-1)!=0&&std::strncmp(format,"RT_PREPARE_R411",sizeof("RT_PREPARE_R411")-1)!=0&&std::strncmp(format,"RT_CACHE_R411",sizeof("RT_CACHE_R411")-1)!=0&&std::strncmp(format,"RT_RECORD_R411",sizeof("RT_RECORD_R411")-1)!=0&&std::strncmp(format,"RT_BIND_R411",sizeof("RT_BIND_R411")-1)!=0))return;
 #elif defined(CONTROL_RT_INSTANCE_CAPTURE)
   if(!format||std::strncmp(format,"RT_INSTANCE_R393",sizeof("RT_INSTANCE_R393")-1)!=0)return;
 #else
@@ -828,14 +829,14 @@ static void RRVramLifecycleAfterPresent(unsigned long long present) noexcept;
 
 static void NativeCpuPoll(unsigned long long present) noexcept;
 
-#ifdef CONTROL_RT_OWNED_ASSEMBLY
+#if defined(CONTROL_RT_OWNED_ASSEMBLY) && CONTROL_RT_DIAGNOSTICS
 #include "rt_frame_intervals_runtime.h"
 #endif
 
 static void HookPresent() {
     control_gi_frames::Present();
     auto count = ++presentCount;
-#ifdef CONTROL_RT_OWNED_ASSEMBLY
+#if defined(CONTROL_RT_OWNED_ASSEMBLY) && CONTROL_RT_DIAGNOSTICS
     RTPerformancePresent(count);
 #endif
     if(control_compare::enabled.load(std::memory_order_relaxed)){LARGE_INTEGER q{};QueryPerformanceCounter(&q);control_compare::Present(q.QuadPart,count);}
@@ -1603,15 +1604,22 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RT_INSTANCE_R393_INSTALL ready=%u",unsigned(RTInstanceCapture::Install(renderer)));
 #endif
 #ifdef CONTROL_RT_OWNED_ASSEMBLY
-        Log("RT_CACHE_R410_INSTALL ready=0 disabled=1 reason=exact_validation_cost");
-        Log("RT_ASSEMBLY_R410_INSTALL ready=%u",unsigned(RTOwnedAssembly::Install(renderer)));
-        Log("RT_SELECTION_R410_INSTALL ready=%u",unsigned(RTOwnedSelection::Install(renderer)));
-        Log("RT_PREPARE_R410_INSTALL ready=%u",unsigned(RTOwnedPrepare::Install(renderer)));
-        Log("RT_RECORD_R410_INSTALL ready=%u",unsigned(RTOwnedRecord::Install(renderer,d3d)));
-        Log("RT_BIND_R410_INSTALL ready=%u",unsigned(RTComputeBindings::Install(renderer,d3d)));
-        Log("RT_LEASE_R410_INSTALL ready=0 disabled=1 reason=no_demonstrated_gain");
-        Log("RT_SETUP_R410_INSTALL ready=%u",unsigned(RTSetupProbe::Install(d3d)));
-        Log("RT_HEAP_R410_INSTALL ready=%u",unsigned(RTHeapRefresh::Install(d3d)));
+        Log("RT_MODE_R411 diagnostics=%u heap_refresh=0 allocator_probe=%u",unsigned(CONTROL_RT_DIAGNOSTICS),unsigned(CONTROL_RT_DIAGNOSTICS));
+        Log("RT_CACHE_R411_INSTALL ready=0 disabled=1 reason=exact_validation_cost");
+        Log("RT_ASSEMBLY_R411_INSTALL ready=%u",unsigned(RTOwnedAssembly::Install(renderer)));
+        Log("RT_SELECTION_R411_INSTALL ready=%u",unsigned(RTOwnedSelection::Install(renderer)));
+        Log("RT_PREPARE_R411_INSTALL ready=%u",unsigned(RTOwnedPrepare::Install(renderer)));
+        Log("RT_RECORD_R411_INSTALL ready=%u",unsigned(RTOwnedRecord::Install(renderer,d3d)));
+        Log("RT_BIND_R411_INSTALL ready=%u",unsigned(RTComputeBindings::Install(renderer,d3d)));
+        Log("RT_LEASE_R411_INSTALL ready=0 disabled=1 reason=no_demonstrated_gain");
+#if CONTROL_RT_DIAGNOSTICS
+        Log("RT_SETUP_R411_INSTALL ready=%u",unsigned(RTSetupProbe::Install(d3d)));
+        Log("RT_ALLOC_R411_INSTALL ready=%u",unsigned(RTAllocatorProbe::Install(d3d)));
+#else
+        Log("RT_SETUP_R411_INSTALL ready=0 disabled=1 reason=clean_build");
+        Log("RT_ALLOC_R411_INSTALL ready=0 disabled=1 reason=clean_build");
+#endif
+        Log("RT_HEAP_R411_INSTALL ready=0 disabled=1 reason=publication_tracking_cost");
 #endif
         StartFGSettingsService();
         Log("PROBE_ACTIVE hooks=9 rr_observer_hooks=%u fg_activation=resource_gated presentation_proxy=active common_constants=per_dlss_frame frame_tokens=begin_indexed pcl_present_markers=frame_gated reflex_mode=low_latency reflex_sleep=active streamline_sdk=2.14.1 streamline_bootstrap=deferred_post_native_factory bootstrap_state=%u semantic_capture=post_eval swapchain_capture=mode_change_aware camera_capture=pre_aa hud_render_hook=native_slot17 hud_rtt_hook=two_native_texture_ctor command_context=pre_ui_readonly_tls_sentinel_safe host_device=native queue_route=exact_constructor_only control_ngx_feature_path=ControlFGStreamline streamline_ngx_paths=runtime_plus_game device_bind=early_before_control_ngx factory_upgrade=presentation_only swapchain_upgrade=via_factory command_queue_proxy=exact_ctor_private_device features_requested=4 features=reflex,pcl,dlssg,dlssrr dlssg_loaded_expected=1 dlssrr_loaded_expected=1 resource_tags=depth_mv_plus_private_hudless_plus_ui_alpha_sdr_and_hdr10 hdr10_resource_tags=depth_mv_plus_rgb10_pq_hudless_plus_ui_alpha backbuffer_index=every_present fg_baseline=working mfg_mode=fixed_plus_native_dynamic default_multiplier=4x max_selector=6x dynamic_mode=native_eDynamic dynamic_auto_target=explicit_game_monitor_refresh dynamic_manual_target=30-1000_fps dynamic_vsync_policy=syncinterval0_while_active dynamic_reflex_limiter=target_fps dynamic_target_ui=auto_manual_thick_slider rr_preset=fixed_F reflection_detail=fixed_60 rr_modes=off,full_public_partial_hidden skin_responsivity=disabled settings_ui=native_graphics_menu persistence=localappdata_ini selector=off,dynamic,2x,3x,4x,5x,6x gpu_policy=rtx40_off_plus_2x_only transition_telemetry=segment_confirmed hdr_transition=display_or_resize_detection hdr10_bridge=fp16_scrgb_shadow_to_rgb10_pq hdr10_fg_ui=pre_ui_fp16_to_rgb10_pq_plus_r8_alpha project_id=305914b8-cf5b-4535-8e53-5589bf8cefa5 device_set=%u hdr_query=enabled transition_capture=enabled rr_phase=NativeG12RRExperiment rr_live_guides=renodx_descriptor_parity_bounded_material_srv rr_eval=warmup_then_native rr_guide=renodx_style_gbuffer_material_envbrdf rr_capture=disabled_production rr_observer_hooks=stable3 p4_hot_binding_hooks=disabled ngx_set_calls=per_rr_frame ngx_setup_intercept=disabled rr_native_denoiser=specular_energy_clamp_gi_contact_shadow_broad_diffuse", rrObserverHooks, slBootstrapState.load(), slDeviceConfigured.load());

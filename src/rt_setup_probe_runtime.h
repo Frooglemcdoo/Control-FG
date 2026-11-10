@@ -3,7 +3,7 @@
 #include "rt_descriptor_lease_bytes.h"
 #include "rt_setup_probe_bytes.h"
 #include "native_cpu_call_patch.h"
-#include "rt_heap_refresh_runtime.h"
+#include "rt_allocator_probe_runtime.h"
 namespace RTSetupProbe {
 inline unsigned char* base=nullptr;inline NativeCpuCallPatch patch{};inline rt_setup_probe::Api api{};
 inline void(*original)(void*,bool,bool)=nullptr;
@@ -26,7 +26,7 @@ struct Scope {
  ~Scope(){Finish();}Scope(const Scope&)=delete;
 };
 inline void Allocate(void* argument,std::uint64_t count,std::uint64_t* gpu,std::uint64_t* cpu,void** owner){
- reinterpret_cast<decltype(api.allocate)>(base+0x1aa00)(argument,count,gpu,cpu,owner);
+ RTAllocatorProbe::Scope sample(count);reinterpret_cast<decltype(api.allocate)>(base+0x1aa00)(argument,count,gpu,cpu,owner);
 }
 inline void Initialize(std::uint64_t destination){
  auto* device=rt_owned_assembly::Read<ID3D12Device*>(base,0x111c08);
@@ -40,9 +40,9 @@ inline void Prepare(void* state,bool clear,bool sampler){
  rt_setup_probe::Run(api,state,clear,sampler,Mark,active);
 }
 inline void Report(){
- if(!frequency)return;RTHeapRefresh::Report();const DWORD error=GetLastError();UINT64 times[3],count,clearCount,samplerCount,maximum;Sample worst;
+ if(!frequency)return;RTAllocatorProbe::Report();const DWORD error=GetLastError();UINT64 times[3],count,clearCount,samplerCount,maximum;Sample worst;
  AcquireSRWLockShared(&lock);for(unsigned i=0;i<3;++i)times[i]=totalTicks[i];count=totalCalls;clearCount=clears;samplerCount=samplers;maximum=peakTicks;worst=peak;ReleaseSRWLockShared(&lock);
- Log("RT_SETUP_R410 sampled_calls=%llu allocation_us=%llu sampler_us=%llu initialization_us=%llu clear_calls=%llu nonzero_sampler_calls=%llu peak_us=%llu peak_allocation_us=%llu peak_sampler_us=%llu peak_initialization_us=%llu peak_begin_qpc=%lld peak_end_qpc=%lld reservation_size=49 lease_enabled=0 cpu_inclusive=1 gpu_duration=0",count,Micros(times[0]),Micros(times[1]),Micros(times[2]),clearCount,samplerCount,Micros(maximum),Micros(worst.ticks[0]),Micros(worst.ticks[1]),Micros(worst.ticks[2]),worst.begin,worst.end);SetLastError(error);
+ Log("RT_SETUP_R411 sampled_calls=%llu allocation_us=%llu sampler_us=%llu initialization_us=%llu clear_calls=%llu nonzero_sampler_calls=%llu peak_us=%llu peak_allocation_us=%llu peak_sampler_us=%llu peak_initialization_us=%llu peak_begin_qpc=%lld peak_end_qpc=%lld reservation_size=49 lease_enabled=0 cpu_inclusive=1 gpu_duration=0",count,Micros(times[0]),Micros(times[1]),Micros(times[2]),clearCount,samplerCount,Micros(maximum),Micros(worst.ticks[0]),Micros(worst.ticks[1]),Micros(worst.ticks[2]),worst.begin,worst.end);SetLastError(error);
 }
 inline bool Install(HMODULE d3d)noexcept{
  if(!d3d||d3d!=verifiedD3d||!HashMatches(d3d,kD3dHash))return false;base=reinterpret_cast<unsigned char*>(d3d);

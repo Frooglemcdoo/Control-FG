@@ -1,0 +1,40 @@
+CONTROL TOH R411 - CONTROLLED RT DIAGNOSTIC OVERHEAD COMPARISON
+
+Extract the complete package over R410 with Control closed.
+The root dxgi.dll is CLEAN by default.
+
+CLEAN compiles out the RT ownership profiling counters, per-object reporting,
+QPC phase timers, setup probe, allocator lock wrappers and present-interval
+recorder. Startup installation health messages remain.
+DIAGNOSTICS restores the R409-style RT instrumentation.
+Both binaries use the same rendering code, native rays, scene work and settings.
+R410's descriptor publication tracker is DISABLED in BOTH.
+
+Use the same save, camera/view, settings and FPS counter. Let loading and
+texture warmup finish before comparing. Do not run F9/F10 captures during
+this comparison. Keep FG/RR states unchanged. Do not compare menu/loading FPS.
+
+1. Start normally with CLEAN. Note steady FPS and dips in the same area.
+2. Close Control. Run ControlTOH\Tools\Use-R411-Diagnostics.cmd.
+   Start normally, repeat the same view/path, and note FPS.
+3. Close Control. Run ControlTOH\Tools\Use-R411-Clean.cmd.
+   Repeat the clean view if practical, to check run-order/warmup effects.
+4. Close Control and run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+   Send RT-Assembly-R411.zip with your clean/diagnostic FPS observations.
+   The collector includes up to two logs per mode.
+
+Mode selection replaces only the root dxgi.dll and verifies its hash. Control
+must be closed. It does not change graphics settings or start the game.
+Leave CLEAN selected afterward. No FPS gain is promised.
+
+Expected startup marker: RT_MODE_R411 diagnostics=0 or diagnostics=1.
+Clean intentionally has only startup RT installation logs, not periodic timing.
+It is clean of this RT profiling work, not a claim that the entire mod has no
+other logging, safety checks, counters or user-triggered capture facilities.
+
+Interpretation:
+- Clean reproducibly faster than diagnostic: RT diagnostic overhead contributes.
+- Both similarly slow: those diagnostics do not explain the reported loss.
+- Clean faster than R410 alone: not enough to distinguish tracker cost from
+  diagnostics, because R410 tracking is removed in both R411 variants.
+This is a causal comparison, not another rendering optimization.

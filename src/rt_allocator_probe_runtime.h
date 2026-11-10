@@ -29,8 +29,8 @@ inline UINT64 Micros(UINT64 value){return value/frequency*1000000+(value%frequen
 inline void Report(){
  if(!frequency)return;const DWORD error=GetLastError();Totals copy[3];UINT64 missing;rt_allocator_probe::Sample wait,hold;
  AcquireSRWLockShared(&statsLock);for(unsigned i=0;i<3;++i)copy[i]=totals[i];missing=unobserved;wait=peakWait;hold=peakHold;ReleaseSRWLockShared(&statsLock);
- for(unsigned i=0;i<3;++i){const auto& t=copy[i];Log("RT_ALLOC_R409 class=%u sampled_calls=%llu wait_us=%llu hold_us=%llu release_us=%llu pool_growth_calls=%llu unobserved_calls=%llu ready=%u reservation_size=49 cpu_inclusive=1",i,t.calls,Micros(t.wait),Micros(t.hold),Micros(t.release),t.growth,missing,unsigned(ready));}
- Log("RT_ALLOC_R409_PEAK wait_us=%llu wait_hold_us=%llu wait_begin_qpc=%llu wait_end_qpc=%llu wait_class=%u hold_us=%llu hold_wait_us=%llu hold_begin_qpc=%llu hold_end_qpc=%llu hold_class=%u",Micros(wait.wait),Micros(wait.hold),wait.begin,wait.end,rt_allocator_probe::Classify(wait),Micros(hold.hold),Micros(hold.wait),hold.begin,hold.end,rt_allocator_probe::Classify(hold));SetLastError(error);
+ for(unsigned i=0;i<3;++i){const auto& t=copy[i];Log("RT_ALLOC_R411 class=%u sampled_calls=%llu wait_us=%llu hold_us=%llu release_us=%llu pool_growth_calls=%llu unobserved_calls=%llu ready=%u reservation_size=49 cpu_inclusive=1",i,t.calls,Micros(t.wait),Micros(t.hold),Micros(t.release),t.growth,missing,unsigned(ready));}
+ Log("RT_ALLOC_R411_PEAK wait_us=%llu wait_hold_us=%llu wait_begin_qpc=%llu wait_end_qpc=%llu wait_class=%u hold_us=%llu hold_wait_us=%llu hold_begin_qpc=%llu hold_end_qpc=%llu hold_class=%u",Micros(wait.wait),Micros(wait.hold),wait.begin,wait.end,rt_allocator_probe::Classify(wait),Micros(hold.hold),Micros(hold.wait),hold.begin,hold.end,rt_allocator_probe::Classify(hold));SetLastError(error);
 }
 struct Patch {unsigned char* site=nullptr;unsigned char original[6]{},replacement[6]{};};inline Patch patches[2]{};
 inline bool PreparePatch(unsigned char* site,void* expected,void* hook,Patch& patch){
