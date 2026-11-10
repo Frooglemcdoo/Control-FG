@@ -260,6 +260,7 @@ int main(int argc,char** argv){try{
   if(frame==80){std::printf("Sparse outliers center %.8f mean %.8f\n",center/centerCount,finalMean);Require(std::abs(finalMean-quietMean)<.06,"Sparse outliers caused excessive light fluctuation");}
   if(frame==96){std::printf("Light off mean %.8f\n",finalMean);Require(finalMean<.025,"Stale illumination persisted after light removal");}
   if(frame>100){const double trailMean=trail/trailCount;worstTrail=(std::max)(worstTrail,trailMean);
+   if(trailMean>=.14)std::printf("Trail failure frame %u mean %.8f profile %s\n",frame,trailMean,control_relax::Name(profile));
    Require(trailMean<.14,"moving foreground left stale illumination on exposed background");
    Require(movingCenter/movingCount>.6,"moving foreground lost illumination");
   }

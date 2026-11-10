@@ -10,7 +10,7 @@ inline bool Valid(Profile p) noexcept {return p==Profile::Original||p==Profile::
 template<class Settings> inline void Spatial(Settings& s,Profile p) noexcept {
  s.diffusePrepassBlurRadius=p==Profile::Balanced?12.f:30.f;
  s.atrousIterationNum=p==Profile::Balanced?3u:5u;
- s.diffusePhiLuminance=p==Profile::Balanced?1.f:2.f;
+ s.diffusePhiLuminance=2.f;
 }
 // manualGI=4 is the existing raw-GI bypass; other manual comparisons reset.
 inline unsigned Cycle(unsigned manual) noexcept {

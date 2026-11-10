@@ -6,8 +6,8 @@ RR and native GI ray counts stay unchanged. OFF uses the existing raw-GI path.
 The button shows the requested profile; CHECK SETTINGS verifies execution.
 
 Balanced is this test build's default. It reduces the diffuse prepass radius
-from 30 to 12 input pixels, spatial wavelet iterations from five to three, and
-luminance smoothing tolerance from 2 to 1. Temporal accumulation duration and
+from 30 to 12 input pixels, spatial wavelet iterations from five to three. Luminance tolerance,
+temporal accumulation duration and
 firefly suppression stay unchanged. There is no added sharpening or raw blend.
 
 Profile switches clear RELAX history; allow a second for it to settle before
