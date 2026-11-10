@@ -119,3 +119,44 @@ Native omits the owned selection install entirely; Owned retains it. Other
 rendering hooks and ray counts remain. This is a causal comparison, not a
 performance fix. Earlier oracle tests established parity and allocation counts,
 not FPS. Use a matched native/owned/native route without the heavy recorder.
+
+
+## R412 user result: native selection retained
+
+User reports similar overall FPS, slightly higher low FPS with native selection,
+and no frame spikes in either mode during the comparison. User confirmed keeping
+native selection. This is observational feedback, not a numeric frame-time dataset.
+No demonstrated performance benefit from owned selection; it is now opt-in at
+compile time. The existing R412 package already defaults to the accepted native
+mode and does not need replacement for this default-policy change. Comparison
+compiles explicitly retain their prior 0/1 definitions, so runtime behavior is
+unchanged. Prior UI waits remain unexplained; absence of spikes in these runs
+does not establish their cause or prove they are fixed.
+
+
+## Remaining preparation hotspot and R413
+
+All-game CPU samples from the existing ETL, exact instruction addresses grouped
+using the R411 DLL exception table: owned preparation body 0x10E87E..0x10ED20
+contains 1,608 smooth / 4,645 slow samples (20 / 40 seconds respectively).
+The body maps to rt_owned_prepare::Run: object owner at +0x60, LOD selection,
+primary provider tables at +0x230/+0x240 and dynamic tables at +0x258/+0x268.
+These are own-IP counts, not inclusive child time, wait latency or FPS gains.
+Sampling skid prevents assigning an exact memory-stall cost to a load.
+Owned assembler body 0xAF20..0xB322 has 763 / 1,864 samples in those windows.
+Different scene workloads remain a confounder, so no regression is proven.
+
+Reviewed earlier R399/R400/R403/R404/R407/R408 results: parity, fewer calls and
+allocation counts did not establish frame-rate benefit. R403/R404 also identify
+recording provider callbacks separately; they should not be conflated with
+preparation. Their recording/binding code stays matched in R413.
+
+R413 compares the object preparation loop and instance assembly as one block.
+NativePrep omits all three assembler call patches and the outer-loop patch;
+OwnedPrep retains both. RTOwnedPrepare explicitly requires assembler patches,
+so disabling the assembler alone while leaving its loop installed is invalid.
+Native selection remains enabled in both clean comparison modes. Other hooks
+do not depend on these two installs: recording validates its own code/imports,
+and bindings patch the provider callback independently. R412 Native remains
+the functional baseline, represented by R413 OwnedPrep. No quality reduction,
+update skipping, persistent pointer cache, scheduler or UI-loop changes.

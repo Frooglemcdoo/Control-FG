@@ -1606,7 +1606,13 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
 #ifdef CONTROL_RT_OWNED_ASSEMBLY
         Log("RT_MODE_R411 diagnostics=%u heap_refresh=0 allocator_probe=%u",unsigned(CONTROL_RT_DIAGNOSTICS),unsigned(CONTROL_RT_DIAGNOSTICS));
         Log("RT_CACHE_R411_INSTALL ready=0 disabled=1 reason=exact_validation_cost");
+#if CONTROL_RT_NATIVE_PREPARATION
+        Log("RT_ASSEMBLY_R411_INSTALL ready=0 disabled=1 reason=r413_native_preparation");
+        Log("RT_MODE_R411 preparation_comparison=R413 preparation=native preparation_hooks=0");
+#else
         Log("RT_ASSEMBLY_R411_INSTALL ready=%u",unsigned(RTOwnedAssembly::Install(renderer)));
+        Log("RT_MODE_R411 preparation_comparison=R413 preparation=owned");
+#endif
 #if CONTROL_RT_NATIVE_SELECTION
         Log("RT_SELECTION_R411_INSTALL ready=0 disabled=1 reason=r412_native_selection");
         Log("RT_MODE_R411 selection_comparison=R412 selection=native selection_hook=0");
@@ -1615,7 +1621,11 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("RT_SELECTION_R411_INSTALL ready=%u",unsigned(selectionReady));
         Log("RT_MODE_R411 selection_comparison=R412 selection=owned selection_hook=%u",unsigned(selectionReady));
 #endif
+#if CONTROL_RT_NATIVE_PREPARATION
+        Log("RT_PREPARE_R411_INSTALL ready=0 disabled=1 reason=r413_native_preparation");
+#else
         Log("RT_PREPARE_R411_INSTALL ready=%u",unsigned(RTOwnedPrepare::Install(renderer)));
+#endif
         Log("RT_RECORD_R411_INSTALL ready=%u",unsigned(RTOwnedRecord::Install(renderer,d3d)));
         Log("RT_BIND_R411_INSTALL ready=%u",unsigned(RTComputeBindings::Install(renderer,d3d)));
         Log("RT_LEASE_R411_INSTALL ready=0 disabled=1 reason=no_demonstrated_gain");

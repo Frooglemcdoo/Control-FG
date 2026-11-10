@@ -1,0 +1,27 @@
+ControlTOH R413 - Object preparation comparison
+
+Both modes KEEP NATIVE SCENE SELECTION, as accepted from R412.
+This comparison concerns the next stage: object/LOD/provider preparation and
+instance geometry/material assembly. It does not change RT ray counts or lights.
+
+Extract the whole package into the Control game folder with the game closed.
+The root DLL defaults to OwnedPrep: the same preparation path as R412 Native.
+
+1. Test your usual route without recording, with your existing settings/counter.
+2. Close Control. Run ControlTOH/Tools/Use-R413-NativePrep.cmd, start normally,
+   and repeat the same route after initial loading settles.
+3. To confirm a difference, close Control and use Use-R413-OwnedPrep.cmd to
+   return to the baseline, then repeat. Keep the save/route/settings consistent.
+
+NativePrep leaves the original object preparation loop and its three native
+instance-assembly calls untouched. OwnedPrep uses our replacements, including
+same-group batching and direct provider reads. Native scene selection stays on
+in BOTH modes. Recording/bindings, lighting, GI, RR, FG and ray counts stay matched.
+Both comparison DLLs have periodic RT diagnostics compiled out. The startup log
+identifies preparation=native or preparation=owned and the hook-install results.
+Use Collect-RT-Preparation.cmd if we need to verify which modes actually ran.
+
+Report overall FPS, low FPS and any sharp spikes. This is an isolation build,
+not a claimed speedup or a fix for the earlier Windows message waits.
+Use only the R413 mode commands for this comparison. Older mode commands may
+remain from previous packages; they are not part of this test.
