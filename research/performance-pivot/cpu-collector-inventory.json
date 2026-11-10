@@ -1,0 +1,174 @@
+[
+  {
+    "archive": "RT-Assembly-R395.zip",
+    "sha256": "c37a559e8f780a2dda8141cd63424046502a8dd2f078e96dceeef52b991d9ba8",
+    "text_members": 1,
+    "text_bytes": 74432,
+    "diagnostics_modes": [],
+    "rt_install_lines": 1,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R396.zip",
+    "sha256": "719068b0c5f99b7035baf4d98351ec391a51c8b73e1ce0cb7843ddf890a4b1cc",
+    "text_members": 1,
+    "text_bytes": 65336,
+    "diagnostics_modes": [],
+    "rt_install_lines": 1,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R397.zip",
+    "sha256": "c66aafde762a032c82f5b8b7f8127250f3b57c739c8f2aa340908f0985cff898",
+    "text_members": 1,
+    "text_bytes": 94820,
+    "diagnostics_modes": [],
+    "rt_install_lines": 2,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R398.zip",
+    "sha256": "1ebc42ed2b7b4436789ca556abdcc09e94293589d033f2c90150013b99003ce5",
+    "text_members": 1,
+    "text_bytes": 55756,
+    "diagnostics_modes": [],
+    "rt_install_lines": 3,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R399.zip",
+    "sha256": "ed5b7cced1f949f9250295a77cea907c97a606c4a2188dde559a8bf7a9190a32",
+    "text_members": 1,
+    "text_bytes": 112804,
+    "diagnostics_modes": [],
+    "rt_install_lines": 3,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R400.zip",
+    "sha256": "efca6df9bda386d9a5ca5f426dc26d06ee28d346060844821f715ba85bb79339",
+    "text_members": 1,
+    "text_bytes": 91448,
+    "diagnostics_modes": [],
+    "rt_install_lines": 3,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R401.zip",
+    "sha256": "1a6974bd755b3fcbc6967f9e97abd079254211b8387ad84bbee0b821e446769c",
+    "text_members": 1,
+    "text_bytes": 64196,
+    "diagnostics_modes": [],
+    "rt_install_lines": 4,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R403(1).zip",
+    "sha256": "7e2760bf47758951f900ad27e0dbafc0ff2a5c72e72319fcdd248cc6d0a7de27",
+    "text_members": 1,
+    "text_bytes": 58065,
+    "diagnostics_modes": [],
+    "rt_install_lines": 5,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R403.zip",
+    "sha256": "b7998e8a3d6e7100be9af58bf4f839a78070b08115ee06e955a692288ebbcf27",
+    "text_members": 1,
+    "text_bytes": 83491,
+    "diagnostics_modes": [],
+    "rt_install_lines": 5,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R404.zip",
+    "sha256": "eda4f8d746a60e86c311a2d623b14e9326ec89ab786b316a673621238a6ea4b3",
+    "text_members": 1,
+    "text_bytes": 101004,
+    "diagnostics_modes": [],
+    "rt_install_lines": 5,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R405.zip",
+    "sha256": "e009c51560b192a8dc2e6796a6def1d4e4e0904f11d2351cf421f4b134fb5719",
+    "text_members": 1,
+    "text_bytes": 89084,
+    "diagnostics_modes": [],
+    "rt_install_lines": 6,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R406.zip",
+    "sha256": "8c986c6b04dbcdfd65feb7cc96aadcc9e6480a34153e84c35b0172759480e269",
+    "text_members": 1,
+    "text_bytes": 110800,
+    "diagnostics_modes": [],
+    "rt_install_lines": 6,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R407.zip",
+    "sha256": "e71d62b7cb8b87bf3af99fd1f326e3843d07d174e3b99052f3aa9a5e45817a47",
+    "text_members": 1,
+    "text_bytes": 71450,
+    "diagnostics_modes": [],
+    "rt_install_lines": 7,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R408.zip",
+    "sha256": "eb76be9cc9f4a87004ab0b5946261af83a8f600358b44938b2dac64f2246a5c8",
+    "text_members": 1,
+    "text_bytes": 106863,
+    "diagnostics_modes": [],
+    "rt_install_lines": 8,
+    "contains_frame_series": true,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R409.zip",
+    "sha256": "ac4b366c6bc0dd444e28aa4dc1ed6776d72245db33a125a2094909d0313af56b",
+    "text_members": 1,
+    "text_bytes": 71497,
+    "diagnostics_modes": [],
+    "rt_install_lines": 9,
+    "contains_frame_series": true,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R410.zip",
+    "sha256": "8a7b79f1198c3910c1b00866fa27d2b59dca3abee6fdd84582c9c64c18cfa9e3",
+    "text_members": 1,
+    "text_bytes": 76312,
+    "diagnostics_modes": [],
+    "rt_install_lines": 9,
+    "contains_frame_series": true,
+    "has_gpu_stage_summary": false
+  },
+  {
+    "archive": "RT-Assembly-R411.zip",
+    "sha256": "715971c476bf8ca09eee4135f550b4ed051945554fca83ee542f9a56041f749e",
+    "text_members": 1,
+    "text_bytes": 870,
+    "diagnostics_modes": [
+      "0"
+    ],
+    "rt_install_lines": 10,
+    "contains_frame_series": false,
+    "has_gpu_stage_summary": false
+  }
+]

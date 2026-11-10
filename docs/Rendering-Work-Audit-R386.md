@@ -1,5 +1,10 @@
 # Rendering work audit — R386
 
+Historical audit. The per-recording allocation issue below was addressed by R388
+reuse; it is not a current recurring-cost claim. See
+[the performance pivot audit](../research/performance-pivot/audit.md) for verified
+R391 timings, current-source checks, and remaining evidence gaps.
+
 Reported regression: approximately 15–30 FPS, user observation. No matched GPU
 capture has yet established which pass accounts for that loss. FPS deltas alone
 cannot be converted to cost without both frame rates and matching settings.
