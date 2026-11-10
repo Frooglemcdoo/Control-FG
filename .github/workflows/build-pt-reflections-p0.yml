@@ -1007,6 +1007,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           python tools/test-clean-baseline.py
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-character-support-log.cpp /Febuild\test-character-support-log.exe
+          if errorlevel 1 exit /b 1
+          build\test-character-support-log.exe
+          if errorlevel 1 exit /b 1
           python tools/test-rr-character-base-evidence.py
           if errorlevel 1 exit /b 1
           python tools/test-rr-character-shader-match.py
@@ -1411,11 +1415,11 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package expanded skin guide correction R417
+      - name: Package bounded character activation logging R418
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R417'
+          $out='ControlTOH-R418'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1457,7 +1461,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/Skin-Guides-R417.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/Character-Support-R418.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1470,10 +1474,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R417
+          name: ControlTOH-R418
           path: |
-            ControlTOH-R417.zip
-            ControlTOH-R417.sha256
+            ControlTOH-R418.zip
+            ControlTOH-R418.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

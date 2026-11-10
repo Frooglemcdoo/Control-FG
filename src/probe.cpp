@@ -65,13 +65,14 @@ static std::atomic<unsigned int> vramProbeHdrKnown{0};
 static std::atomic<unsigned int> vramProbeHdrEnabled{0};
 
 #include "release_log_policy.h"
+#include "character_support_log.h"
 
 static bool ReleaseLogSuppressed(const char* body) noexcept {
     return control_fg_release_log::ShouldSuppress(body, verboseAuditLogging);
 }
 
 static void Log(const char* format, ...) noexcept {
- if(!control_diagnostics::Active()) {
+ if(!control_diagnostics::Active() && !control_character_support::IsLifecycleEvent(format)) {
 #if defined(CONTROL_RT_OWNED_ASSEMBLY)
   if(!format||(std::strncmp(format,"RT_MODE_R411",sizeof("RT_MODE_R411")-1)!=0&&std::strncmp(format,"RT_ALLOC_R411",sizeof("RT_ALLOC_R411")-1)!=0&&std::strncmp(format,"RT_HEAP_R411",sizeof("RT_HEAP_R411")-1)!=0&&std::strncmp(format,"RT_SETUP_R411",sizeof("RT_SETUP_R411")-1)!=0&&std::strncmp(format,"RT_FRAME_R411",sizeof("RT_FRAME_R411")-1)!=0&&std::strncmp(format,"RT_LEASE_R411",sizeof("RT_LEASE_R411")-1)!=0&&std::strncmp(format,"RT_ASSEMBLY_R411",sizeof("RT_ASSEMBLY_R411")-1)!=0&&std::strncmp(format,"RT_SELECTION_R411",sizeof("RT_SELECTION_R411")-1)!=0&&std::strncmp(format,"RT_PREPARE_R411",sizeof("RT_PREPARE_R411")-1)!=0&&std::strncmp(format,"RT_CACHE_R411",sizeof("RT_CACHE_R411")-1)!=0&&std::strncmp(format,"RT_RECORD_R411",sizeof("RT_RECORD_R411")-1)!=0&&std::strncmp(format,"RT_BIND_R411",sizeof("RT_BIND_R411")-1)!=0))return;
 #elif defined(CONTROL_RT_INSTANCE_CAPTURE)
@@ -252,6 +253,7 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
+    Log("RR_CHARACTER_SUPPORT_R418 build=R418 lifecycle_logging=1 diagnostics=%u skin_record_limit=32 hair_record_limit=32 rendering=R417",unsigned(control_diagnostics::Active()));
     Log("PROBE v2.1.2 internal_build=pt-reflections-p0 source_revision=pt-reflections-p0 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");
     Log("MONITORING profile=%s rr_perf_sample=240 support_events=startup_settings_fg_rr_model_resize_recovery_failures_fallbacks_performance verbose_env=CONTROLFG_VERBOSE_LOG",verboseAuditLogging?"verbose_audit":"release_support");

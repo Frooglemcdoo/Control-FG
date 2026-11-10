@@ -1,0 +1,20 @@
+ControlTOH R418 - Character activation logging repair
+
+This is an observability repair, not a claimed noise fix. Rendering is unchanged
+from R417. RELAX remains off by default.
+
+The submitted R417 log contained only 13 RT lifecycle lines. The clean-build
+diagnostics gate suppressed the skin and hair replacement activation messages,
+so their absence could not establish whether either replacement activated.
+
+R418 records one startup marker and the existing bounded skin/hair replacement
+creation events during ordinary play. It does not enable continuous diagnostics,
+performance recording, GPU readbacks, or capture passes. Each replacement list
+is capped at 32 entries; cached records do not log again.
+
+Install over the existing mod while the game is closed. After ordinary play in
+the affected scene, send the newest probe log from %LOCALAPPDATA%\ControlFGProbe.
+No capture button, comparison sequence, or video is required for this check.
+
+An activation event proves a replacement record was created, not that its pixels
+reached the final RR output or that it resolves the observed noise.
