@@ -85,7 +85,7 @@ int main(){
  Require(cameras.PreparedFrame()->settings.accumulationMode==nrd::AccumulationMode::CLEAR_AND_RESTART,"original return must reset history");
  Require(cameras.Submitted(7,6),"original reset submitted");
  moving.frame=7;Require(cameras.Prepare(moving,7),"original continuous");
- Require(cameras.Plan().size()==balancedCount+2,"balanced must remove exactly two spatial dispatches");
+ Require(cameras.Plan().size()==balancedCount+1,"balanced must remove exactly one spatial dispatch");
  gi_reuse::GraphicsTableState graphics;Require(!graphics.known,"graphics admission before reset");
  graphics.Reset();graphics.Root(7);graphics.Table(3,99);graphics.Root(7);unsigned replayed=0;
  graphics.Replay([&](unsigned slot,std::uint64_t address){Require(slot==3&&address==99,"graphics table mismatch");++replayed;});Require(replayed==1,"same graphics root lost table");

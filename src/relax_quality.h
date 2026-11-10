@@ -8,8 +8,8 @@ inline bool Valid(Profile p) noexcept {return p==Profile::Original||p==Profile::
 // Explicit values match pinned NRD 4.18 defaults in Original. Balanced reduces
 // spatial reuse; no ray count, temporal lifetime or output sharpening changes.
 template<class Settings> inline void Spatial(Settings& s,Profile p) noexcept {
- s.diffusePrepassBlurRadius=p==Profile::Balanced?12.f:30.f;
- s.atrousIterationNum=p==Profile::Balanced?3u:5u;
+ s.diffusePrepassBlurRadius=p==Profile::Balanced?20.f:30.f;
+ s.atrousIterationNum=p==Profile::Balanced?4u:5u;
  s.diffusePhiLuminance=2.f;
 }
 // manualGI=4 is the existing raw-GI bypass; other manual comparisons reset.
