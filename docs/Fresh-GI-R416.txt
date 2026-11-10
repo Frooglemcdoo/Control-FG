@@ -1,0 +1,18 @@
+ControlTOH R416 - Fresh GI samples, RR first
+
+Install over the existing mod with the game fully closed. RR stays ON.
+RELAX now starts OFF; RESET COMPARE returns it to OFF. The F10 RELAX
+button still cycles Balanced -> Original -> Off. Selections are session-only.
+
+Removed Owned GI's temporal endpoint replacement. It selectively replaced
+already-traced fresh hits with old endpoints without correcting their weights.
+Fresh ray count, current-frame lighting evaluation and miss contribution remain.
+The extra endpoint visibility pass and its history allocation are no longer used.
+This is separate from RELAX and from RR's own temporal reconstruction.
+
+The estimator regression and build checks do not establish a live-game visual
+fix or FPS gain. Existing captures were reviewed; no new capture is requested.
+Judge all three existing problem scenes together: Jesse's jaw/lighting around
+her, the plant and desk lamp, and the projector floor while still and moving.
+A cleaner scene does not count as success if another loses light or starts boiling.
+RELAX remains optional for comparison, not a requirement for this correction.
