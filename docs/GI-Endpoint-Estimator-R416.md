@@ -48,3 +48,16 @@ Windows shader/runtime tests and package verification are required before delive
 Only in-game observation can establish whether all three reported scenes improve
 without lost lighting, speckles, boiling or excessive softness. No FPS gain or
 complete noise fix is claimed from removing this work alone.
+
+## Delivered validation
+
+Windows run 42898414474, job 130117574617: all 60 steps passed for runtime
+commit `c65c9d261f3b08c7659a431f4088b13c215702a0`. Logs confirm the new
+estimator/wiring regression, 132-file baseline, four NRD tests, and RELAX
+default/cycle/reset test passed. Packaged x64 DLL and R416 labels verified;
+retired temporal-history allocation log string absent from DLL. Both archive
+CRC checks and the published SHA-256 agree. Live game results are pending.
+
+- ZIP SHA-256: `81465e8a8bad535db8ad8d4a1e90225adf7680008ce90f7f7a68f46cb3ad33e1`
+- DLL SHA-256: `5175a3551f6d36ff46b18a33f1cf0f7aedcc0f8fa055efecdfe243709ca7a648`
+- Package size: 6,796,680 bytes; 83 entries.
