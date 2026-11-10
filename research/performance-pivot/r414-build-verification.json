@@ -1,0 +1,23 @@
+{
+  "file": "ControlTOH-R414.zip",
+  "bytes": 6809847,
+  "sha256": "a4fa4de6c51d50ccfbf8c20629cb7b7212ad22299a2209cac52fff6ff584aed5",
+  "dll_sha256": "e34b3fbff07ae50e6019faabcdc1fa4316a3254dfde87faf90e6ede9ee4eb57f",
+  "members": 83,
+  "zip_verified": true,
+  "markers_verified": true,
+  "x64_exports_verified": true,
+  "source_commit": "7b1f9b9df9382940f045bbb62c6c8d1ff34744e0",
+  "run": 42863459541,
+  "windows_job": 129995427077,
+  "windows_steps_passed": 60,
+  "nrd_tests_passed": 3,
+  "local_validation": [
+    "performance comparison phase/cadence/drift policy",
+    "settings evidence generations",
+    "native motion contract",
+    "132 protected baseline files",
+    "legacy timestamp adapter and query policy, optimized and ASan/UBSan"
+  ],
+  "live_game_performance": "Not measured; user capture required"
+}
