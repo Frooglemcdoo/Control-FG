@@ -177,7 +177,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R392",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R414",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
@@ -388,7 +388,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             if(path_capture::active||settings_report::Busy()||compare_capture::Active()||!ButtonVisible(index))return 0;
             if(index==kModeCount+29){
                 if(compare_capture::Start(GetTickCount64()))ClosePanel(window);
-                else MessageBoxW(window,L"Enable RR, turn FG off and finish other captures. Load the scene until enhanced lighting is ready. Keep the camera still with Jesse visible for about three minutes. The suite changes temporary feature selections automatically and restores them. Two beeps mean the ZIP is ready. Restart if the profiler query budget is exhausted.",L"RR performance comparison",MB_OK);
+                else MessageBoxW(window,L"Enable RR, turn FG off and finish other captures. Load the scene until enhanced lighting is ready. Keep the camera still with Jesse visible for about five minutes. The suite changes temporary feature selections automatically and restores them. Two beeps mean the ZIP is ready. Restart if the profiler query budget is exhausted.",L"RR performance comparison",MB_OK);
                 return 0;
             }
             if(index==kModeCount+28){

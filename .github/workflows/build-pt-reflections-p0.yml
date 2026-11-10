@@ -1250,8 +1250,6 @@ jobs:
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_NATIVE_PREPARATION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe-native-preparation.obj /Febuild\dxgi-native-preparation.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
-          if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
@@ -1405,28 +1403,16 @@ jobs:
           build\test-performance-compare.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package preparation comparison R413
+      - name: Package rendering cost comparison R414
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R413'
+          $out='ControlTOH-R414'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
           New-Item -ItemType Directory -Force -Path $out,$shader,$tools,$diagnostics | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
-          New-Item -ItemType Directory -Force -Path "$diagnostics/R413-NativePrep","$diagnostics/R413-OwnedPrep" | Out-Null
-          Copy-Item build/dxgi-native-preparation.dll "$diagnostics/R413-NativePrep/dxgi.dll"
-          Copy-Item build/dxgi.dll "$diagnostics/R413-OwnedPrep/dxgi.dll"
-          foreach($mode in @('NativePrep','OwnedPrep')){
-            $dll="$diagnostics/R413-$mode/dxgi.dll"
-            (Get-FileHash $dll -Algorithm SHA256).Hash | Set-Content "$dll.sha256" -Encoding ASCII
-          }
-          Copy-Item tools/diagnostics/Collect-RT-Preparation.cmd,tools/diagnostics/Collect-RT-Preparation.ps1,tools/diagnostics/Use-R413-NativePrep.cmd,tools/diagnostics/Use-R413-OwnedPrep.cmd,tools/diagnostics/Set-R413-Preparation.ps1 $tools
-          python tools/rt-scene-probe/check-r413-binaries.py build/dxgi-native-preparation.dll build/dxgi.dll
-          if ($LASTEXITCODE -ne 0) { throw 'R413 preparation isolation validation failed' }
-          powershell -NoProfile -ExecutionPolicy Bypass -File tools/diagnostics/test-r413-preparation.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'R413 selector test failed' }
           New-Item -ItemType Directory -Force -Path "$out/ControlTOH/Licenses" | Out-Null
           Copy-Item nrd-build/_deps/nrd-src/LICENSE.txt "$out/ControlTOH/Licenses/NVIDIA-NRD.txt"
           Copy-Item build/gi_index_snapshot.dxil $shader
@@ -1463,7 +1449,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/RT-Preparation-R413.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/Rendering-Cost-R414.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1476,10 +1462,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R413
+          name: ControlTOH-R414
           path: |
-            ControlTOH-R413.zip
-            ControlTOH-R413.sha256
+            ControlTOH-R414.zip
+            ControlTOH-R414.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

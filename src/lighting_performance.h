@@ -3,10 +3,11 @@
 // retained for the process lifetime: a native list may be submitted again.
 // Query indices are never recycled, including after a cancelled capture.
 namespace performance {
-enum class Stage : unsigned { None, ShadowRays, OtherRays, Selector, History, Spatial0, Spatial1, Composition, OtherCompute, GICombinedRays, GITemporalReuse, GIEvaluator, ReceiverExport, RelaxTotal, RREvaluation, Count };
+enum class Stage : unsigned { None, ShadowRays, OtherRays, Selector, History, Spatial0, Spatial1, Composition, OtherCompute, GICombinedRays, GITemporalReuse, GIEvaluator, ReceiverExport, RelaxTotal, RREvaluation, RelaxPrepare, RelaxDenoise, RelaxDispatch, RelaxFinish, SREvaluation, Count };
 inline constexpr unsigned kStageCount=static_cast<unsigned>(Stage::Count);
 inline const char* Name(Stage s) noexcept {
-    constexpr const char* names[]={"none","shadow_rays","other_rays","selector","history","spatial0","spatial1","composition","other_compute","gi_rays_including_reuse","gi_temporal_visibility","gi_evaluator","relax_receiver_export","relax_including_conversion","rr_evaluation"};
+    constexpr const char* names[]={"none","shadow_rays","other_rays","selector","history","spatial0","spatial1","composition","other_compute","gi_rays_including_reuse","gi_temporal_visibility","gi_evaluator","relax_receiver_export","relax_including_conversion","rr_evaluation","relax_prepare_conversion","relax_denoise_including_dispatches","relax_dispatch","relax_finish_conversion","sr_evaluation"};
+    static_assert(sizeof(names)/sizeof(names[0])==kStageCount);
     return names[static_cast<unsigned>(s)];
 }
 enum class State : unsigned { Recording, Recorded, Submitting, Submitted, Read, Discarded };
@@ -18,7 +19,7 @@ struct Sample {
     UINT64 capture=0,present=0,selection=0,fence=0,frequency=0,tableBytes=0;
     char sourceShader[65]{};
     UINT64 raygenStart=0,raygenBytes=0,hitStart=0,hitStride=0,missStart=0,missStride=0;
-    unsigned recordIndex=0;
+    unsigned recordIndex=0,passOrdinal=~0u,pipelineIndex=~0u;
     UINT x=0,y=0,z=0;bool rr=false,current=true;unsigned effects=0;
 };
 inline SRWLOCK lock=SRWLOCK_INIT;
@@ -92,7 +93,7 @@ inline void End(unsigned index) noexcept {
 struct Scope {
  unsigned ticket=kInvalid,phase=0,cpuStage=3;LONGLONG start=0;
  Scope(ID3D12GraphicsCommandList* list,Stage stage,UINT x=0,UINT y=0,UINT z=0,unsigned cpu=3) noexcept {
-  if(!control_compare::enabled.load())return;
+  if(!control_compare::enabled.load()||!enabled.load())return;
   phase=control_compare::phase.load();cpuStage=cpu;
   if(cpu<3){LARGE_INTEGER q{};QueryPerformanceCounter(&q);start=q.QuadPart;}
   ticket=Begin(list,stage,x,y,z);

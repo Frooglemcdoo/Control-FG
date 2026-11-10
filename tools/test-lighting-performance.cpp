@@ -65,6 +65,19 @@ int main(){try{
     const auto second=GetTickCount64()+10000;
     while(p::Poll(1,emit) && GetTickCount64()<second)Sleep(1);
     Require(rows==2 && !p::fault.load());
+    Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));p::Reset(list.Get());
+    control_compare::enabled=true;
+    const auto outer=p::Begin(list.Get(),p::Stage::RelaxDenoise,10,10,1);
+    const auto inner=p::Begin(list.Get(),p::Stage::RelaxDispatch,2,3,1);
+    Require(outer!=p::kInvalid&&inner!=p::kInvalid&&outer!=inner);
+    p::samples[inner].passOrdinal=7;p::samples[inner].pipelineIndex=12;
+    p::End(inner);p::End(outer);control_compare::enabled=false;
+    Check(list->Close());value=p::BeforeExecute(queue.Get(),1,lists);Require(value!=0);
+    queue->ExecuteCommandLists(1,lists);p::AfterExecute(queue.Get(),value);
+    unsigned nested=0;double totalMs=0,passMs=0;
+    auto nestedEmit=[&](const p::Sample& s,double ms){++nested;if(s.stage==p::Stage::RelaxDispatch){Require(s.passOrdinal==7&&s.pipelineIndex==12&&s.x==2&&s.y==3);passMs=ms;}else{Require(s.stage==p::Stage::RelaxDenoise);totalMs=ms;}};
+    const auto third=GetTickCount64()+10000;while(p::Poll(1,nestedEmit)&&GetTickCount64()<third)Sleep(1);
+    Require(nested==2&&totalMs>=passMs&&!p::fault.load());
     // Reusing an unreset list is not silently treated as a fresh measurement.
     Require(p::BeforeExecute(queue.Get(),1,lists)==0 && p::fault.load());
     p::enabled=false;

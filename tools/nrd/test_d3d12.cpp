@@ -193,7 +193,19 @@ int main(){try{
   // relying on a large test heap. Restart at frame 64 retains full capacity.
   if(privateHeap){reservation.available.heap=privateHeap.Get();reservation.available.first=0;}
   if(frame>2&&frame<64)reservation.available.count=normalDescriptors;
-  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction,reserve,&reservation,&graphics),"complete native transaction rejected");
+  struct TraceState {unsigned next=0,ended=0,passes=0,depth=0;unsigned stack[128]{};bool valid=true;} trace;
+  control_nrd::Timing timing;
+  timing.context=&trace;
+  timing.begin=[](void* context,control_nrd::TimingStage stage,unsigned ordinal,unsigned,unsigned x,unsigned y) noexcept {
+   auto& t=*static_cast<TraceState*>(context);
+   if(t.depth>=128){t.valid=false;return ~0u;}
+   if(stage==control_nrd::TimingStage::Dispatch){t.valid=t.valid&&ordinal==t.passes++&&x>0&&y>0&&t.depth==1;}
+   else t.valid=t.valid&&t.depth==0;
+   const auto id=++t.next;t.stack[t.depth++]=id;return id;
+  };
+  timing.end=[](void* context,unsigned id) noexcept {auto& t=*static_cast<TraceState*>(context);t.valid=t.valid&&t.depth>0;if(t.depth)t.valid=t.valid&&t.stack[--t.depth]==id;++t.ended;};
+  Require(control_nrd::NativeTransaction::Record(pipeline,list.Get(),snapshot,f,1,bindings,conversion,arena,transaction,reserve,&reservation,&graphics,&timing),"complete native transaction rejected");
+  Require(trace.valid&&!trace.depth&&trace.next==trace.ended&&trace.passes==pipeline.DispatchCount()&&trace.next==trace.passes+3,"internal timing nesting/coverage");
   Require(requested==22+UINT(pipeline.DispatchCount())*(descriptorContract.Description().descriptorPoolDesc.perSetTexturesMaxNum+descriptorContract.Description().descriptorPoolDesc.perSetStorageTexturesMaxNum),"reservation did not match dispatch plan");
   if(frame==1)restartDescriptors=requested;
   if(frame==2){normalDescriptors=requested;Require(normalDescriptors<restartDescriptors&&normalDescriptors<pipeline.MaxDescriptors(),"steady frame retained worst-case reservation");std::printf("Descriptor reservation: restart %u, normal %u, maximum %u\n",restartDescriptors,normalDescriptors,pipeline.MaxDescriptors());}

@@ -14,10 +14,10 @@ inline std::string expectedSignature,constantConfig;
 inline HANDLE packager=nullptr;
 inline bool ioFailed=false;
 inline std::string outcome="incomplete";
-struct Saved {Mode mode{};bool owned=false,lighting=false;unsigned rays=0,quality=0,volume=0,surface=0,request=0,manualGI=0,contact=0,spec=0;control_rr_gi::StageMode stage{};} saved;
+struct Saved {Mode mode{};bool owned=false,lighting=false;unsigned rays=0,quality=0,volume=0,surface=0,request=0,manualGI=0,contact=0,spec=0;control_rr_gi::StageMode stage{};control_rr::RRUserMode rr{};} saved;
 struct Result {uint64_t evidence[settings_check::Count]{};uint64_t skipped=0;unsigned sampleMask=0;bool observed=false;std::string settings,failures;};
 inline Result results[phaseCount]{};
-struct GPU {unsigned phase;uint64_t present;unsigned stage;double ms;};
+struct GPU {unsigned phase;uint64_t present;unsigned stage;double ms;unsigned ordinal,pipeline,x,y;};
 inline std::vector<GPU> gpu;
 inline bool Active() noexcept{return state!=State::Idle;}
 inline bool Write(const wchar_t* name,const std::string& text){
@@ -28,7 +28,7 @@ inline bool Write(const wchar_t* name,const std::string& text){
 inline std::string Constants(){
  std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);std::ostringstream out;
  for(const auto& o:control_settings::kOptions){using K=control_settings::Key;
-  if(o.key!=K::GlobalIlluminationSamples&&o.key!=K::EnhancedCharacterLighting&&o.key!=K::EnhancedLighting)out<<o.id<<'='<<control_settings::Read(o.key)<<';';}
+  if(o.key!=K::RayReconstruction&&o.key!=K::GlobalIlluminationSamples&&o.key!=K::EnhancedCharacterLighting&&o.key!=K::EnhancedLighting)out<<o.id<<'='<<control_settings::Read(o.key)<<';';}
  out<<"clamp="<<unsigned(control_rr_clamp::requestedMode.load())<<" hdr="<<IsHdr10BridgeActive()<<" preset="<<control_rr::RRUserPresetValue();return out.str();
 }
 inline void Restore(){
@@ -37,10 +37,12 @@ inline void Restore(){
  control_visual::lightingEnabled=saved.lighting;volume_test::phase=saved.volume;character_surface::phase=saved.surface;
  rt_surface_source::request=saved.request;rt_surface_source::manualGI=saved.manualGI;rt_surface_source::manualContact=saved.contact;
  specularSampleChoice=saved.spec;control_rr_gi::stageMode=saved.stage;SelectMode(saved.mode);
+ control_rr::RRUserSetMode(saved.rr);
  performance::sampleInterval=savedInterval;
 }
 inline bool Apply(){
  const auto& p=conditions[step];
+ control_rr::RRUserSetMode(p.rr?control_rr::RRUserMode::Full:control_rr::RRUserMode::Off);
  gi_reuse::ownedRequested=p.owned;control_rr::GISampleSelect(p.rays);control_visual::characterQuality=p.character?3:0;
  control_visual::lightingEnabled=p.lighting;volume_test::phase=p.volume?0:1;character_surface::phase=0;
  rt_surface_source::request=p.relax?7:8;rt_surface_source::manualGI=0;rt_surface_source::manualContact=0;
@@ -48,7 +50,7 @@ inline bool Apply(){
  if(!SelectMode(p.lighting?kNativeBlendDefaultMode:Mode::Native))return false;
  expectedSignature=settings_report::Signature();return true;
 }
-inline void Emit(const performance::Sample& s,double ms){gpu.push_back({step,s.present,unsigned(s.stage),ms});}
+inline void Emit(const performance::Sample& s,double ms){gpu.push_back({step,s.present,unsigned(s.stage),ms,s.passOrdinal,s.pipelineIndex,s.x,s.y});}
 inline void Summary(){
  std::vector<double> intervals[phaseCount];std::ostringstream cadence;
  cadence<<"phase,present,interval_ms\n";uint64_t lastTicks=0,lastPresent=0;unsigned lastPhase=~0u;
@@ -62,8 +64,18 @@ inline void Summary(){
  std::map<std::tuple<unsigned,unsigned,uint64_t>,double> perPresent;
  for(const auto& s:gpu){raw<<conditions[s.phase].name<<','<<s.present<<','<<performance::Name(performance::Stage(s.stage))<<','<<s.ms<<'\n';perPresent[{s.phase,s.stage,s.present}]+=s.ms;}
  Write(L"gpu-timings.csv",raw.str());
- Statistics stats[phaseCount];std::ostringstream out,table,stage;
- out<<"R392 RR PERFORMANCE COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, native GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR, clamp, reflections sample policy (Native), FG OFF and unrelated Visual settings held fixed.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents; unrelated compute/rays excluded.\n\n";
+ std::ostringstream passes;passes<<"phase,present,ordinal,pipeline_index,dispatch_groups_x,dispatch_groups_y,gpu_ms\n";
+ for(const auto& s:gpu)if(s.stage==unsigned(performance::Stage::RelaxDispatch))passes<<conditions[s.phase].name<<','<<s.present<<','<<s.ordinal<<','<<s.pipeline<<','<<s.x<<','<<s.y<<','<<s.ms<<'\n';
+ Write(L"relax-dispatches.csv",passes.str());
+ Statistics stats[phaseCount];for(unsigned p=0;p<phaseCount;++p)stats[p]=Summarize(intervals[p]);
+ if(outcome.rfind("COMPLETE",0)==0){
+  bool stable=true;for(const auto pair: {std::pair<unsigned,unsigned>{0,8},{6,7},{9,10},{8,11},{7,13}})
+   stable=stable&&RepeatStable(stats[pair.first].mean,stats[pair.second].mean);
+  for(const auto& s:stats)stable=stable&&s.count>100;
+  if(!stable)outcome="INCOMPLETE: repeat drift exceeds 5% or too few frame intervals";
+ }
+ std::ostringstream out,table,stage;
+ out<<"R414 RENDERING COST COMPARISON\nOutcome: "<<outcome<<"\n\nNative = native GI producer/sample policy and character/volume/lighting replacements off, with this mod's RR integration still ON.\nFull = Owned GI, native GI samples, enhanced lighting, RELAX, character/near-volume and volume filter.\nRR is ON except loaded_native_sr and its repeat. Clamp, reflection samples (Native), FG OFF and unrelated Visual settings held fixed. Glass retains the saved setting, so these are controlled feature phases, not necessarily the entire accepted visual configuration.\nThe same proxy/hooks remain loaded in every phase. This is not an unmodified executable baseline.\nStand still throughout; moving objects/lights can still invalidate scene matching.\nEach phase: 5 seconds warmup, 12 seconds measurement; GPU queries every 64 Presents except full_rr_no_gpu_queries, where GPU queries and CPU span timers are disabled; unrelated compute/rays excluded. No GPU waits or ETW stacks. Timestamp commands still have overhead; this is not a zero-overhead claim.\n\n";
  table<<"phase,intervals,mean_frame_ms,p50_ms,p95_ms,p99_ms,average_fps,one_percent_low_fps,coverage_ok,skipped_gpu_samples\n";
  for(unsigned p=0;p<phaseCount;++p){stats[p]=Summarize(intervals[p]);auto& s=stats[p];
   table<<conditions[p].name<<','<<s.count<<','<<s.mean<<','<<s.p50<<','<<s.p95<<','<<s.p99<<','<<(s.mean?1000/s.mean:0)<<','<<s.low1<<','<<results[p].observed<<','<<results[p].skipped<<'\n';
@@ -73,8 +85,13 @@ inline void Summary(){
  if(stats[0].mean&&stats[8].mean)out<<"\nBaseline repeat drift: "<<100*(stats[8].mean/stats[0].mean-1)<<"% in mean frame time.\n";
  if(stats[6].mean&&stats[7].mean)out<<"Full repeat drift: "<<100*(stats[7].mean/stats[6].mean-1)<<"% in mean frame time.\n";
  if(stats[0].mean&&stats[6].mean)out<<"Full minus initial native: "<<stats[6].mean-stats[0].mean<<" ms (raw observation, not a causal allocation).\n";
+ if(stats[9].mean&&stats[10].mean)out<<"Loaded SR repeat drift: "<<100*(stats[10].mean/stats[9].mean-1)<<"%\n";
+ if(stats[8].mean&&stats[11].mean)out<<"RR return drift: "<<100*(stats[11].mean/stats[8].mean-1)<<"%\n";
+ if(stats[8].mean&&stats[9].mean)out<<"RR minus loaded SR: "<<stats[8].mean-stats[9].mean<<" ms; conditional on identical loaded hooks and fixed settings, not untouched-engine overhead.\n";
+ out<<"CPU replacement build: diagnostics="<<CONTROL_RT_DIAGNOSTICS<<" native_selection="<<CONTROL_RT_NATIVE_SELECTION<<" native_preparation="<<CONTROL_RT_NATIVE_PREPARATION<<"; owned recording/bindings remain installed in this build.\n";
+ if(stats[12].mean&&stats[13].mean)out<<"Full with queries minus no-query full: "<<stats[13].mean-stats[12].mean<<" ms. Same coverage/cadence collectors remain active; this isolates sampled GPU queries and CPU span timers, NOT all diagnostic overhead. Check full repeat drift before attribution.\n";
  out<<"Input/output dimensions (packed 16-bit W,H,W,H): "<<geometryAtStart<<"\n";
- out<<"\nStage isolation is incremental: sample policy -> Owned producer/reuse -> lighting policy -> RELAX -> character -> near-volume and main volume filters.\nDo not sum these deltas as independent costs: dependencies, GPU occupancy, CPU bottlenecks and clock drift can interact.\nMore than 5% repeat drift warrants rejecting the comparison. No effect is ranked if required-path coverage is missing.\n\n";
+ out<<"\nStage isolation is incremental: native-sample reference confirmation -> Owned producer/reuse -> lighting policy -> RELAX -> character -> near-volume and main volume filters.\nDo not sum these deltas as independent costs: dependencies, GPU occupancy, CPU bottlenecks and clock drift can interact.\nMore than 5% repeat drift warrants rejecting the comparison. No effect is ranked if required-path coverage is missing.\n\n";
  stage<<"phase,stage,sampled_presents,mean_gpu_ms_per_sampled_present,p95_gpu_ms_per_sampled_present\n";
  for(unsigned p=0;p<phaseCount;++p){
   out<<"\n"<<conditions[p].name<<" evidence:\n";
@@ -82,13 +99,13 @@ inline void Summary(){
   for(unsigned e=0;e<settings_check::Count;++e)out<<settings_check::names[e]<<'='<<results[p].evidence[e]<<'\n';
   for(unsigned s=1;s<performance::kStageCount;++s){std::vector<double> v;for(const auto& entry:perPresent)if(std::get<0>(entry.first)==p&&std::get<1>(entry.first)==s)v.push_back(entry.second);
    auto x=Summarize(v);if(x.count)stage<<conditions[p].name<<','<<performance::Name(performance::Stage(s))<<','<<x.count<<','<<x.mean<<','<<x.p95<<'\n';}
-  const char* cpuNames[]={"receiver_recording","relax_recording_including_buffer_allocations","ngx_evaluation_call"};
+  const char* cpuNames[]={"receiver_recording","relax_recording","ngx_evaluation_call"};
   for(unsigned c=0;c<3;++c){auto calls=cpuCalls[p][c].load();out<<cpuNames[c]<<" mean_cpu_ms="<<(calls?1000.*cpuTicks[p][c].load()/qpcFrequency/calls:0)<<" calls="<<calls<<'\n';}
   out<<results[p].settings<<'\n';
  }
  Write(L"gpu-stage-summary.csv",stage.str());
  std::string failures="phase,reason,thread_frame,present,guide_frame,same_view,recordings,pending_recordings\n";for(const auto& r:results)failures+=r.failures;Write(L"relax-failures.csv",failures);
- out<<"\nGPU stages are selected spans, not total frame GPU time. GI rays INCLUDE temporal visibility; do not add the nested visibility span again. RELAX includes prepare/finish conversion. Other compute may overlap explicit scopes.\nCPU spans measure command recording/API work, not whole-frame CPU utilization. Frame intervals are application Present cadence with FG off; they include waits and are not GPU durations.\nNo textures, shader dumps or continuous shadow inventory. Counter/fence boundary differences are normal; failures and unobserved paths are not silently treated as successful measurements.\nProfiler fault="<<performance::fault.load()<<" dropped_frame_rows="<<control_compare::dropped.load()<<"\n";
+ out<<"\nGPU stages are selected spans, not total frame GPU time. GI rays INCLUDE temporal visibility; do not add the nested visibility span again. RELAX total includes prepare, denoise, finish conversion and surrounding work. Denoise includes all relax_dispatch spans. These are NESTED: never add total, denoise and dispatch values together. Per-dispatch rows include their preceding resource barriers and use NRD pipeline index plus dispatch ordinal; shader costs are not inferred from names. Other compute may overlap explicit scopes.\nCPU spans measure command recording/API work, not whole-frame CPU utilization. Frame intervals are application Present cadence with FG off; they include waits and are not GPU durations.\nNo textures, shader dumps or continuous shadow inventory. Counter/fence boundary differences are normal; failures and unobserved paths are not silently treated as successful measurements.\nProfiler fault="<<performance::fault.load()<<" dropped_frame_rows="<<control_compare::dropped.load()<<"\n";
  Write(L"SUMMARY.txt",out.str());
 }
 inline void Finish(HWND game,const char* reason){
@@ -108,8 +125,8 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return false;qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return false;
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-R392-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
- saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load()};
+ folder=root+L"\\Performance-R414-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
+ saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
  {std::lock_guard<std::recursive_mutex> guard(fgSettingsMutex);CopyFileW(fgSettingsPath.c_str(),(folder+L"\\mod-settings.ini").c_str(),FALSE);}
@@ -128,7 +145,7 @@ inline void Tick(HWND game,uint64_t now){
   }else if(now>until){TerminateProcess(packager,1);CloseHandle(packager);packager=nullptr;state=State::Idle;MessageBoxW(game,L"Packaging timed out. Settings restored and report folder retained.",L"Performance comparison",MB_OK);}return;}
  if(state==State::Arm&&now<until)return;
  if(!game||IsIconic(game)||GetForegroundWindow()!=game){Finish(game,"INCOMPLETE: game lost focus");return;}
- if(Constants()!=constantConfig||!control_rr::RRUserRequested()||GetFGUserMultiplier()!=kSLSelectionOff){Finish(game,"INCOMPLETE: fixed settings changed");return;}
+ if(Constants()!=constantConfig||(state!=State::Arm&&control_rr::RRUserRequested()!=conditions[step].rr)||GetFGUserMultiplier()!=kSLSelectionOff){Finish(game,"INCOMPLETE: fixed settings changed");return;}
  if(state==State::Arm){if(!Apply()){Finish(game,"INCOMPLETE: feature unavailable");return;}state=State::Warm;until=now+5000;return;}
  if(settings_report::Signature()!=expectedSignature){Finish(game,"INCOMPLETE: compared settings changed");return;}
  if(performance::fault.load()){Finish(game,"INCOMPLETE: GPU timestamp tracking fault");return;}
@@ -139,12 +156,12 @@ inline void Tick(HWND game,uint64_t now){
   lastRR=0;lastRRTime=now;
   AcquireSRWLockExclusive(&performance::lock);performance::scanFirst=performance::count;ReleaseSRWLockExclusive(&performance::lock);
   session=performance::capture.fetch_add(1)+1;skippedStart=performance::skipped.load();settings_check::Begin();
-  control_compare::phase=step;control_compare::enabled=true;performance::enabled=true;
+  control_compare::phase=step;control_compare::enabled=true;performance::enabled=conditions[step].profile;
   state=State::Measure;until=now+12000;Beep(800,80);return;
  }
  if(state==State::Measure){
-  const auto rr=settings_check::counts[settings_check::RRSuccess].load();if(rr!=lastRR){lastRR=rr;lastRRTime=now;}
-  if(now-lastRRTime>1500){Finish(game,"INCOMPLETE: RR stopped evaluating or game paused");return;}
+  const auto rr=settings_check::counts[conditions[step].rr?settings_check::RRSuccess:settings_check::SRSuccess].load();if(rr!=lastRR){lastRR=rr;lastRRTime=now;}
+  if(now-lastRRTime>1500){Finish(game,"INCOMPLETE: requested RR/SR path stopped evaluating or game paused");return;}
   performance::Poll(session,Emit);if(now<until)return;
   control_compare::enabled=false;performance::enabled=false;settings_check::End();
   for(unsigned e=0;e<settings_check::Count;++e)results[step].evidence[e]=settings_check::counts[e].load();
@@ -152,7 +169,7 @@ inline void Tick(HWND game,uint64_t now){
   results[step].failures=settings_report::Failures(conditions[step].name);
   results[step].settings=settings_report::Snapshot();results[step].skipped=performance::skipped.load()-skippedStart;
   using namespace settings_check;const auto* e=results[step].evidence;
-  results[step].observed=e[RRSuccess]>100&&!e[RRFailure]&&!e[RelaxFallback]&&
+  results[step].observed=(conditions[step].rr?(e[RRSuccess]>100&&!e[SRSuccess]):(e[SRSuccess]>100&&!e[RRSuccess]))&&!e[RRFailure]&&!e[SRFailure]&&!e[RelaxFallback]&&
     (conditions[step].owned?e[OwnedGI]>100&&!e[NativeGI]:e[NativeGI]>100&&!e[OwnedGI])&&
     (conditions[step].relax?e[RelaxCompleted]>100:e[RelaxRecorded]==0)&&
     (conditions[step].character?e[CharacterEnhanced]>0:e[CharacterEnhanced]==0)&&
@@ -164,8 +181,12 @@ inline void Tick(HWND game,uint64_t now){
  if(state==State::Drain){const auto pending=performance::Poll(session,Emit);if(pending){if(now>until)Finish(game,"INCOMPLETE: GPU timings did not retire");return;}
   performance::watch=false;
   if(step+1==phaseCount){
-   bool complete=true;for(unsigned p=0;p<phaseCount;++p){bool timed=false;for(const auto& s:gpu)if(s.phase==p&&s.stage==unsigned(performance::Stage::RREvaluation))timed=true;complete=complete&&timed&&results[p].observed;}
-   Finish(game,complete?"COMPLETE: inspect repeat drift and timing data":"INCOMPLETE: missing GPU timings or feature coverage");return;}
+   bool complete=!control_compare::dropped.load()&&!performance::fault.load();for(unsigned p=0;p<phaseCount;++p){bool timed=!conditions[p].profile;for(const auto& s:gpu)if(s.phase==p&&s.stage==unsigned(conditions[p].rr?performance::Stage::RREvaluation:performance::Stage::SREvaluation))timed=true;bool details=!conditions[p].relax||!conditions[p].profile;
+    if(conditions[p].relax&&conditions[p].profile){bool prepare=false,denoise=false,dispatch=false,finish=false;
+     for(const auto& s:gpu)if(s.phase==p){prepare|=s.stage==unsigned(performance::Stage::RelaxPrepare);denoise|=s.stage==unsigned(performance::Stage::RelaxDenoise);dispatch|=s.stage==unsigned(performance::Stage::RelaxDispatch);finish|=s.stage==unsigned(performance::Stage::RelaxFinish);}
+     details=prepare&&denoise&&dispatch&&finish;}
+    complete=complete&&timed&&details&&results[p].observed&&!results[p].skipped;}
+   Finish(game,complete?"COMPLETE: inspect repeat drift and timing data":"INCOMPLETE: missing timings/coverage, skipped queries or dropped rows");return;}
   ++step;if(!Apply()){Finish(game,"INCOMPLETE: feature unavailable");return;}state=State::Warm;until=now+5000;
  }
 }

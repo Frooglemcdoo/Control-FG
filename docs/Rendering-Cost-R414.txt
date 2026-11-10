@@ -1,0 +1,44 @@
+ControlTOH R414 - rendering cost measurement
+
+This is a measurement build, not a performance fix. Rendering shaders, sample
+counts and CPU replacement defaults are unchanged from the R413 root build.
+No NativePrep/OwnedPrep switching is requested.
+
+Run one consolidated stationary comparison:
+1. Install this package over the current test installation with the game closed.
+2. Keep the accepted visual settings and resolution. Turn Frame Generation OFF,
+   enable RR and RT indirect lighting, and load the usual test scene.
+3. Open the existing F10 diagnostics panel and click PERF COMPARE.
+4. Keep the camera still with Jesse visible and the game focused for about five
+   minutes. Do not change settings. RR will briefly turn off for the SR phases.
+5. Two beeps mark completion. Explorer selects Performance-R414-*.zip. Return
+   that compact ZIP. Original feature selections and RR request are restored.
+
+No PIX/ETW capture, video, shader dump, or 10 GB trace is needed.
+
+What changed:
+- All GI comparisons use native samples; the old four-sample phase is removed.
+- RR reference, controlled visual feature additions and full repeats remain.
+- Loaded-mod SR, its repeat and a return to RR isolate the net RR integration
+  difference with the same proxy/hooks still loaded.
+- RELAX prepare conversion, denoiser, individual dispatches and finish conversion
+  have sampled GPU timestamps, one sampled Present in 64. Per-pass CSV records
+  pipeline index, ordinal and dispatch dimensions. Receiver export remains timed.
+- Full visuals also run without GPU queries or CPU span timers, then with them
+  restored. Cadence/coverage collection stays active; this isolates query/timer
+  overhead only. Repeat drift over 5% marks the comparison incomplete.
+- Missing execution coverage, skipped timestamps, failed RR/SR evaluations,
+  dropped frame rows and profiler faults cannot produce a complete result.
+
+Limits:
+- A loaded-mod SR phase is NOT untouched Control. This cannot measure residual
+  mod overhead against a no-proxy launch or total GPU frame time.
+- Glass and unrelated visual settings stay fixed. The full controlled phase may
+  differ from your saved full setup; both requested settings and runtime coverage
+  are saved. CPU selection/preparation build flags are recorded.
+- GPU scopes are nested: never add RELAX total, denoiser and dispatch totals.
+  Pass timings include their preceding resource barriers. Timestamp work is
+  bounded but not free; this build does not prove diagnostic overhead is zero.
+- This stationary run does not replace a separate traversal comparison.
+- Query indices are never reused while the process is alive. Restart the game
+  before repeating the capture if the query budget is exhausted.

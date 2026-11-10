@@ -3,17 +3,22 @@
 #include <array>
 #include <cstdint>
 namespace control_compare {
-struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,character,volume;};
+struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,character,volume;bool rr=true,profile=true;};
 inline constexpr Condition conditions[]={
  {"native_rr_begin",false,0,false,false,false,false},
- {"native_rr_4_samples",false,4,false,false,false,false},
+ {"native_rr_confirm",false,0,false,false,false,false},
  {"owned_native_raw",true,0,false,false,false,false},
  {"owned_native_lighting_raw",true,0,true,false,false,false},
  {"owned_native_lighting_relax",true,0,true,true,false,false},
  {"plus_character",true,0,true,true,true,false},
  {"full_rr",true,0,true,true,true,true},
  {"full_rr_repeat",true,0,true,true,true,true},
- {"native_rr_end",false,0,false,false,false,false}};
+ {"native_rr_end",false,0,false,false,false,false},
+ {"loaded_native_sr",false,0,false,false,false,false,false},
+ {"loaded_native_sr_repeat",false,0,false,false,false,false,false},
+ {"native_rr_return",false,0,false,false,false,false},
+ {"full_rr_no_gpu_queries",true,0,true,true,true,true,true,false},
+ {"full_rr_profile_return",true,0,true,true,true,true}};
 inline constexpr unsigned phaseCount=sizeof(conditions)/sizeof(conditions[0]);
 inline constexpr unsigned capacity=65536;
 struct Cadence {std::uint64_t ticks=0,present=0;unsigned phase=0;std::atomic<bool> ready{false};};

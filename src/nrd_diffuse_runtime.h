@@ -259,8 +259,26 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
    }
    result={heap.Get(),0,count};*request.recovered=true;return nullptr;
   };
+  control_nrd::Timing detail;
+  // Only sampled comparison frames enter the internal callback path.
+  const auto interval=native_lighting::performance::sampleInterval.load();
+  const bool details=control_compare::enabled.load()&&native_lighting::performance::enabled.load()&&presentCount.load()%(interval?interval:1u)==0;
+  if(details){
+   detail.context=c.rays;
+   detail.begin=[](void* context,control_nrd::TimingStage stage,unsigned ordinal,unsigned pipeline,unsigned x,unsigned y) noexcept {
+    namespace p=native_lighting::performance;
+    p::Stage selected=p::Stage::RelaxDispatch;
+    switch(stage){case control_nrd::TimingStage::Prepare:selected=p::Stage::RelaxPrepare;break;
+     case control_nrd::TimingStage::Denoise:selected=p::Stage::RelaxDenoise;break;
+     case control_nrd::TimingStage::Finish:selected=p::Stage::RelaxFinish;break;default:break;}
+    const auto ticket=p::Begin(static_cast<ID3D12GraphicsCommandList4*>(context),selected,x,y,1);
+    if(ticket!=p::kInvalid){p::samples[ticket].passOrdinal=ordinal;p::samples[ticket].pipelineIndex=pipeline;}
+    return ticket;
+   };
+   detail.end=[](void*,unsigned ticket) noexcept {native_lighting::performance::End(ticket);};
+  }
   epoch->filter->BeginAttempt();
-  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {c.table.heap,0,0},*record->work,reserve,&reservation,&graphics)){
+  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {c.table.heap,0,0},*record->work,reserve,&reservation,&graphics,details?&detail:nullptr)){
    if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}
    else record->work.reset();
    Reason(epoch->filter->LastFailure());return false;

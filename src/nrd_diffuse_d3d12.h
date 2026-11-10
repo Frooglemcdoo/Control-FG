@@ -1,5 +1,6 @@
 #pragma once
 #include "nrd_diffuse_session.h"
+#include "nrd_diffuse_timing.h"
 #include <d3d12.h>
 #include <wrl/client.h>
 #include <map>
@@ -133,7 +134,7 @@ public:
  }
  // AllocateRecording must finish before the enclosing transaction records any
  // commands. The plan/inputs remain immutable between allocation and dispatch.
- void RecordPrepared(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording){
+ void RecordPrepared(ID3D12GraphicsCommandList* list,const std::vector<Dispatch>& plan,Inputs& inputs,Recording& recording,const Timing* timing=nullptr){
   if(poisoned||!list||!recording.heap||!recording.constants||!recording.mapped)throw std::runtime_error("NRD recording was not prepared");
   auto cpu=recording.heap->GetCPUDescriptorHandleForHeapStart();auto gpu=recording.heap->GetGPUDescriptorHandleForHeapStart();
   cpu.ptr+=SIZE_T(recording.first)*increment;gpu.ptr+=UINT64(recording.first)*increment;
@@ -141,6 +142,7 @@ public:
   auto gh=[&](UINT i){return D3D12_GPU_DESCRIPTOR_HANDLE{gpu.ptr+UINT64(i)*increment};};
   auto*heap=recording.heap.Get();if(!recording.borrowed)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());
   for(UINT i=0;i<plan.size();++i){const auto&d=plan[i];const UINT base=i*(srvCount+uavCount);
+   TimingScope pass(timing,TimingStage::Dispatch,i,d.pipeline,d.width,d.height);
    // Deterministic null descriptors for unused entries of the shared layout.
    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
    D3D12_UNORDERED_ACCESS_VIEW_DESC uav{};uav.Format=srv.Format;uav.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
