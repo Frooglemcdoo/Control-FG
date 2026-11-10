@@ -1,0 +1,71 @@
+{
+  "source": "GI-Path-R378-3632-27477578.zip",
+  "zip_crc_valid": true,
+  "frames": [
+    {
+      "frame": 4619,
+      "condition": 1,
+      "stride": 4,
+      "pre_gi_frame_matches": true,
+      "rr_result": 1,
+      "reset": 0,
+      "raw_gi_rgb_equal": true,
+      "raw_gi_finite": true,
+      "guide_finite": true,
+      "motion_finite": true,
+      "nonzero_motion_pixels": 6030,
+      "motion_abs_max": 0.0005574226379394531,
+      "full_resolution_rgb_differences": 0
+    },
+    {
+      "frame": 4620,
+      "condition": 1,
+      "stride": 4,
+      "pre_gi_frame_matches": true,
+      "rr_result": 1,
+      "reset": 0,
+      "raw_gi_rgb_equal": true,
+      "raw_gi_finite": true,
+      "guide_finite": true,
+      "motion_finite": true,
+      "nonzero_motion_pixels": 6036,
+      "motion_abs_max": 0.0005054473876953125,
+      "full_resolution_rgb_differences": 0
+    },
+    {
+      "frame": 5681,
+      "condition": 2,
+      "stride": 4,
+      "pre_gi_frame_matches": true,
+      "rr_result": 1,
+      "reset": 0,
+      "raw_gi_rgb_equal": false,
+      "raw_gi_finite": true,
+      "guide_finite": true,
+      "motion_finite": true,
+      "nonzero_motion_pixels": 6076,
+      "motion_abs_max": 0.00015091896057128906,
+      "full_resolution_rgb_differences": 3686305
+    },
+    {
+      "frame": 5682,
+      "condition": 2,
+      "stride": 4,
+      "pre_gi_frame_matches": true,
+      "rr_result": 1,
+      "reset": 0,
+      "raw_gi_rgb_equal": false,
+      "raw_gi_finite": true,
+      "guide_finite": true,
+      "motion_finite": true,
+      "nonzero_motion_pixels": 6091,
+      "motion_abs_max": 0.00016891956329345703,
+      "full_resolution_rgb_differences": 3686298
+    }
+  ],
+  "limits": [
+    "Stride-four point samples cannot quantify full-resolution image quality.",
+    "Different jitter and poses prevent unaligned pair differences from proving temporal noise.",
+    "Older build evidence does not certify R415 execution."
+  ]
+}
