@@ -48,3 +48,12 @@ This closes a demonstrable coverage gap if those native shaders are paired with
 the audited selected albedo shader. It does not prove that those pairs occur in
 the latest video, or that this fixes jaw/hair noise. Hair may need separate work.
 No new capture is requested. A build is not a live-game quality result.
+
+## Delivered validation
+
+Runtime commit `c4ee7b48c77183f5352d1eb217fc4f48d8568fc6`; Windows run 42906420410, job 130145457304: all 60 steps successful. Logs confirm all four captured native reflectance audits, production allowlist rejection cases, original selected-albedo hash check, four NRD tests and 132-file baseline check passed. Downloaded archive CRC, published SHA, x64 DLL, R417 labels and new native shader hash strings verified. Live-game result pending.
+
+ZIP SHA-256: `4ca53e06a83382b35065bfe6bdc39ebabd74a732120a5ca1117f51316b7509be`
+DLL SHA-256: `28280b2a7c64b427e73a92e2a7254d9a13ac0a1bf52e759f02b91707b68cf01c`
+Package: 6797007 bytes, 83 entries.
+
