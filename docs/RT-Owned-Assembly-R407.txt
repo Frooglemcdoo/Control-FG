@@ -1,0 +1,26 @@
+CONTROL TOH R407 - JOB-SCOPED DESCRIPTOR RESERVATIONS
+
+Install over R406 with Control closed. Play the same area for 60-90 seconds,
+close Control, then run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+Send RT-Assembly-R407.zip and note whether performance or visuals changed.
+
+R406 located most sampled shader-application CPU time in native shader-state
+setup. R407 targets one part of that setup: repeated shared descriptor-heap
+reservations. In the known dynamic update path, reserve space for up to 16
+fresh tables with one native allocation. Each update still gets a separate
+49-descriptor table; no already-recorded table is overwritten or reused.
+
+The reservation belongs to one recording job. Context, timeline, epoch,
+descriptor generation, increment or owner changes invalidate it. Unused space
+is abandoned at job end. Native heap creation, bindless-prefix copying,
+fence tagging and retirement remain responsible for the allocation.
+Sampler reservation, complete table initialization, current resource binding,
+animation updates, transitions and AS work remain enabled.
+
+This is an optimization candidate. It does not remove all of shader setup,
+and no FPS gain is established until tested in game. R406 phase timing is
+retained, alongside counters showing how many native reservations were avoided.
+
+Expected markers: RT_LEASE_R407_INSTALL ready=1 and RT_LEASE_R407 with
+leased_tables increasing. Other active hooks should be ready=1. Persistent
+scene caching stays intentionally disabled. PTLAS remains off.
