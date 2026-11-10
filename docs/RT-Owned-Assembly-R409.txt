@@ -1,0 +1,33 @@
+CONTROL TOH R409 - DESCRIPTOR ALLOCATOR LOCK DIAGNOSTICS
+
+Install over R408 with Control closed. Play the same area for 60-90 seconds,
+including the movement that produced dips. Close Control and run
+ControlTOH\Tools\Collect-RT-Assembly.cmd. Send RT-Assembly-R409.zip.
+No manual toggles or extra capture program are required.
+
+R408 identified descriptor allocation as 88% of sampled shader setup time.
+R409 separates waiting for its shared lock, work while holding that lock,
+and lock release. Protected heap metadata distinguishes ordinary cursor
+advancement from heap refill/change and records pool growth observations.
+
+Native allocations still reserve exactly 49 descriptors. R407 larger leases
+remain disabled. Geometry, animation, lighting, native rays and AS work remain
+enabled. This is a diagnostic build; no FPS improvement is promised.
+
+Detailed setup is sampled once per 256 applications. Only the allocator's
+two lock-call sites are redirected; the Windows lock APIs still execute.
+Unsampled calls forward without timers. Recursive allocations that do not
+acquire the physical lock are reported as unobserved.
+Lock hold includes the sampled metadata reads and timing overhead. CPU
+inclusive wait can include OS scheduling delays. Sampling can miss stalls.
+Setup allocation totals also include the observer's aggregation overhead.
+
+R408 engine present-entry intervals remain: 300-interval windows, threshold
+counts and four slowest timestamped intervals. These are not GPU durations or
+generated/displayed FPS. Menus, loading and pauses are included.
+
+Expected: RT_ALLOC_R409_INSTALL ready=1, RT_SETUP_R409_INSTALL ready=1,
+RT_ALLOC_R409 (class 0 normal, 1 refill/change, 2 other), RT_ALLOC_R409_PEAK,
+RT_SETUP_R409 and RT_FRAME_R409.
+RT_LEASE_R409_INSTALL ready=0 disabled=1 and the disabled persistent scene
+cache are intentional. PTLAS remains off.
