@@ -8,9 +8,14 @@ namespace rt_surface_source {
 // Transient diagnostic request. No saved setting is changed. Zero is gameplay.
 inline std::atomic<unsigned> request{0};
 // Session-only manual comparisons; automated capture has priority.
-inline std::atomic<unsigned> manualGI{0}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser
+#ifdef CONTROL_NRD_GI
+inline constexpr unsigned defaultManualGI=4; // Raw GI into RR; RELAX is opt-in.
+#else
+inline constexpr unsigned defaultManualGI=0;
+#endif
+inline std::atomic<unsigned> manualGI{defaultManualGI}; // 0 saved, 1 removed, 2 stabilized, 3 owned denoiser, 4 raw
 inline std::atomic<unsigned> manualContact{0}; // 0 auto, 1 preserved, 2 unfiltered
-inline std::atomic<bool> ownedFilterEnabled{true};
+inline std::atomic<bool> ownedFilterEnabled{defaultManualGI!=4};
 inline unsigned EffectiveRequest() noexcept {
 #ifdef CONTROL_PERFORMANCE_BUILD
  return ownedFilterEnabled.load(std::memory_order_relaxed)?7:0; // Controls only; no capture overrides.
@@ -27,7 +32,7 @@ inline unsigned EffectiveRequest() noexcept {
 }
 inline bool ManualContactUnfiltered() noexcept {return !request.load() && manualContact.load()==2;}
 inline bool ManualContactPreserved() noexcept {return !request.load() && manualContact.load()==1;}
-inline void ResetManual() noexcept {manualGI.store(0);manualContact.store(0);}
+inline void ResetManual() noexcept {manualGI.store(defaultManualGI);manualContact.store(0);}
 inline thread_local unsigned giScope=0;
 inline constexpr unsigned phases=9;
 enum class Event : unsigned {GIEntry,GIEligible,GITemporal,GISpatial,GIZero,GIRaw, GISteady,
