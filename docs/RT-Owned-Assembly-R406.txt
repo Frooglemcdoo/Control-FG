@@ -1,0 +1,24 @@
+CONTROL TOH R406 - DYNAMIC BINDING COST BREAKDOWN
+
+Install over R405 with Control closed. Play the same area for 60-90 seconds,
+close Control, then run ControlTOH\Tools\Collect-RT-Assembly.cmd.
+Send RT-Assembly-R406.zip. No manual toggles or extra capture program needed.
+
+This is a diagnostic build, not a promised FPS improvement. R405 batching
+worked, but dynamic CPU time remained approximately unchanged. R406 keeps
+that rendering path and measures its previously unsplit child work:
+- constant-buffer dirty checks, allocations and uploads;
+- CBV/root bindings;
+- current buffer descriptor resolution and copying;
+- shader state and UAV binding;
+- unsupported native table handling and wrapper overhead.
+
+Detailed timings sample one application in 256. Ordinary whole-application
+samples exclude those calls, so the extra detail timers are not mixed into
+that average. Detail values are CPU-inclusive and include timer overhead;
+they are not GPU timings or an FPS measurement. Animation, geometry updates,
+native rays, transitions and AS builds remain enabled. PTLAS and the
+expensive persistent scene cache remain disabled.
+
+Expected marker: RT_BIND_R406_DETAIL. All active install markers should be
+ready=1; RT_CACHE_R406_INSTALL ready=0 disabled=1 is intentional.

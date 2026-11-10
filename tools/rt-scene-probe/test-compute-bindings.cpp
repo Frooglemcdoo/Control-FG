@@ -27,6 +27,23 @@ static void One(std::uintptr_t dest,std::uintptr_t source){++ones;events.push_ba
 static void Many(unsigned n,const std::uintptr_t* d,const std::uintptr_t* s){++many;for(unsigned i=0;i<n;++i){for(unsigned j=0;j<n;++j)assert(d[i]!=s[j]);events.push_back({2,d[i],s[i],0});}}
 static void NativeCbv(void*,const Cbv* d,std::uintptr_t dest){CbvCall(d,dest);}
 static void NativeCopy(void*,unsigned n,std::uintptr_t dest,std::uintptr_t source,unsigned type){assert(type==0&&n==1);One(dest,source);}
+struct Trace {Phase phase=Phase::Other;std::size_t cursor=0;unsigned marks=0;};
+static void TraceMark(void* context,Phase phase){
+ auto& trace=*static_cast<Trace*>(context);
+ for(;trace.cursor<events.size();++trace.cursor){const auto event=events[trace.cursor][0];
+  switch(trace.phase){
+   case Phase::Retrieve:assert(event==3);break;
+   case Phase::Shaders:assert(event==4||event==5);break;
+   case Phase::Constants:assert(event==0);break;
+   case Phase::Cbv:assert(event==1);break;
+   case Phase::Copy:assert(event==2);break;
+   case Phase::Uav:assert(event==6);break;
+   case Phase::Native:assert(event==7);break;
+   default:assert(false);break;
+  }
+ }
+ trace.phase=phase;++trace.marks;
+}
 static void Rel(unsigned char* p,unsigned operand,unsigned next,unsigned target){const auto v=static_cast<std::int32_t>(target-next);Write(p,operand,v);}
 static void Jump(unsigned char* p,void* target){const unsigned char h[]={0xff,0x25,0,0,0,0};std::memcpy(p,h,6);Write(p,6,target);}
 int main(){
@@ -66,9 +83,9 @@ int main(){
    for(unsigned i=0;i<7;++i){Write(material.data(),0x10+i*16,test%(i+2)?reinterpret_cast<void*>(std::uintptr_t(0x8000+i)):nullptr);Write(material.data(),0x18+i*16,i%2?otherTable.data():testTable.data());}activeMaterial=material.data();mutateShaders=test%3==0;
   };
   shaderSetup();applyNative(material.data());const auto expectedApply=events;const auto expectedApplyState=testState;const auto expectedUpdates=updates;
-  shaderSetup();ApplyShader(api,shaderApi,material.data());assert(events==expectedApply&&testState==expectedApplyState&&updates==expectedUpdates);
+  shaderSetup();Trace trace;Probe probe{TraceMark,&trace};const bool traced=test%2==0;ApplyShader(api,shaderApi,material.data(),traced?&probe:nullptr);if(traced){TraceMark(&trace,Phase::Other);assert(trace.marks>=4&&trace.cursor==events.size());}assert(events==expectedApply&&testState==expectedApplyState&&updates==expectedUpdates);
  }
  for(auto off:{0x10,0x20}){Write(testTable.data(),static_cast<std::size_t>(off),1u);updates=0;assert(!TryBind(api,testTable.data()).handled&&updates==0);Write(testTable.data(),static_cast<std::size_t>(off),0u);}
  assert(batches>0&&fallbackCopies>0);assert(VirtualFree(code,0,MEM_RELEASE));
- std::printf("PASS 4096 native compute-binding cases; %u batched cases, %u overlap/duplicate fallback copies; current CBVs, null buffers, root constants, and unsupported texture/sampler rejection. Not an FPS benchmark.\n",batches,fallbackCopies);
+ std::printf("PASS 4096 native compute-binding cases; %u batched cases, %u overlap/duplicate fallback copies; current CBVs, null buffers, root constants, and unsupported texture/sampler rejection. Phase attribution matches native callback events with tracing enabled/disabled. Not an FPS benchmark.\n",batches,fallbackCopies);
 }

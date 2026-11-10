@@ -10,6 +10,9 @@ struct Api {
  void(*copyMany)(unsigned,const std::uintptr_t*,const std::uintptr_t*);
  const unsigned char* registry=nullptr;const std::uint32_t* increment=nullptr;void* const* nullDescriptors=nullptr;
 };
+enum class Phase : unsigned { Other, Retrieve, Shaders, Eligibility, Constants, Cbv, Resolve, Copy, Uav, Native, Count };
+struct Probe { void(*mark)(void*,Phase);void* context; };
+inline void Mark(const Probe* probe,Phase phase){if(probe)probe->mark(probe->context,phase);}
 struct Result {bool handled=false,batched=false;unsigned descriptors=0;};
 // Metadata is native compiled-shader metadata; no pointers are retained after this call.
 inline bool Eligible(const void* table){
@@ -29,10 +32,11 @@ inline bool Eligible(const void* table){
  }
  return true;
 }
-inline Result TryBind(const Api& api,void* table){
- if(!Eligible(table))return {};
+inline Result TryBind(const Api& api,void* table,const Probe* probe=nullptr){
+ Mark(probe,Phase::Eligibility);
+ if(!Eligible(table)){Mark(probe,Phase::Other);return {};}
  // Preserve native constant-buffer dirty guards, allocations and uploads exactly once.
- api.updateConstants(table);auto* tls=static_cast<unsigned char*>(api.threadData());auto* state=api.state(tls);
+ Mark(probe,Phase::Constants);api.updateConstants(table);Mark(probe,Phase::Cbv);auto* tls=static_cast<unsigned char*>(api.threadData());auto* state=api.state(tls);
  const auto step=*api.increment;const auto base=Read<std::uintptr_t>(state,0x40);
  auto* list=Read<unsigned char*>(table,0x68);auto count=Read<std::uint32_t>(table,0x70);
  for(std::uint32_t i=0;i<count;++i){auto* r=list+40*i;const auto slot=Read<std::int32_t>(r);const auto index=Read<std::int32_t>(r,0x20);
@@ -46,6 +50,7 @@ inline Result TryBind(const Api& api,void* table){
   if(slot<4)Write(state,0xf8+std::size_t(slot)*8,Read<std::uint64_t>(desc));else api.createCbv(reinterpret_cast<const Cbv*>(desc),Read<std::uintptr_t>(state,0x40)+std::uintptr_t(slot-4)*step);
  }
  // The native function snapshots the SRV destination base before its CBV loops.
+ Mark(probe,Phase::Resolve);
  const auto srvBase=base+std::uintptr_t(step)*5;
  std::array<std::uintptr_t,36> dst{},src{};unsigned n=0;std::uint64_t used=0;bool safe=step!=0;
  list=Read<unsigned char*>(table,0x38);count=Read<std::uint32_t>(table,0x40);
@@ -58,18 +63,20 @@ inline Result TryBind(const Api& api,void* table){
  // A batched copy must not overlap any written range with any read range.
  // Native heap handles are opaque; use descriptor increments, not guessed byte sizes.
  for(unsigned i=0;i<n&&safe;++i)for(unsigned j=0;j<n;++j){const auto distance=dst[i]>src[j]?dst[i]-src[j]:src[j]-dst[i];if(distance<step){safe=false;break;}}
+ Mark(probe,Phase::Copy);
  if(safe)api.copyMany(n,dst.data(),src.data());else for(unsigned i=0;i<n;++i)api.copyOne(dst[i],src[i]);
+ Mark(probe,Phase::Other);
  return {true,safe,n};
 }
 struct ShaderApi {void*(*retrieve)();void(*setShaders)(void*,const void* const*,bool);void(*nativeUse)(void*,void*);void(*finishUse)(void*,void*);};
 struct ShaderResult {std::uint64_t handled=0,batches=0,descriptors=0,native=0;};
-inline ShaderResult ApplyShader(const Api& api,const ShaderApi& shaderApi,void* material){
+inline ShaderResult ApplyShader(const Api& api,const ShaderApi& shaderApi,void* material,const Probe* probe=nullptr){
  ShaderResult stats;const void* shaders[7]{};for(unsigned i=0;i<7;++i)shaders[i]=Read<void*>(material,0x10+i*16);
- auto* state=shaderApi.retrieve();shaderApi.setShaders(state,shaders,Read<unsigned char>(material,1)!=0);
+ Mark(probe,Phase::Retrieve);auto* state=shaderApi.retrieve();Mark(probe,Phase::Shaders);shaderApi.setShaders(state,shaders,Read<unsigned char>(material,1)!=0);Mark(probe,Phase::Other);
  for(unsigned i=0;i<7;++i)if(Read<void*>(material,0x10+i*16)){
-  auto* table=Read<void*>(material,0x18+i*16);const auto result=TryBind(api,table);
-  if(result.handled){shaderApi.finishUse(table,state);++stats.handled;stats.batches+=result.batched?1u:0u;stats.descriptors+=result.descriptors;}
-  else{shaderApi.nativeUse(table,state);++stats.native;}
+  auto* table=Read<void*>(material,0x18+i*16);const auto result=TryBind(api,table,probe);
+  if(result.handled){Mark(probe,Phase::Uav);shaderApi.finishUse(table,state);Mark(probe,Phase::Other);++stats.handled;stats.batches+=result.batched?1u:0u;stats.descriptors+=result.descriptors;}
+  else{Mark(probe,Phase::Native);shaderApi.nativeUse(table,state);Mark(probe,Phase::Other);++stats.native;}
  }
  return stats;
 }

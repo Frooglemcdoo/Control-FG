@@ -20,7 +20,7 @@ __declspec(noinline) inline void Hook(void* capture){
  objects.fetch_add(stats.objects,std::memory_order_relaxed);instances.fetch_add(stats.instances,std::memory_order_relaxed);updates.fetch_add(stats.dynamicUpdates,std::memory_order_relaxed);ticks.fetch_add(static_cast<UINT64>(end.QuadPart-begin.QuadPart),std::memory_order_relaxed);
  const auto n=calls.fetch_add(1,std::memory_order_relaxed)+1;
  if(n==1||n%512==0){const DWORD error=GetLastError();const auto elapsed=ticks.load();const auto us=elapsed/frequency*1000000+(elapsed%frequency)*1000000/frequency;
-  Log("RT_PREPARE_R405 active=1 loops=%llu objects=%llu instances=%llu dynamic_updates=%llu total_loop_us=%llu batch_groups=%llu reused_instances=%llu native_object_loop=0 native_dynamic_updates=1 native_readback=1 native_as_builds=1 ptlas=0",n,objects.load(),instances.load(),updates.load(),us,batchGroups.load(),reusedInstances.load());SetLastError(error);
+  Log("RT_PREPARE_R406 active=1 loops=%llu objects=%llu instances=%llu dynamic_updates=%llu total_loop_us=%llu batch_groups=%llu reused_instances=%llu native_object_loop=0 native_dynamic_updates=1 native_readback=1 native_as_builds=1 ptlas=0",n,objects.load(),instances.load(),updates.load(),us,batchGroups.load(),reusedInstances.load());SetLastError(error);
  }
 }
 inline bool ExchangeLoop(bool install)noexcept{
