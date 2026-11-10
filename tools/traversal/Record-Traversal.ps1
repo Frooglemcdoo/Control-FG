@@ -77,6 +77,7 @@ finally {
   if($stdout -and $stdout.Wait(5000)){$stdout.Result|Set-Content (Join-Path $out 'presentmon-stdout.txt')}
   if($stderr -and $stderr.Wait(5000)){$stderr.Result|Set-Content (Join-Path $out 'presentmon-stderr.txt')}
   $meta.presentmon_exit_code=$pmProcess.ExitCode
+  if($pmProcess.ExitCode -ne 0){$failure="PresentMon exit code $($pmProcess.ExitCode); inspect its logs."}
   $pmProcess.Dispose()
   } catch {$failure='PresentMon cleanup failed: '+$_.Exception.Message}
  }

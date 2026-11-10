@@ -21,7 +21,7 @@ jobs:
       - name: Validate actual Windows recorder tools
         shell: powershell
         run: |
-          & tools/traversal/test-recorder.ps1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/traversal/test-recorder.ps1
           if($LASTEXITCODE -ne 0){throw 'Recorder validation failed'}
       - name: Package independent recorder
         shell: powershell
