@@ -58,7 +58,7 @@ module and checked the exact hash before retaining this evidence.
 ## Scene lifetime: progress, not a completed lease
 
 24430 retains resources in a deferred release queue. 245C0 stamps that queue from
-the frame object's +88 timeline. 24830 checks the stored fence/value before
+the NativeDevice object's +88 timeline. 24830 checks the stored fence/value before
 draining it. This supports frame-based retirement but does NOT yet prove every
 BLAS, local-root geometry address or material mutation is covered for deferred
 GI replay. No new global AS/geometry inventory has been enabled.
@@ -222,3 +222,11 @@ Recording identity hardening: use a process-wide saturating serial only at creat
 The static-provider destructor150AA0 releases primary/scratch/alternate chunks through151720/1518A0/151A20. The skinned-provider destructorA6030 releases its three chunks throughA7220/A7400/A7580. All six decrement chunk+1C reference count and, at zero, remove the chunk and invoke NativeBuffer::releaseResources directly or schedule a cleanup job. Static allocation1504C0/150E21 and skinned allocationA6380 advance chunk+18 and increment references; the inspected frees do not return individual offsets to a free list. Chunk+8 is the native buffer wrapper and+10 the base GPU address. Reproducible build-locked audit/native-pools.json retains the exact function bytes and call identities. This narrows storage reuse concerns; mutable vertex/material/AS contents and precise same-frame consumer integration remain separate.
 
 CI state20:37UTC: old full runs43093369305/43093819085 remain in progress at auxiliary artifact upload; latest recording-hook cores43095118890/43096345342 queued without jobs. Job-log retrieval returned ReadTimeout. Added a3-minute timeout and continue-on-error only to the AUXILIARY preflight diagnostic upload. The actual preflight test, DLL compilation, validation and final package upload still must pass. Added per-workflow/per-branch concurrency cancellation for future superseded runs; it cannot cancel old runs created before this setting. No user action or repeat capture needed for this CI stall.
+
+### Checkpoint20:40UTC, pending Windows validation
+
+Current source/workflow commit f580d0acd020c3337f95db6dcde73ea2d5f16af0 (recording-identity code introduced0e543d624db058aa6a0f0c7b54c4093bcbc5bae3). Latest core43097092781 and full43097092705 are queued without results. The newer ClearState/address-recycling tests have NOT passed yet; only the earlier private-fence/owner version07b60e1 has a successful core run. Native retirement and pool audit scripts passed locally, Python syntax checks passed, changed-file whitespace check passed, and both workflow YAMLs parsed.
+
+Attempted to cancel superseded runs through authenticated GitHub UI because the connector has no cancellation action. Run43093369305 returned Cannot cancel a workflow run that is not in progress while still displaying In progress. Run43093819085 accepted a cancellation REQUEST but remained In progress on re-open. Queued43095118876 returned Failed to cancel workflow. No cancellation completion was verified; do not claim the queue was cleared. Job-log calls also returned ReadTimeout. This is a concrete external validation blocker, not evidence of a shader failure and not a reason for a new game capture.
+
+Next: check latest core/full when runner service progresses; repair any actual compile/test failure. Then finish the same-invocation scene/descriptor borrowing contract and live two-phase dispatch integration. No producer is suppressed, no deferred-guided rays execute, and no new gameplay build is ready. Existing successful RTX check must NOT be repeated.
