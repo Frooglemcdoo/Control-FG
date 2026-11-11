@@ -1,5 +1,6 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/frozen_guide_training.h"
+#include "../src/gi_reuse/d3d12_frozen_guide_build.h"
 int main()try {
  using namespace gi_reuse;Device d(false);constexpr UINT slots=16;
  GIWorldGuideKey a{0,0,0,7,1},b{1,0,0,7,1},c{2,0,0,7,1};
@@ -38,6 +39,22 @@ int main()try {
  d.list->Dispatch(1,1,1);d.Uav(cells.Get());
  d.list->SetComputeRootShaderResourceView(0,invalid->GetGPUVirtualAddress());d.list->Dispatch(1,1,1);d.Uav(cells.Get());
  d.list->SetPipelineState(freeze.Get());d.list->Dispatch(1,1,1);
+ // Exercise the production four-stage recorder, not only manually issued stages.
+ std::array<std::vector<char>,4> buildCode;std::array<D3D12_SHADER_BYTECODE,4> buildShaders;
+ for(UINT i=0;i<4;++i){buildCode[i]=Read(names[i]);buildShaders[i]={buildCode[i].data(),buildCode[i].size()};}
+ D3D12FrozenGuideBuild builder;Check(builder.Initialize(d.device.Get(),buildShaders));
+ auto ownedCells=d.Buffer(slots*sizeof(GITrainingCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto ownedGuides=d.Buffer(slots*sizeof(GIKeyedGuide),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto ownedRead=d.Buffer(slots*sizeof(GIKeyedGuide),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ ComputeBindingTracker tracker;tracker.Root(root.Get());tracker.Pipeline(freeze.Get());
+ tracker.Descriptor(0,RootArgumentKind::SRV,invalid->GetGPUVirtualAddress());tracker.Descriptor(1,RootArgumentKind::UAV,cells->GetGPUVirtualAddress());
+ tracker.Descriptor(2,RootArgumentKind::UAV,frozen->GetGPUVirtualAddress());tracker.Constants(3,0,4,control);
+ ComputeBindingSnapshot restore;Require(tracker.Capture(restore),"builder restore snapshot failed");
+ Require(!builder.Record(d.list.Get(),input.Get(),1024,ownedCells.Get(),ownedCells.Get(),slots,101,8,restore),"aliased builder outputs admitted");
+ Require(!builder.Record(d.list.Get(),input.Get(),2048,ownedCells.Get(),ownedGuides.Get(),slots,101,8,restore),"short training buffer admitted");
+ Require(builder.Record(d.list.Get(),input.Get(),1024,ownedCells.Get(),ownedGuides.Get(),slots,101,8,restore),"production builder failed");
+ d.Transition(ownedGuides.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ d.list->CopyResource(ownedRead.Get(),ownedGuides.Get());
  d.Transition(cells.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
  d.Transition(frozen.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
  d.list->CopyBufferRegion(back.Get(),0,cells.Get(),0,slots*sizeof(GITrainingCell));d.list->CopyBufferRegion(back.Get(),slots*sizeof(GITrainingCell),frozen.Get(),0,slots*sizeof(GIKeyedGuide));d.Submit();
@@ -54,5 +71,10 @@ int main()try {
  auto native=GISampleKeyedFrozenWorld(guides[ai].guide,guides[ai].key,collision,{0,0,1},100,7,.125f,.3f,.8f);
  Require(native.valid&&native.weight==1,"Collision failed native pre-sample fallback");
  D3D12_RANGE empty{0,0};back->Unmap(0,&empty);
+ GIKeyedGuide* actual=nullptr;Check(ownedRead->Map(0,nullptr,reinterpret_cast<void**>(&actual)));
+ Require(actual[ai].guide.valid&&actual[ai].guide.frame==101&&actual[ai].guide.epoch==8,"production builder did not freeze current identity");
+ Require(!actual[bi].guide.valid&&actual[ci].guide.valid,"production builder count validation failed");
+ Require(GIWorldGuideKeysMatch(actual[ai].key,a)&&actual[ai].guide.samples<=512&&actual[ai].guide.samples>=256,"production builder lost key/count");
+ ownedRead->Unmap(0,&empty);
  std::cout<<"PASS GPU training: atomic energy/count, frozen CPU/HLSL CDF, full-key collision isolation, insufficient/invalid native fallback. Not live or hardware timing.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

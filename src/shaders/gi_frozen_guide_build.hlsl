@@ -11,6 +11,7 @@ void Clear(uint3 id:SV_DispatchThreadID) {
 }
 [numthreads(64,1,1)]
 void Claim(uint3 id:SV_DispatchThreadID) {
+ id.x+=id.y*(65535u*64u);
  if(id.x>=recordCount||!cellCount)return;
  GITrainingRecord r=training[id.x];
  if(r.key.valid!=1||r.key.normal>7)return;
@@ -24,6 +25,7 @@ void Claim(uint3 id:SV_DispatchThreadID) {
 }
 [numthreads(64,1,1)]
 void Accumulate(uint3 id:SV_DispatchThreadID) {
+ id.x+=id.y*(65535u*64u);
  if(id.x>=recordCount||!cellCount)return;
  GITrainingRecord r=training[id.x];if(r.key.valid!=1||r.key.normal>7)return;
  uint slot=GITrainingHash(r.key)%cellCount,old;
