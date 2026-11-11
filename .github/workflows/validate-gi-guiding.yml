@@ -33,6 +33,8 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Sample shader compile failed'}
           & $dxc -T cs_6_0 -E Learn -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-learn.dxil
           if($LASTEXITCODE -ne 0){throw 'Learning shader compile failed'}
+          & $dxc -T cs_6_0 -E Prepare -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-prepare.dxil
+          if($LASTEXITCODE -ne 0){throw 'Table preparation shader compile failed'}
           & $dxc -T cs_6_0 -E Publish -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-publish.dxil
           if($LASTEXITCODE -ne 0){throw 'Publication shader compile failed'}
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-guiding-gpu.cpp /Febuild/test-guiding-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
