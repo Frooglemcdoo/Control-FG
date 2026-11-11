@@ -15,20 +15,20 @@ GI_FROZEN_INLINE GIFrozenWorldGuide GIFreezeWorldGuide(float energy[64],uint sam
     GIFrozenWorldGuide g;
     g.frame=frame;g.epoch=epoch;g.samples=samples;g.valid=0;g.cdf[0]=0;
     float peak=0;bool good=samples>=256&&epoch!=0;
-    for(uint i=0;i<64;++i){good=good&&GIFinite(energy[i])&&energy[i]>=0;if(energy[i]>peak)peak=energy[i];}
-    float sum=0;if(good&&peak>0)for(uint i=0;i<64;++i)sum+=energy[i]/peak;
+    for(uint index1=0;index1<64;++index1){good=good&&GIFinite(energy[index1])&&energy[index1]>=0;if(energy[index1]>peak)peak=energy[index1];}
+    float sum=0;if(good&&peak>0)for(uint index2=0;index2<64;++index2)sum+=energy[index2]/peak;
     good=good&&GIFinite(sum)&&sum>0;
-    for(uint i=0;i<64;++i){
-        float mass=good?0.01f/64+0.99f*(energy[i]/peak)/sum:1.0f/64;
-        g.cdf[i+1]=g.cdf[i]+mass;
+    for(uint index3=0;index3<64;++index3){
+        float mass=good?0.01f/64+0.99f*(energy[index3]/peak)/sum:1.0f/64;
+        g.cdf[index3+1]=g.cdf[index3]+mass;
     }
     // Evaluate the stored intervals, not the pre-rounding training masses.
-    float total=g.cdf[64];for(uint i=1;i<64;++i)g.cdf[i]/=total;g.cdf[64]=1;
+    float total=g.cdf[64];for(uint index4=1;index4<64;++index4)g.cdf[index4]/=total;g.cdf[64]=1;
     g.valid=good?1u:0u;return g;
 }
 GI_FROZEN_INLINE bool GIFrozenValid(GIFrozenWorldGuide g,uint frame,uint epoch){
     if(g.valid!=1||g.samples<256||!epoch||g.frame!=frame||g.epoch!=epoch||g.cdf[0]!=0||g.cdf[64]!=1)return false;
-    for(uint i=0;i<64;++i)if(!GIFinite(g.cdf[i+1])||g.cdf[i+1]<=g.cdf[i])return false;
+    for(uint index5=0;index5<64;++index5)if(!GIFinite(g.cdf[index5+1])||g.cdf[index5+1]<=g.cdf[index5])return false;
     return true;
 }
 GI_FROZEN_INLINE uint GIFrozenCell(GIPoint d){

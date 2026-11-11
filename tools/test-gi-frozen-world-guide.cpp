@@ -1,5 +1,6 @@
 #include "../src/gi_reuse/frozen_world_guide.h"
 #include <cassert>
+#include <algorithm>
 #include <cstdio>
 #include <limits>
 #include <random>

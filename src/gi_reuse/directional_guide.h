@@ -17,12 +17,12 @@ GI_GUIDE_INLINE GIDirectionalGuide GIBuildDirectionalGuide(float energy[64],floa
     GIDirectionalGuide g;
     float peak=0;
     bool good=GIFinite(learnedFraction)&&learnedFraction>=0&&learnedFraction<=0.5f;
-    for(uint i=0;i<64;++i){good=good&&GIFinite(energy[i])&&energy[i]>=0;if(energy[i]>peak)peak=energy[i];}
+    for(uint index1=0;index1<64;++index1){good=good&&GIFinite(energy[index1])&&energy[index1]>=0;if(energy[index1]>peak)peak=energy[index1];}
     float total=0;
-    if(good&&peak>0)for(uint i=0;i<64;++i)total+=energy[i]/peak;
+    if(good&&peak>0)for(uint index2=0;index2<64;++index2)total+=energy[index2]/peak;
     if(!good||!(total>0))learnedFraction=0;
-    for(uint i=0;i<64;++i)g.mass[i]=learnedFraction>0?
-        (1-learnedFraction)/64+learnedFraction*((energy[i]/peak)/total):1.0f/64;
+    for(uint index3=0;index3<64;++index3)g.mass[index3]=learnedFraction>0?
+        (1-learnedFraction)/64+learnedFraction*((energy[index3]/peak)/total):1.0f/64;
     return g;
 }
 GI_GUIDE_INLINE GIGuidedDirection GISampleDirectionalGuide(GIDirectionalGuide g,float choose,float vertical) {
@@ -33,11 +33,11 @@ GI_GUIDE_INLINE GIGuidedDirection GISampleDirectionalGuide(GIDirectionalGuide g,
 #endif
     if(!GIFinite(choose)||!GIFinite(vertical)||choose<0||choose>=1||vertical<0||vertical>=1)return r;
     float total=0;
-    for(uint i=0;i<64;++i){if(!GIFinite(g.mass[i])||g.mass[i]<=0)return r;total+=g.mass[i];}
+    for(uint index4=0;index4<64;++index4){if(!GIFinite(g.mass[index4])||g.mass[index4]<=0)return r;total+=g.mass[index4];}
     if(!GIFinite(total)||total<=0)return r;
     // Normalize the actual stored masses; evaluation must use this SAME table.
     float target=choose*total,lo=0;uint selected=63;
-    for(uint i=0;i<63;++i){float hi=lo+g.mass[i];if(target<hi){selected=i;break;}lo=hi;}
+    for(uint index5=0;index5<63;++index5){float hi=lo+g.mass[index5];if(target<hi){selected=index5;break;}lo=hi;}
     float fraction=(target-lo)/g.mass[selected];
     if(fraction<0)fraction=0;
     if(fraction>0.9999999403953552f)fraction=0.9999999403953552f;
