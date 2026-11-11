@@ -1,4 +1,4 @@
-"""Execute emitted R360 instructions against an independent image-space oracle."""
+"""Execute emitted R422 instructions against an independent image-space oracle."""
 import json,struct,re
 from pathlib import Path
 import numpy as np
@@ -127,7 +127,7 @@ for family in families:
    keep=[3] if rr==output else [0,1,2,3];assert np.array_equal(regs[rr,keep],actual[rr,keep],equal_nan=True)
   if samples>1:assert not reads
   checks+=1
-print(f'PASS {checks} emitted diffuse reconstruction cases across12 families: native remap, odd borders, constant radiance, normal/material/mask and radiance edges, NaN/Inf, MSAA fallback, original-register preservation')
+print(f'PASS {checks} emitted diffuse reconstruction cases across12 families: native remap, odd borders, constant radiance, normal/material/mask guards and radiance mixing, NaN/Inf, MSAA fallback, original-register preservation')
 
 # Constant-surface noise test: the reference already agrees with emitted code.
 tex={0:np.tile(np.array([.5,.5,.5,128/255],np.float32),(16,16,1)),1:np.tile(np.array([.2,.3,10/255,20/255],np.float32),(16,16,1)),3:rng.uniform(.9,1.1,(16,16,4)).astype(np.float32),11:np.zeros((8,8,4),np.float32)}

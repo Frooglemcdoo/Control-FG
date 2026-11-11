@@ -192,7 +192,7 @@ jobs:
           python tools/test-character-native-remap.py
           if not "%errorlevel%"=="0" exit /b 1
           python tools/test-character-diffuse-impulses.py
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-character-coverage-guard.py
           if not "%errorlevel%"=="0" exit /b 1
           python tools/prepare-character-coverage-gpu.py
