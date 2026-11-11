@@ -20,6 +20,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  if((!Enabled()&&!GIOwnedPipeline::Enabled())||!device||!desc||!native||!create||!desc->CS.pShaderBytecode||desc->CS.BytecodeLength!=kNativeEvaluatorSize)return;
  char sha[65]{};
  if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de"))return;
+ gi_frozen_prepare::Observe(device,desc,native);
  const auto owned=GIOwnedPipeline::Attach(device,desc->pRootSignature,native);
  if(GIOwnedPipeline::Enabled())Trace("GI_OWNED_PIPELINE attached=%u hr=0x%08lX dispatch_hook=1",unsigned(owned==S_OK),static_cast<unsigned long>(owned));
  if(!Enabled())return;

@@ -1,6 +1,11 @@
 #pragma once
 #include "visual_settings_policy.h"
 #include "gi_phase_audit.h"
+#ifdef CONTROL_GI_LONG_SEQUENCE
+#include "gi_reuse/d3d12_frozen_raygen.h"
+#include "gi_reuse/d3d12_frozen_pipeline_bundle.h"
+#include "../build/gi_frozen.generated.h"
+#endif
 #include "performance_compare_state.h"
 #include "diagnostic_activity.h"
 #include "gi_stack_capture.h"
@@ -280,6 +285,7 @@ inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
 #include "gi_source_runtime.inl"
+namespace gi_frozen_prepare { inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept; }
 #include "gi_evaluator_runtime.inl"
 #include "gi_spot_pcf_runtime.inl"
 namespace gi_binding_audit {
@@ -546,6 +552,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
+#include "gi_frozen_prepare.inl"
 #include "gi_binding_audit.inl"
 #include "gi_compute_hooks.inl"
 namespace gi_phase_bindings {

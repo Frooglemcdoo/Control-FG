@@ -1,8 +1,6 @@
 #pragma once
 #include "gi_reuse/native_gi_identity.h"
 #include "gi_reuse/owned_request.h"
-#include "gi_reuse/d3d12_frozen_raygen.h"
-#include "../build/gi_frozen.generated.h"
 // Both raygens share one state object: native hit/miss identifiers remain valid.
 namespace gi_live_toggle {
 inline const GUID kRecord={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x66,0x77,0x01}};
