@@ -57,3 +57,17 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Current-frame fixture compile failed'}
           ./build/test-current-guide.exe
           if($LASTEXITCODE -ne 0){throw 'Current-frame split validation failed'}
+          python tools/test-gi-owned-source-trace.py
+          if($LASTEXITCODE -ne 0){throw 'Owned source preservation/schema tests failed'}
+          python tools/generate-gi-owned-source-trace.py
+          if($LASTEXITCODE -ne 0){throw 'Owned source generation failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -O3 -WX build/gi_owned_source.generated.hlsl -Fo build/gi-owned-source.dxil
+          if($LASTEXITCODE -ne 0){throw 'Actual owned evaluator trace compile failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -O3 -WX tools/gi-owned-source-recorder-validation.hlsl -Fo gi-owned-source-recorder.dxil
+          if($LASTEXITCODE -ne 0){throw 'Recorder shader compile failed'}
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-owned-source-recorder-gpu.cpp /Febuild/test-owned-source-recorder.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Recorder GPU fixture compile failed'}
+          ./build/test-owned-source-recorder.exe
+          if($LASTEXITCODE -ne 0){throw 'Recorder GPU validation failed'}
+          python tools/analyze-gi-owned-source.py build/owned-source-recorder-fixture.bin --output build/owned-source-recorder-fixture.json
+          if($LASTEXITCODE -ne 0){throw 'GPU record decoding failed'}
