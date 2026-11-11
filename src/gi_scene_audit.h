@@ -66,7 +66,7 @@ inline void Read(Snapshot* s,U64 frame) noexcept {
    for(unsigned i=0;i<2;++i){auto* h=*reinterpret_cast<unsigned char**>(state+0x50+i*8);
     if(!h)continue;s->heap[i]=reinterpret_cast<U64>(h);s->heapCom[i]=*reinterpret_cast<U64*>(h);
     s->epoch[i]=*reinterpret_cast<U64*>(h+0x20);s->generation[i]=*reinterpret_cast<U64*>(h+0x30);
-    s->cursor[i]=*reinterpret_cast<U64*>(h+0x18);s->valid|=U64(16)<<i;}}
+    s->cursor[i]=*reinterpret_cast<unsigned*>(h+0x18);s->valid|=U64(16)<<i;}}
  } __except(EXCEPTION_EXECUTE_HANDLER){s->fault=GetExceptionCode();}
 }
 inline void Observe(U64 parent,U64 frame,unsigned point) noexcept {

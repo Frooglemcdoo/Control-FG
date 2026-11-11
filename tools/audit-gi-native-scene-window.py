@@ -49,6 +49,21 @@ def audit(path):
     assert vtable==0x6281D0 and callback==0xA8F70
     assert pe.get_data(callback,9)==bytes.fromhex('4883c118e947faffff')
     tlas_build=imported_call(0xA8BCA,'buildTopLevelAccelerationStructure@DeviceUtilRaytracing')
+    # Native graphics preparation -> async scene -> graphics consumer handshake.
+    fence_calls = {
+        'prepare_submit': imported_call(0x124130, 'submitGraphicsCommandList'),
+        'prepare_signal': imported_call(0x124152, 'signalFence'),
+        'async_wait': imported_call(0xA8C45, 'waitFence'),
+        'cleanup_submit': imported_call(0xA8C61, 'executeDeferredThreadCleanup'),
+        'async_signal': imported_call(0xA8C8F, 'signalFence'),
+        'consumer_submit': imported_call(0xA8C95, 'submitGraphicsCommandList')}
+    assert instruction(0xA8CB4).mnemonic == 'jmp'
+    assert 'waitFence' in imports[relative_memory(0xA8CB4)]
+    for address in (0x12413D, 0xA8C85):
+        assert pe.get_data(address,3) == bytes.fromhex('48ff00')
+    for address in (0x124136,0xA8C7B):
+        assert pe.get_data(address,7) == bytes.fromhex('488b83d0000000')
+    assert relative_memory(0xA8C2F) == relative_memory(0xA8C72) == 0x7EC040
     lo, hi = 0x128D20, 0x12DA38
     assert any(e.struct.BeginAddress == lo and e.struct.EndAddress == hi
                for e in pe.DIRECTORY_ENTRY_EXCEPTION), 'Unexpected function extent'
@@ -118,6 +133,9 @@ def audit(path):
             'later_conditional_ray_calls': {'sun_shadow':'0x12d342','ao':'0x12d8ba'},
             'scene_binding_array_offset':'0x80', 'scene_binding_count_offset':'0x88',
             'scene_join_call':'0x128f3b', 'scene_bind_call':'0x128f5b',
+            'scene_fence_handshake':{'scene_fence_offset':'0xd0',
+                'async_flag':'0x7ec040','verified_imports':fence_calls,
+                'graphics_wait_tail':'0xa8cb4','later_writer_exclusion_proven':False},
             'scene_preparation_chain':{
                 'material_rebuild_call':'0x12491d',
                 'material_record_update_call':'0xc7c59',

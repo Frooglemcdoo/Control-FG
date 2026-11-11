@@ -15,6 +15,20 @@
   "scene_binding_count_offset": "0x88",
   "scene_join_call": "0x128f3b",
   "scene_bind_call": "0x128f5b",
+  "scene_fence_handshake": {
+    "scene_fence_offset": "0xd0",
+    "async_flag": "0x7ec040",
+    "verified_imports": {
+      "prepare_submit": "?submitGraphicsCommandList@DeviceUtilDX12@d3d@@SAXXZ",
+      "prepare_signal": "?signalFence@FenceUtil@d3d@@SAXAEAVCommandQueue@2@AEBUFence@2@@Z",
+      "async_wait": "?waitFence@FenceUtil@d3d@@SAXAEAVCommandQueue@2@AEBUFence@2@@Z",
+      "cleanup_submit": "?executeDeferredThreadCleanup@ThreadingCore@d3d@@SAX_KPEAPEAVDeferredCleanupCommand@2@@Z",
+      "async_signal": "?signalFence@FenceUtil@d3d@@SAXAEAVCommandQueue@2@AEBUFence@2@@Z",
+      "consumer_submit": "?submitGraphicsCommandList@DeviceUtilDX12@d3d@@SAXXZ"
+    },
+    "graphics_wait_tail": "0xa8cb4",
+    "later_writer_exclusion_proven": false
+  },
   "scene_preparation_chain": {
     "material_rebuild_call": "0x12491d",
     "material_record_update_call": "0xc7c59",
