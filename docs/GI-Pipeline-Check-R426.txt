@@ -1,0 +1,21 @@
+R426 - Frozen GI pipeline compatibility check
+
+This is NOT the hair/jaw noise fix and does not enable deferred guided rendering.
+It prepares the new raygen in Control's real DXR state object and prepares six
+compute stages against its real GI6 root, then checks the live root bindings.
+Existing shading and the one-ray budget remain selected. No RELAX change.
+
+1. Close Control. Extract this package into the game folder, replacing its mod files.
+2. Run ControlTOH\Diagnostics\Start-GI-Pipeline-Check.cmd.
+3. Load a level with RT indirect lighting enabled, wait about 10 seconds, exit.
+4. Send the GI-Pipeline-R426-*.zip automatically created beside the launcher.
+
+No movement route, video, screenshot or FPS comparison is needed. No large GPU
+capture starts. Do not repeat the run if it reports a failure; send that result.
+Normal game launches do not enable this check. Keep the previous package so its
+mod files can be restored if loading fails; the check does not change saved settings.
+
+Why this is needed: automated software-GPU checks cover compute and buffer
+preservation, but cannot validate Control's DXR state object on the RTX driver.
+A successful check is not proof that the new split rendering path is safe or that
+the visible noise has improved. Scene/descriptor lifetime integration remains.

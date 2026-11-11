@@ -90,3 +90,37 @@ needed for the completed component work.
 
 Constant-copy PSO/root preparation has now been split from per-invocation storage;
 the live frame owner can reuse one immutable D3D12GIRayConstantPipeline.
+
+
+## Integration continuation
+
+- 43078878208 passed the shared constant-pipeline refactor.
+- 43079769047 passed split-recording lifetime cases: producer completion/reset
+  cannot retire an unattached future consumer; last-consumer completion AND both
+  recording seals are required. Replay, reverse order, cross-queue, failed signal
+  and overlap quarantine. Cancellation only applies to an unattached consumer.
+- 43079981806 passed actual two-list WARP buffer preservation, transactional
+  committed-allocation budgeting and layout validation. A 3840x2160 half-frame
+  training buffer is 149,299,200 bytes; weights are 16,588,800 bytes, before guide
+  cells and actual allocation alignment. Old 128-MiB scratch pooling cannot be
+  assumed suitable. No live pool is connected yet.
+- 43080206080 and 43080843343 passed the frozen stage bundle build and extended
+  records. A third immutable raygen record explicitly disables guide use for
+  native-cosine COMPLEMENT recovery; never retry the complete native ray pass.
+- D3D12FrozenCompletion now composes shade-A / guide / trace-B / shade-B, with
+  texture/buffer barriers, original ray bindings and final native compute state.
+  It requires an explicit separate-producer-submission and scene/descriptor
+  lease. No live hook supplies that proof. This recorder is compiled but its
+  DXR transaction has NOT executed on software GPU or in Control.
+- Full DLL CI initially stopped at the standalone live-toggle test's missing
+  d3d12.lib link. The link was added. Headers must be preincluded globally before
+  native_lighting scope; isolated tests also retain direct header includes.
+
+R426 pipeline check is distinct from compact-preview image testing. The session
+flag CONTROLTOH_GI_FROZEN_PREPARE prepares the new raygen in the same native state
+object and attaches six immutable compute pipelines to real GI6, then checks live
+binding acceptance. It does NOT record deferred rays, create scene leases,
+change RELAX, run a GPU capture, or promise a noise/FPS improvement. The small
+load-and-exit result reports ray, compute and binding readiness independently.
+Successful shader compile/WARP tests cannot answer RTX-driver DXR integration.
+Do not ask for another moving hair/jaw visual comparison for this package.

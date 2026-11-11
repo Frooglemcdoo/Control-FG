@@ -98,6 +98,8 @@ jobs:
         run: |
           & tools/test-gi-phase-collector.ps1
           if ($LASTEXITCODE -ne 0) { throw 'Phase collector failed' }
+          & tools/test-gi-pipeline-collector.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Pipeline collector failed' }
           python tools/test-gi-phase-check.py
           if ($LASTEXITCODE -ne 0) { throw 'Phase parser failed' }
       - uses: actions/upload-artifact@v4

@@ -1109,7 +1109,7 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-sequence-runtime.exe live
           if not "%errorlevel%"=="0" exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-toggle.cpp /Febuild\test-gi-live-toggle.exe
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-toggle.cpp /Febuild\test-gi-live-toggle.exe /link d3d12.lib
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-lighting-panel-window.cpp /Febuild\test-lighting-panel-window.exe /link user32.lib
           if not "%errorlevel%"=="0" exit /b 1
@@ -1472,7 +1472,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Pipeline-Check-R426' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1516,7 +1516,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-Compact-Preview') {
+          if ($out -eq 'ControlTOH-GI-Pipeline-Check-R426') {
+            Copy-Item docs/GI-Pipeline-Check-R426.txt "$out/ControlTOH/README.txt"
+            Copy-Item tools/diagnostics/Start-GI-Pipeline-Check.cmd,tools/diagnostics/GI-Pipeline-Check.ps1 $diagnostics
+          } elseif ($out -eq 'ControlTOH-GI-Compact-Preview') {
             Copy-Item docs/GI-Compact-Preview.txt "$out/ControlTOH/README.txt"
             Copy-Item tools/diagnostics/Start-GI-Compact-Preview.cmd $diagnostics
           } else {
@@ -1534,8 +1537,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Pipeline-Check-R426' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
+            ControlTOH-GI-Pipeline-Check-R426.zip
+            ControlTOH-GI-Pipeline-Check-R426.sha256
             ControlTOH-R425.zip
             ControlTOH-R425.sha256
             ControlTOH-GI-Compact-Preview.zip

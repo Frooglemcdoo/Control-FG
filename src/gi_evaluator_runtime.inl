@@ -34,7 +34,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   if(SUCCEEDED(hr)&&owner){hr=owner->SetPrivateData(kMode,sizeof(mode),&mode);
    if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kVariant,alternate);owner->Release();}
  }
- if(SUCCEEDED(hr)&&alternate)GIOwnedPipeline::Share(native,alternate);
+ if(SUCCEEDED(hr)&&alternate){GIOwnedPipeline::Share(native,alternate);gi_frozen_prepare::Share(native,alternate);}
  if(alternate)alternate->Release();
  if(SUCCEEDED(hr)){ready.store(true);if(gi_reuse::SingleProducerEnabled())gi_reuse::singleEvaluatorReady=true;}
  Trace("GI_EVALUATOR_R309 ready=%u hr=0x%08lX shader=gi6 native_fallback=%u",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),unsigned(FAILED(hr)));

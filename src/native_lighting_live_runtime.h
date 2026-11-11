@@ -285,7 +285,7 @@ inline void RecordDirect(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
 #include "gi_source_runtime.inl"
-namespace gi_frozen_prepare { inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept; }
+namespace gi_frozen_prepare { inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept; inline void Share(IUnknown*,ID3D12PipelineState*) noexcept; inline void CheckBinding(ID3D12GraphicsCommandList*) noexcept; }
 #include "gi_evaluator_runtime.inl"
 #include "gi_spot_pcf_runtime.inl"
 namespace gi_binding_audit {
@@ -514,6 +514,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto hooks=Lookup(list);const auto original=hooks.dispatch;if(!original)return;
     gi_evaluator::Dispatch(list);
+    gi_frozen_prepare::CheckBinding(list);
     if(gi_phase_audit::Enabled()){UINT mode=0,bytes=sizeof(mode);
       if(SUCCEEDED(list->GetPrivateData(gi_evaluator::kMode,&bytes,&mode))&&bytes==sizeof(mode)&&mode)gi_phase_bindings::Record(list,2,x,y,z);}
     gi_binding_audit::Dispatch(list,x,y,z);
@@ -552,9 +553,9 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 }
 #include "spot_shadow_resolution_runtime.h"
 #include "rt_spot_capture_audit.h"
-#include "gi_frozen_prepare.inl"
 #include "gi_binding_audit.inl"
 #include "gi_compute_hooks.inl"
+#include "gi_frozen_prepare.inl"
 namespace gi_phase_bindings {
 inline void Record(ID3D12GraphicsCommandList* list,unsigned kind,UINT x,UINT y,UINT z) noexcept {
  if(!gi_phase_audit::Enabled())return;
