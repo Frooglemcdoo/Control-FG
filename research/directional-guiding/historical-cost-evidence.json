@@ -1,0 +1,1902 @@
+{
+  "scope": "Existing historical comparisons; no current-frame split path was measured. Stage timings are not total GPU frame time and cannot predict additional pass overhead. R414 capture may be partial; retain coverage fields.",
+  "captures": [
+    {
+      "file": "Performance-R414-60480-272967046.zip",
+      "sha256": "16f7ed63e4ed2227bf0b0b8153b6cae40acb988559241b3d81d50639234574fd",
+      "comparison": [
+        {
+          "phase": "native_rr_begin",
+          "intervals": "798",
+          "mean_frame_ms": "15.0028",
+          "p50_ms": "14.7932",
+          "p95_ms": "17.1752",
+          "p99_ms": "19.793",
+          "average_fps": "66.6542",
+          "one_percent_low_fps": "48.7136",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_confirm",
+          "intervals": "798",
+          "mean_frame_ms": "15.0238",
+          "p50_ms": "14.8126",
+          "p95_ms": "17.4356",
+          "p99_ms": "19.5302",
+          "average_fps": "66.5609",
+          "one_percent_low_fps": "49.9438",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_native_raw",
+          "intervals": "803",
+          "mean_frame_ms": "14.9446",
+          "p50_ms": "14.7295",
+          "p95_ms": "16.8299",
+          "p99_ms": "19.2318",
+          "average_fps": "66.9137",
+          "one_percent_low_fps": "50.421",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_native_lighting_raw",
+          "intervals": "763",
+          "mean_frame_ms": "15.6908",
+          "p50_ms": "15.5055",
+          "p95_ms": "17.9694",
+          "p99_ms": "20.2083",
+          "average_fps": "63.7318",
+          "one_percent_low_fps": "47.9712",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_native_lighting_relax",
+          "intervals": "760",
+          "mean_frame_ms": "15.7654",
+          "p50_ms": "15.4802",
+          "p95_ms": "18.1076",
+          "p99_ms": "19.9756",
+          "average_fps": "63.4301",
+          "one_percent_low_fps": "48.0317",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "plus_character",
+          "intervals": "764",
+          "mean_frame_ms": "15.6911",
+          "p50_ms": "15.4674",
+          "p95_ms": "17.7616",
+          "p99_ms": "19.6391",
+          "average_fps": "63.7302",
+          "one_percent_low_fps": "49.6801",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr",
+          "intervals": "760",
+          "mean_frame_ms": "15.7755",
+          "p50_ms": "15.5288",
+          "p95_ms": "17.9085",
+          "p99_ms": "20.0112",
+          "average_fps": "63.3894",
+          "one_percent_low_fps": "46.7664",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "intervals": "754",
+          "mean_frame_ms": "15.8833",
+          "p50_ms": "15.5855",
+          "p95_ms": "18.7379",
+          "p99_ms": "20.1427",
+          "average_fps": "62.9593",
+          "one_percent_low_fps": "48.7229",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_end",
+          "intervals": "782",
+          "mean_frame_ms": "15.34",
+          "p50_ms": "15.0126",
+          "p95_ms": "18.4077",
+          "p99_ms": "20.184",
+          "average_fps": "65.1889",
+          "one_percent_low_fps": "48.0817",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "loaded_native_sr",
+          "intervals": "789",
+          "mean_frame_ms": "15.1886",
+          "p50_ms": "14.9736",
+          "p95_ms": "17.9689",
+          "p99_ms": "19.6383",
+          "average_fps": "65.8391",
+          "one_percent_low_fps": "48.8342",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "loaded_native_sr_repeat",
+          "intervals": "786",
+          "mean_frame_ms": "15.2469",
+          "p50_ms": "15.0079",
+          "p95_ms": "18.2444",
+          "p99_ms": "19.4934",
+          "average_fps": "65.5873",
+          "one_percent_low_fps": "49.2759",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_return",
+          "intervals": "541",
+          "mean_frame_ms": "15.1094",
+          "p50_ms": "14.6724",
+          "p95_ms": "18.0863",
+          "p99_ms": "20.5187",
+          "average_fps": "66.184",
+          "one_percent_low_fps": "40.7319",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_no_gpu_queries",
+          "intervals": "0",
+          "mean_frame_ms": "0",
+          "p50_ms": "0",
+          "p95_ms": "0",
+          "p99_ms": "0",
+          "average_fps": "0",
+          "one_percent_low_fps": "0",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_profile_return",
+          "intervals": "0",
+          "mean_frame_ms": "0",
+          "p50_ms": "0",
+          "p95_ms": "0",
+          "p99_ms": "0",
+          "average_fps": "0",
+          "one_percent_low_fps": "0",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        }
+      ],
+      "selected_gpu_stages": [
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.259989",
+          "p95_gpu_ms_per_sampled_present": "0.267072"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.261467",
+          "p95_gpu_ms_per_sampled_present": "0.263264"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "rr_evaluation",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "3.08921",
+          "p95_gpu_ms_per_sampled_present": "3.10211"
+        },
+        {
+          "phase": "native_rr_confirm",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.280445",
+          "p95_gpu_ms_per_sampled_present": "0.506176"
+        },
+        {
+          "phase": "native_rr_confirm",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.262653",
+          "p95_gpu_ms_per_sampled_present": "0.265952"
+        },
+        {
+          "phase": "native_rr_confirm",
+          "stage": "rr_evaluation",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "3.10499",
+          "p95_gpu_ms_per_sampled_present": "3.11514"
+        },
+        {
+          "phase": "owned_native_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "13",
+          "mean_gpu_ms_per_sampled_present": "0.411732",
+          "p95_gpu_ms_per_sampled_present": "0.640992"
+        },
+        {
+          "phase": "owned_native_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "13",
+          "mean_gpu_ms_per_sampled_present": "0.2627",
+          "p95_gpu_ms_per_sampled_present": "0.267424"
+        },
+        {
+          "phase": "owned_native_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "13",
+          "mean_gpu_ms_per_sampled_present": "3.11699",
+          "p95_gpu_ms_per_sampled_present": "3.12816"
+        },
+        {
+          "phase": "owned_native_lighting_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.388093",
+          "p95_gpu_ms_per_sampled_present": "0.407264"
+        },
+        {
+          "phase": "owned_native_lighting_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.261685",
+          "p95_gpu_ms_per_sampled_present": "0.266176"
+        },
+        {
+          "phase": "owned_native_lighting_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "3.12682",
+          "p95_gpu_ms_per_sampled_present": "3.13296"
+        },
+        {
+          "phase": "owned_native_lighting_relax",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.390355",
+          "p95_gpu_ms_per_sampled_present": "0.401696"
+        },
+        {
+          "phase": "owned_native_lighting_relax",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.263781",
+          "p95_gpu_ms_per_sampled_present": "0.266176"
+        },
+        {
+          "phase": "owned_native_lighting_relax",
+          "stage": "rr_evaluation",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "3.14765",
+          "p95_gpu_ms_per_sampled_present": "3.15478"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.392256",
+          "p95_gpu_ms_per_sampled_present": "0.414048"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.263832",
+          "p95_gpu_ms_per_sampled_present": "0.267904"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "rr_evaluation",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "3.15844",
+          "p95_gpu_ms_per_sampled_present": "3.16829"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "11",
+          "mean_gpu_ms_per_sampled_present": "0.391907",
+          "p95_gpu_ms_per_sampled_present": "0.40624"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "11",
+          "mean_gpu_ms_per_sampled_present": "0.263942",
+          "p95_gpu_ms_per_sampled_present": "0.2672"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "rr_evaluation",
+          "sampled_presents": "11",
+          "mean_gpu_ms_per_sampled_present": "3.164",
+          "p95_gpu_ms_per_sampled_present": "3.17424"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.389107",
+          "p95_gpu_ms_per_sampled_present": "0.400288"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.262939",
+          "p95_gpu_ms_per_sampled_present": "0.267712"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "rr_evaluation",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "3.16885",
+          "p95_gpu_ms_per_sampled_present": "3.18582"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "13",
+          "mean_gpu_ms_per_sampled_present": "0.262555",
+          "p95_gpu_ms_per_sampled_present": "0.268096"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_evaluator",
+          "sampled_presents": "13",
+          "mean_gpu_ms_per_sampled_present": "0.263828",
+          "p95_gpu_ms_per_sampled_present": "0.26736"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "rr_evaluation",
+          "sampled_presents": "13",
+          "mean_gpu_ms_per_sampled_present": "3.14763",
+          "p95_gpu_ms_per_sampled_present": "3.15654"
+        },
+        {
+          "phase": "loaded_native_sr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.209517",
+          "p95_gpu_ms_per_sampled_present": "0.216608"
+        },
+        {
+          "phase": "loaded_native_sr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.237741",
+          "p95_gpu_ms_per_sampled_present": "0.240736"
+        },
+        {
+          "phase": "loaded_native_sr_repeat",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.208595",
+          "p95_gpu_ms_per_sampled_present": "0.212672"
+        },
+        {
+          "phase": "loaded_native_sr_repeat",
+          "stage": "gi_evaluator",
+          "sampled_presents": "12",
+          "mean_gpu_ms_per_sampled_present": "0.237653",
+          "p95_gpu_ms_per_sampled_present": "0.238944"
+        },
+        {
+          "phase": "native_rr_return",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "8",
+          "mean_gpu_ms_per_sampled_present": "0.25028",
+          "p95_gpu_ms_per_sampled_present": "0.261472"
+        },
+        {
+          "phase": "native_rr_return",
+          "stage": "gi_evaluator",
+          "sampled_presents": "8",
+          "mean_gpu_ms_per_sampled_present": "0.26286",
+          "p95_gpu_ms_per_sampled_present": "0.265184"
+        },
+        {
+          "phase": "native_rr_return",
+          "stage": "rr_evaluation",
+          "sampled_presents": "8",
+          "mean_gpu_ms_per_sampled_present": "3.12509",
+          "p95_gpu_ms_per_sampled_present": "3.12963"
+        }
+      ]
+    },
+    {
+      "file": "Performance-R387-28156-97426562.zip",
+      "sha256": "88c1322387c491a22c8a57905807e023e824ea7b8b4b6a7cc79e77e627d5790e",
+      "comparison": [
+        {
+          "phase": "native_rr_begin",
+          "intervals": "1436",
+          "mean_frame_ms": "8.34816",
+          "p50_ms": "8.178",
+          "p95_ms": "9.682",
+          "p99_ms": "12.5372",
+          "average_fps": "119.787",
+          "one_percent_low_fps": "74.1116",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "2"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "intervals": "1259",
+          "mean_frame_ms": "9.52018",
+          "p50_ms": "9.4035",
+          "p95_ms": "11.344",
+          "p99_ms": "13.7885",
+          "average_fps": "105.04",
+          "one_percent_low_fps": "70.5729",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "2"
+        },
+        {
+          "phase": "owned_4_raw",
+          "intervals": "1248",
+          "mean_frame_ms": "9.60396",
+          "p50_ms": "9.5031",
+          "p95_ms": "11.4862",
+          "p99_ms": "13.0714",
+          "average_fps": "104.124",
+          "one_percent_low_fps": "73.1037",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "3"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "intervals": "1218",
+          "mean_frame_ms": "9.84289",
+          "p50_ms": "9.7539",
+          "p95_ms": "11.6098",
+          "p99_ms": "13.5193",
+          "average_fps": "101.596",
+          "one_percent_low_fps": "69.0459",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "intervals": "986",
+          "mean_frame_ms": "12.1574",
+          "p50_ms": "12.1428",
+          "p95_ms": "14.25",
+          "p99_ms": "16.8444",
+          "average_fps": "82.2542",
+          "one_percent_low_fps": "54.6576",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "2"
+        },
+        {
+          "phase": "plus_character",
+          "intervals": "974",
+          "mean_frame_ms": "12.3031",
+          "p50_ms": "12.285",
+          "p95_ms": "14.1262",
+          "p99_ms": "16.3747",
+          "average_fps": "81.2803",
+          "one_percent_low_fps": "57.8124",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr",
+          "intervals": "957",
+          "mean_frame_ms": "12.5239",
+          "p50_ms": "12.5246",
+          "p95_ms": "14.6302",
+          "p99_ms": "16.2888",
+          "average_fps": "79.8475",
+          "one_percent_low_fps": "58.0839",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "368"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "intervals": "965",
+          "mean_frame_ms": "12.4356",
+          "p50_ms": "12.3364",
+          "p95_ms": "14.644",
+          "p99_ms": "16.4867",
+          "average_fps": "80.414",
+          "one_percent_low_fps": "54.773",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "2379"
+        },
+        {
+          "phase": "native_rr_end",
+          "intervals": "1325",
+          "mean_frame_ms": "9.05922",
+          "p50_ms": "8.9718",
+          "p95_ms": "10.557",
+          "p99_ms": "12.8084",
+          "average_fps": "110.385",
+          "one_percent_low_fps": "73.7458",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "2317"
+        }
+      ],
+      "selected_gpu_stages": [
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "44",
+          "mean_gpu_ms_per_sampled_present": "0.207098",
+          "p95_gpu_ms_per_sampled_present": "0.219232"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_evaluator",
+          "sampled_presents": "44",
+          "mean_gpu_ms_per_sampled_present": "0.250068",
+          "p95_gpu_ms_per_sampled_present": "0.251296"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "rr_evaluation",
+          "sampled_presents": "44",
+          "mean_gpu_ms_per_sampled_present": "3.14277",
+          "p95_gpu_ms_per_sampled_present": "3.15443"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "0.691431",
+          "p95_gpu_ms_per_sampled_present": "0.710208"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_evaluator",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "0.736224",
+          "p95_gpu_ms_per_sampled_present": "0.74416"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "rr_evaluation",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "3.169",
+          "p95_gpu_ms_per_sampled_present": "3.17434"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "0.8312",
+          "p95_gpu_ms_per_sampled_present": "0.845696"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "0.668612",
+          "p95_gpu_ms_per_sampled_present": "0.67408"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "3.18662",
+          "p95_gpu_ms_per_sampled_present": "3.18835"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "0.832839",
+          "p95_gpu_ms_per_sampled_present": "0.853376"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "0.671069",
+          "p95_gpu_ms_per_sampled_present": "0.675904"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "39",
+          "mean_gpu_ms_per_sampled_present": "3.22491",
+          "p95_gpu_ms_per_sampled_present": "3.47827"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "31",
+          "mean_gpu_ms_per_sampled_present": "0.818294",
+          "p95_gpu_ms_per_sampled_present": "0.829504"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_evaluator",
+          "sampled_presents": "31",
+          "mean_gpu_ms_per_sampled_present": "0.670398",
+          "p95_gpu_ms_per_sampled_present": "0.674656"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "rr_evaluation",
+          "sampled_presents": "31",
+          "mean_gpu_ms_per_sampled_present": "3.27413",
+          "p95_gpu_ms_per_sampled_present": "3.30384"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "30",
+          "mean_gpu_ms_per_sampled_present": "0.821836",
+          "p95_gpu_ms_per_sampled_present": "0.851232"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_evaluator",
+          "sampled_presents": "30",
+          "mean_gpu_ms_per_sampled_present": "0.669865",
+          "p95_gpu_ms_per_sampled_present": "0.673664"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "rr_evaluation",
+          "sampled_presents": "30",
+          "mean_gpu_ms_per_sampled_present": "3.25764",
+          "p95_gpu_ms_per_sampled_present": "3.28598"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "26",
+          "mean_gpu_ms_per_sampled_present": "0.81913",
+          "p95_gpu_ms_per_sampled_present": "0.834976"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "26",
+          "mean_gpu_ms_per_sampled_present": "0.670843",
+          "p95_gpu_ms_per_sampled_present": "0.676832"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "rr_evaluation",
+          "sampled_presents": "25",
+          "mean_gpu_ms_per_sampled_present": "3.25175",
+          "p95_gpu_ms_per_sampled_present": "3.28128"
+        }
+      ]
+    },
+    {
+      "file": "Performance-R388-39628-101675390.zip",
+      "sha256": "5c3592afc7444db0357b61e2b6e9ebb7a27af995e644403c01ded62af8e22e98",
+      "comparison": [
+        {
+          "phase": "native_rr_begin",
+          "intervals": "1441",
+          "mean_frame_ms": "8.33067",
+          "p50_ms": "8.1154",
+          "p95_ms": "10.1183",
+          "p99_ms": "11.9774",
+          "average_fps": "120.038",
+          "one_percent_low_fps": "78.8852",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "intervals": "1270",
+          "mean_frame_ms": "9.43653",
+          "p50_ms": "9.3177",
+          "p95_ms": "11.2885",
+          "p99_ms": "13.6501",
+          "average_fps": "105.971",
+          "one_percent_low_fps": "69.5344",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_raw",
+          "intervals": "1252",
+          "mean_frame_ms": "9.57594",
+          "p50_ms": "9.4902",
+          "p95_ms": "11.2046",
+          "p99_ms": "13.511",
+          "average_fps": "104.428",
+          "one_percent_low_fps": "70.639",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "intervals": "1218",
+          "mean_frame_ms": "9.83231",
+          "p50_ms": "9.7448",
+          "p95_ms": "11.4858",
+          "p99_ms": "13.5814",
+          "average_fps": "101.706",
+          "one_percent_low_fps": "69.4817",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "intervals": "1073",
+          "mean_frame_ms": "11.1667",
+          "p50_ms": "11.1788",
+          "p95_ms": "13.0777",
+          "p99_ms": "15.2065",
+          "average_fps": "89.5522",
+          "one_percent_low_fps": "62.2988",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "plus_character",
+          "intervals": "1079",
+          "mean_frame_ms": "11.106",
+          "p50_ms": "11.1342",
+          "p95_ms": "12.9057",
+          "p99_ms": "14.5858",
+          "average_fps": "90.0417",
+          "one_percent_low_fps": "65.2548",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr",
+          "intervals": "1054",
+          "mean_frame_ms": "11.3727",
+          "p50_ms": "11.3648",
+          "p95_ms": "13.2416",
+          "p99_ms": "14.985",
+          "average_fps": "87.9302",
+          "one_percent_low_fps": "60.896",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "intervals": "1069",
+          "mean_frame_ms": "11.2139",
+          "p50_ms": "11.2307",
+          "p95_ms": "13.2009",
+          "p99_ms": "15.1396",
+          "average_fps": "89.1747",
+          "one_percent_low_fps": "63.6973",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_end",
+          "intervals": "1400",
+          "mean_frame_ms": "8.56619",
+          "p50_ms": "8.3659",
+          "p95_ms": "10.3875",
+          "p99_ms": "12.4094",
+          "average_fps": "116.738",
+          "one_percent_low_fps": "75.8514",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        }
+      ],
+      "selected_gpu_stages": [
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.210944",
+          "p95_gpu_ms_per_sampled_present": "0.226816"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.252543",
+          "p95_gpu_ms_per_sampled_present": "0.25808"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.10767",
+          "p95_gpu_ms_per_sampled_present": "3.12557"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.692283",
+          "p95_gpu_ms_per_sampled_present": "0.7008"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_evaluator",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.759189",
+          "p95_gpu_ms_per_sampled_present": "0.770816"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "rr_evaluation",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "3.16212",
+          "p95_gpu_ms_per_sampled_present": "3.1591"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.846656",
+          "p95_gpu_ms_per_sampled_present": "0.866848"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.6912",
+          "p95_gpu_ms_per_sampled_present": "0.703904"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "3.19954",
+          "p95_gpu_ms_per_sampled_present": "3.43014"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.846105",
+          "p95_gpu_ms_per_sampled_present": "0.871616"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.693464",
+          "p95_gpu_ms_per_sampled_present": "0.709312"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.21894",
+          "p95_gpu_ms_per_sampled_present": "3.46854"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.835774",
+          "p95_gpu_ms_per_sampled_present": "0.852544"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.696824",
+          "p95_gpu_ms_per_sampled_present": "0.704576"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.23078",
+          "p95_gpu_ms_per_sampled_present": "3.67578"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "0.852742",
+          "p95_gpu_ms_per_sampled_present": "0.873376"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_evaluator",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "0.696002",
+          "p95_gpu_ms_per_sampled_present": "0.708128"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "rr_evaluation",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "3.21371",
+          "p95_gpu_ms_per_sampled_present": "3.22195"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.84458",
+          "p95_gpu_ms_per_sampled_present": "0.87504"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.698025",
+          "p95_gpu_ms_per_sampled_present": "0.710752"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.22156",
+          "p95_gpu_ms_per_sampled_present": "3.23437"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.853267",
+          "p95_gpu_ms_per_sampled_present": "0.8752"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.700604",
+          "p95_gpu_ms_per_sampled_present": "0.70976"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.25861",
+          "p95_gpu_ms_per_sampled_present": "3.69267"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.214876",
+          "p95_gpu_ms_per_sampled_present": "0.22928"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.255156",
+          "p95_gpu_ms_per_sampled_present": "0.261248"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.25093",
+          "p95_gpu_ms_per_sampled_present": "3.25315"
+        }
+      ]
+    },
+    {
+      "file": "Performance-R389-28432-109765281.zip",
+      "sha256": "d887867cf0233210138200727572d0c28726d2c5130d846c246d0f432c323b24",
+      "comparison": [
+        {
+          "phase": "native_rr_begin",
+          "intervals": "1424",
+          "mean_frame_ms": "8.41576",
+          "p50_ms": "8.2182",
+          "p95_ms": "10.2528",
+          "p99_ms": "12.1836",
+          "average_fps": "118.825",
+          "one_percent_low_fps": "77.3937",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "intervals": "1275",
+          "mean_frame_ms": "9.40471",
+          "p50_ms": "9.2519",
+          "p95_ms": "11.0641",
+          "p99_ms": "13.2749",
+          "average_fps": "106.33",
+          "one_percent_low_fps": "70.9623",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_raw",
+          "intervals": "1266",
+          "mean_frame_ms": "9.47829",
+          "p50_ms": "9.3929",
+          "p95_ms": "11.104",
+          "p99_ms": "13.3259",
+          "average_fps": "105.504",
+          "one_percent_low_fps": "72.1494",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "intervals": "1238",
+          "mean_frame_ms": "9.69162",
+          "p50_ms": "9.5768",
+          "p95_ms": "11.4442",
+          "p99_ms": "13.5268",
+          "average_fps": "103.182",
+          "one_percent_low_fps": "71.8869",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "intervals": "1112",
+          "mean_frame_ms": "10.7871",
+          "p50_ms": "10.7573",
+          "p95_ms": "12.5414",
+          "p99_ms": "14.2834",
+          "average_fps": "92.703",
+          "one_percent_low_fps": "65.1347",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "plus_character",
+          "intervals": "1112",
+          "mean_frame_ms": "10.7966",
+          "p50_ms": "10.739",
+          "p95_ms": "12.2647",
+          "p99_ms": "14.3722",
+          "average_fps": "92.622",
+          "one_percent_low_fps": "64.6874",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr",
+          "intervals": "1091",
+          "mean_frame_ms": "10.9949",
+          "p50_ms": "10.9608",
+          "p95_ms": "12.5991",
+          "p99_ms": "14.8944",
+          "average_fps": "90.9512",
+          "one_percent_low_fps": "64.4799",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "intervals": "1076",
+          "mean_frame_ms": "11.1369",
+          "p50_ms": "11.0876",
+          "p95_ms": "13.0396",
+          "p99_ms": "15.2112",
+          "average_fps": "89.7919",
+          "one_percent_low_fps": "62.63",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_end",
+          "intervals": "1428",
+          "mean_frame_ms": "8.39781",
+          "p50_ms": "8.1809",
+          "p95_ms": "10.17",
+          "p99_ms": "12.2852",
+          "average_fps": "119.079",
+          "one_percent_low_fps": "77.1501",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        }
+      ],
+      "selected_gpu_stages": [
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.199636",
+          "p95_gpu_ms_per_sampled_present": "0.216352"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.250492",
+          "p95_gpu_ms_per_sampled_present": "0.256864"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.16184",
+          "p95_gpu_ms_per_sampled_present": "3.16096"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.641714",
+          "p95_gpu_ms_per_sampled_present": "0.651456"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_evaluator",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.751763",
+          "p95_gpu_ms_per_sampled_present": "0.762944"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "rr_evaluation",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "3.18765",
+          "p95_gpu_ms_per_sampled_present": "3.18454"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.786574",
+          "p95_gpu_ms_per_sampled_present": "0.796288"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.68637",
+          "p95_gpu_ms_per_sampled_present": "0.697472"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "3.24177",
+          "p95_gpu_ms_per_sampled_present": "3.45261"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.793224",
+          "p95_gpu_ms_per_sampled_present": "0.825472"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.689209",
+          "p95_gpu_ms_per_sampled_present": "0.69824"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.22251",
+          "p95_gpu_ms_per_sampled_present": "3.48304"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "18",
+          "mean_gpu_ms_per_sampled_present": "0.778062",
+          "p95_gpu_ms_per_sampled_present": "0.80352"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_evaluator",
+          "sampled_presents": "18",
+          "mean_gpu_ms_per_sampled_present": "0.681463",
+          "p95_gpu_ms_per_sampled_present": "0.699488"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "rr_evaluation",
+          "sampled_presents": "18",
+          "mean_gpu_ms_per_sampled_present": "3.16822",
+          "p95_gpu_ms_per_sampled_present": "3.2144"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.77443",
+          "p95_gpu_ms_per_sampled_present": "0.799072"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.679966",
+          "p95_gpu_ms_per_sampled_present": "0.69504"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.17093",
+          "p95_gpu_ms_per_sampled_present": "3.17952"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "18",
+          "mean_gpu_ms_per_sampled_present": "0.777214",
+          "p95_gpu_ms_per_sampled_present": "0.793408"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "18",
+          "mean_gpu_ms_per_sampled_present": "0.682459",
+          "p95_gpu_ms_per_sampled_present": "0.694784"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "rr_evaluation",
+          "sampled_presents": "18",
+          "mean_gpu_ms_per_sampled_present": "3.19891",
+          "p95_gpu_ms_per_sampled_present": "3.548"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.785779",
+          "p95_gpu_ms_per_sampled_present": "0.800448"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.681958",
+          "p95_gpu_ms_per_sampled_present": "0.697056"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.17906",
+          "p95_gpu_ms_per_sampled_present": "3.18749"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.204208",
+          "p95_gpu_ms_per_sampled_present": "0.217152"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.249263",
+          "p95_gpu_ms_per_sampled_present": "0.252832"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.18426",
+          "p95_gpu_ms_per_sampled_present": "3.19027"
+        }
+      ]
+    },
+    {
+      "file": "Performance-R390-52528-111527218.zip",
+      "sha256": "55694118de2cd52c982b63135bb3f8976828d645cace3f1e538372fd0b187ba5",
+      "comparison": [
+        {
+          "phase": "native_rr_begin",
+          "intervals": "1445",
+          "mean_frame_ms": "8.28824",
+          "p50_ms": "8.1015",
+          "p95_ms": "10.1603",
+          "p99_ms": "11.7342",
+          "average_fps": "120.653",
+          "one_percent_low_fps": "79.4115",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "intervals": "1273",
+          "mean_frame_ms": "9.40957",
+          "p50_ms": "9.2827",
+          "p95_ms": "11.2724",
+          "p99_ms": "13.3756",
+          "average_fps": "106.275",
+          "one_percent_low_fps": "70.6916",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_raw",
+          "intervals": "1256",
+          "mean_frame_ms": "9.54155",
+          "p50_ms": "9.4193",
+          "p95_ms": "11.3303",
+          "p99_ms": "13.2993",
+          "average_fps": "104.805",
+          "one_percent_low_fps": "66.7807",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "intervals": "1234",
+          "mean_frame_ms": "9.70698",
+          "p50_ms": "9.6156",
+          "p95_ms": "11.4961",
+          "p99_ms": "13.5761",
+          "average_fps": "103.019",
+          "one_percent_low_fps": "70.7365",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "intervals": "1094",
+          "mean_frame_ms": "10.9608",
+          "p50_ms": "10.9624",
+          "p95_ms": "12.7959",
+          "p99_ms": "15.1302",
+          "average_fps": "91.2345",
+          "one_percent_low_fps": "63.3884",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "plus_character",
+          "intervals": "1085",
+          "mean_frame_ms": "11.0442",
+          "p50_ms": "11.0531",
+          "p95_ms": "13.0285",
+          "p99_ms": "14.7077",
+          "average_fps": "90.5449",
+          "one_percent_low_fps": "65.5367",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr",
+          "intervals": "1076",
+          "mean_frame_ms": "11.14",
+          "p50_ms": "11.1716",
+          "p95_ms": "13.0808",
+          "p99_ms": "14.8309",
+          "average_fps": "89.7666",
+          "one_percent_low_fps": "65.0346",
+          "coverage_ok": "0",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "intervals": "1056",
+          "mean_frame_ms": "11.3594",
+          "p50_ms": "11.3751",
+          "p95_ms": "13.1641",
+          "p99_ms": "14.8918",
+          "average_fps": "88.0324",
+          "one_percent_low_fps": "63.556",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_end",
+          "intervals": "1414",
+          "mean_frame_ms": "8.48619",
+          "p50_ms": "8.2054",
+          "p95_ms": "10.6358",
+          "p99_ms": "12.0907",
+          "average_fps": "117.838",
+          "one_percent_low_fps": "75.9135",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        }
+      ],
+      "selected_gpu_stages": [
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.209542",
+          "p95_gpu_ms_per_sampled_present": "0.218528"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.25942",
+          "p95_gpu_ms_per_sampled_present": "0.264448"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.14545",
+          "p95_gpu_ms_per_sampled_present": "3.14819"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.688973",
+          "p95_gpu_ms_per_sampled_present": "0.709952"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.775045",
+          "p95_gpu_ms_per_sampled_present": "0.788704"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.1556",
+          "p95_gpu_ms_per_sampled_present": "3.42733"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.839655",
+          "p95_gpu_ms_per_sampled_present": "0.848384"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.705832",
+          "p95_gpu_ms_per_sampled_present": "0.718432"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.16979",
+          "p95_gpu_ms_per_sampled_present": "3.43101"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.833154",
+          "p95_gpu_ms_per_sampled_present": "0.847008"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "0.703893",
+          "p95_gpu_ms_per_sampled_present": "0.717536"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "20",
+          "mean_gpu_ms_per_sampled_present": "3.26703",
+          "p95_gpu_ms_per_sampled_present": "3.53578"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.830991",
+          "p95_gpu_ms_per_sampled_present": "0.845024"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.709016",
+          "p95_gpu_ms_per_sampled_present": "0.718528"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.19222",
+          "p95_gpu_ms_per_sampled_present": "3.48518"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.832589",
+          "p95_gpu_ms_per_sampled_present": "0.850208"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.705888",
+          "p95_gpu_ms_per_sampled_present": "0.719712"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.23437",
+          "p95_gpu_ms_per_sampled_present": "3.66544"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.840634",
+          "p95_gpu_ms_per_sampled_present": "0.865728"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.709043",
+          "p95_gpu_ms_per_sampled_present": "0.71968"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.21336",
+          "p95_gpu_ms_per_sampled_present": "3.64266"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "0.832884",
+          "p95_gpu_ms_per_sampled_present": "0.860768"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_evaluator",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "0.709676",
+          "p95_gpu_ms_per_sampled_present": "0.718848"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "rr_evaluation",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "3.21649",
+          "p95_gpu_ms_per_sampled_present": "3.66192"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.209686",
+          "p95_gpu_ms_per_sampled_present": "0.223776"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.26047",
+          "p95_gpu_ms_per_sampled_present": "0.266112"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.20614",
+          "p95_gpu_ms_per_sampled_present": "3.20765"
+        }
+      ]
+    },
+    {
+      "file": "Performance-R391-25040-116045718.zip",
+      "sha256": "949456360f413119396d4c40130e1c8b8952681a457f60bd3eb6d076e04ea211",
+      "comparison": [
+        {
+          "phase": "native_rr_begin",
+          "intervals": "1429",
+          "mean_frame_ms": "8.39035",
+          "p50_ms": "8.1658",
+          "p95_ms": "10.1912",
+          "p99_ms": "11.7704",
+          "average_fps": "119.185",
+          "one_percent_low_fps": "80.0017",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "intervals": "1260",
+          "mean_frame_ms": "9.51029",
+          "p50_ms": "9.4023",
+          "p95_ms": "10.9328",
+          "p99_ms": "13.3043",
+          "average_fps": "105.149",
+          "one_percent_low_fps": "70.7859",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_raw",
+          "intervals": "1256",
+          "mean_frame_ms": "9.54322",
+          "p50_ms": "9.4834",
+          "p95_ms": "11.1542",
+          "p99_ms": "13.0114",
+          "average_fps": "104.786",
+          "one_percent_low_fps": "72.0177",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "intervals": "1209",
+          "mean_frame_ms": "9.91152",
+          "p50_ms": "9.8565",
+          "p95_ms": "11.3959",
+          "p99_ms": "13.8535",
+          "average_fps": "100.893",
+          "one_percent_low_fps": "70.0733",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "intervals": "1083",
+          "mean_frame_ms": "11.0799",
+          "p50_ms": "11.095",
+          "p95_ms": "12.8853",
+          "p99_ms": "15.1286",
+          "average_fps": "90.2537",
+          "one_percent_low_fps": "62.9922",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "plus_character",
+          "intervals": "1075",
+          "mean_frame_ms": "11.1561",
+          "p50_ms": "11.1351",
+          "p95_ms": "12.6897",
+          "p99_ms": "15.0195",
+          "average_fps": "89.6373",
+          "one_percent_low_fps": "64.225",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr",
+          "intervals": "1056",
+          "mean_frame_ms": "11.346",
+          "p50_ms": "11.3535",
+          "p95_ms": "13.0281",
+          "p99_ms": "15.1634",
+          "average_fps": "88.1364",
+          "one_percent_low_fps": "63.8514",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "intervals": "1063",
+          "mean_frame_ms": "11.2672",
+          "p50_ms": "11.2926",
+          "p95_ms": "12.828",
+          "p99_ms": "14.8691",
+          "average_fps": "88.7536",
+          "one_percent_low_fps": "64.8782",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        },
+        {
+          "phase": "native_rr_end",
+          "intervals": "1417",
+          "mean_frame_ms": "8.45621",
+          "p50_ms": "8.2808",
+          "p95_ms": "9.8238",
+          "p99_ms": "11.9835",
+          "average_fps": "118.256",
+          "one_percent_low_fps": "76.8836",
+          "coverage_ok": "1",
+          "skipped_gpu_samples": "0"
+        }
+      ],
+      "selected_gpu_stages": [
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.211023",
+          "p95_gpu_ms_per_sampled_present": "0.226016"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.252924",
+          "p95_gpu_ms_per_sampled_present": "0.260416"
+        },
+        {
+          "phase": "native_rr_begin",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.11908",
+          "p95_gpu_ms_per_sampled_present": "3.12954"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.688317",
+          "p95_gpu_ms_per_sampled_present": "0.729664"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.761773",
+          "p95_gpu_ms_per_sampled_present": "0.775488"
+        },
+        {
+          "phase": "native_rr_4_samples",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.14281",
+          "p95_gpu_ms_per_sampled_present": "3.1625"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.841054",
+          "p95_gpu_ms_per_sampled_present": "0.862496"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.692682",
+          "p95_gpu_ms_per_sampled_present": "0.704544"
+        },
+        {
+          "phase": "owned_4_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.16815",
+          "p95_gpu_ms_per_sampled_present": "3.43898"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.836253",
+          "p95_gpu_ms_per_sampled_present": "0.860128"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "gi_evaluator",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "0.692539",
+          "p95_gpu_ms_per_sampled_present": "0.705376"
+        },
+        {
+          "phase": "owned_4_lighting_raw",
+          "stage": "rr_evaluation",
+          "sampled_presents": "19",
+          "mean_gpu_ms_per_sampled_present": "3.18659",
+          "p95_gpu_ms_per_sampled_present": "3.42954"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.834242",
+          "p95_gpu_ms_per_sampled_present": "0.860992"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.695891",
+          "p95_gpu_ms_per_sampled_present": "0.706272"
+        },
+        {
+          "phase": "owned_4_lighting_relax",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.19551",
+          "p95_gpu_ms_per_sampled_present": "3.44106"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.831023",
+          "p95_gpu_ms_per_sampled_present": "0.845568"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.695642",
+          "p95_gpu_ms_per_sampled_present": "0.70672"
+        },
+        {
+          "phase": "plus_character",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.17007",
+          "p95_gpu_ms_per_sampled_present": "3.17642"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.834985",
+          "p95_gpu_ms_per_sampled_present": "0.85968"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "gi_evaluator",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "0.695371",
+          "p95_gpu_ms_per_sampled_present": "0.70704"
+        },
+        {
+          "phase": "full_rr",
+          "stage": "rr_evaluation",
+          "sampled_presents": "17",
+          "mean_gpu_ms_per_sampled_present": "3.17317",
+          "p95_gpu_ms_per_sampled_present": "3.18112"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "0.829546",
+          "p95_gpu_ms_per_sampled_present": "0.846976"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "gi_evaluator",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "0.696954",
+          "p95_gpu_ms_per_sampled_present": "0.705664"
+        },
+        {
+          "phase": "full_rr_repeat",
+          "stage": "rr_evaluation",
+          "sampled_presents": "16",
+          "mean_gpu_ms_per_sampled_present": "3.17165",
+          "p95_gpu_ms_per_sampled_present": "3.18643"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_rays_including_reuse",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.214311",
+          "p95_gpu_ms_per_sampled_present": "0.233184"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "gi_evaluator",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "0.253199",
+          "p95_gpu_ms_per_sampled_present": "0.258976"
+        },
+        {
+          "phase": "native_rr_end",
+          "stage": "rr_evaluation",
+          "sampled_presents": "22",
+          "mean_gpu_ms_per_sampled_present": "3.18636",
+          "p95_gpu_ms_per_sampled_present": "3.19274"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,780 @@
+{
+  "scope": "Adversarial admission tests, not captured lighting or a game benchmark.\nGeometry/material are deliberately identical while illumination varies within\na group. Report minority receivers separately; a group mean can hide regressions.",
+  "seed": 427,
+  "repetitions": 8192,
+  "native_comparator": "two independent uniform discrete samples, not Control stratification",
+  "guide_fraction": 0.125,
+  "cases": [
+    {
+      "case": "coherent",
+      "conditional_mean_error": 2.220446049250313e-16,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 47.556740809548195,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 128,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 47.556740809548195,
+              "variance_ratio": 0.6190074570096197,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 65.41410184301687,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 128,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 65.41410184301687,
+              "variance_ratio": 0.8514422171311709,
+              "admission_fraction": 0.3299560546875
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 76.5003361270102,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 128,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.5003361270102,
+              "variance_ratio": 0.9957427216470263,
+              "admission_fraction": 0.009454727172851562
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "balanced",
+      "conditional_mean_error": 2.220446049250313e-16,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 58.14352723452736,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 64,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 57.923181066560105,
+              "variance_ratio": 0.7539389874825142,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 1,
+              "receivers": 64,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 58.36387340249462,
+              "variance_ratio": 0.7596751215730085,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 73.41029474583658,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 64,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 73.31275288095777,
+              "variance_ratio": 0.9542525403276787,
+              "admission_fraction": 0.1444091796875
+            },
+            {
+              "label": 1,
+              "receivers": 64,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 73.50783661071536,
+              "variance_ratio": 0.9567917867395553,
+              "admission_fraction": 0.1444091796875
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 76.70204344541634,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 64,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.69713541716301,
+              "variance_ratio": 0.9983042981147379,
+              "admission_fraction": 0.0038738250732421875
+            },
+            {
+              "label": 1,
+              "receivers": 64,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.70695147366968,
+              "variance_ratio": 0.9984320657470991,
+              "admission_fraction": 0.003582000732421875
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "minority_1",
+      "conditional_mean_error": 2.220446049250313e-16,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 47.906520624899315,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 127,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 47.645877768653186,
+              "variance_ratio": 0.6201676803857784,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 1,
+              "receivers": 1,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 81.00816336815595,
+              "variance_ratio": 1.0544174464006637,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 65.7093444178358,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 127,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 65.60886668485149,
+              "variance_ratio": 0.8539773128380392,
+              "admission_fraction": 0.324462890625
+            },
+            {
+              "label": 1,
+              "receivers": 1,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 78.4700165068457,
+              "variance_ratio": 1.0213804508582534,
+              "admission_fraction": 0.324462890625
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 76.50637822406406,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 127,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.50385040059844,
+              "variance_ratio": 0.9957884640911061,
+              "admission_fraction": 0.009357121985728346
+            },
+            {
+              "label": 1,
+              "receivers": 1,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82741180419916,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "minority_8",
+      "conditional_mean_error": 2.220446049250313e-16,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 50.316055564431025,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 120,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 48.507491693291186,
+              "variance_ratio": 0.6313826088130678,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.44451363152857,
+              "variance_ratio": 1.0080323131137372,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 67.37401174633679,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 120,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 66.70748608020084,
+              "variance_ratio": 0.8682771489193231,
+              "admission_fraction": 0.2938232421875
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.37189673837597,
+              "variance_ratio": 1.007087118014133,
+              "admission_fraction": 0.2938232421875
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 76.54090069991946,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 120,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.52223071241069,
+              "variance_ratio": 0.9960277056766366,
+              "admission_fraction": 0.008856201171875
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82095051255097,
+              "variance_ratio": 0.9999158986161772,
+              "admission_fraction": 0.0001983642578125
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "mixed_16",
+      "conditional_mean_error": 2.220446049250313e-16,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 77.48143990352239,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 77.30445124667798,
+              "variance_ratio": 1.0062092348456897,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.40590316877908,
+              "variance_ratio": 1.0075297520897124,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 2,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 77.38500508649477,
+              "variance_ratio": 1.0072577387315433,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 3,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.65132807376384,
+              "variance_ratio": 1.010724248679162,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 4,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 77.56157908669786,
+              "variance_ratio": 1.0095560590322854,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 5,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.63498813018165,
+              "variance_ratio": 1.0105115649091578,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 6,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 77.61409776600055,
+              "variance_ratio": 1.0102396520112673,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 7,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.29756853067478,
+              "variance_ratio": 1.0061196481234302,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 8,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 77.64087063283634,
+              "variance_ratio": 1.010588132666896,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 9,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 77.44673304441918,
+              "variance_ratio": 1.0080612014081427,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 10,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 77.33013594926251,
+              "variance_ratio": 1.006543551751353,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 11,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 77.6208898364344,
+              "variance_ratio": 1.0103280588737968,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 12,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.30448439262405,
+              "variance_ratio": 1.0062096662795394,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 13,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 77.38693577508,
+              "variance_ratio": 1.0072828689362436,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 14,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 77.70863335302488,
+              "variance_ratio": 1.0114701449408647,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 15,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 77.40943438340612,
+              "variance_ratio": 1.00757571504153,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 76.82974926990173,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.8234120957216,
+              "variance_ratio": 0.9999479390443635,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.83398126460729,
+              "variance_ratio": 1.0000855093286862,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 2,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.83741438847417,
+              "variance_ratio": 1.0001301955127744,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 3,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.83369119743475,
+              "variance_ratio": 1.0000817337599701,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 4,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.83021640159001,
+              "variance_ratio": 1.0000365051656033,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 5,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.8336983801986,
+              "variance_ratio": 1.0000818272521714,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 6,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82918916075646,
+              "variance_ratio": 1.0000231344062684,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 7,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.81653847324117,
+              "variance_ratio": 0.9998584706851018,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 8,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82434555343139,
+              "variance_ratio": 0.9999600891049713,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 9,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.8326909864678,
+              "variance_ratio": 1.0000687148264482,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 10,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.81580543201464,
+              "variance_ratio": 0.999848929283025,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 11,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.8375064910005,
+              "variance_ratio": 1.0001313943365295,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 12,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82800277902723,
+              "variance_ratio": 1.000007692239191,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 13,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.8331156040953,
+              "variance_ratio": 1.0000742417291193,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 14,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.83368893928572,
+              "variance_ratio": 1.000081704367479,
+              "admission_fraction": 0.0018310546875
+            },
+            {
+              "label": 15,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.83269117108121,
+              "variance_ratio": 1.0000687172294107,
+              "admission_fraction": 0.0018310546875
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 76.82598182539421,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.82289280192236,
+              "variance_ratio": 0.9999411798188861,
+              "admission_fraction": 0.0001373291015625
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82741180419916,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 2,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.82741180419914,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 3,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82741180419916,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 4,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82741180419916,
+              "variance_ratio": 0.9999999999999991,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 5,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82741180419916,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 6,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82588727287211,
+              "variance_ratio": 0.9999801564143407,
+              "admission_fraction": 4.57763671875e-05
+            },
+            {
+              "label": 7,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82430423258383,
+              "variance_ratio": 0.9999595512650705,
+              "admission_fraction": 9.1552734375e-05
+            },
+            {
+              "label": 8,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82441741001585,
+              "variance_ratio": 0.9999610244037505,
+              "admission_fraction": 9.1552734375e-05
+            },
+            {
+              "label": 9,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.82588711989585,
+              "variance_ratio": 0.9999801544231735,
+              "admission_fraction": 4.57763671875e-05
+            },
+            {
+              "label": 10,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82277968623669,
+              "variance_ratio": 0.9999397074839076,
+              "admission_fraction": 0.0001373291015625
+            },
+            {
+              "label": 11,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.82741180419914,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 12,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82435901457404,
+              "variance_ratio": 0.9999602643177288,
+              "admission_fraction": 9.1552734375e-05
+            },
+            {
+              "label": 13,
+              "receivers": 8,
+              "native_pair_variance": 76.8274118041992,
+              "candidate_pair_variance": 76.82741180419914,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 14,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.82741180419916,
+              "variance_ratio": 0.9999999999999992,
+              "admission_fraction": 0.0
+            },
+            {
+              "label": 15,
+              "receivers": 8,
+              "native_pair_variance": 76.82741180419923,
+              "candidate_pair_variance": 76.82588723461336,
+              "variance_ratio": 0.9999801559163577,
+              "admission_fraction": 4.57763671875e-05
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "constant",
+      "conditional_mean_error": 6.938893903907228e-18,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 4.624774500339999e-06,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 128,
+              "native_pair_variance": 2.407412430484045e-35,
+              "candidate_pair_variance": 4.624774500339999e-06,
+              "variance_ratio": null,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 2.168404344971009e-19,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 128,
+              "native_pair_variance": 2.407412430484045e-35,
+              "candidate_pair_variance": 2.168404344971009e-19,
+              "variance_ratio": null,
+              "admission_fraction": 0.0
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 2.168404344971009e-19,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 128,
+              "native_pair_variance": 2.407412430484045e-35,
+              "candidate_pair_variance": 2.168404344971009e-19,
+              "variance_ratio": null,
+              "admission_fraction": 0.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "case": "flat_minority",
+      "conditional_mean_error": 2.220446049250313e-16,
+      "modes": {
+        "ungated": {
+          "group_mean_pair_variance": 45.247595524800694,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 120,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 48.26409755837902,
+              "variance_ratio": 0.6282145451077269,
+              "admission_fraction": 1.0
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 2.407412430484045e-35,
+              "candidate_pair_variance": 6.502112581109257e-05,
+              "variance_ratio": null,
+              "admission_fraction": 1.0
+            }
+          ]
+        },
+        "group_evidence": {
+          "group_mean_pair_variance": 62.509482419373654,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 120,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 66.67677973211218,
+              "variance_ratio": 0.867877469334035,
+              "admission_fraction": 0.29345703125
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 2.407412430484045e-35,
+              "candidate_pair_variance": 2.2728295627692533e-05,
+              "variance_ratio": null,
+              "admission_fraction": 0.29345703125
+            }
+          ]
+        },
+        "receiver_evidence": {
+          "group_mean_pair_variance": 71.73838395840747,
+          "cohorts": [
+            {
+              "label": 0,
+              "receivers": 120,
+              "native_pair_variance": 76.82741180419922,
+              "candidate_pair_variance": 76.52094288896797,
+              "variance_ratio": 0.996010943125192,
+              "admission_fraction": 0.0088592529296875
+            },
+            {
+              "label": 1,
+              "receivers": 8,
+              "native_pair_variance": 2.407412430484045e-35,
+              "candidate_pair_variance": 2.168404344971009e-19,
+              "variance_ratio": null,
+              "admission_fraction": 0.0
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

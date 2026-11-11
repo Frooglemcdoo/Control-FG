@@ -1,5 +1,9 @@
 # Current-frame two-ray candidate — 2026-11-11
 
+Follow-up: [admission tests](Directional-Guiding-Admission-Decision.md) reject
+the tested tile-sharing heuristics for live integration. The successful GPU
+checks below establish plumbing and accounting, not permission to ship them.
+
 Research only. R423 game behavior is unchanged. No live DXR dispatch, image fix,
 frame-time improvement or completed ReSTIR implementation is claimed.
 
