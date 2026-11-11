@@ -34,3 +34,10 @@ jobs:
           Set-Content -Path validate-gi-core.cmd -Value $commands -Encoding ASCII
           cmd /c validate-gi-core.cmd
           if ($LASTEXITCODE -ne 0) { throw 'Sampler validation failed' }
+      - name: Validate phase metadata collection
+        shell: powershell
+        run: |
+          & tools/test-gi-phase-collector.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Phase collector failed' }
+          python tools/test-gi-phase-check.py
+          if ($LASTEXITCODE -ne 0) { throw 'Phase parser failed' }
