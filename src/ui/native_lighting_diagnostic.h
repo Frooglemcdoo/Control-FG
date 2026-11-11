@@ -560,7 +560,8 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
-        if(control_diagnostics::Active())gi_spot_trace::InputTick();
+        // The dedicated launcher must accept F7/ROI movement before a capture is active.
+        if(gi_spot_trace::Enabled())gi_spot_trace::InputTick();
         if(cameraRequestedAt && now-cameraRequestedAt>=3000 && free_camera::commands.Timeout())
             Trace("free_camera_request_expired reason=no_camera_update target_not_applied=1");
         if(control_diagnostics::Active() && now>=nextRRReport){ReportSpecIsolation("heartbeat");ReportRRPaths("heartbeat");nextRRReport=now+5000;}
