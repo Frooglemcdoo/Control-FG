@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - work/rt-replacement-r392
+      - work/gi-replacement-core-r425
       - work/gi-modernization
       - work/r285-gi-stack-capture
       - work/r284-gi-wide-sequence

@@ -8,6 +8,11 @@ inline const GUID kState={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x6
 inline std::atomic<bool> requested{gi_sequence::LiveRequested()},ready{false};
 inline std::atomic<unsigned long long> revision{0},applied{~0ull};
 inline constexpr LPCWSTR kExport=L"controlNewGIRayGen";
+inline constexpr LPCWSTR kCompactExports[2]={L"controlCompactGIRayGenA",L"controlCompactGIRayGenB"};
+inline bool CompactRequested() noexcept {
+ static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_COMPACT",v,4)==1&&v[0]=='1';}();
+ return enabled;
+}
 inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
  if(!device||!desc||!out||!desc->pSubobjects||desc->Type!=D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE)return next(device,desc,iid,out);
  UINT match=desc->NumSubobjects;unsigned variant=0;
@@ -23,7 +28,8 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
  }
  if(match==desc->NumSubobjects)return next(device,desc,iid,out);
  try {
-  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+1);
+  const bool compact=variant==0&&gi_reuse::SingleProducerEnabled()&&CompactRequested();
+  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+3);
   std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
   std::vector<std::vector<LPCWSTR>> names(desc->NumSubobjects);
   for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -36,6 +42,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
     // No replacement record may silently discard native local-root arguments.
     if(objects[target].Type==D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)return next(device,desc,iid,out);
     names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);names[i].push_back(kExport);
+    if(compact){names[i].push_back(kCompactExports[0]);names[i].push_back(kCompactExports[1]);}
     associations[i].NumExports=static_cast<UINT>(names[i].size());associations[i].pExports=names[i].data();break;
    }
    associations[i].pSubobjectToAssociate=objects.data()+target;objects[i].pDesc=&associations[i];
@@ -48,23 +55,37 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
    objects[match].pDesc=&shared;
    lib.DXILLibrary=variant==0?D3D12_SHADER_BYTECODE{gi_sequence::kGIOwnedRay0,sizeof(gi_sequence::kGIOwnedRay0)}:D3D12_SHADER_BYTECODE{gi_sequence::kGIOwnedRay1,sizeof(gi_sequence::kGIOwnedRay1)};
   }
+  D3D12_EXPORT_DESC compactAliases[2]={{kCompactExports[0],L"rayGenMain",D3D12_EXPORT_FLAG_NONE},{kCompactExports[1],L"rayGenMain",D3D12_EXPORT_FLAG_NONE}};
+  D3D12_DXIL_LIBRARY_DESC compactLibs[2]={
+   {{gi_sequence::kGICompactPhaseA0,sizeof(gi_sequence::kGICompactPhaseA0)},1,&compactAliases[0]},
+   {{gi_sequence::kGICompactPhaseB0,sizeof(gi_sequence::kGICompactPhaseB0)},1,&compactAliases[1]}};
+  if(compact){
+   shared.DXILLibrary={gi_sequence::kGICompactShared0,sizeof(gi_sequence::kGICompactShared0)};
+   objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&compactLibs[0]});
+   objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&compactLibs[1]});
+  }
   objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&lib});auto augmented=*desc;augmented.NumSubobjects=static_cast<UINT>(objects.size());augmented.pSubobjects=objects.data();
   void* candidate=nullptr;const HRESULT hr=next(device,&augmented,iid,&candidate);
   if(FAILED(hr)||!candidate){if(candidate)static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 create_failed=1 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return next(device,desc,iid,out);}
   Microsoft::WRL::ComPtr<ID3D12StateObject> state;Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> props;
   HRESULT prepared=static_cast<IUnknown*>(candidate)->QueryInterface(IID_PPV_ARGS(&state));if(SUCCEEDED(prepared))prepared=state.As(&props);
   const void* identifier=SUCCEEDED(prepared)?props->GetShaderIdentifier(kExport):nullptr;
+  const void* phaseIdentifiers[2]={nullptr,nullptr};
+  if(compact&&identifier){for(unsigned p=0;p<2;++p)phaseIdentifiers[p]=props->GetShaderIdentifier(kCompactExports[p]);
+   if(!phaseIdentifiers[0]||!phaseIdentifiers[1])identifier=nullptr;}
   Microsoft::WRL::ComPtr<ID3D12Resource> record;
   if(identifier){
    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
-   D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=64;buffer.Height=1;buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+   D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=compact?192:64;buffer.Height=1;buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
    prepared=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&record));
    void* mapped=nullptr;D3D12_RANGE empty{0,0};if(SUCCEEDED(prepared))prepared=record->Map(0,&empty,&mapped);
-   if(SUCCEEDED(prepared)){memset(mapped,0,64);memcpy(mapped,identifier,32);record->Unmap(0,nullptr);prepared=state->SetPrivateDataInterface(kRecord,record.Get());}
+   if(SUCCEEDED(prepared)){memset(mapped,0,static_cast<size_t>(buffer.Width));memcpy(mapped,identifier,32);
+    if(compact)for(unsigned p=0;p<2;++p)memcpy(static_cast<unsigned char*>(mapped)+64*(p+1),phaseIdentifiers[p],32);
+    record->Unmap(0,nullptr);prepared=state->SetPrivateDataInterface(kRecord,record.Get());}
   }else prepared=E_FAIL;
   if(FAILED(prepared)){static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 record_failed=1 native_fallback=1");return next(device,desc,iid,out);}
   const UINT variantTag=variant+1;state->SetPrivateData(gi_reuse::nativeGIVariantKey,sizeof(variantTag),&variantTag);
-  *out=candidate;ready.store(true);Log("GI_TOGGLE_R308 ready=1 variant=%u native_original=1 new_sampler=R307 same_state=1",variant);return hr;
+  *out=candidate;ready.store(true);Log("GI_TOGGLE_R308 ready=1 variant=%u native_original=1 new_sampler=R307 same_state=1 compact_columns=%u",variant,compact?1u:0u);return hr;
  }catch(...){Log("GI_TOGGLE_R308 exception=1 native_fallback=1");return next(device,desc,iid,out);}
 }
 inline void OnState(ID3D12GraphicsCommandList4* list,ID3D12StateObject* state) noexcept {list->SetPrivateDataInterface(kState,state);rt_spot_runtime::OnState(list,state);}
@@ -80,7 +101,17 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     if(single){gi_reuse::singleRayApplied.store(useNew);if(useNew)++gi_reuse::singleRayDispatches;}
     if(applied.exchange(version)!=version)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",useNew?"new":"native",version);
     settings_check::Record(useNew?settings_check::OwnedRays:settings_check::NativeRays);
-    if(useNew){auto custom=*desc;custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);
+    if(useNew){auto custom=*desc;
+     if(record->GetDesc().Width==192&&desc->Width>=2&&(desc->Width&1)==0&&desc->Height>0&&
+        desc->MissShaderTable.StrideInBytes==32&&desc->HitGroupTable.StrideInBytes==96){
+      // Both halves execute here with the same native bindings and SBT lifetime.
+      // There is no deferred replay, guide use, extra ray, or partial fallback.
+      custom.Width=desc->Width/2;
+      const auto dispatch=rt_shadow_capture::Lookup(list).dispatch;
+      for(unsigned p=0;p<2;++p){custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress()+64*(p+1),32};dispatch(list,&custom);}
+      return true;
+     }
+     custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);
      return true;}
     return false;
    }

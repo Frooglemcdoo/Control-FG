@@ -77,6 +77,7 @@ def transform(source,variant):
 
 
 def main():
+    from gi_compact_phase import compact_shared_hits, compact_raygen
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--dxc',required=True);p.add_argument('--assembler',required=True);a=p.parse_args()
     build=ROOT/'build';build.mkdir(exist_ok=True);header=['#pragma once'];reports=[]
     for v in (0,1):
@@ -84,7 +85,12 @@ def main():
         native=build/f'gi-live-native-{v}.dxbc';native.write_bytes(data)
         source=subprocess.check_output([a.dxc,'-dumpbin',str(native)],text=True)
         sampled=transform(source,v)
-        for name, program in [('GISharedHit',shared_hits(source)),('GIOwnedRay',owned_raygen(sampled,v))]:
+        programs=[('GISharedHit',shared_hits(source)),('GIOwnedRay',owned_raygen(sampled,v))]
+        if v==0:
+            programs += [('GICompactShared',compact_shared_hits(source)),
+                         ('GICompactPhaseA',compact_raygen(source,0,0)),
+                         ('GICompactPhaseB',compact_raygen(source,0,1))]
+        for name, program in programs:
             ir_path=build/f'{name}-{v}.ll';ir_path.write_text(program)
             compiled=ir_path.with_suffix('.dxil')
             subprocess.run([a.assembler,str(ir_path),str(compiled),str(Path(a.dxc).parent/'dxcompiler.dll')],check=True)

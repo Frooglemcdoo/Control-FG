@@ -92,9 +92,42 @@ authorizes native suppression. Full DLL build uses commit
 954c767859b3a326a7a826378f5e1c3c045d2973; its validated collector updates are in
 72e922435e84fcad09eccfaeb54f550ce658c901. No gameplay noise/FPS claim follows.
 
-Next user input needed is the short automatic phase-check ZIP, not another
-hair/jaw/source video. This is a scheduling integration prerequisite. The old
-captures already established source contributions; do not repeat them merely
-to recover the new command-list relationship. After this result, continue the
-split-phase implementation and separately enforce native SBT and descriptor
-resource lifetimes, output publication and barriers.
+The R425 phase-check ZIP has now been received and analyzed; do not request it
+again. All 24 target frames have a complete ray/evaluator pair, separate ordered
+submissions on the same direct queue, and matching root/heap layouts within each
+pair. Root argument values differ in slots 0, 2, 3, 4 and 5. Heap identities rotate
+between frames. See GI-Phase-Findings-R425.md for evidence and truncation limits.
+
+## Current implementation checkpoint (November 11)
+
+Core Windows run 43066361835 passed the GPU guide builder, separate immutable
+phase-binding values, split-recording planner and GPU SBT snapshot tests. The
+SBT fixture overwrites the native upload table after the copy, then reads the
+snapshot in a second submission to verify the original bytes survive. This does
+not establish ownership of geometry, acceleration structures, descriptor contents
+or pointed-to constant-buffer bytes in the running game.
+
+Run 43069119697 passed Microsoft assembly/validation of the compact variant-zero
+raygen pair and shared hit/miss shaders. Both hit and miss derive output locations
+from DispatchRaysIndex, so the compact mapping must apply to all three exports.
+The new A/B payload namespace preserves native, owned and visibility payloads.
+A mask mistake was caught by the namespace test and corrected before this run.
+
+The runtime now has an opt-in CONTROLTOH_GI_COMPACT=1 stage. It traces alternate
+columns in two immediate half-width dispatches with the original bindings and
+shader table; it does not defer work across command lists. Total ray count is
+unchanged. Only audited variant zero, even widths and the expected table strides
+use the compact path; other cases use the existing full-width owned raygen.
+Pipeline or record preparation failure falls back before any ray is dispatched.
+The two phases have distinct 64-byte-aligned raygen records and share original
+hit/miss identifiers. The ordinary native/owned toggle remains available.
+
+This is a scheduling/parity integration stage, not the noise fix. The frozen guide
+is not yet used by gameplay and neither RTX timing nor visual parity is verified.
+The compact path is disabled unless explicitly requested. A full DLL build is
+required before any package can be described as ready.
+
+Remaining work: connect shade-A/guide-freeze/ray-B/shade-B with proven resource
+lifetimes, actual sampled-weight storage, final output publication, then validate
+moving-surface reconstruction and real performance. No extra capture is needed
+for the already-established scheduling relationship.
