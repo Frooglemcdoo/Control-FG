@@ -3,6 +3,11 @@ on:
   push:
     branches: [work/gi-replacement-core-r425, work/gi-replacement-binding-r426]
   workflow_dispatch:
+# Superseded builds of this same branch must not delay current validation.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: windows-latest

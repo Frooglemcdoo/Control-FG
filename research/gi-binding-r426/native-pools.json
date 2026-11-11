@@ -1,0 +1,404 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "functions": [
+    {
+      "start": "0x151720",
+      "end": "0x15188e",
+      "sha256": "8d565199f26046ece0a1517ed8ca2820f246285856657d3c0684152489289b80",
+      "calls": [
+        {
+          "rva": "0x15180c",
+          "target": "?createJob@JobManager@r@@QEAA?AVJobHandle@2@W4JobPriority@2@@Z"
+        },
+        {
+          "rva": "0x15181a",
+          "target": "??0JobBase@r@@QEAA@XZ"
+        },
+        {
+          "rva": "0x15183d",
+          "target": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+        },
+        {
+          "rva": "0x151855",
+          "target": "?yieldCurrentThread@r@@YAXXZ"
+        },
+        {
+          "rva": "0x151869",
+          "target": "?releaseResources@NativeBuffer@d3d@@QEAAXXZ"
+        },
+        {
+          "rva": "0x151873",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        },
+        {
+          "rva": "0x15187d",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        }
+      ],
+      "code_hex": "40574883ec4048c7442420feffffff48895c24584c8bc94c8b41288b4130498d04c048894424504c3bc00f8433010000488b12498bc866660f1f8400000000004c8bc148391174114c8d41084c89442460498bc84c3bc075e74c3bc00f8401010000498b38836f1c010f85f40000008b4724f7d84863c8f0480fc10dc8d77b004d2b412849c1f803498d5001458b51304c8bda4d2bd87428493bd2731c0f1f00498b4928488b04d1488944d1f848ffc2493bd272eb458b5130452bd34589513049397938750849c7413800000000803d8bc97b0000745741b801000000488d542428488b0d2fec4800488b09ff1536ec4800488b5c2428488bcbff1538ec4800488d05411c4e0048890348897b18488d542428488b0df6eb4800488b09ff15fdeb4800488b5c24584883c4405fc30fb60784c07508ff157dea4800ebf1488b5f084885db7414488bcbff1539e4480090488bcbff1547fa480090488bcfff153dfa4800488b5c24584883c4405fc3"
+    },
+    {
+      "start": "0x1518a0",
+      "end": "0x151a0e",
+      "sha256": "f40a367ccab5df2a5a9101d9852e0b96b0740b1f8e1b46d6440f8d837d460042",
+      "calls": [
+        {
+          "rva": "0x15198c",
+          "target": "?createJob@JobManager@r@@QEAA?AVJobHandle@2@W4JobPriority@2@@Z"
+        },
+        {
+          "rva": "0x15199a",
+          "target": "??0JobBase@r@@QEAA@XZ"
+        },
+        {
+          "rva": "0x1519bd",
+          "target": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+        },
+        {
+          "rva": "0x1519d5",
+          "target": "?yieldCurrentThread@r@@YAXXZ"
+        },
+        {
+          "rva": "0x1519e9",
+          "target": "?releaseResources@NativeBuffer@d3d@@QEAAXXZ"
+        },
+        {
+          "rva": "0x1519f3",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        },
+        {
+          "rva": "0x1519fd",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        }
+      ],
+      "code_hex": "40574883ec4048c7442420feffffff48895c24584c8bc94c8b41408b4148498d04c048894424504c3bc00f8433010000488b12498bc866660f1f8400000000004c8bc148391174114c8d41084c89442460498bc84c3bc075e74c3bc00f8401010000498b38836f1c010f85f40000008b4724f7d84863c8f0480fc10d08d77b004d2b414049c1f803498d5001458b51484c8bda4d2bd87428493bd2731c0f1f00498b4940488b04d1488944d1f848ffc2493bd272eb458b5148452bd34589514849397950750849c7415000000000803d0bc87b0000745741b801000000488d542428488b0dafea4800488b09ff15b6ea4800488b5c2428488bcbff15b8ea4800488d05091b4e0048890348897b18488d542428488b0d76ea4800488b09ff157dea4800488b5c24584883c4405fc30fb60784c07508ff15fde84800ebf1488b5f084885db7414488bcbff15b9e2480090488bcbff15c7f8480090488bcfff15bdf84800488b5c24584883c4405fc3"
+    },
+    {
+      "start": "0x151a20",
+      "end": "0x151b8e",
+      "sha256": "647d3eaff015ef38d0115931805f17962cc5e167cf3f5eb64600913457152b8f",
+      "calls": [
+        {
+          "rva": "0x151b0c",
+          "target": "?createJob@JobManager@r@@QEAA?AVJobHandle@2@W4JobPriority@2@@Z"
+        },
+        {
+          "rva": "0x151b1a",
+          "target": "??0JobBase@r@@QEAA@XZ"
+        },
+        {
+          "rva": "0x151b3d",
+          "target": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+        },
+        {
+          "rva": "0x151b55",
+          "target": "?yieldCurrentThread@r@@YAXXZ"
+        },
+        {
+          "rva": "0x151b69",
+          "target": "?releaseResources@NativeBuffer@d3d@@QEAAXXZ"
+        },
+        {
+          "rva": "0x151b73",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        },
+        {
+          "rva": "0x151b7d",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        }
+      ],
+      "code_hex": "40574883ec4048c7442420feffffff48895c24584c8bc94c8b41588b4160498d04c048894424504c3bc00f8433010000488b12498bc866660f1f8400000000004c8bc148391174114c8d41084c89442428498bc84c3bc075e74c3bc00f8401010000498b38836f1c010f85f40000008b4724f7d84863c8f0480fc10dc8d47b004d2b415849c1f803498d5001458b51604c8bda4d2bd87428493bd2731c0f1f00498b4958488b04d1488944d1f848ffc2493bd272eb458b5160452bd34589516049397968750849c7416800000000803d8bc67b0000745741b801000000488d542430488b0d2fe94800488b09ff1536e94800488b5c2430488bcbff1538e94800488d0571194e0048890348897b18488d542430488b0df6e84800488b09ff15fde84800488b5c24584883c4405fc30fb60784c07508ff157de74800ebf1488b5f084885db7414488bcbff1539e1480090488bcbff1547f7480090488bcfff153df74800488b5c24584883c4405fc3"
+    },
+    {
+      "start": "0xa7220",
+      "end": "0xa738d",
+      "sha256": "7301169b822182d4aafaf201efe2d05a4f1ccf5931b07be4ad4754fceefd97e7",
+      "calls": [
+        {
+          "rva": "0xa730b",
+          "target": "?createJob@JobManager@r@@QEAA?AVJobHandle@2@W4JobPriority@2@@Z"
+        },
+        {
+          "rva": "0xa7319",
+          "target": "??0JobBase@r@@QEAA@XZ"
+        },
+        {
+          "rva": "0xa733c",
+          "target": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+        },
+        {
+          "rva": "0xa7354",
+          "target": "?yieldCurrentThread@r@@YAXXZ"
+        },
+        {
+          "rva": "0xa7368",
+          "target": "?releaseResources@NativeBuffer@d3d@@QEAAXXZ"
+        },
+        {
+          "rva": "0xa7372",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        },
+        {
+          "rva": "0xa737c",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        }
+      ],
+      "code_hex": "40574883ec4048c7442420feffffff48895c24584c8bc94c8b018b4108498d04c048894424504c3bc00f8433010000488b12498bc86666660f1f8400000000004c8bc148391174114c8d41084c89442460498bc84c3bc075e74c3bc00f8400010000498b38836f1c010f85f30000008b4724f7d84863c8f0480fc10db8f385004d2b0149c1f803498d5001458b51084c8bda4d2bd87428493bd2731c0f1f4000498b09488b04d1488944d1f848ffc2493bd272ec458b5108452bd34589510849397910750849c7411000000000803d8c6e860000745741b801000000488d542428488b0d30915300488b09ff1537915300488b5c2428488bcbff1539915300488d05220d580048890348897b18488d542428488b0df7905300488b09ff15fe905300488b5c24584883c4405fc30fb60784c07508ff157e8f5300ebf1488b5f084885db7414488bcbff153a89530090488bcbff15489f530090488bcfff153e9f5300488b5c24584883c4405fc3"
+    },
+    {
+      "start": "0xa7400",
+      "end": "0xa756e",
+      "sha256": "8edec33bb41ba768bb6b627041aa256511b6eb6870f591e5d61cb5983332e215",
+      "calls": [
+        {
+          "rva": "0xa74ec",
+          "target": "?createJob@JobManager@r@@QEAA?AVJobHandle@2@W4JobPriority@2@@Z"
+        },
+        {
+          "rva": "0xa74fa",
+          "target": "??0JobBase@r@@QEAA@XZ"
+        },
+        {
+          "rva": "0xa751d",
+          "target": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+        },
+        {
+          "rva": "0xa7535",
+          "target": "?yieldCurrentThread@r@@YAXXZ"
+        },
+        {
+          "rva": "0xa7549",
+          "target": "?releaseResources@NativeBuffer@d3d@@QEAAXXZ"
+        },
+        {
+          "rva": "0xa7553",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        },
+        {
+          "rva": "0xa755d",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        }
+      ],
+      "code_hex": "40574883ec4048c7442420feffffff48895c24584c8bc94c8b41188b4120498d04c048894424504c3bc00f8433010000488b12498bc866660f1f8400000000004c8bc148391174114c8d41084c89442428498bc84c3bc075e74c3bc00f8401010000498b38836f1c010f85f40000008b4724f7d84863c8f0480fc10d58f085004d2b411849c1f803498d5001458b51204c8bda4d2bd87428493bd2731c0f1f00498b4918488b04d1488944d1f848ffc2493bd272eb458b5120452bd34589512049397928750849c7412800000000803dab6c860000745741b801000000488d542430488b0d4f8f5300488b09ff15568f5300488b5c2430488bcbff15588f5300488d05290b580048890348897b18488d542430488b0d168f5300488b09ff151d8f5300488b5c24584883c4405fc30fb60784c07508ff159d8d5300ebf1488b5f084885db7414488bcbff155987530090488bcbff15679d530090488bcfff155d9d5300488b5c24584883c4405fc3"
+    },
+    {
+      "start": "0xa7580",
+      "end": "0xa76ee",
+      "sha256": "217729a693080236e66297bd31138d4e2ec7b22a7f664ea23e5b0a124e1a8675",
+      "calls": [
+        {
+          "rva": "0xa766c",
+          "target": "?createJob@JobManager@r@@QEAA?AVJobHandle@2@W4JobPriority@2@@Z"
+        },
+        {
+          "rva": "0xa767a",
+          "target": "??0JobBase@r@@QEAA@XZ"
+        },
+        {
+          "rva": "0xa769d",
+          "target": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+        },
+        {
+          "rva": "0xa76b5",
+          "target": "?yieldCurrentThread@r@@YAXXZ"
+        },
+        {
+          "rva": "0xa76c9",
+          "target": "?releaseResources@NativeBuffer@d3d@@QEAAXXZ"
+        },
+        {
+          "rva": "0xa76d3",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        },
+        {
+          "rva": "0xa76dd",
+          "target": "?deleteMemory@r@@YAXPEAX@Z"
+        }
+      ],
+      "code_hex": "40574883ec4048c7442420feffffff48895c24584c8bc94c8b41308b4138498d04c048894424504c3bc00f8433010000488b12498bc866660f1f8400000000004c8bc148391174114c8d41084c89442460498bc84c3bc075e74c3bc00f8401010000498b38836f1c010f85f40000008b4724f7d84863c8f0480fc10d98ef85004d2b413049c1f803498d5001458b51384c8bda4d2bd87428493bd2731c0f1f00498b4930488b04d1488944d1f848ffc2493bd272eb458b5138452bd34589513849397940750849c7414000000000803d2b6b860000745741b801000000488d542428488b0dcf8d5300488b09ff15d68d5300488b5c2428488bcbff15d88d5300488d059109580048890348897b18488d542428488b0d968d5300488b09ff159d8d5300488b5c24584883c4405fc30fb60784c07508ff151d8c5300ebf1488b5f084885db7414488bcbff15d985530090488bcbff15e79b530090488bcfff15dd9b5300488b5c24584883c4405fc3"
+    },
+    {
+      "start": "0x1504c0",
+      "end": "0x150a49",
+      "sha256": "c07c2b0230a48948286fada4ce157032604df262ffd0767d8d504aced8fd9009",
+      "calls": [
+        {
+          "rva": "0x150671",
+          "target": "strncmp"
+        },
+        {
+          "rva": "0x1506c4",
+          "target": "?getElementOffset@VertexFormat@d3d@@QEBAHEW4Semantic@12@H@Z"
+        },
+        {
+          "rva": "0x1506f4",
+          "target": "?getStride@NativeBufferUtil@d3d@@SA_KPEBVNativeBuffer@2@@Z"
+        },
+        {
+          "rva": "0x15072a",
+          "target": "?getGPUVirtualAddress@NativeBufferUtilDX12@d3d@@SA_KPEBVNativeBuffer@2@@Z"
+        },
+        {
+          "rva": "0x150748",
+          "target": "?getGPUVirtualAddress@NativeBufferUtilDX12@d3d@@SA_KPEBVNativeBuffer@2@@Z"
+        },
+        {
+          "rva": "0x15078e",
+          "target": "?getElementOffset@VertexFormat@d3d@@QEBAHEW4Semantic@12@H@Z"
+        },
+        {
+          "rva": "0x1507a4",
+          "target": "?getElementOffset@VertexFormat@d3d@@QEBAHEW4Semantic@12@H@Z"
+        },
+        {
+          "rva": "0x1507b8",
+          "target": "?getElementOffset@VertexFormat@d3d@@QEBAHEW4Semantic@12@H@Z"
+        },
+        {
+          "rva": "0x1507cc",
+          "target": "?getElementOffset@VertexFormat@d3d@@QEBAHEW4Semantic@12@H@Z"
+        },
+        {
+          "rva": "0x15085f",
+          "target": "0xa6d20"
+        },
+        {
+          "rva": "0x15086c",
+          "target": "0xa6d20"
+        },
+        {
+          "rva": "0x15087d",
+          "target": "0x22730"
+        },
+        {
+          "rva": "0x1508e6",
+          "target": "?estimateBottomLevelAccelerationStructureSize@DeviceUtilRaytracing@d3d@@SA?AURaytracingAccelerationInfo@2@W4RaytracingAccelerationBuildFlags@2@PEBURaytracingGeometryDesc@2@H@Z"
+        },
+        {
+          "rva": "0x150956",
+          "target": "0x151240"
+        },
+        {
+          "rva": "0x150966",
+          "target": "0x151240"
+        },
+        {
+          "rva": "0x1509e3",
+          "target": "0x1513d0"
+        },
+        {
+          "rva": "0x1509f3",
+          "target": "0x1513d0"
+        },
+        {
+          "rva": "0x150a2c",
+          "target": "0x22730"
+        }
+      ],
+      "code_hex": "44894c2420448944241848894c2408555356574154415541564157488d6c24f14881ecd800000048c745f7feffffff458bd1488bda4c8bf1488d05f12d4e0048890144894908488d51104533ff4c893a4c897a084c8979204c8979284c8979304c897938440fb65d77418d43018941604c897968448979704c8979784489b9800000004c89b9880000004489b990000000488b457f488981980000004489b9a0000000c781a4000000ffffffff4488b9a80000004489b9ac0000004c89b9b00000004c89b9b80000004c89b9c00000008b8358010000ffc0458bef4863c848894d7f4439bb000100000f8e1e0300004963c848894c2420458be7488b83f8000000498b34044585c0741b83bb58010000007412488d0c49488b83500100004c8b4cc8f0eb074c8b8b300100004f8b0c0c418b890002000085c90f95c0413ac3751285c9740a4983b9000a0000007504b001eb0232c0443996680100000f858e02000083be8c010000000f858102000084c00f84790200004983b9100a000000400f95c7498b81f80100008b08c1e91f418b81f0010000c1e81f84c8742141b805000000488d15762c4e00498b89b0000000ff15f9ec480085c0750340b7014084ff0f851c02000033c0488945874889459f488945a744897c2440488b865801000048894424488b866c010000894587488b860801000089458b4533c94533c033d2488bceff1596ef48004863c848038e8001000048894d8f488b8e6001000048894d974885c974218b86700100008d144089559fff1526f848004c8bf88945a3488b8e60010000eb0a48c7459f0000000033c98b8688010000410fafc74898488945a7c745af00000000ff15a0ed4800488945bf8b45a78945cf488bbe78010000488b8e50010000ff1582ed48004803c7488945c7488b86600100008b4830894def488b86500100008b48302b8e78010000894df344897dd3488b86100100008945d74533c941b003b201488bceff15ccee48008945df4533c941b001410fb6d0488bceff15b6ee48008945e34533c941b002b201488bceff15a2ee48008945e74533c941b004b201488bceff158eee48008945eb4532d24533ff458bc7488b7d7f4885ff7e564d8d4fe84d85c074174439bb58010000740e488b8350010000498b4c0108eb07488b8b30010000498b0c0c488b81f80100008b10c1ea1f8b81f0010000c1e81f22d0440ad249ffc04983c1184c3bc77cb34584d27507c745af0100000044896db7c745bbffffffffc745dbffffffff488d542440498d4e10e8bc64f5ff488d55b7498d4e20e8af64f5ff4889755f488d555f498d4e30e8ae1eedff8b4d9fb85655555585c97e04f7e9eb03f76d878bc2c1e81f03d0410196a0000000440fb65d77448b556f448b456741ffc54983c408443bab00010000488b4c24200f8cf1fcffff498d561041c7464006000000458b4e284c8b02ba06000000488d4c2420ff15eceb48000f1008f20f104010410f114e48f2410f114658498bbe98000000418b5e4881c3ff00000081e300ffffff488b57384885d27410b8000020002b42183bd87e04b001eb0232c081fb000020007f2881fb000008007e0484c0751c4885d2740484c07420ba00002000488bcfe8e508000048894738eb0a8bd3488bcfe8d5080000488bd048895424208b4a18894c242803cb894a18ff421c0f10442420410f114668498bbe98000000418b5e5081c3ff00000081e300ffffff488b57504885d27410b8000020002b42183bd87e04b001eb0232c081fb000020007f2881fb000008007e0484c0751c4885d2740484c07420ba00002000488bcfe8e809000048894750eb0a8bd3488bcfe8d8090000488bd048895424208b4a18894c242803cb894a18ff421c0f10442420410f1146784c89757f498b8e980000004883c170488d557fe8ff1cedff90498bc64881c4d8000000415f415e415d415c5f5e5b5dc3"
+    },
+    {
+      "start": "0x150e21",
+      "end": "0x150f99",
+      "sha256": "57b25fb9b3653f40ea0778dda31d4ebbf828e1a7575336f37f6a405a8d90c446",
+      "calls": [
+        {
+          "rva": "0x150e59",
+          "target": "0x22730"
+        },
+        {
+          "rva": "0x150eb8",
+          "target": "qword ptr [rax + 0x48]"
+        },
+        {
+          "rva": "0x150f0e",
+          "target": "0x151570"
+        },
+        {
+          "rva": "0x150f1e",
+          "target": "0x151570"
+        },
+        {
+          "rva": "0x150f5e",
+          "target": "qword ptr [rax + 8]"
+        },
+        {
+          "rva": "0x150f79",
+          "target": "0x22730"
+        }
+      ],
+      "code_hex": "c783ac000000040000004883c4405f5e5bc3488b83880000000fb60884c90f844c010000488d5424604889bbc0000000498bc948895c2460e8d218edffc783ac000000030000004883c4405f5e5bc3488b83b80000004883c002483bc70f850d0100008b83a4000000c1e0034863d0488b8398000000488b4820488b3c0a4885ff0f8ee9000000483b7b480f8fdf000000488b03488bcbff5048488bb39800000081c7ff00000081e700ffffff488b56684885d27410b8000020002b42183bf87e04b001eb0232c081ff000020007f2881ff000008007e0484c0751c4885d2740484c07420ba00002000488bcee85d06000048894668eb0a8bd7488bcee84d060000488bd08b4a18894c242803cfff421c894a1848895424200f10442420c783ac000000020000000f1183880000004883c4405f5e5bc3488b03488bcbff500884c0742c488d5424684889bbb8000000488bce48895c2468e8b217edff8b46088983a4000000c783ac000000010000004883c4405f5e5bc3"
+    },
+    {
+      "start": "0xa6380",
+      "end": "0xa65f6",
+      "sha256": "9718cfc95702fb7a1785facb7fa4d606d477a56a622bd0dc416ea2ad250c2eae",
+      "calls": [
+        {
+          "rva": "0xa6411",
+          "target": "0xa76f0"
+        },
+        {
+          "rva": "0xa6435",
+          "target": "0xa76f0"
+        },
+        {
+          "rva": "0xa6462",
+          "target": "qword ptr [rax + 0x48]"
+        },
+        {
+          "rva": "0xa64d6",
+          "target": "0xa78e0"
+        },
+        {
+          "rva": "0xa64fb",
+          "target": "0xa78e0"
+        },
+        {
+          "rva": "0xa6594",
+          "target": "0xa7a90"
+        },
+        {
+          "rva": "0xa65b9",
+          "target": "0xa7a90"
+        }
+      ],
+      "code_hex": "48895c2408488974241048897c241855488bec4883ec30488b4118488bf9488b5908488b108b921001000083c20c0faf5168488b4b1083c20f83e2f04885c97410b8000020002b41183bd07e04b001eb0232c033f681fa000020007f5281fa000008007e0484c075464885c9741884c075148b41188945f803c2894118488b4310ff401ceb43448bc2488bcbba00002000e8da1200008b4b08488b03ffc98975f8488b14c848895310488955f0eb1e448bc2488bcbe8b61200008b4b08488b03ffc98975f8488b0cc848894df0488b8788000000488bcf0f2845f00f114018488b07ff5048488b8788000000488b5f088b5010488b4b2881c2ff00000081e200ffffff4885c97410b8000020002b41183bd07e04b001eb0232c081fa000020007f5381fa000008007e0484c075474885c9741884c075148b41188945f803c2894118488b4328ff401ceb45448bc2488bcbba00002000e8051400008b4b20488b4318ffc98975f8488b14c848895328488955f0eb1f448bc2488bcbe8e01300008b4b20488b4318ffc98975f8488b0cc848894df0488b87880000000f2845f00f114028488b8788000000488b5f088b5014488b4b4081c2ff00000081e200ffffff4885c97410b8000020002b41183bd07e04b001eb0232c081fa000020007f5381fa000008007e0484c075474885c9741884c075148b41188945f803c2894118488b4340ff401ceb45448bc2488bcbba00002000e8f71400008b4b38488b4330ffc98975f8488b14c848895340488955f0eb1f448bc2488bcbe8d21400008b4b38488b4330ffc98975f8488b0cc848894df0488b87880000000f2845f0488b5c2440488b742448488b7c24500f1140384883c4305dc3"
+    }
+  ],
+  "cursor_increment_windows": [
+    {
+      "start": "0x150973",
+      "end": "0x150982",
+      "bytes": "8b4a18894c242803cb894a18ff421c"
+    },
+    {
+      "start": "0x150a00",
+      "end": "0x150a0f",
+      "bytes": "8b4a18894c242803cb894a18ff421c"
+    },
+    {
+      "start": "0x150f26",
+      "end": "0x150f35",
+      "bytes": "8b4a18894c242803cfff421c894a18"
+    },
+    {
+      "start": "0xa64b7",
+      "end": "0xa64c9",
+      "bytes": "8b41188945f803c2894118488b4328ff401c"
+    }
+  ],
+  "observed_layout": {
+    "native_buffer": "chunk+8",
+    "gpu_address": "chunk+0x10",
+    "allocation_cursor": "chunk+0x18",
+    "reference_count": "chunk+0x1c"
+  },
+  "interpretation": "The listed allocation paths advance a chunk cursor. Listed free paths decrement chunk references and release the whole native buffer at zero, synchronously or through a job. They do not insert a freed individual range into a free list.",
+  "scene_lease_proven": false,
+  "limitations": [
+    "Only these recovered provider/pool paths, not every renderer allocation",
+    "No guarantee of immutable vertex/material/AS contents from allocation lifetime",
+    "Native retirement still requires the consumer submission inside its frame boundary"
+  ]
+}

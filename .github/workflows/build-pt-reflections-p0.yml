@@ -90,6 +90,11 @@ on:
 permissions:
   contents: read
 
+# Superseded builds of this same branch must not delay current validation.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
@@ -1228,8 +1233,11 @@ jobs:
           Compress-Archive -Path $out -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload auxiliary preflight diagnostics
+        uses: actions/upload-artifact@v4
         if: always()
+        timeout-minutes: 3
+        continue-on-error: true
         with:
           name: Control-FG-Capture-Preflight-R134
           path: |
