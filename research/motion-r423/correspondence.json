@@ -1,0 +1,177 @@
+{
+  "scope": "best fit over sign/jitter candidates; same material/tag is not object identity; view-normal dot is not world-normal comparison; depth is clip depth without captured previous view transform; no claim of proven visibility or guidance validity",
+  "regions": {
+    "hair": {
+      "dominant_reprojected_id_pairs": [
+        {
+          "previous_id": 985,
+          "current_id": 986,
+          "pixels": 94047
+        },
+        {
+          "previous_id": 1504,
+          "current_id": 1504,
+          "pixels": 851
+        },
+        {
+          "previous_id": 1127,
+          "current_id": 986,
+          "pixels": 631
+        },
+        {
+          "previous_id": 985,
+          "current_id": 696,
+          "pixels": 588
+        },
+        {
+          "previous_id": 249,
+          "current_id": 249,
+          "pixels": 454
+        }
+      ],
+      "best_albedo_fit": {
+        "mae": 0.01216481626033783,
+        "mv_sign": 1,
+        "jitter_adjustment": [
+          0.90625,
+          -0.3333333766
+        ]
+      },
+      "unwarped_albedo_mae": 0.022503139451146126,
+      "same_material_fraction": 0.015753846153846153,
+      "same_tag_fraction": 0.9874564102564103,
+      "same_material_and_tag_fraction": 0.015753846153846153,
+      "native_normal_dot_percentiles_matched": [
+        0.9665317816385325,
+        0.9971269042163856,
+        0.999999511958704,
+        1.0,
+        1.0000000000000002
+      ],
+      "rr_normal_dot_percentiles_matched": [
+        0.9659368634223938,
+        0.9963460862636566,
+        0.999309241771698,
+        0.9996361136436462,
+        0.9998104751110077
+      ],
+      "matched_native_dot_gt_095_fraction": 0.01568205128205128,
+      "native_vs_rr_normal_dot_percentiles": [
+        0.6591823160374295,
+        0.8777430419018903,
+        0.9818854509009016,
+        0.9987034987337406,
+        0.9997741066949456
+      ]
+    },
+    "neck": {
+      "dominant_reprojected_id_pairs": [
+        {
+          "previous_id": 1127,
+          "current_id": 696,
+          "pixels": 13256
+        },
+        {
+          "previous_id": 985,
+          "current_id": 986,
+          "pixels": 557
+        },
+        {
+          "previous_id": 985,
+          "current_id": 696,
+          "pixels": 324
+        },
+        {
+          "previous_id": 1127,
+          "current_id": 986,
+          "pixels": 313
+        }
+      ],
+      "best_albedo_fit": {
+        "mae": 0.017153561115264893,
+        "mv_sign": 1,
+        "jitter_adjustment": [
+          0.90625,
+          -0.3333333766
+        ]
+      },
+      "unwarped_albedo_mae": 0.03058893419802189,
+      "same_material_fraction": 0.0,
+      "same_tag_fraction": 0.955916955017301,
+      "same_material_and_tag_fraction": 0.0,
+      "native_normal_dot_percentiles_matched": null,
+      "rr_normal_dot_percentiles_matched": null,
+      "matched_native_dot_gt_095_fraction": 0.0,
+      "native_vs_rr_normal_dot_percentiles": [
+        0.8563847748776301,
+        0.9995066419567445,
+        0.9997035507972469,
+        0.999903702961194,
+        0.9999770249634967
+      ]
+    },
+    "arm": {
+      "dominant_reprojected_id_pairs": [
+        {
+          "previous_id": 894,
+          "current_id": 895,
+          "pixels": 3003
+        },
+        {
+          "previous_id": 1520,
+          "current_id": 1520,
+          "pixels": 588
+        },
+        {
+          "previous_id": 1367,
+          "current_id": 1367,
+          "pixels": 396
+        },
+        {
+          "previous_id": 1520,
+          "current_id": 895,
+          "pixels": 8
+        },
+        {
+          "previous_id": 894,
+          "current_id": 1367,
+          "pixels": 5
+        }
+      ],
+      "best_albedo_fit": {
+        "mae": 0.0029379010666161776,
+        "mv_sign": 1,
+        "jitter_adjustment": [
+          0.90625,
+          -0.3333333766
+        ]
+      },
+      "unwarped_albedo_mae": 0.018719838932156563,
+      "same_material_fraction": 0.246,
+      "same_tag_fraction": 0.99875,
+      "same_material_and_tag_fraction": 0.246,
+      "native_normal_dot_percentiles_matched": [
+        0.9946891186704231,
+        0.9991719451729603,
+        0.9999705075574206,
+        0.9999970642442341,
+        1.0
+      ],
+      "rr_normal_dot_percentiles_matched": [
+        0.9937702226638794,
+        0.9984003305435181,
+        0.9993088841438293,
+        0.9996337115764617,
+        0.9997857928276062
+      ],
+      "matched_native_dot_gt_095_fraction": 0.246,
+      "native_vs_rr_normal_dot_percentiles": [
+        0.999440525973211,
+        0.9995473117784808,
+        0.9997307045575214,
+        0.9999179279950773,
+        0.999977160836609
+      ]
+    }
+  }
+}

@@ -1,0 +1,17 @@
+PASS n=(0.0,0.0,1.0) fraction=0.000 constant mean=1.000000 zero-support fraction=0.000000
+PASS n=(0.0,0.0,1.0) fraction=0.125 constant mean=1.000288 zero-support fraction=0.032972
+PASS n=(0.0,0.0,1.0) fraction=0.500 constant mean=0.998849 zero-support fraction=0.132420
+PASS n=(0.0,0.0,-1.0) fraction=0.000 constant mean=1.000000 zero-support fraction=0.000000
+PASS n=(0.0,0.0,-1.0) fraction=0.125 constant mean=0.999429 zero-support fraction=0.092428
+PASS n=(0.0,0.0,-1.0) fraction=0.500 constant mean=1.000362 zero-support fraction=0.367486
+PASS n=(1.0,0.0,0.0) fraction=0.000 constant mean=1.000000 zero-support fraction=0.000000
+PASS n=(1.0,0.0,0.0) fraction=0.125 constant mean=1.000542 zero-support fraction=0.032982
+PASS n=(1.0,0.0,0.0) fraction=0.500 constant mean=0.999680 zero-support fraction=0.132386
+PASS n=(0.0,1.0,0.0) fraction=0.000 constant mean=1.000000 zero-support fraction=0.000000
+PASS n=(0.0,1.0,0.0) fraction=0.125 constant mean=1.000012 zero-support fraction=0.091890
+PASS n=(0.0,1.0,0.0) fraction=0.500 constant mean=0.998087 zero-support fraction=0.368906
+PASS n=(0.6,0.0,0.8) fraction=0.000 constant mean=1.000000 zero-support fraction=0.000000
+PASS n=(0.6,0.0,0.8) fraction=0.125 constant mean=1.000074 zero-support fraction=0.032940
+PASS n=(0.6,0.0,0.8) fraction=0.500 constant mean=1.001370 zero-support fraction=0.132422
+PASS 7.5M draws: rotated/flipped receiver normals, world-fixed proposal, cosine expectation, miss-equivalent constant field, below-hemisphere zero terms, PDF support bound
+Scope: estimator math only. No live bindings, learned illumination, material identity, visibility reuse, RR output or FPS claim.
