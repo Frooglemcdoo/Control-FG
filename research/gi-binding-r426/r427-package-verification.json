@@ -1,0 +1,14 @@
+{
+  "source_commit": "f31481425462267c387064c9a8f1adee59f80c17",
+  "full_build_run": 43107062344,
+  "core_validation_run": 43107062347,
+  "zip_sha256": "72410d1126b282ba6cc89fc1269f3d8d6e9c37c0faa00ca48da4540abba61783",
+  "dll_sha256": "4563f507ab643cd8a9dd88c0a8a4ba7860f1c694d9a043f0a3c519d641317b84",
+  "bytes": 6940577,
+  "files": 89,
+  "unchanged_sidecar_shaders": 18,
+  "new_scripts_verified": true,
+  "live_guided_rendering": false,
+  "purpose": "Native scene writer and epoch observation; no noise or FPS claim",
+  "library_file_id": "libfile_8d49d7437b808191a134d1adfa76604b"
+}

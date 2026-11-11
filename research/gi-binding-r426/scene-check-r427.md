@@ -70,10 +70,32 @@ exception unwind, concurrent publication, SEH fault, stopped-window and E8/E9
 forwarding tests; all existing WARP lifetime/constant/SBT tests passed too.
 Collector fixtures passed but its CI wrapper incorrectly compared an unset
 PowerShell LASTEXITCODE with0; the wrapper now invokes a child PowerShell process
-with an explicit exit code. Revalidation is pending at this checkpoint.
+with an explicit exit code. Revalidation passed: core43107062347/job130813037381.
+The full DLL and install-package build43107062344/job130813085051 also passed,
+including package layout and restart-helper validation. Both built source
+f31481425462267c387064c9a8f1adee59f80c17.
 
 The parser records serial/epoch changes, missing/partial data and observed heap
 identity differences. It never grants a scene lease or native suppression, even
 if every sample is quiet. The final host contract still needs code evidence and
 actual consumer submission tied to native resource retirement. No live guided
 DXR transaction, noise improvement or FPS gain is claimed.
+
+## Ready for the one missing user run
+
+Verified and saved ControlTOH-GI-Scene-Check-R427.zip (6,940,577 bytes).
+Library identity libfile_8d49d7437b808191a134d1adfa76604b.
+ZIP SHA256 72410d1126b282ba6cc89fc1269f3d8d6e9c37c0faa00ca48da4540abba61783.
+DLL SHA256 4563f507ab643cd8a9dd88c0a8a4ba7860f1c694d9a043f0a3c519d641317b84.
+All18 external shader files match the delivered R426-v2 package. New launcher,
+collector and README match source. CI archive checksum and ZIP integrity pass.
+
+Next: user runs Start-GI-Scene-Check.cmd, loads any level with RT indirect
+lighting enabled, waits15seconds and exits. Collect automatic GI-Scene-R427 ZIP.
+No video, camera pose, hair/jaw comparison, R425 repeat or R426 repeat is needed.
+Analyze available rows with tools/analyze-gi-scene-check.py and existing phase
+analyzer, correlate exact event IDs/serials/fences/heap identities, and inspect
+startup rejection/fault metadata before asking for anything else. Global late
+overflow need not invalidate an already complete first24-frame prefix.
+Live guided producer/consumer integration is still disabled. Do not call this
+a visual fix, a proven immutable scene lease or a performance improvement.
