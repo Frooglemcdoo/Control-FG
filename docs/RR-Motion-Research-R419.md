@@ -88,3 +88,15 @@ requested by this research note. Any future acceptance must involve movement.
 
 The current Streamline page is version 2.14.16; this project has used 2.14.1.
 R419 does not adopt new SDK APIs or change the installed RR runtime.
+
+## Verified package
+
+Runtime commit `72e47e8daeb17c7f33266cf39c11edb1e466b9a9`.
+Windows workflow 42926804776, job 130215229495: all 60 steps succeeded.
+The Windows log confirms the visibility-reset regression and 132 protected files
+passed. Downloaded ZIP CRC and published SHA, x64 DLL, build labels and startup
+policy marker verified. Package has 83 entries and 6,797,164 bytes.
+
+ZIP SHA256: `c6dc244de59c60e19a83452cfaf385a55c60d882f8230a0e31965413a65c5e79`.
+DLL SHA256: `4e9d61ccb86ae26c0bb6f21a1279115b88eef20cdc58562eeecd7691ce4c84f8`.
+No game-side movement result has been obtained for this correction.
