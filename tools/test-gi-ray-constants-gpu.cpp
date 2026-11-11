@@ -24,7 +24,8 @@ int main()try {
  parameters[3].Descriptor.ShaderRegister=7;ComPtr<ID3DBlob> wrong;
  Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&wrong,&error));
  Require(FAILED(copy.Initialize(d.device.Get(),root.Get(),wrong->GetBufferPointer(),wrong->GetBufferSize(),{shader->GetBufferPointer(),shader->GetBufferSize()})),"wrong CBV mapping accepted");
- Check(copy.Initialize(d.device.Get(),root.Get(),rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),{shader->GetBufferPointer(),shader->GetBufferSize()}));
+ D3D12GIRayConstantPipeline pipeline;Check(pipeline.Initialize(d.device.Get(),root.Get(),rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),{shader->GetBufferPointer(),shader->GetBufferSize()}));
+ Check(copy.Initialize(d.device.Get(),pipeline));
  auto unaligned=native;unaligned.arguments.Descriptor(2,RootArgumentKind::CBV,sourceA->GetGPUVirtualAddress()+4);
  Require(!copy.RecordAndRestore(d.list.Get(),unaligned),"unaligned root CBV accepted");
  Require(copy.RecordAndRestore(d.list.Get(),native)&&!copy.RecordAndRestore(d.list.Get(),native),"one-shot copy violated");

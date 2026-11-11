@@ -44,8 +44,9 @@ public:
 };
 // Immutable per-invocation records: 32-byte identifier, two 64-bit root GPU
 // addresses, eight constants. 80 used bytes, size padded to 96, starts 128 apart.
-// Both phases use this raygen. A legacy compact A plus regenerated Duff-basis
-// training directions would train on directions that were NOT traced.
+// Both phases use this raygen and the same receiver/sampling implementation
+// as the training shader. Owned compact also uses Duff; unmodified native uses
+// the older basis. Do not mix unmodified native draws with Duff reconstruction.
 class D3D12FrozenRaygenRecords {
  Microsoft::WRL::ComPtr<ID3D12Resource> records_;
 public:

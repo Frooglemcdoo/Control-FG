@@ -6,17 +6,14 @@ namespace gi_reuse {
 // No CPU copy, source resource lookup, descriptor copy, source transition or wait.
 // Caller mutes injected binding observers and retains this object until the LAST
 // consumer fence. This does not own descriptor/geometry/AS contents for replay.
-class D3D12GIRayConstantSnapshot {
+class D3D12GIRayConstantPipeline {
  Microsoft::WRL::ComPtr<ID3D12RootSignature> nativeRoot_,copyRoot_;
  Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipeline_;
- Microsoft::WRL::ComPtr<ID3D12Resource> data_;
- bool recorded_=false;
 public:
- static constexpr UINT Bytes=1536,GIConstantOffset=1280;
  HRESULT Initialize(ID3D12Device* device,ID3D12RootSignature* nativeRoot,
                     const void* nativeRootBytes,SIZE_T nativeRootSize,
                     D3D12_SHADER_BYTECODE shader) noexcept {
-  if(data_||!device||!nativeRoot||!nativeRootBytes||!nativeRootSize||
+  if(copyPipeline_||!device||!nativeRoot||!nativeRootBytes||!nativeRootSize||
      !shader.pShaderBytecode||!shader.BytecodeLength)return E_INVALIDARG;
   Microsoft::WRL::ComPtr<ID3D12VersionedRootSignatureDeserializer> decoded;
   auto hr=D3D12CreateVersionedRootSignatureDeserializer(nativeRootBytes,nativeRootSize,IID_PPV_ARGS(&decoded));
@@ -36,12 +33,37 @@ public:
   hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&copyRoot_));if(FAILED(hr))return hr;
   D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};pso.pRootSignature=copyRoot_.Get();pso.CS=shader;
   hr=device->CreateComputePipelineState(&pso,IID_PPV_ARGS(&copyPipeline_));if(FAILED(hr))return hr;
+  nativeRoot_=nativeRoot;return S_OK;
+ }
+ ID3D12RootSignature* NativeRoot()const noexcept{return nativeRoot_.Get();}
+ ID3D12RootSignature* CopyRoot()const noexcept{return copyRoot_.Get();}
+ ID3D12PipelineState* Pipeline()const noexcept{return copyPipeline_.Get();}
+};
+// One immutable per-invocation buffer. Initialize with a shared pipeline so
+// rendering does not create a root signature and PSO for every frame.
+class D3D12GIRayConstantSnapshot {
+ Microsoft::WRL::ComPtr<ID3D12RootSignature> nativeRoot_,copyRoot_;
+ Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipeline_;
+ Microsoft::WRL::ComPtr<ID3D12Resource> data_;
+ bool recorded_=false;
+public:
+ static constexpr UINT Bytes=1536,GIConstantOffset=1280;
+ HRESULT Initialize(ID3D12Device* device,const D3D12GIRayConstantPipeline& pipeline)noexcept {
+  if(data_||!device||!pipeline.NativeRoot()||!pipeline.CopyRoot()||!pipeline.Pipeline())return E_INVALIDARG;
   D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
   D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=Bytes;
   buffer.Height=1;buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;
   buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;buffer.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-  hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&data_));
-  if(SUCCEEDED(hr))nativeRoot_=nativeRoot;return hr;
+  const auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&data_));
+  if(SUCCEEDED(hr)){nativeRoot_=pipeline.NativeRoot();copyRoot_=pipeline.CopyRoot();copyPipeline_=pipeline.Pipeline();}return hr;
+ }
+ // Convenience for isolated tests; live owners use the shared-pipeline overload.
+ HRESULT Initialize(ID3D12Device* device,ID3D12RootSignature* nativeRoot,
+                    const void* nativeRootBytes,SIZE_T nativeRootSize,
+                    D3D12_SHADER_BYTECODE shader)noexcept {
+  if(data_)return E_INVALIDARG;D3D12GIRayConstantPipeline pipeline;
+  const auto hr=pipeline.Initialize(device,nativeRoot,nativeRootBytes,nativeRootSize,shader);
+  return FAILED(hr)?hr:Initialize(device,pipeline);
  }
  bool RecordAndRestore(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& native) noexcept {
   if(!list||!data_||recorded_||!native.Ready()||native.root.Get()!=nativeRoot_.Get()||
