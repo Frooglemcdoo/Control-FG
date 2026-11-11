@@ -46,3 +46,12 @@ void Learn(uint3 id:SV_DispatchThreadID){
  next.parentGeneration=old.generation;next.nextFrame=old.frame+1;next.valid=next.count?1u:0u;
  learned[id.x]=next;
 }
+RWStructuredBuffer<Frozen> published : register(u2);
+[numthreads(1,1,1)]
+void Publish(uint3 id:SV_DispatchThreadID){
+ uint count,stride;frozen.GetDimensions(count,stride);if(id.x>=count)return;
+ Frozen old=frozen[id.x];Learned n=learned[id.x];Frozen ready=(Frozen)0;
+ // Empty learning publishes a uniform proposal, never uninitialized memory.
+ ready.guide=n.guide;for(uint copyCell=0;copyCell<64;++copyCell)ready.energy[copyCell]=n.energy[copyCell];
+ ready.generation=old.generation+1;ready.frame=n.nextFrame;published[id.x]=ready;
+}

@@ -22,19 +22,34 @@ int main()try{
  auto out=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true),next=gpu.Buffer(gGuard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  auto init=gpu.Upload(guard),gInit=gpu.Upload(gGuard);gpu.list->CopyResource(out.Get(),init.Get());gpu.list->CopyResource(next.Get(),gInit.Get());
  gpu.Transition(out.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);gpu.Transition(next.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
- D3D12_DESCRIPTOR_RANGE ranges[4]{};D3D12_ROOT_PARAMETER params[4]{};
- for(UINT i=0;i<4;++i){ranges[i].RangeType=i<2?D3D12_DESCRIPTOR_RANGE_TYPE_SRV:D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=i%2;params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i].DescriptorTable={1,&ranges[i]};}
- D3D12_ROOT_SIGNATURE_DESC rd{4,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
+ D3D12_DESCRIPTOR_RANGE ranges[5]{};D3D12_ROOT_PARAMETER params[5]{};
+ for(UINT i=0;i<5;++i){ranges[i].RangeType=i<2?D3D12_DESCRIPTOR_RANGE_TYPE_SRV:D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=i<2?i:i-2;params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i].DescriptorTable={1,&ranges[i]};}
+ D3D12_ROOT_SIGNATURE_DESC rd{5,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto Make=[&](const char* name){auto code=Read(name);D3D12_COMPUTE_PIPELINE_STATE_DESC d{};d.pRootSignature=root.Get();d.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> p;Check(gpu.device->CreateComputePipelineState(&d,IID_PPV_ARGS(&p)));return p;};
- auto sample=Make("gi-guide-sample.dxil"),learn=Make("gi-guide-learn.dxil");gpu.list->SetComputeRootSignature(root.Get());
+ auto sample=Make("gi-guide-sample.dxil"),learn=Make("gi-guide-learn.dxil"),publish=Make("gi-guide-publish.dxil");gpu.list->SetComputeRootSignature(root.Get());
  gpu.list->SetComputeRootDescriptorTable(0,gpu.View(old.Get(),0,sizeof(Frozen),gcount,false));gpu.list->SetComputeRootDescriptorTable(1,gpu.View(input.Get(),1,sizeof(Input),count,false));gpu.list->SetComputeRootDescriptorTable(2,gpu.View(out.Get(),2,sizeof(Result),count+1,true));gpu.list->SetComputeRootDescriptorTable(3,gpu.View(next.Get(),3,sizeof(Learned),gcount+1,true));
+ auto published=gpu.Buffer(gcount*sizeof(Frozen),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ gpu.list->SetComputeRootDescriptorTable(4,gpu.View(published.Get(),4,sizeof(Frozen),gcount,true));
  gpu.list->SetPipelineState(sample.Get());gpu.list->Dispatch((count+63)/64+1,1,1);gpu.Uav(out.Get());
  auto before=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.Transition(out.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);gpu.list->CopyResource(before.Get(),out.Get());gpu.Transition(out.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  gpu.list->SetPipelineState(learn.Get());gpu.list->Dispatch(gcount+1,1,1);gpu.Uav(next.Get());
  // Sampling again must still use the original table, despite finished learning.
  gpu.list->SetPipelineState(sample.Get());gpu.list->Dispatch((count+63)/64+1,1,1);
  gpu.Transition(out.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);gpu.Transition(next.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
- auto read=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST),trained=gpu.Buffer(gGuard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.list->CopyResource(read.Get(),out.Get());gpu.list->CopyResource(trained.Get(),next.Get());gpu.Submit();
+ auto read=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST),trained=gpu.Buffer(gGuard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.list->CopyResource(read.Get(),out.Get());gpu.list->CopyResource(trained.Get(),next.Get());
+ gpu.Transition(next.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+ gpu.list->SetPipelineState(publish.Get());gpu.list->Dispatch(gcount+1,1,1);
+ gpu.Transition(published.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ auto nextInputs=in;for(auto& v:nextInputs){++v.frame;++v.generation;}auto nextInput=gpu.Upload(nextInputs);
+ auto nextOutput=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
+ gpu.list->CopyResource(nextOutput.Get(),init.Get());gpu.Transition(nextOutput.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+ gpu.list->SetComputeRootDescriptorTable(0,gpu.View(published.Get(),5,sizeof(Frozen),gcount,false));
+ gpu.list->SetComputeRootDescriptorTable(1,gpu.View(nextInput.Get(),6,sizeof(Input),count,false));
+ gpu.list->SetComputeRootDescriptorTable(2,gpu.View(nextOutput.Get(),7,sizeof(Result),count+1,true));
+ gpu.list->SetPipelineState(sample.Get());gpu.list->Dispatch((count+63)/64+1,1,1);
+ gpu.Transition(nextOutput.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ auto nextRead=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.list->CopyResource(nextRead.Get(),nextOutput.Get());
+ gpu.Submit();
  Result* results=nullptr;Result* previous=nullptr;Learned* learned=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&results)));Check(before->Map(0,nullptr,reinterpret_cast<void**>(&previous)));Check(trained->Map(0,nullptr,reinterpret_cast<void**>(&learned)));
  Require(!memcmp(results,previous,guard.size()),"Learning changed same-frame sample output");
  float observed[6][64]{};uint counts[6]{};
@@ -48,7 +63,17 @@ int main()try{
   for(uint k=0;k<64;++k){energy[k]=counts[i]?guides[i].energy[k]*.8f+.2f*observed[i][k]/counts[i]:0;Require(Close(energy[k],r.energy[k]),"Learning energy mismatch");}auto expected=GIBuildDirectionalGuide(energy,.5f);for(uint k=0;k<64;++k)Require(Close(expected.mass[k],r.guide.mass[k]),"Next guide differs");
  }
  Require(!memcmp(results+count,guard.data()+count*sizeof(Result),sizeof(Result)),"Sample output guard changed");Require(!memcmp(learned+gcount,gGuard.data()+gcount*sizeof(Learned),sizeof(Learned)),"Learning guard changed");
- read->Unmap(0,nullptr);before->Unmap(0,nullptr);trained->Unmap(0,nullptr);
+ Result* nextResults=nullptr;Check(nextRead->Map(0,nullptr,reinterpret_cast<void**>(&nextResults)));unsigned changed=0;
+ for(UINT i=0;i<count;++i){auto v=nextInputs[i];auto r=nextResults[i];if(i>=640){Require(!r.proposal.valid&&!r.training,"Next frame accepted stale identity");continue;}
+  auto cpu=GISampleWorldGuide(learned[v.guideIndex].guide,v.normal,v.fraction,v.u,v.v);
+  Require(cpu.valid==r.proposal.valid&&cpu.trace==r.proposal.trace&&r.training,"Next frame validity differs");
+  Require(Close(cpu.pdf,r.proposal.pdf)&&Close(cpu.throughputWeight,r.proposal.throughputWeight)&&Close(cpu.direction.x,r.proposal.direction.x)&&Close(cpu.direction.y,r.proposal.direction.y)&&Close(cpu.direction.z,r.proposal.direction.z),"Next frame sampler and PDF not using published guide");
+  Require(Cell(cpu.direction)==r.cell,"Next frame world cell differs");const float value[3]={r.cell==63?100.f:.2f,r.cell==63?20.f:.3f,r.cell==63?1.f:.4f};for(uint c=0;c<3;++c)Require(Close(value[c]*cpu.throughputWeight,r.contribution[c]),"Next frame weighted contribution mismatch");
+  if(std::abs(r.proposal.pdf-results[i].proposal.pdf)>1e-4)++changed;
+ }
+ Require(changed>100,"Published guide was not actually used");Require(!memcmp(nextResults+count,guard.data()+count*sizeof(Result),sizeof(Result)),"Next frame guard changed");
+ nextRead->Unmap(0,nullptr);read->Unmap(0,nullptr);before->Unmap(0,nullptr);trained->Unmap(0,nullptr);
+ std::cout<<"PASS GPU-only publication: 640 next-frame proposals and weights use learned guide, stale identities rejected, no CPU readback between frames, changed PDFs="<<changed<<"\n";
  std::cout<<"PASS WARP: 640 world-space proposals, rotated normals, CPU/PDF/contribution parity, stale-frame/generation rejection, density-corrected next-guide learning, empty-guide fallback, unchanged same-frame sampling, output guards\n";
  std::cout<<"LIMIT: synthetic fresh shading, standalone compute, no live raygen/evaluator, receiver tracking or RTX performance measurement\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
