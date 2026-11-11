@@ -37,6 +37,15 @@ public:
   if(stage_!=Stage::Completion||invocation!=invocation_||!bothSubsetsShaded)return false;
   stage_=Stage::Published;return true;
  }
+ // Compact dispatch mapping preserves the original receiver index/random stream.
+ // Do not halve DispatchRays dimensions without restoring original coordinates
+ // and dimensions in the raygen; that would change the native sample identity.
+ std::uint32_t TrainingPixelAt(std::uint32_t sample)const noexcept {
+  return sample<TrainingCount()?sample*2+parity_:UINT32_MAX;
+ }
+ std::uint32_t ComplementPixelAt(std::uint32_t sample)const noexcept {
+  return sample<ComplementCount()?sample*2+(parity_^1u):UINT32_MAX;
+ }
  bool CanRunFullNative()const noexcept{return stage_==Stage::Empty||stage_==Stage::Prepared;}
  bool TrainingPixel(std::uint32_t pixel)const noexcept{return pixel<pixels_&&(pixel&1u)==parity_;}
  bool ComplementPixel(std::uint32_t pixel)const noexcept{return pixel<pixels_&&!TrainingPixel(pixel);}

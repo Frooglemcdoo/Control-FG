@@ -11,6 +11,9 @@ int main(){using P=gi_reuse::GISplitPhasePlan;try {
   Check(p.SelectedCompletion()==(fail?P::Completion::NativeComplement:P::Completion::GuidedComplement));
   Check(!p.BeginCompletion(9,false));Check(!p.BeginTraining(9));Check(!p.Publish(9,false));
   unsigned a=0,b=0;for(unsigned i=0;i<size;++i){Check(p.TrainingPixel(i)!=p.ComplementPixel(i));a+=p.TrainingPixel(i);b+=p.ComplementPixel(i);}
+  for(unsigned i=0;i<a;++i)Check(p.TrainingPixel(p.TrainingPixelAt(i)));
+  for(unsigned i=0;i<b;++i)Check(p.ComplementPixel(p.ComplementPixelAt(i)));
+  Check(p.TrainingPixelAt(a)==UINT32_MAX&&p.ComplementPixelAt(b)==UINT32_MAX);
   Check(a==p.TrainingCount()&&b==p.ComplementCount()&&a+b==size);
   Check(!p.TrainingPixel(size)&&!p.ComplementPixel(size));Check(p.Publish(9,true));Check(!p.Publish(9,true));Check(!p.CanRunFullNative());
  }

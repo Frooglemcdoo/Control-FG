@@ -16,6 +16,12 @@ jobs:
           if (!$dxc) { throw 'DXC unavailable' }
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX tools/gi-frozen-world-validation.hlsl -Fo gi-frozen-world.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Sampler HLSL compile failed' }
+          python -c "import base64; from pathlib import Path; [Path('gi-native-'+str(i)+'.dxil').write_bytes(base64.b64decode(Path('research/gi-sequence-r264/gi-ray-'+str(i)+'.dxbc.b64').read_text())) for i in range(2)]"
+          if ($LASTEXITCODE -ne 0) { throw 'Native shader decode failed' }
+          foreach ($variant in @(0,1)) {
+            & $dxc.FullName -dumpbin "gi-native-$variant.dxil" | Set-Content "gi-native-$variant.ll" -Encoding UTF8
+            if ($LASTEXITCODE -ne 0) { throw 'Native shader inspection failed' }
+          }
           foreach ($entry in @('Clear','Claim','Accumulate','Freeze')) {
             & $dxc.FullName -T cs_6_0 -E $entry -HV 2018 -WX src/shaders/gi_frozen_guide_build.hlsl -Fo "gi-guide-$entry.dxil"
             if ($LASTEXITCODE -ne 0) { throw "Guide builder compile failed: $entry" }
@@ -57,3 +63,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Phase collector failed' }
           python tools/test-gi-phase-check.py
           if ($LASTEXITCODE -ne 0) { throw 'Phase parser failed' }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gi-core-native-contract
+          path: gi-native-*.ll
+          retention-days: 7
