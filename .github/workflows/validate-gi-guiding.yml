@@ -1,0 +1,39 @@
+name: Validate GI guiding research
+on:
+  push:
+    branches: [work/gi-guiding-validation-20261111]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Compile and validate research samplers
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          New-Item -ItemType Directory -Force build | Out-Null
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-directional-guide.cpp /Febuild/test-guide.exe
+          if($LASTEXITCODE -ne 0){throw 'CPU proposal compile failed'}
+          ./build/test-guide.exe
+          if($LASTEXITCODE -ne 0){throw 'CPU proposal validation failed'}
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-world-directional-guide.cpp /Febuild/test-world-guide.exe
+          if($LASTEXITCODE -ne 0){throw 'World proposal compile failed'}
+          ./build/test-world-guide.exe
+          if($LASTEXITCODE -ne 0){throw 'World proposal validation failed'}
+          $root=Join-Path ([Environment]::GetFolderPath('ProgramFilesX86')) 'Windows Kits\10\bin'
+          $dxc=(Get-ChildItem -LiteralPath $root -Filter dxc.exe -File -Recurse | Where-Object {$_.FullName -match '\\x64\\'} | Sort-Object FullName -Descending | Select-Object -First 1).FullName
+          if(-not $dxc){throw 'DXC unavailable'}
+          Write-Host "DXC: $dxc"
+          & $dxc -T cs_6_0 -E Sample -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-sample.dxil
+          if($LASTEXITCODE -ne 0){throw 'Sample shader compile failed'}
+          & $dxc -T cs_6_0 -E Learn -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-learn.dxil
+          if($LASTEXITCODE -ne 0){throw 'Learning shader compile failed'}
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-guiding-gpu.cpp /Febuild/test-guiding-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'GPU fixture compile failed'}
+          ./build/test-guiding-gpu.exe
+          if($LASTEXITCODE -ne 0){throw 'GPU validation failed'}
