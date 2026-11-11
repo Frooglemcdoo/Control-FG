@@ -1,0 +1,21 @@
+ControlTOH R423 - R421 rendering plus reconstruction-map capture
+
+R422 was rejected after substantially worse neck/hair artifacts. This build
+restores the exact R421 character diffuse filter and its tests. It does not
+claim a new visual fix. RELAX stays OFF; native GI rays remain unchanged.
+
+CAPTURE MOTION now also saves native-reconstruction-map.r32u from the engine's
+named g_sGBufferReconstruction resource. Earlier captures did not contain this
+packed map, so offline filter replay could not follow actual source selection.
+The map is saved at the RR boundary with its dimensions and resource identity.
+This does not prove it was unchanged since every character draw, and does not
+capture each fragment's coverage selector. Those limits must remain explicit.
+
+The capture still records one consecutive full-resolution moving pair without
+switching lighting and without a GI hit dump. The extra map readback is only
+active when capturing. Unknown resource formats/states fail rather than guessing.
+
+Install with the game closed. Keep Native Blend, RR ON, FG OFF, RELAX OFF and
+Enhanced Character Lighting ON. To collect the missing map, press CAPTURE MOTION
+and reproduce the moving GI-lit issue until two beeps. The ZIP opens afterward.
+This is a diagnostic request for previously missing data, not a quality A/B.

@@ -243,6 +243,10 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   }
   resources[nativeIndex+6]=nativeInputs[6].resource;
   resources[nativeIndex+7]=nativeInputs[7].resource;
+  if(!RRInputCaptureReadShaderTexture(kRRShaderGBufferReconstructionRva,&nativeInputs[8])){
+   Log("RR_INPUT_CAPTURE_C1_REJECT reason=reconstruction_map_unavailable frame=%llu",frame);c->policy.phase=Policy::Failed;__leave;
+  }
+  resources[nativeIndex+8]=nativeInputs[8].resource;
   if(responsivity)resources[maskIndex]=responsivity;
   resources[outputIndex]=output;
 #ifdef CONTROL_RR_GI_SEQUENCE
@@ -264,9 +268,11 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   }
   const auto& gd=descriptions[nativeIndex+5];
   valid=valid&&gd.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&gd.Width==width&&gd.Height==height&&gd.DepthOrArraySize==1&&gd.MipLevels>=1&&gd.MipLevels<=14&&gd.SampleDesc.Count==1&&gd.SampleDesc.Quality==0&&gd.Format==DXGI_FORMAT_R16G16B16A16_FLOAT;
-  for(unsigned i=nativeIndex+6;i<maskIndex;++i){const auto& d=descriptions[i];
+  for(unsigned i=nativeIndex+6;i<nativeIndex+8;++i){const auto& d=descriptions[i];
    valid=valid&&d.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&d.Width==width&&d.Height==height&&d.DepthOrArraySize==1&&d.MipLevels==1&&d.SampleDesc.Count==1&&d.SampleDesc.Quality==0&&(d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT||d.Format==DXGI_FORMAT_R11G11B10_FLOAT);
   }
+  const auto& map=descriptions[nativeIndex+8];
+  valid=valid&&map.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&map.Width>=(width+1)/2&&map.Width<=width&&map.Height>=(height+1)/2&&map.Height<=height&&map.DepthOrArraySize==1&&map.MipLevels==1&&map.SampleDesc.Count==1&&map.SampleDesc.Quality==0&&map.Format==DXGI_FORMAT_R32_UINT;
   const auto& od=descriptions[outputIndex];
   valid=valid&&od.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&od.Width>0&&od.Width<=4096&&od.Height>0&&od.Height<=2160&&od.DepthOrArraySize==1&&od.MipLevels==1&&od.SampleDesc.Count==1&&(od.Format==DXGI_FORMAT_R11G11B10_FLOAT||od.Format==DXGI_FORMAT_R16G16B16A16_FLOAT);
   for(unsigned i=0;i<=outputIndex;++i)for(unsigned j=0;j<i;++j)if(resources[i]==resources[j])valid=false;
@@ -292,7 +298,8 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    c->pixelBytes[nativeIndex+5]=8;
    c->names[nativeIndex+6]=descriptions[nativeIndex+6].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"lighting-diffuse.r11g11b10f":L"lighting-diffuse.rgba16f";
    c->names[nativeIndex+7]=descriptions[nativeIndex+7].Format==DXGI_FORMAT_R11G11B10_FLOAT?L"lighting-specular.r11g11b10f":L"lighting-specular.rgba16f";
-   for(unsigned i=nativeIndex+6;i<maskIndex;++i)c->pixelBytes[i]=descriptions[i].Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
+   for(unsigned i=nativeIndex+6;i<nativeIndex+8;++i)c->pixelBytes[i]=descriptions[i].Format==DXGI_FORMAT_R11G11B10_FLOAT?4u:8u;
+   c->names[nativeIndex+8]=L"native-reconstruction-map.r32u";c->pixelBytes[nativeIndex+8]=4;
    if(responsivity){c->names[maskIndex]=L"hair-responsivity.r16f";c->pixelBytes[maskIndex]=2;}
    c->names[outputIndex]=nativeLighting?
     (od.Format==DXGI_FORMAT_R11G11B10_FLOAT?L"native-sr-output.r11g11b10f":L"native-sr-output.rgba16f"):

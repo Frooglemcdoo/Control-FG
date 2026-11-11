@@ -1,4 +1,4 @@
-"""Execute emitted R422 instructions against an independent image-space oracle."""
+"""Execute emitted R360 instructions against an independent image-space oracle."""
 import json,struct,re
 from pathlib import Path
 import numpy as np
@@ -89,6 +89,7 @@ def oracle(resources,p,center,samples):
    val=resources[3][sy,sx,:3].astype(float)
    if not np.all(abs(val)<1e20):continue
    weight=np.clip((np.dot(nn,n)-.95)*20,0,1)**2*(2 if xx==0 or yy==0 else 1)
+   weight*=np.clip(1-np.max(abs(val-c)/(.5*np.maximum(abs(val),abs(c))+.0001)),0,1)
    total+=weight*val;den+=weight
  return total/den
 
@@ -100,7 +101,7 @@ for family in families:
  from character_diffuse import filtered_diffuse
  expected_guarded,_=guarded_diffuse(base.read_bytes(),d)
  assert new.read_bytes()==expected_guarded, 'Gameplay shader must include exact validated coverage guard'
- # Numerical filter oracle tests the current inner block; guard has dedicated tests.
+ # Numerical filter oracle tests the unchanged inner block; guard has dedicated tests.
  fw=words(filtered_diffuse(base.read_bytes(),d))
  load=next(i for i in d['instructions'] if i['name']=='ld' and i['operands'][-1]=='t[3][3].xyzw');at=load['dword']+(w[load['dword']]>>24);size=len(fw)-len(w);code=fw[at:at+size]
  output=int(re.search(r'r\[(\d+)\]',load['operands'][0])[1]);coord=w[load['dword']+4]
@@ -127,7 +128,7 @@ for family in families:
    keep=[3] if rr==output else [0,1,2,3];assert np.array_equal(regs[rr,keep],actual[rr,keep],equal_nan=True)
   if samples>1:assert not reads
   checks+=1
-print(f'PASS {checks} emitted diffuse reconstruction cases across12 families: native remap, odd borders, constant radiance, normal/material/mask guards and radiance mixing, NaN/Inf, MSAA fallback, original-register preservation')
+print(f'PASS {checks} emitted diffuse reconstruction cases across12 families: native remap, odd borders, constant radiance, normal/material/mask and radiance edges, NaN/Inf, MSAA fallback, original-register preservation')
 
 # Constant-surface noise test: the reference already agrees with emitted code.
 tex={0:np.tile(np.array([.5,.5,.5,128/255],np.float32),(16,16,1)),1:np.tile(np.array([.2,.3,10/255,20/255],np.float32),(16,16,1)),3:rng.uniform(.9,1.1,(16,16,4)).astype(np.float32),11:np.zeros((8,8,4),np.float32)}

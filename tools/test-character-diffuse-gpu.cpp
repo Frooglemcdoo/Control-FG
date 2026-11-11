@@ -40,5 +40,5 @@ for(unsigned test=0;test<8;++test){
  for(unsigned c=0;c<4;++c)if(!std::isfinite(actual[c])||std::abs(actual[c]-expected[c])>0.0001f){std::cerr<<"case "<<test<<" channel "<<c<<" actual "<<actual[c]<<" expected "<<expected[c]<<'\n';throw std::runtime_error("diffuse GPU result mismatch");}
  read->Unmap(0,nullptr);
 }
-std::cout<<"PASS eight real WARP dispatch/readback cases for exact emitted diffuse filter: energy, noise, material/normal guards, radiance mixing, border, MSAA fallback\n";
+std::cout<<"PASS eight real WARP dispatch/readback cases for exact emitted diffuse filter: energy, noise, material/normal/radiance guards, border, MSAA fallback\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -1,4 +1,6 @@
 #pragma once
+// Named map ShaderTexture: audited constructor/setNativeTexture in RVA 0xC3C60.
+inline constexpr size_t kRRShaderGBufferReconstructionRva = 0x01292EE0;
 // Read the audited native raw-DGI ShaderTexture at the RR evaluation boundary.
 // Called only while an overlay capture is pending. Never guess a writable state.
 static bool RRInputCaptureReadShaderTexture(size_t offset,RRGuideInputTexture* out) noexcept {
