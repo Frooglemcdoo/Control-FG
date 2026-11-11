@@ -9,7 +9,7 @@ int main(){
  std::mt19937 rng(424);std::uniform_real_distribution<float> random(0,1);
  for(auto n:normals)for(float fraction:{0.f,.125f,.5f}){
   constexpr unsigned count=500000;double sum[4]{},square[4]{};unsigned skipped=0;
-  for(unsigned i=0;i<count;++i){auto r=GISampleWorldGuide(guide,n,fraction,random(rng),random(rng));assert(r.valid);assert(std::abs(GIDot(r.direction,r.direction)-1)<1e-5);assert(r.throughputWeight<=1/(1-fraction)+1e-5);if(!r.trace)++skipped;
+  for(unsigned i=0;i<count;++i){float u=random(rng),v=random(rng);auto r=GISampleWorldGuide(guide,n,fraction,u,v);if(!r.valid){std::fprintf(stderr,"INVALID n %.9g %.9g %.9g fraction %.9g u %.9g v %.9g pdf %.9g draw %u\n",n.x,n.y,n.z,fraction,u,v,r.pdf,i);return 2;}assert(std::abs(GIDot(r.direction,r.direction)-1)<1e-5);assert(r.throughputWeight<=1/(1-fraction)+1e-5);if(!r.trace)++skipped;
    // Integral under cosine sampling: E[direction] = (2/3)*normal.
    double values[]={r.throughputWeight,r.throughputWeight*(r.direction.x+1),r.throughputWeight*(r.direction.y+1),r.throughputWeight*(r.direction.z+1)};
    for(unsigned j=0;j<4;++j){sum[j]+=values[j];square[j]+=values[j]*values[j];}
