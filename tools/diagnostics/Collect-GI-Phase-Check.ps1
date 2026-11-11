@@ -1,7 +1,8 @@
 #requires -Version 5.1
+param([string]$RunStartedUtc='')
 $ErrorActionPreference='Stop'
 $root=Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
-$file=Get-ChildItem -LiteralPath $root -Filter 'GI-Phase-R425-*.jsonl' -File | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+$file=Get-ChildItem -LiteralPath $root -Filter 'GI-Phase-R425-*.jsonl' -File | Where-Object { !$RunStartedUtc -or $_.LastWriteTimeUtc -ge [DateTime]::Parse($RunStartedUtc).ToUniversalTime() } | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if (!$file) { throw 'No phase log found. Launch using Start-GI-Phase-Check.cmd.' }
 if ($file.Length -gt 8MB) { throw 'Phase log unexpectedly exceeds the bounded size.' }
 $stage=Join-Path $PSScriptRoot ('GI-Phase-R425-'+(Get-Date -Format 'yyyyMMdd-HHmmss'))

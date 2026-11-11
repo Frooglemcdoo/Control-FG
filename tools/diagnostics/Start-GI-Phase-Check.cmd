@@ -27,8 +27,9 @@ echo R425: automatic GI command-list ordering check, not a noise-fix build.
 echo Keep GI enabled. Load a level, play normally for 15 seconds, then exit.
 echo No hotkey, camera position, recording or settings comparison is needed.
 echo The metadata window stops automatically. The ZIP is collected on exit.
+for /f "delims=" %%T in ('powershell.exe -NoProfile -Command "[DateTime]::UtcNow.ToString('o')"') do set "PHASE_RUN_START=%%T"
 start "" /wait "Control_DX12.exe"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Collect-GI-Phase-Check.ps1"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Collect-GI-Phase-Check.ps1" -RunStartedUtc "%PHASE_RUN_START%"
 if errorlevel 1 echo Collection failed. Keep the console error and GI-Phase-R425 log.
 pause
 endlocal
