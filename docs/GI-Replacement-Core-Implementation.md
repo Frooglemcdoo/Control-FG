@@ -3,8 +3,8 @@
 The user authorized replacing GI sampling and reconstruction to address both
 hair speckles and jaw/neck noise. Preserve native ray budget, material/direct
 lighting detail and accepted projector/desk/plant appearance. No repeat generic
-capture is requested. This checkpoint is real implementation, but NOT a complete
-replacement or a gameplay build.
+capture is requested. This checkpoint records staged implementation, not a complete GI replacement.
+The compact scheduling preview at the end is the latest packaged stage.
 
 ## Implemented
 
@@ -131,3 +131,24 @@ Remaining work: connect shade-A/guide-freeze/ray-B/shade-B with proven resource
 lifetimes, actual sampled-weight storage, final output publication, then validate
 moving-surface reconstruction and real performance. No extra capture is needed
 for the already-established scheduling relationship.
+
+
+## Verified compact preview package
+
+Final source commit: 270f853631ea029eec6d4198a69069b247d8fb2d.
+Full Windows DLL/package workflow 43069909943 passed; core workflow 43069909931
+also passed. Earlier full runtime build 43069466065 passed before launcher and
+route-log refinements. No test failures were skipped to produce the package.
+
+ControlTOH-GI-Compact-Preview.zip: 6,842,998 bytes.
+SHA256: 0c1199778e0779de5a8fda0d498f21d2a1a1e8886fee2c79242679171f78af71
+DLL SHA256: 7751f9f15ece7afbf78b5d2194b28cf80f1c7d654da530b21b321e888a3d0b05
+The downloaded inner ZIP matched its workflow hash before repackaging. The final
+ZIP normalizes path separators and adds BUILD-SOURCE.json with source/run IDs.
+All 18 external shaders are byte-identical to the delivered R425 package.
+Library file: libfile_5d806b097f908191bc32f274cc816884.
+
+This preview is opt-in and has no in-game quality or timing evidence. It does
+not integrate the frozen guide or fix hair/jaw noise. No repeat source capture
+has been requested. Continue with ownership and shade/guide/ray integration;
+do not confuse this milestone with a completed visual fix.
