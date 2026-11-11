@@ -5,7 +5,7 @@ struct Frozen { GIDirectionalGuide guide;float energy[64];uint generation;uint f
 struct Input { GIPoint normal;float fraction;float u,v;uint guideIndex,generation;uint frame;uint3 reserved; };
 struct Result { GIWorldProposal proposal;uint cell;float3 contribution;uint training; };
 struct Learned { GIDirectionalGuide guide;float energy[64];uint parentGeneration,nextFrame,valid,count; };
-struct Prepared {float rowCDF[8];float columnCDF[64];uint generation,frame;};
+struct Prepared {float rowCDF[8];float columnCDF[64];uint generation,frame,admitted;};
 StructuredBuffer<Prepared> prepared : register(t2);
 RWStructuredBuffer<Prepared> published : register(u2);
 StructuredBuffer<Frozen> frozen : register(t0);
@@ -62,7 +62,9 @@ void Sample(uint3 id:SV_DispatchThreadID){
  if(v.guideIndex>=guideCount){results[id.x]=r;return;}
  uint oldGeneration=prepared[v.guideIndex].generation,oldFrame=prepared[v.guideIndex].frame;
  if(oldGeneration!=v.generation||oldFrame!=v.frame){results[id.x]=r;return;}
- r.proposal=FastSample(v.guideIndex,v.normal,v.fraction,v.u,v.v);
+ // Empty/rejected world guides must return to COSINE sampling, not a uniform
+ // sphere (which still changes the proposal and can waste below-surface rays).
+ r.proposal=FastSample(v.guideIndex,v.normal,prepared[v.guideIndex].admitted?v.fraction:0,v.u,v.v);
  if(r.proposal.valid){
   r.cell=WorldCell(r.proposal.direction);
   // Analytic stand-in for a newly evaluated ray. Includes a nonzero fallback.
@@ -133,8 +135,8 @@ void LearnCurrent(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
   learned[group.x]=next;
  }
 }
-Prepared PrepareTable(GIDirectionalGuide guide,uint generation,uint frame){
- Prepared p=(Prepared)0;p.generation=generation;p.frame=frame;
+Prepared PrepareTable(GIDirectionalGuide guide,uint generation,uint frame,uint admitted){
+ Prepared p=(Prepared)0;p.generation=generation;p.frame=frame;p.admitted=admitted;
  float total=0;for(uint sumCell=0;sumCell<64;++sumCell)total+=guide.mass[sumCell];
  float prefix=0;
  for(uint row=0;row<8;++row){
@@ -147,13 +149,13 @@ Prepared PrepareTable(GIDirectionalGuide guide,uint generation,uint frame){
 [numthreads(1,1,1)]
 void Prepare(uint3 id:SV_DispatchThreadID){
  uint count,stride;frozen.GetDimensions(count,stride);if(id.x>=count)return;
- Frozen old=frozen[id.x];published[id.x]=PrepareTable(old.guide,old.generation,old.frame);
+ Frozen old=frozen[id.x];published[id.x]=PrepareTable(old.guide,old.generation,old.frame,1);
 }
 [numthreads(1,1,1)]
 void Publish(uint3 id:SV_DispatchThreadID){
  uint count,stride;frozen.GetDimensions(count,stride);if(id.x>=count)return;
  Frozen old=frozen[id.x];Learned n=learned[id.x];
- published[id.x]=PrepareTable(n.guide,old.generation+1,n.nextFrame);
+ published[id.x]=PrepareTable(n.guide,old.generation+1,n.nextFrame,n.valid);
 }
 [numthreads(64,1,1)]
 void ResolveCurrent(uint3 id:SV_DispatchThreadID){

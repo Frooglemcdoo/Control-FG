@@ -2,7 +2,7 @@
 #include "../src/gi_reuse/world_directional_guide.h"
 #include <random>
 using namespace gi_reuse;
-struct Prepared {float rowCDF[8],columnCDF[64];uint generation,frame;};
+struct Prepared {float rowCDF[8],columnCDF[64];uint generation,frame,admitted;};
 struct Frozen {GIDirectionalGuide guide;float energy[64];uint generation,frame;};
 struct Input {GIPoint normal;float fraction,u,v;uint guideIndex,generation,frame,reserved[3];};
 struct Result {GIWorldProposal proposal;uint cell;float contribution[3];uint training;};
@@ -32,6 +32,9 @@ int main()try{
  for(auto& v:in)v.fraction=0;
 #endif
  auto bad=in[0];bad.generation++;in.push_back(bad);bad=in[1];bad.frame--;in.push_back(bad);bad=in[2];bad.guideIndex=100;in.push_back(bad);
+ // No valid pilot for guide 5. The second stage repairs this frame stamp to
+ // check that an empty guide yields EXACT native sampling, not uniform sphere.
+ bad=in[0];bad.guideIndex=5;bad.generation=guides[5].generation;bad.frame=99;in.push_back(bad);
  const UINT count=static_cast<UINT>(in.size()),gcount=static_cast<UINT>(guides.size());
  auto old=gpu.Upload(guides),input=gpu.Upload(in);
  std::vector<unsigned char> guard((count+1)*sizeof(Result),0xcd),gGuard((gcount+1)*sizeof(Learned),0xcd);
@@ -75,7 +78,13 @@ int main()try{
 #else
   ++v.frame;
 #endif
- }auto nextInput=gpu.Upload(nextInputs);
+ }
+#ifdef GI_GUIDE_CURRENT_FRAME
+ nextInputs[643].frame=100;
+#else
+ nextInputs[643].frame=101;
+#endif
+ auto nextInput=gpu.Upload(nextInputs);
  auto nextOutput=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  gpu.list->CopyResource(nextOutput.Get(),init.Get());gpu.Transition(nextOutput.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  gpu.list->SetComputeRootDescriptorTable(2,gpu.View(published.Get(),5,sizeof(Prepared),gcount,false));
@@ -117,8 +126,9 @@ int main()try{
  }
  Require(!memcmp(results+count,guard.data()+count*sizeof(Result),sizeof(Result)),"Sample output guard changed");Require(!memcmp(learned+gcount,gGuard.data()+gcount*sizeof(Learned),sizeof(Learned)),"Learning guard changed");
  Result* nextResults=nullptr;Check(nextRead->Map(0,nullptr,reinterpret_cast<void**>(&nextResults)));unsigned changed=0;
- for(UINT i=0;i<count;++i){auto v=nextInputs[i];auto r=nextResults[i];if(i>=640){Require(!r.proposal.valid&&!r.training,"Next frame accepted stale identity");continue;}
-  auto cpu=GISampleWorldGuide(learned[v.guideIndex].guide,v.normal,v.fraction,v.u,v.v);
+ for(UINT i=0;i<count;++i){auto v=nextInputs[i];auto r=nextResults[i];if(i>=640&&i!=643){Require(!r.proposal.valid&&!r.training,"Next frame accepted stale identity");continue;}
+  auto cpu=GISampleWorldGuide(learned[v.guideIndex].guide,v.normal,learned[v.guideIndex].valid?v.fraction:0,v.u,v.v);
+  if(i==643)Require(r.proposal.valid&&r.proposal.trace&&r.proposal.throughputWeight==1,"Empty guide did not restore native cosine sampling");
   Require(cpu.valid==r.proposal.valid&&cpu.trace==r.proposal.trace&&r.training,"Next frame validity differs");
   Require(Close(cpu.pdf,r.proposal.pdf)&&Close(cpu.throughputWeight,r.proposal.throughputWeight)&&Close(cpu.direction.x,r.proposal.direction.x)&&Close(cpu.direction.y,r.proposal.direction.y)&&Close(cpu.direction.z,r.proposal.direction.z),"Next frame sampler and PDF not using published guide");
   Require(Cell(cpu.direction)==r.cell,"Next frame world cell differs");const float value[3]={r.cell==63?100.f:.2f,r.cell==63?20.f:.3f,r.cell==63?1.f:.4f};for(uint c=0;c<3;++c)Require(Close(value[c]*cpu.throughputWeight,r.contribution[c]),"Next frame weighted contribution mismatch");
