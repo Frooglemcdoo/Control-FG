@@ -29,7 +29,7 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 $lines=@()
 foreach ($log in $logs) {
     Copy-Item -LiteralPath $log.FullName -Destination $stage
-    $lines+=@(Get-Content -LiteralPath $log.FullName | Where-Object { $_ -match 'GI_FROZEN_R426|GI_TOGGLE_R308.*(failed|ready=)' })
+    $lines+=@([IO.File]::ReadAllLines($log.FullName) | Where-Object { $_ -match 'GI_FROZEN_R426|GI_TOGGLE_R308.*(failed|ready=)' })
 }
 $text=$lines -join "`r`n"
 $result=[ordered]@{

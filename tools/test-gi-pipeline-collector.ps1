@@ -14,6 +14,7 @@ try {
     $folders=@(Get-ChildItem $out -Directory);if ($folders.Count -ne 1) { throw 'Expected one result folder' }
     $r=Get-Content (Join-Path $folders[0].FullName 'result.json') -Raw | ConvertFrom-Json
     if (!$r.LogFound -or !$r.RayPipelineReady -or !$r.ComputePipelinesReady -or !$r.LiveBindingsReady -or $r.DeferredRenderingEnabled) { throw 'Pipeline result misclassified' }
+    if (@($r.Evidence | Where-Object { $_ -isnot [string] }).Count -ne 0) { throw 'Evidence contains provider metadata instead of plain strings' }
     if (!$r.StartupObserved -or !$r.RequestedInGame -or $r.RayPipelineStatus -ne 'ready') { throw 'Startup/readiness classification failed' }
     if (@(Get-ChildItem $out -Filter '*.zip').Count -ne 1) { throw 'ZIP missing' }
     foreach ($case in @('filtered','failure')) {
