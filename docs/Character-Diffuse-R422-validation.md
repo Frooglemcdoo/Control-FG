@@ -1,5 +1,7 @@
 # R422 character diffuse reconstruction
 
+**REJECTED after gameplay testing:** user reports substantially worse artifacts. See R422-Rejected-Character-Regression.md. Build/test success below is historical and does not establish visual quality.
+
 R421's two moving captures show strong diffuse-light fluctuations on the affected character surfaces. This change removes the current filter's radiance-based neighbor rejection while retaining its surface-guide checks and native remapping. It does not change the GI producer, sample count, RR guides, albedo, specular shading, or temporal history.
 
 ## Reason for the intervention

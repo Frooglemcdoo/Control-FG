@@ -1,5 +1,7 @@
 # Verified package R422
 
+**REJECTED after gameplay testing:** user reports substantially worse artifacts. See R422-Rejected-Character-Regression.md. Build/test success below is historical and does not establish visual quality.
+
 R422 changes character diffuse reconstruction to use surface weights without radiance rejection. It is a candidate visual correction; gameplay success and FPS are unverified. See Character-Diffuse-R422-validation.md for the capture-based approximation and limitations.
 
 - Runtime commit: 2e48b557779000b208d4728eeea8a1d0a7f69235
