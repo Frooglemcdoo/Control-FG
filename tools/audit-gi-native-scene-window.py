@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build-locked native scene-window evidence; never certifies an ownership lease."""
-import argparse, hashlib, json
+import argparse, hashlib, json, struct
 from pathlib import Path
 import capstone
 import pefile
@@ -18,6 +18,37 @@ def audit(path):
     imports = {item.address - pe.OPTIONAL_HEADER.ImageBase:
                (item.name or b'').decode('ascii')
                for group in pe.DIRECTORY_ENTRY_IMPORT for item in group.imports}
+    def instruction(rva):
+        return next(dis.disasm(pe.get_data(rva,15),rva,count=1))
+    def relative_memory(rva):
+        ins=instruction(rva)
+        refs=[o.mem for o in ins.operands if o.type==capstone.x86.X86_OP_MEM
+              and o.mem.base==capstone.x86.X86_REG_RIP]
+        assert len(refs)==1
+        return rva+ins.size+refs[0].disp
+    def imported_call(rva,expected):
+        assert instruction(rva).mnemonic=='call'
+        name=imports[relative_memory(rva)]
+        assert expected in name
+        return name
+    def direct_call(rva,target):
+        ins=instruction(rva)
+        assert ins.mnemonic=='call' and ins.operands[0].type==capstone.x86.X86_OP_IMM
+        assert ins.operands[0].imm==target
+    # Material upload precedes creation/submission of the exact job joined by
+    # the GI render invocation. Do not infer that later frames cannot overlap.
+    direct_call(0x12491D,0xC7BC0)
+    direct_call(0xC7C59,0xC51D0)
+    job=relative_memory(0x1249F0)
+    assert job==relative_memory(0xA8C02)==0x90E9E8
+    assert relative_memory(0x1249E9)==job
+    job_run=imported_call(0x124A01,'runJob@JobSystem')
+    job_join=imported_call(0xA8C13,'waitJob@JobSystem')
+    vtable=relative_memory(0x1249D7)
+    callback=struct.unpack('<Q',pe.get_data(vtable+8,8))[0]-pe.OPTIONAL_HEADER.ImageBase
+    assert vtable==0x6281D0 and callback==0xA8F70
+    assert pe.get_data(callback,9)==bytes.fromhex('4883c118e947faffff')
+    tlas_build=imported_call(0xA8BCA,'buildTopLevelAccelerationStructure@DeviceUtilRaytracing')
     lo, hi = 0x128D20, 0x12DA38
     assert any(e.struct.BeginAddress == lo and e.struct.EndAddress == hi
                for e in pe.DIRECTORY_ENTRY_EXCEPTION), 'Unexpected function extent'
@@ -87,6 +118,17 @@ def audit(path):
             'later_conditional_ray_calls': {'sun_shadow':'0x12d342','ao':'0x12d8ba'},
             'scene_binding_array_offset':'0x80', 'scene_binding_count_offset':'0x88',
             'scene_join_call':'0x128f3b', 'scene_bind_call':'0x128f5b',
+            'scene_preparation_chain':{
+                'material_rebuild_call':'0x12491d',
+                'material_record_update_call':'0xc7c59',
+                'job_handle_global':hex(job),
+                'job_run':{'rva':'0x124a01','import':job_run},
+                'job_callback':hex(callback),'worker':'0xa89c0',
+                'worker_tlas_build':{'rva':'0xa8bca','import':tlas_build},
+                'job_join':{'rva':'0xa8c13','import':job_join},
+                'material_rebuild_precedes_job_run':True,
+                'join_uses_same_job_handle':True,
+                'excludes_future_frame_or_concurrent_mutation':False},
             'normal_ray_to_shade_control_flow':{
                 'start':hex(start), 'sole_exit':hex(stop),
                 'instruction_count':len(visited), 'branches':branches,

@@ -12,7 +12,10 @@ int main()try {
  Require(FAILED(copy.Initialize(d.device.Get(),source.Get(),wrong)),"out of range accepted");
  wrong=native;wrong.HitGroupTable.StrideInBytes=64;Require(FAILED(copy.Initialize(d.device.Get(),source.Get(),wrong)),"wrong ABI accepted");
  Check(copy.Initialize(d.device.Get(),source.Get(),native));Require(!copy.Dispatch()&&!copy.Resource(),"unrecorded snapshot exposed");
+ Require(copy.CanRecord(d.list.Get())&&!copy.CanRecord(nullptr)&&copy.MatchesExtent(native.Width,native.Height)&&
+  !copy.MatchesExtent(native.Width+2,native.Height),"SBT preflight admitted incorrect source extent");
  Require(copy.Record(d.list.Get())&&!copy.Record(d.list.Get()),"snapshot repeated");
+ Require(!copy.CanRecord(d.list.Get()),"recorded SBT admitted a second writer");
  const auto* desc=copy.Dispatch();Require(desc&&desc->Width==native.Width&&desc->Height==native.Height&&copy.Bytes()==512,"copy extent/shape changed");
  Require(desc->HitGroupTable.StartAddress-desc->RayGenerationShaderRecord.StartAddress==128&&desc->MissShaderTable.StartAddress-desc->RayGenerationShaderRecord.StartAddress==64,"table offsets changed");
  // Native Control uses GPU-local SBT storage, with GPU upload already ordered.
@@ -41,6 +44,7 @@ int main()try {
  D3D12FrozenRaygenRecords records;
  Require(FAILED(records.Initialize(d.device.Get(),bytes.data(),base,localBase,2559,1440,100,7,65536,0,.125f)),"odd frozen width admitted");
  Check(records.Initialize(d.device.Get(),bytes.data(),base,localBase,2560,1440,100,7,65536,0,.125f));
+ Require(!records.MatchesStateObject(nullptr),"unbound shader-table identifier admitted");
  Require(records.Matches(2560,1440,100,7,65536,0,base,localBase)&&!records.Matches(2560,1440,101,7,65536,0,base,localBase),"stale frozen identity admitted");
  Require(records.At(0).SizeInBytes==96&&records.At(1).StartAddress-records.At(0).StartAddress==128&&!records.At(2).StartAddress,"frozen record stride wrong");
  Require(records.NativeComplement().StartAddress-records.At(0).StartAddress==256,"complement record missing");

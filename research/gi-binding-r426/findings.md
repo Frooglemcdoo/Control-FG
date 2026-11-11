@@ -273,3 +273,16 @@ new gameplay build, no live producer suppression, no new noise or FPS claim.
 The remaining scene/descriptor content contract and live integration are still
 required after Windows validation. Do not request another R425 phase capture or
 R426 pipeline compatibility run.
+
+
+### Windows recovery and phase-A recorder
+
+Source c49c612d9fb94ca4853b3d7b46e7163243deb179 core43102089078/job130795886544 SUCCESS; full DLL43102089113/job130795880876 SUCCESS. The recording identity, consumer claim and frozen constant identity changes now have Windows validation. This clears the earlier CI blocker; no user rerun of pipeline compatibility is needed.
+
+Added D3D12FrozenProducer to compose the original-site sequence: preflight every prepared component, snapshot SBT and b0/b1, apply saved CBVs, transition private weights/guides, trace training parity at half width, restore original native bindings, publish saved replay bindings. It allocates no resources and never suppresses a game call itself. Requires explicit native one-ray ABI and scene/descriptor admission; these remain false in the live game. RejectedBeforeCommands leaves output untouched; any later failure requires retained/quarantined ownership. The actual separate Execute boundary remains mandatory for buffer decay before completion.
+
+SBT and constant snapshot classes now expose side-effect-free CanRecord checks; actual recorders reuse them. Frozen raygen records verify their identifier against the actual replay state object's frozen export. Both producer and completion require that identity; compatible-looking local-root bytes cannot certify identifiers from another state object. Existing RTX readiness evidence already confirms the export exists in the user's state object, but the complete producer/consumer DXR transaction has not run on hardware.
+
+Updated WARP fixtures cover snapshot preflight and one-shot writing; the working-set fixture compiles phase A and exercises rejection without issuing rays. Do NOT describe this as successful DXR execution. New Windows validation pending after this change.
+
+Extended native scene audit: material rebuild at12491D->C7BC0 (record updates atC7C59->C51D0) precedes the scene job submission124A01. The job handle is the exact90E9E8 handle joined atA8C13. The job's vtable6281D0 callbackA8F70 tail-calls workerA89C0; that worker builds TLAS atA8BCA. Exact bytes, imports and job-handle references passed against the captured renderer. This joins the previously separate material and scene preparation evidence; it does not yet exclude a future-frame/concurrent writer after the join.

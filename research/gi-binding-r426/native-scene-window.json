@@ -15,6 +15,28 @@
   "scene_binding_count_offset": "0x88",
   "scene_join_call": "0x128f3b",
   "scene_bind_call": "0x128f5b",
+  "scene_preparation_chain": {
+    "material_rebuild_call": "0x12491d",
+    "material_record_update_call": "0xc7c59",
+    "job_handle_global": "0x90e9e8",
+    "job_run": {
+      "rva": "0x124a01",
+      "import": "?runJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+    },
+    "job_callback": "0xa8f70",
+    "worker": "0xa89c0",
+    "worker_tlas_build": {
+      "rva": "0xa8bca",
+      "import": "?buildTopLevelAccelerationStructure@DeviceUtilRaytracing@d3d@@SAXW4RaytracingAccelerationBuildFlags@2@AEAVNativeBuffer@2@H11_N@Z"
+    },
+    "job_join": {
+      "rva": "0xa8c13",
+      "import": "?waitJob@JobSystem@experimental@r@@QEAAXAEAVJobHandle@3@@Z"
+    },
+    "material_rebuild_precedes_job_run": true,
+    "join_uses_same_job_handle": true,
+    "excludes_future_frame_or_concurrent_mutation": false
+  },
   "normal_ray_to_shade_control_flow": {
     "start": "0x12c5f1",
     "sole_exit": "0x12cc16",

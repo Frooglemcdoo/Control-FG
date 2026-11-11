@@ -3,6 +3,7 @@
 #include "../src/gi_reuse/d3d12_frozen_working_set.h"
 #include "../src/gi_reuse/d3d12_split_owner_retirement.h"
 #include "../src/gi_reuse/d3d12_frozen_completion.h"
+#include "../src/gi_reuse/d3d12_frozen_producer.h"
 #include "../src/gi_reuse/d3d12_frozen_pipeline_bundle.h"
 #include "../src/gi_reuse/graphics_table_state.h"
 namespace gi_reuse {namespace runtime {inline bool Enabled()noexcept{return false;}}}
@@ -38,6 +39,22 @@ int main()try {
  Require(scratch.Matches(18,3,16)&&!scratch.Matches(18,4,16),"wrong extent reuse admitted");
  Require(scratch.AllocationBytes()>=4*65536,"committed allocation not accounted");
  Require(FAILED(scratch.Initialize(d.device.Get(),layout,4*1024*1024)),"live allocation overwritten");
+ // WARP cannot execute the real DXR producer. Exercise fail-closed admission
+ // and compile its complete command path without pretending this is a trace.
+ D3D12GIRayConstantSnapshot unpreparedConstants;D3D12GISbtSnapshot unpreparedTables;
+ D3D12FrozenRaygenRecords unpreparedRecords;D3D12FrozenProducer::Inputs producerInput;
+ ComputeBindingSnapshot saved;saved.arguments.Root(1);
+ saved.arguments.Descriptor(2,RootArgumentKind::CBV,65536);
+ saved.arguments.Descriptor(3,RootArgumentKind::CBV,65536+FrozenRayConstants::GIConstantOffset);
+ const auto noTrace=+[](ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*){Require(false,"rejected producer dispatched rays");};
+ Require(D3D12FrozenProducer::Record(d.list.Get(),producerInput,scratch,unpreparedConstants,
+  unpreparedTables,unpreparedRecords,noTrace,saved)==D3D12FrozenProducer::Result::RejectedBeforeCommands,
+  "producer without native lease admitted");
+ producerInput.nativeSingleRayAbi=true;producerInput.sceneAndDescriptorLease=true;
+ Require(D3D12FrozenProducer::Record(d.list.Get(),producerInput,scratch,unpreparedConstants,
+  unpreparedTables,unpreparedRecords,noTrace,saved)==D3D12FrozenProducer::Result::RejectedBeforeCommands,
+  "unprepared producer admitted");
+ Require(FrozenRayConstants::Matches(saved.arguments,65536),"rejected producer published partial bindings");
  // Distinct command lists/submissions: producer writes sentinel data; consumer
  // reads it only after producer completes. CPU ownership waits for BOTH resets.
  const UINT count=layout.count;std::vector<float> values(count);for(UINT i=0;i<count;++i)values[i]=float(i)+.25f;

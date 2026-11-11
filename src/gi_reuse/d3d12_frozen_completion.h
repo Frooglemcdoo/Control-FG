@@ -39,6 +39,7 @@ public:
      !evaluator.Accept(p.shade)||!builder.Ready()||!work.Matches(p.width,p.height,p.slots)||
      !p.frame||!p.epoch||p.trainingParity>1||!FrozenRayConstants::Matches(p.ray.arguments,p.rayConstants)||!p.output||
      !records.At(1).StartAddress||!records.NativeComplement().StartAddress)return false;
+  if(!records.MatchesStateObject(p.ray.rays.Get()))return false;
   if(!records.Matches(p.width,p.height,p.frame,p.epoch,p.slots,p.trainingParity,
       work.Get(D3D12FrozenWorkingSet::Guides)->GetGPUVirtualAddress(),work.Get(D3D12FrozenWorkingSet::Weights)->GetGPUVirtualAddress()))return false;
   for(unsigned i=0;i<2;++i)if(p.ray.heaps[i].Get()!=p.shade.heaps[i].Get())return false;

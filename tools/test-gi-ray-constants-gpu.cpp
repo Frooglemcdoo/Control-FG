@@ -27,8 +27,10 @@ int main()try {
  D3D12GIRayConstantPipeline pipeline;Check(pipeline.Initialize(d.device.Get(),root.Get(),rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),{shader->GetBufferPointer(),shader->GetBufferSize()}));
  Check(copy.Initialize(d.device.Get(),pipeline));
  auto unaligned=native;unaligned.arguments.Descriptor(2,RootArgumentKind::CBV,sourceA->GetGPUVirtualAddress()+4);
+ Require(!copy.CanRecord(d.list.Get(),unaligned)&&copy.CanRecord(d.list.Get(),native),"constant preflight disagrees with ABI");
  Require(!copy.RecordAndRestore(d.list.Get(),unaligned),"unaligned root CBV accepted");
  Require(copy.RecordAndRestore(d.list.Get(),native)&&!copy.RecordAndRestore(d.list.Get(),native),"one-shot copy violated");
+ Require(!copy.CanRecord(d.list.Get(),native),"recorded constants admitted a second writer");
  d.list->Dispatch(1,1,1); // Uses RESTORED native root, pipeline and arguments.
  d.Submit();
  void* mapped=nullptr;D3D12_RANGE empty{0,0};for(auto* resource:{sourceA.Get(),sourceB.Get()}){

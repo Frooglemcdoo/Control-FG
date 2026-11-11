@@ -66,7 +66,7 @@ public:
   const auto hr=pipeline.Initialize(device,nativeRoot,nativeRootBytes,nativeRootSize,shader);
   return FAILED(hr)?hr:Initialize(device,pipeline);
  }
- bool RecordAndRestore(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& native) noexcept {
+ bool CanRecord(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& native)const noexcept {
   if(!list||!data_||recorded_||!native.Ready()||native.root.Get()!=nativeRoot_.Get()||
      (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
   struct Extract {
@@ -76,7 +76,17 @@ public:
     if(index>=2&&index<=3&&kind==RootArgumentKind::CBV)source[index-2]=address;
    }
   } input;native.arguments.Replay(input);
-  if(!input.source[0]||!input.source[1]||input.source[0]%256||input.source[1]%256)return false;
+  return input.source[0]&&input.source[1]&&input.source[0]%256==0&&input.source[1]%256==0;
+ }
+ bool RecordAndRestore(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& native) noexcept {
+  if(!CanRecord(list,native))return false;
+  struct Extract {
+   UINT64 source[2]{};
+   void Constants(unsigned,unsigned,unsigned,const std::uint32_t*)noexcept{}
+   void Descriptor(unsigned index,RootArgumentKind kind,std::uint64_t address)noexcept{
+    if(index>=2&&index<=3&&kind==RootArgumentKind::CBV)source[index-2]=address;
+   }
+  } input;native.arguments.Replay(input);
   list->SetComputeRootSignature(copyRoot_.Get());list->SetPipelineState(copyPipeline_.Get());
   list->SetComputeRootConstantBufferView(0,input.source[0]);list->SetComputeRootConstantBufferView(1,input.source[1]);
   list->SetComputeRootUnorderedAccessView(2,data_->GetGPUVirtualAddress());list->Dispatch(6,1,1);

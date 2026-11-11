@@ -51,6 +51,7 @@ class D3D12FrozenRaygenRecords {
  Microsoft::WRL::ComPtr<ID3D12Resource> records_;
  std::array<UINT,6> identity_{};
  D3D12_GPU_VIRTUAL_ADDRESS guides_=0,weights_=0;
+ std::array<unsigned char,32> identifier_{};
 public:
  static constexpr UINT RecordSize=96,Stride=128,Bytes=384;
  HRESULT Initialize(ID3D12Device* device,const void* identifier,
@@ -75,7 +76,14 @@ public:
   void* mapped=nullptr;const D3D12_RANGE empty{};hr=data->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
   if(!mapped){data->Unmap(0,&empty);return E_UNEXPECTED;}
   std::memcpy(mapped,bytes.data(),Bytes);const D3D12_RANGE written{0,Bytes};data->Unmap(0,&written);records_=std::move(data);identity_={width,height,frame,epoch,guideSlots,trainingParity};
-  guides_=guides;weights_=weights;return S_OK;
+  guides_=guides;weights_=weights;std::memcpy(identifier_.data(),identifier,identifier_.size());return S_OK;
+ }
+ bool MatchesStateObject(ID3D12StateObject* state)const noexcept {
+  if(!records_||!state)return false;
+  Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> properties;
+  if(FAILED(state->QueryInterface(IID_PPV_ARGS(&properties))))return false;
+  const auto* identifier=properties->GetShaderIdentifier(D3D12FrozenRaygenAugment::Export);
+  return identifier&&std::memcmp(identifier_.data(),identifier,identifier_.size())==0;
  }
  bool Matches(UINT width,UINT height,UINT frame,UINT epoch,UINT guideSlots,UINT parity,
               D3D12_GPU_VIRTUAL_ADDRESS guides,D3D12_GPU_VIRTUAL_ADDRESS weights)const noexcept {

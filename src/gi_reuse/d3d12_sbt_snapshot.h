@@ -50,9 +50,12 @@ public:
   dispatch_.HitGroupTable.StartAddress=address+(native.HitGroupTable.StartAddress-base);
   return S_OK;
  }
+ bool CanRecord(ID3D12GraphicsCommandList* list)const noexcept {
+  return list&&copy_&&source_&&!recorded_&&
+   (list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT||list->GetType()==D3D12_COMMAND_LIST_TYPE_COMPUTE);
+ }
  bool Record(ID3D12GraphicsCommandList* list) noexcept {
-  if(!list||!copy_||!source_||recorded_||
-     (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
+  if(!CanRecord(list))return false;
   D3D12_RESOURCE_BARRIER sourceBarrier{};sourceBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   sourceBarrier.Transition={source_.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};
@@ -65,6 +68,9 @@ public:
   list->ResourceBarrier(1,&b);recorded_=true;return true;
  }
  ID3D12Resource* Resource()const noexcept{return recorded_?copy_.Get():nullptr;}
+ bool MatchesExtent(UINT width,UINT height)const noexcept {
+  return copy_&&dispatch_.Width==width&&dispatch_.Height==height&&dispatch_.Depth==1;
+ }
  const D3D12_DISPATCH_RAYS_DESC* Dispatch()const noexcept{return recorded_?&dispatch_:nullptr;}
  UINT64 Bytes()const noexcept{return bytes_;}
 };
