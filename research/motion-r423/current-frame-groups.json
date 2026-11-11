@@ -1,0 +1,74 @@
+{
+  "scope": "Upper bound on same-frame grouping from R423; NOT lighting coherence proof.\nCounts equal material IDs and replay-tag signs inside native 8x16 tiles.\nIDs are never compared between frames. No world normal or visibility claim.",
+  "tile_extent": [
+    8,
+    16
+  ],
+  "warning": "ROI rectangles are not segmentation. Equal current IDs/tags do not establish equal lighting, geometric connectivity or visibility. Counts are an upper bound before normal/depth rejection.",
+  "frames": [
+    {
+      "capture": "rr-input-c1-11180-12238",
+      "regions": {
+        "hair": {
+          "group_size_percentiles_10_50_90": [
+            123.0,
+            128.0,
+            128.0
+          ],
+          "fraction_with_at_least_16_members": 0.9928615384615385,
+          "fraction_with_at_least_64_members": 0.9836
+        },
+        "neck": {
+          "group_size_percentiles_10_50_90": [
+            100.0,
+            128.0,
+            128.0
+          ],
+          "fraction_with_at_least_16_members": 0.9942560553633218,
+          "fraction_with_at_least_64_members": 0.9578546712802768
+        },
+        "arm": {
+          "group_size_percentiles_10_50_90": [
+            90.0,
+            128.0,
+            128.0
+          ],
+          "fraction_with_at_least_16_members": 0.99675,
+          "fraction_with_at_least_64_members": 0.94175
+        }
+      }
+    },
+    {
+      "capture": "rr-input-c1-11180-12239",
+      "regions": {
+        "hair": {
+          "group_size_percentiles_10_50_90": [
+            124.0,
+            128.0,
+            128.0
+          ],
+          "fraction_with_at_least_16_members": 0.9927794871794872,
+          "fraction_with_at_least_64_members": 0.984902564102564
+        },
+        "neck": {
+          "group_size_percentiles_10_50_90": [
+            86.0,
+            128.0,
+            128.0
+          ],
+          "fraction_with_at_least_16_members": 0.99439446366782,
+          "fraction_with_at_least_64_members": 0.9438062283737024
+        },
+        "arm": {
+          "group_size_percentiles_10_50_90": [
+            69.0,
+            128.0,
+            128.0
+          ],
+          "fraction_with_at_least_16_members": 0.994,
+          "fraction_with_at_least_64_members": 0.93225
+        }
+      }
+    }
+  ]
+}

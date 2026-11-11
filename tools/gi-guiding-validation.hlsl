@@ -85,9 +85,17 @@ void Learn(uint3 id:SV_DispatchThreadID){
   if(v.guideIndex!=id.x||v.frame!=old.frame||v.generation!=old.generation||!r.training)continue;
   accumulated[r.cell]+=dot(r.contribution,float3(.2126,.7152,.0722));++next.count;
  }
+#ifdef GI_GUIDE_CURRENT_FRAME
+ // Pilot rays are native. Their fresh contributions form THIS frame's table.
+ for(uint writeCell=0;writeCell<64;++writeCell)next.energy[writeCell]=next.count?accumulated[writeCell]/next.count:0;
+#else
  for(uint writeCell=0;writeCell<64;++writeCell)next.energy[writeCell]=next.count?old.energy[writeCell]*.8f+.2f*accumulated[writeCell]/next.count:0;
+#endif
  next.guide=GIBuildDirectionalGuide(next.energy,.5f);
  next.parentGeneration=old.generation;next.nextFrame=old.frame+1;next.valid=next.count?1u:0u;
+#ifdef GI_GUIDE_CURRENT_FRAME
+ next.nextFrame=old.frame;
+#endif
  learned[id.x]=next;
 }
 Prepared PrepareTable(GIDirectionalGuide guide,uint generation,uint frame){

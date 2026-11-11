@@ -17,6 +17,10 @@ int main()try{
  std::mt19937 gen(424);std::uniform_real_distribution<float> random(.0001f,.9999f);std::vector<Input> in;
  for(uint i=0;i<5;++i)for(uint j=0;j<128;++j)in.push_back({normals[i],j%3==0?0.f:j%3==1?.125f:.5f,random(gen),random(gen),i,guides[i].generation,100,{}});
  for(uint group=0;group<5;++group)for(uint edge=0;edge<8;++edge){auto& v=in[group*128+edge];v.fraction=.5f;v.u=edge%4==0?0.f:edge%4==1?.125f:edge%4==2?.5f:.99999994f;v.v=edge<4?0.f:.99999994f;}
+#ifdef GI_GUIDE_CURRENT_FRAME
+ // All pilot rays must stay native, including when their results inform q.
+ for(auto& v:in)v.fraction=0;
+#endif
  auto bad=in[0];bad.generation++;in.push_back(bad);bad=in[1];bad.frame--;in.push_back(bad);bad=in[2];bad.guideIndex=100;in.push_back(bad);
  const UINT count=static_cast<UINT>(in.size()),gcount=static_cast<UINT>(guides.size());
  auto old=gpu.Upload(guides),input=gpu.Upload(in);
@@ -28,7 +32,13 @@ int main()try{
  for(UINT i=0;i<6;++i){ranges[i].RangeType=i<3?D3D12_DESCRIPTOR_RANGE_TYPE_SRV:D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=i<3?i:i-3;params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i].DescriptorTable={1,&ranges[i]};}
  D3D12_ROOT_SIGNATURE_DESC rd{6,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto Make=[&](const char* name){auto code=Read(name);D3D12_COMPUTE_PIPELINE_STATE_DESC d{};d.pRootSignature=root.Get();d.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> p;Check(gpu.device->CreateComputePipelineState(&d,IID_PPV_ARGS(&p)));return p;};
- auto sample=Make("gi-guide-sample.dxil"),learn=Make("gi-guide-learn.dxil"),publish=Make("gi-guide-publish.dxil"),prepare=Make("gi-guide-prepare.dxil");gpu.list->SetComputeRootSignature(root.Get());
+ auto sample=Make("gi-guide-sample.dxil"),publish=Make("gi-guide-publish.dxil"),prepare=Make("gi-guide-prepare.dxil");
+#ifdef GI_GUIDE_CURRENT_FRAME
+ auto learn=Make("gi-guide-learn-current.dxil");
+#else
+ auto learn=Make("gi-guide-learn.dxil");
+#endif
+ gpu.list->SetComputeRootSignature(root.Get());
  gpu.list->SetComputeRootDescriptorTable(0,gpu.View(old.Get(),0,sizeof(Frozen),gcount,false));gpu.list->SetComputeRootDescriptorTable(1,gpu.View(input.Get(),1,sizeof(Input),count,false));gpu.list->SetComputeRootDescriptorTable(3,gpu.View(out.Get(),2,sizeof(Result),count+1,true));gpu.list->SetComputeRootDescriptorTable(4,gpu.View(next.Get(),3,sizeof(Learned),gcount+1,true));
  auto published=gpu.Buffer(gcount*sizeof(Prepared),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto initialPrepared=gpu.Buffer(gcount*sizeof(Prepared),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
@@ -47,7 +57,14 @@ int main()try{
  gpu.Transition(next.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  gpu.list->SetPipelineState(publish.Get());gpu.list->Dispatch(gcount+1,1,1);
  gpu.Transition(published.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
- auto nextInputs=in;for(auto& v:nextInputs){++v.frame;++v.generation;}auto nextInput=gpu.Upload(nextInputs);
+ auto nextInputs=in;for(auto& v:nextInputs){
+  ++v.generation;
+#ifdef GI_GUIDE_CURRENT_FRAME
+  v.fraction=.125f;v.u=random(gen);v.v=random(gen);
+#else
+  ++v.frame;
+#endif
+ }auto nextInput=gpu.Upload(nextInputs);
  auto nextOutput=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  gpu.list->CopyResource(nextOutput.Get(),init.Get());gpu.Transition(nextOutput.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  gpu.list->SetComputeRootDescriptorTable(2,gpu.View(published.Get(),5,sizeof(Prepared),gcount,false));
@@ -66,8 +83,14 @@ int main()try{
   const float value[3]={r.cell==63?100.f:.2f,r.cell==63?20.f:.3f,r.cell==63?1.f:.4f};for(uint c=0;c<3;++c)Require(Close(value[c]*cpu.throughputWeight,r.contribution[c]),"Contribution mismatch");
   observed[v.guideIndex][r.cell]+=.2126f*r.contribution[0]+.7152f*r.contribution[1]+.0722f*r.contribution[2];++counts[v.guideIndex];
  }
- for(UINT i=0;i<gcount;++i){float energy[64]{};auto r=learned[i];Require(r.count==counts[i]&&r.valid==uint(counts[i]>0)&&r.parentGeneration==guides[i].generation&&r.nextFrame==101,"Learning ledger mismatch");
-  for(uint k=0;k<64;++k){energy[k]=counts[i]?guides[i].energy[k]*.8f+.2f*observed[i][k]/counts[i]:0;Require(Close(energy[k],r.energy[k]),"Learning energy mismatch");}auto expected=GIBuildDirectionalGuide(energy,.5f);for(uint k=0;k<64;++k)Require(Close(expected.mass[k],r.guide.mass[k]),"Next guide differs");
+ for(UINT i=0;i<gcount;++i){float energy[64]{};auto r=learned[i];
+#ifdef GI_GUIDE_CURRENT_FRAME
+  constexpr uint expectedFrame=100;constexpr float oldFraction=0;
+#else
+  constexpr uint expectedFrame=101;constexpr float oldFraction=.8f;
+#endif
+  Require(r.count==counts[i]&&r.valid==uint(counts[i]>0)&&r.parentGeneration==guides[i].generation&&r.nextFrame==expectedFrame,"Learning ledger mismatch");
+  for(uint k=0;k<64;++k){energy[k]=counts[i]?guides[i].energy[k]*oldFraction+(1-oldFraction)*observed[i][k]/counts[i]:0;Require(Close(energy[k],r.energy[k]),"Learning energy mismatch");}auto expected=GIBuildDirectionalGuide(energy,.5f);for(uint k=0;k<64;++k)Require(Close(expected.mass[k],r.guide.mass[k]),"Next guide differs");
  }
  Require(!memcmp(results+count,guard.data()+count*sizeof(Result),sizeof(Result)),"Sample output guard changed");Require(!memcmp(learned+gcount,gGuard.data()+gcount*sizeof(Learned),sizeof(Learned)),"Learning guard changed");
  Result* nextResults=nullptr;Check(nextRead->Map(0,nullptr,reinterpret_cast<void**>(&nextResults)));unsigned changed=0;
@@ -80,7 +103,11 @@ int main()try{
  }
  Require(changed>100,"Published guide was not actually used");Require(!memcmp(nextResults+count,guard.data()+count*sizeof(Result),sizeof(Result)),"Next frame guard changed");
  nextRead->Unmap(0,nullptr);read->Unmap(0,nullptr);before->Unmap(0,nullptr);trained->Unmap(0,nullptr);
+#ifdef GI_GUIDE_CURRENT_FRAME
+ std::cout<<"PASS current-frame split: 640 native pilots retained unchanged, fresh guided second samples, no previous lighting history, shared contribution correction, same-frame publication, stale identity rejection, no CPU readback between stages\n";
+#else
  std::cout<<"PASS GPU-only publication: 640 next-frame proposals and weights use learned guide, stale identities rejected, no CPU readback between frames, changed PDFs="<<changed<<"\n";
+#endif
  std::cout<<"PASS WARP: prepared two-level CDF, 640 world-space proposals, rotated normals, CPU/PDF/contribution parity, stale-frame/generation rejection, density-corrected next-guide learning, empty-guide fallback, unchanged same-frame sampling, output guards\n";
  std::cout<<"LIMIT: synthetic fresh shading, standalone compute, no live raygen/evaluator, receiver tracking or RTX performance measurement\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
