@@ -3,6 +3,7 @@
 #include "d3d12_frozen_guide_build.h"
 #include "d3d12_frozen_raygen.h"
 #include "d3d12_frozen_working_set.h"
+#include "frozen_ray_constants.h"
 namespace gi_reuse {
 // Actual GI6 replacement command sequence. The host supplies independently
 // owned native bindings/SBT/scene and recording leases. This does not infer
@@ -36,7 +37,7 @@ public:
                     const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
   if(!trace||!p.separateProducerSubmitted||!p.sceneAndDescriptorLease||!p.ray.Ready()||!p.ray.rays||
      !evaluator.Accept(p.shade)||!builder.Ready()||!work.Matches(p.width,p.height,p.slots)||
-     !p.frame||!p.epoch||p.trainingParity>1||!p.rayConstants||p.rayConstants%256||!p.output||
+     !p.frame||!p.epoch||p.trainingParity>1||!FrozenRayConstants::Matches(p.ray.arguments,p.rayConstants)||!p.output||
      !records.At(1).StartAddress||!records.NativeComplement().StartAddress)return false;
   if(!records.Matches(p.width,p.height,p.frame,p.epoch,p.slots,p.trainingParity,
       work.Get(D3D12FrozenWorkingSet::Guides)->GetGPUVirtualAddress(),work.Get(D3D12FrozenWorkingSet::Weights)->GetGPUVirtualAddress()))return false;

@@ -238,3 +238,38 @@ Added CanRecordConsumer/ClaimConsumerRecording through the recording lease, boun
 Live GitHub job UI for43093819085/job130777417458 exposed logs despite stale API step metadata: auxiliary upload step42 failed, DLL compilation step45 was skipped, final always-run upload step60 also failed. Exact error: Failed to CreateArtifact: Failed to make request after5 attempts: Unexpected token '<', '<!DOCTYPE '... is not valid JSON. Therefore do NOT claim this full build compiled successfully. Existing f580d0a timeout/continue-on-error on auxiliary upload addresses the skip; final package delivery still depends on artifact service. Latest core43097092781 remained queued in UI. GitHub's public status summary at20:29 reported all systems operational; do not call this a confirmed global outage.
 
 Native GI continuation control-flow audit now checks all339 reachable instructions and24 local branches after12C5F1. They are acyclic and all normal paths reconverge at the original GI6 dispatch12CC16; no conditional return/alternate local exit occurs between them. The native scene join128F3B->A8BF0 and bind128F5B->A8080 precede both. This establishes normal-path phase pairing within one native invocation; called functions are assumed to return, so it is not a transitive/concurrent mutation or exception guarantee. Useful for the live transaction's scope contract without another capture.
+
+### Frozen ray/shade constants must identify the same saved bytes
+
+Found an admission gap in the inactive D3D12FrozenCompletion path: rayConstants
+was checked for alignment, but the replay snapshot's root slots2/3 could still
+reference the original native CBVs while the two evaluator stages consumed the
+saved buffer. Added FrozenRayConstants::Matches and call it before any completion
+commands. It requires both CBVs to match the saved base and base+1280, valid root
+argument state, correct kinds, alignment and non-overflow. Snapshot allocation
+and admission share the1536-byte/1280-offset layout constants. This is an
+integration safeguard, NOT a diagnosed cause of the current user's noise.
+
+Portable compute-root tests pass GCC C++17 -Wall -Wextra -Werror, covering absent,
+mixed, stale, wrong-kind, unaligned, invalid and overflowing bindings. Added the
+test to focused Windows core validation. Actual GPU constant snapshot fixture
+now checks native bindings reject and ApplyTo accepts, including mixed-b1
+rejection, alongside its existing overwrite/readback test. That new Windows
+coverage has NOT executed yet. YAML parsing, audit Python syntax and whitespace
+checks pass locally.
+
+Extended build-locked native-retirement audit from17 to22 instruction windows.
+Native raytrace353E0 uses device+220 context, increments its+a8 fence value and
+selects one of two0x50-byte SBT slots. After DispatchRays358E4, its ordinary path
+flushes and signals context+a0 at35A76, then flushes/signals+a8 at35AC4 before
+returning. These are distinct from the NativeDevice+88 Present retirement
+ timeline. This supports the requirement to preserve SBT bytes at the original
+ray site; merely retaining a resource or relying on Present cannot certify its
+contents. The audit does NOT establish that these fences authorize scene/AS
+mutation. Saved shader tables still do not own referenced geometry/materials.
+
+Latest checked core43098448158/full43098448113 for11b29cc remained queued. No
+new gameplay build, no live producer suppression, no new noise or FPS claim.
+The remaining scene/descriptor content contract and live integration are still
+required after Windows validation. Do not request another R425 phase capture or
+R426 pipeline compatibility run.

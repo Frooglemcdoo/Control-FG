@@ -27,6 +27,12 @@ CHECKS = {
     0x24485: '488b07488bcfff5008',  # retain IUnknown before enqueue
     0x244AC: '488938488d0d6affffff48894808',  # deferred Release callback
     0x24420: '488b0148ff6010',
+    # The ray path has its own SBT timeline, independent of Present retirement.
+    0x35701: '498b8020020000488b80a800000048ff00498b9020020000488b82a8000000488b0883e1014c8d348949c1e6044c03f2',
+    0x357C6: 'e875e2ffff4c8b0556151000498b8020020000488b80a000000048ff00',
+    0x358D9: '488b4920488b01488d55a7ff9060020000',  # DispatchRays
+    0x35A4B: '488b05d6121000488b8820020000488bb9a0000000498bcfe838da0000498b4f10488b014c8b07488b5708ff5070',
+    0x35A99: '488b0588121000488b8820020000488bb9a8000000498bcfe8ead90000498b4f10488b014c8b07488b5708ff5070',
 }
 
 def audit(path):
@@ -43,7 +49,8 @@ def audit(path):
                for s in pe.DIRECTORY_ENTRY_EXPORT.symbols}
     for rva, name in [(0x31B50, 'present@DeviceUtil@d3d'),
                       (0x239B0, 'setCurrentFrame@d3d'),
-                      (0x239C0, 'getCurrentFrame@d3d')]:
+                      (0x239C0, 'getCurrentFrame@d3d'),
+                      (0x353E0, 'raytrace@DeviceUtilRaytracing@d3d')]:
         if name not in exports.get(rva, ''):
             raise ValueError(f'Unexpected exported identity at {rva:#x}')
     return {
@@ -60,6 +67,18 @@ def audit(path):
                           'drain completed batches with force=false'],
         'ordinary_drain_waits_for_stored_fence_value': True,
         'force_drain_is_distinct': True,
+        'native_sbt_timeline': {
+            'context_offset_from_device':'0x220',
+            'fence_fields':['0xa0','0xa8'],
+            'slot_selection':'increment +a8 fence value, select parity, stride 0x50',
+            'native_dispatch_call':'0x358e4',
+            'ordinary_post_dispatch_signals':['0x35a76','0x35ac4'],
+            'flush_before_each_signal':True,
+            'signals_before_raytrace_returns':True,
+            'same_timeline_as_present':False,
+            'scene_mutation_authorized_by_these_fences': 'not established',
+            'replay_requirement':'Preserve native SBT bytes before these native lifetime cuts; retaining a resource pointer or Present timeline alone is insufficient',
+        },
         'scene_lease_proven': False,
         'remaining': ['Geometry/BLAS suballocation recycling and mutable contents',
                       'Transitive and concurrent writes between GI ray and shade',

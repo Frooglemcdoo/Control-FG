@@ -1,4 +1,5 @@
 #include "../src/gi_reuse/compute_root_arguments.h"
+#include "../src/gi_reuse/frozen_ray_constants.h"
 #include <cassert>
 #include <iostream>
 using namespace gi_reuse;
@@ -47,5 +48,26 @@ int main() {
     state.Reset(); state.Root(1); state.Constants(0,0,3,values); frozen=state;
     values[0]=99; state.Constants(0,0,1,values); sink={}; frozen.Replay(sink);
     assert(sink.values[0][0]==5 && sink.values[0][1]==6 && sink.values[0][2]==7);
-    std::cout<<"PASS compute arguments: all descriptor kinds, sparse constants, root/heap invalidation, reset, immutable capture and bounded refusal\n";
+    // Replaying old native constants while shading with the saved copy must fail.
+    constexpr std::uint64_t base=0x10000;
+    state.Reset(); state.Root(1);
+    assert(!FrozenRayConstants::Matches(state,base));
+    state.Descriptor(2,RootArgumentKind::CBV,base);
+    state.Descriptor(3,RootArgumentKind::CBV,base+FrozenRayConstants::GIConstantOffset);
+    assert(FrozenRayConstants::Matches(state,base));
+    assert(!FrozenRayConstants::Matches(state,0));
+    assert(!FrozenRayConstants::Matches(state,base+1));
+    assert(!FrozenRayConstants::Matches(state,UINT64_MAX-255));
+    assert(!FrozenRayConstants::Matches(state,base+256));
+    auto correct=state;
+    state.Descriptor(2,RootArgumentKind::CBV,base+4096);
+    assert(!FrozenRayConstants::Matches(state,base));
+    state=correct; state.Descriptor(3,RootArgumentKind::CBV,base+4096);
+    assert(!FrozenRayConstants::Matches(state,base));
+    state=correct; state.Invalidate(); assert(!FrozenRayConstants::Matches(state,base));
+    state.Reset(); state.Root(1);
+    state.Descriptor(2,RootArgumentKind::SRV,base);
+    state.Descriptor(3,RootArgumentKind::CBV,base+FrozenRayConstants::GIConstantOffset);
+    assert(!FrozenRayConstants::Matches(state,base));
+    std::cout<<"PASS compute arguments and frozen ray/shade constant identity\n";
 }

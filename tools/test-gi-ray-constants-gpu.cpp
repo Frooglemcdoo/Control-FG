@@ -35,6 +35,11 @@ int main()try {
   Check(resource->Map(0,&empty,&mapped));memset(mapped,0xee,static_cast<size_t>(resource->GetDesc().Width));resource->Unmap(0,nullptr);}
  Check(d.allocator->Reset());Check(d.list->Reset(d.allocator.Get(),nullptr));Check(d.device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(d.fence.ReleaseAndGetAddressOf())));
  auto replay=native;Require(copy.ApplyTo(replay),"copied constants not applied");index=3;replay.arguments.Constants(0,0,1,&index);
+ const auto savedAddress=copy.Resource()->GetGPUVirtualAddress();
+ Require(!FrozenRayConstants::Matches(native.arguments,savedAddress),"original mutable CBVs admitted as frozen");
+ Require(FrozenRayConstants::Matches(replay.arguments,savedAddress),"saved ray/shade constants disagree");
+ auto mixed=replay;mixed.arguments.Descriptor(3,RootArgumentKind::CBV,sourceB->GetGPUVirtualAddress());
+ Require(!FrozenRayConstants::Matches(mixed.arguments,savedAddress),"mixed original/snapshot CBVs admitted");
  Require(replay.Restore(d.list.Get()),"replay restore");d.list->Dispatch(1,1,1);
  auto values=d.Buffer(24,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  d.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyBufferRegion(values.Get(),0,output.Get(),0,24);

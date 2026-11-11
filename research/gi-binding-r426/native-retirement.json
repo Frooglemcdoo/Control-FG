@@ -17,7 +17,12 @@
     "0x435a3": "498b80880000000f1000498b0cd7660fd64140",
     "0x24485": "488b07488bcfff5008",
     "0x244ac": "488938488d0d6affffff48894808",
-    "0x24420": "488b0148ff6010"
+    "0x24420": "488b0148ff6010",
+    "0x35701": "498b8020020000488b80a800000048ff00498b9020020000488b82a8000000488b0883e1014c8d348949c1e6044c03f2",
+    "0x357c6": "e875e2ffff4c8b0556151000498b8020020000488b80a000000048ff00",
+    "0x358d9": "488b4920488b01488d55a7ff9060020000",
+    "0x35a4b": "488b05d6121000488b8820020000488bb9a0000000498bcfe838da0000498b4f10488b014c8b07488b5708ff5070",
+    "0x35a99": "488b0588121000488b8820020000488bb9a8000000498bcfe8ead90000498b4f10488b014c8b07488b5708ff5070"
   },
   "native_device_global_rva": "0x136d28",
   "frame_number_global_rva": "0x136c68",
@@ -35,6 +40,24 @@
   ],
   "ordinary_drain_waits_for_stored_fence_value": true,
   "force_drain_is_distinct": true,
+  "native_sbt_timeline": {
+    "context_offset_from_device": "0x220",
+    "fence_fields": [
+      "0xa0",
+      "0xa8"
+    ],
+    "slot_selection": "increment +a8 fence value, select parity, stride 0x50",
+    "native_dispatch_call": "0x358e4",
+    "ordinary_post_dispatch_signals": [
+      "0x35a76",
+      "0x35ac4"
+    ],
+    "flush_before_each_signal": true,
+    "signals_before_raytrace_returns": true,
+    "same_timeline_as_present": false,
+    "scene_mutation_authorized_by_these_fences": "not established",
+    "replay_requirement": "Preserve native SBT bytes before these native lifetime cuts; retaining a resource pointer or Present timeline alone is insufficient"
+  },
   "scene_lease_proven": false,
   "remaining": [
     "Geometry/BLAS suballocation recycling and mutable contents",

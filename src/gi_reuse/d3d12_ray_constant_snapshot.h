@@ -1,5 +1,6 @@
 #pragma once
 #include "d3d12_compute_bindings.h"
+#include "frozen_ray_constants.h"
 #include <d3dcompiler.h>
 namespace gi_reuse {
 // Record at the ORIGINAL native ray site, while its CBV lifetimes/states apply.
@@ -47,7 +48,7 @@ class D3D12GIRayConstantSnapshot {
  Microsoft::WRL::ComPtr<ID3D12Resource> data_;
  bool recorded_=false;
 public:
- static constexpr UINT Bytes=1536,GIConstantOffset=1280;
+ static constexpr UINT Bytes=FrozenRayConstants::Bytes,GIConstantOffset=FrozenRayConstants::GIConstantOffset;
  HRESULT Initialize(ID3D12Device* device,const D3D12GIRayConstantPipeline& pipeline)noexcept {
   if(data_||!device||!pipeline.NativeRoot()||!pipeline.CopyRoot()||!pipeline.Pipeline())return E_INVALIDARG;
   D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
