@@ -1,5 +1,6 @@
 // Standalone WARP fixture. Not a production learning pipeline.
 #include "../src/gi_reuse/world_directional_guide.h"
+#include "../src/gi_reuse/guiding_contribution.h"
 struct Frozen { GIDirectionalGuide guide;float energy[64];uint generation;uint frame; };
 struct Input { GIPoint normal;float fraction;float u,v;uint guideIndex,generation;uint frame;uint3 reserved; };
 struct Result { GIWorldProposal proposal;uint cell;float3 contribution;uint training; };
@@ -64,8 +65,12 @@ void Sample(uint3 id:SV_DispatchThreadID){
   r.cell=WorldCell(r.proposal.direction);
   // Analytic stand-in for a newly evaluated ray. Includes a nonzero fallback.
   float3 fresh=r.cell==63?float3(100,20,1):float3(.2,.3,.4);
-  r.contribution=fresh*r.proposal.throughputWeight;
-  r.training=1; // Includes legitimate zero terms below the hemisphere.
+  GIPoint throughput;throughput.x=throughput.y=throughput.z=1;
+  GIPoint secondary;secondary.x=fresh.x;secondary.y=fresh.y;secondary.z=fresh.z;
+  float nativePdf=max(0,GIDot(v.normal,r.proposal.direction))*.3183098861837907f;
+  GIGuidedContribution evaluated=GIApplyGuideCorrection(throughput,secondary,nativePdf,r.proposal.pdf);
+  r.contribution=float3(evaluated.rgb.x,evaluated.rgb.y,evaluated.rgb.z);
+  r.training=evaluated.valid; // Includes legitimate zero terms below the hemisphere.
  }
  results[id.x]=r;
 }
