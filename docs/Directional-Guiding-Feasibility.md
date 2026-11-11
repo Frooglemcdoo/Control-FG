@@ -3,6 +3,11 @@
 Status: research prototype only. Not a game build or a noise fix. No runtime
 include references directional_guide.h. R423 production rendering is unchanged.
 
+Update 2026-11-11: the historical implementation status below predates Windows
+GPU validation. See [GPU validation](Directional-Guiding-GPU-Validation.md) and
+[evaluator bridge](Directional-Guiding-Evaluator-Bridge.md) for current evidence.
+The motion-learning rejection and live integration requirements still apply.
+
 ## Why this work
 
 R423 captures contain identity reconstruction maps at the RR boundary and bright

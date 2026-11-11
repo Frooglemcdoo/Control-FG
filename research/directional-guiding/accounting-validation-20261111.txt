@@ -1,0 +1,6 @@
+2026-11-11T12:46:24.5398566Z LIMIT: discrete toy integrands and independent draws, not Control rays, production shader binding, guide learning, or in-game image/FPS validation.
+2026-11-11T12:46:37.2599926Z PASS GPU-only publication: 640 next-frame proposals and weights use learned guide, stale identities rejected, no CPU readback between frames, changed PDFs=401
+2026-11-11T12:46:37.2600769Z PASS WARP: prepared two-level CDF, 640 world-space proposals, rotated normals, CPU/PDF/contribution parity, stale-frame/generation rejection, density-corrected next-guide learning, empty-guide fallback, unchanged same-frame sampling, output guards
+2026-11-11T12:46:37.2601491Z LIMIT: synthetic fresh shading, standalone compute, no live raygen/evaluator, receiver tracking or RTX performance measurement
+2026-11-11T12:46:38.7925536Z PASS captured accounting bridge: 9 fixtures x 3 corrections, native RGB max error=2.98023e-08, weighted surface AND miss, zero terms retained, pre-fade learning, 10 invalid packets, output guard
+2026-11-11T12:46:38.7926169Z LIMIT: synthetic PDF ratios over captured accounting values; no new rays, full light replay, live bindings, hit-distance policy or FPS validation

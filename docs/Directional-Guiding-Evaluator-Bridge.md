@@ -52,6 +52,10 @@ The two-frame sampling fixture now calls the same contribution helper instead
 of maintaining a separate multiplication. Its illumination remains synthetic;
 it does not execute the full Control material/light evaluator.
 
+The combined version passed [Windows run 43023181082](https://github.com/Frooglemcdoo/Control-FG/actions/runs/43023181082)
+at `5279cae24c1ea435c63052ef41a1d3e85e3367d5`: 640 two-frame proposals,
+401 changed next-frame PDFs, and all captured accounting checks above.
+
 ## Distance and provenance constraints
 
 `GIEvaluateSecondaryCore` separately accumulates native hit information in
