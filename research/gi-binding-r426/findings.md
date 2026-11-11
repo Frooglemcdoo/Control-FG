@@ -144,3 +144,21 @@ scope; they do not by themselves certify the full native scene lease.
 run 43082297242 / job 130737667715 PASS, including all CPU/WARP contracts,
 complement record identity, bounded working allocation and the new exact-session
 pipeline collector. Full DLL run 43082297245 remains the packaging gate.
+
+
+## Delivered pipeline check
+
+Full DLL run 43082297245 / job 130737708746 SUCCESS. Core run 43082297242 SUCCESS.
+Source 38513c997155786cc98f01c105e9e4557555539c. Package 6,937,478 bytes:
+`ControlTOH-GI-Pipeline-Check-R426.zip`.
+ZIP SHA256 514056f1ea724c15052a547b38f02c52efe0ee61fe0b5d15e95f4d00027060c4.
+DLL SHA256 0e194ce7a1313f35a57bb413a438c8e8cd15580cfbbc05bf3b7ba6dc6be3e60b.
+All 18 external shaders byte-identical to the delivered compact preview.
+Library ID libfile_d78f969f1a488191a467f190e706b916.
+
+Next user input: one load-and-exit result from Start-GI-Pipeline-Check.cmd, with
+RT indirect lighting enabled. Automatic GI-Pipeline-R426 ZIP beside launcher.
+No movement route, image judgement, performance run, large capture, or repeated
+compact-preview test. Need actual RTX state-object and live root-binding result.
+Deferred guided dispatch is still disabled. Continue scene/descriptor ownership
+integration after reading that result; do not claim this check fixes the noise.
