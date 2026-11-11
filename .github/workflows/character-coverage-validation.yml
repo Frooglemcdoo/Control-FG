@@ -28,6 +28,21 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools/test-character-diffuse-impulses.py
           if errorlevel 1 exit /b 1
+      - name: Dispatch coverage guard and verify GPU readbacks
+        shell: cmd
+        run: |
+          python tools/character_surface.py
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-character-diffuse-gpu.cpp /Febuild\test-character-diffuse-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          build\test-character-diffuse-gpu.exe --compile
+          if errorlevel 1 exit /b 1
+          python tools/test-character-diffuse.py --gpu-fixture
+          if errorlevel 1 exit /b 1
+          python tools/prepare-character-coverage-gpu.py
+          if errorlevel 1 exit /b 1
+          build\test-character-diffuse-gpu.exe
+          if errorlevel 1 exit /b 1
       - name: Generate isolated candidate shader set
         run: python tools/prepare-character-coverage-validation.py
       - name: Validate candidate graphics pipelines on WARP

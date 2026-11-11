@@ -3,6 +3,10 @@ from character_surface import words, dst, src, reg, transform_shex
 from character_diffuse import filtered_diffuse, ins, ui
 
 
+def guard_instructions(temporary):
+    return ins('ieq',dst(temporary,1),src(temporary,0),ui(0)) + ins('if',src(temporary,0),flags=1<<18)
+
+
 def guarded_diffuse(data, info):
     original = words(data)
     instructions = info['instructions']
@@ -17,7 +21,7 @@ def guarded_diffuse(data, info):
     filtered = filtered_diffuse(data, info)
     filtered_words = words(filtered)
     length = len(filtered_words)-len(original)
-    guard = ins('ieq',dst(temporary,1),src(temporary,0),ui(0)) + ins('if',src(temporary,0),flags=1<<18)
+    guard = guard_instructions(temporary)
     end = ins('endif')
     def patch(w):
         w[begin+length:begin+length] = end
