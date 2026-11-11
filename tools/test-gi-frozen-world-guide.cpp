@@ -44,6 +44,16 @@ int main(){
  float boundary[]={0.f,std::nextafter(.125f,0.f),.125f,std::nextafter(1.f,0.f)};
  for(float u:boundary)for(float v:boundary){auto r=GISampleFrozenWorld(guide,normals[0],100,7,.125f,u,v);assert(r.valid&&std::isfinite(r.weight));}
  auto zero=GISampleFrozenWorld(guide,normals[0],100,7,0,.3f,0);assert(zero.valid&&zero.frame==100&&zero.epoch==7);
+ GIPoint position{-.001f,.25f,-.25f};auto key=GIMakeWorldGuideKey(position,normals[0]);
+ assert(key.valid&&key.x==-1&&key.y==1&&key.z==-1&&key.normal==4);
+ auto wrong=key;wrong.x+=1;assert(!GIWorldGuideKeysMatch(key,wrong));
+ auto matched=GISampleKeyedFrozenWorld(guide,key,key,normals[0],100,7,.125f,.05f,.2f);
+ auto ordinary=GISampleFrozenWorld(guide,normals[0],100,7,.125f,.05f,.2f);
+ assert(matched.valid&&matched.weight==ordinary.weight&&matched.direction.x==ordinary.direction.x);
+ auto unmatched=GISampleKeyedFrozenWorld(guide,key,wrong,normals[0],100,7,.125f,.05f,.2f);
+ auto native=GISampleFrozenWorld(guide,normals[0],100,7,0,.05f,.2f);
+ assert(unmatched.valid&&unmatched.weight==native.weight&&unmatched.direction.x==native.direction.x&&unmatched.direction.y==native.direction.y&&unmatched.direction.z==native.direction.z);
+ position.x=INFINITY;assert(!GIMakeWorldGuideKey(position,normals[0]).valid);
  assert(!GISampleFrozenWorld(guide,normals[0],100,7,.6f,.5f,.5f).valid);
  std::puts("PASS 3M draws: stored-CDF density, analytic energy, flipped normals, stale/invalid pre-sample fallback and boundary samples. No runtime or FPS claim.");
 }

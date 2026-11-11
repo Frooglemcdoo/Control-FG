@@ -11,6 +11,25 @@ namespace gi_reuse {
 #endif
 struct GIFrozenWorldGuide { float cdf[65]; uint frame,epoch,samples,valid; };
 struct GIFrozenRay { GIPoint direction; float weight; float pdf; uint frame,epoch,trace,valid; };
+struct GIWorldGuideKey { int x,y,z;uint normal,valid; };
+GI_FROZEN_INLINE GIWorldGuideKey GIMakeWorldGuideKey(GIPoint position,GIPoint normal){
+#ifdef __cplusplus
+    GIWorldGuideKey k{};
+#else
+    GIWorldGuideKey k=(GIWorldGuideKey)0;
+#endif
+    if(!GIFinitePoint(position)||!GIFinitePoint(normal)||GIAbs(GIDot(normal,normal)-1)>.0001f||
+       GIAbs(position.x)>=1048576||GIAbs(position.y)>=1048576||GIAbs(position.z)>=1048576)return k;
+#ifdef __cplusplus
+    k.x=int(std::floor(position.x*4));k.y=int(std::floor(position.y*4));k.z=int(std::floor(position.z*4));
+#else
+    k.x=int(floor(position.x*4));k.y=int(floor(position.y*4));k.z=int(floor(position.z*4));
+#endif
+    k.normal=(normal.x>0?1u:0u)|(normal.y>0?2u:0u)|(normal.z>0?4u:0u);k.valid=1;return k;
+}
+GI_FROZEN_INLINE bool GIWorldGuideKeysMatch(GIWorldGuideKey a,GIWorldGuideKey b){
+    return a.valid==1&&b.valid==1&&a.x==b.x&&a.y==b.y&&a.z==b.z&&a.normal==b.normal;
+}
 GI_FROZEN_INLINE GIFrozenWorldGuide GIFreezeWorldGuide(float energy[64],uint samples,uint frame,uint epoch) {
     GIFrozenWorldGuide g;
     g.frame=frame;g.epoch=epoch;g.samples=samples;g.valid=0;g.cdf[0]=0;
@@ -78,12 +97,21 @@ GI_FROZEN_INLINE GIFrozenRay GISampleFrozenWorld(GIFrozenWorldGuide g,GIPoint n,
     if(r.pdf<=0){if(fraction==0&&cosine==0){r.weight=1;r.trace=1;r.valid=1;}return r;}
     r.weight=base/r.pdf;r.trace=cosine>0?1u:0u;r.valid=1;r.frame=frame;r.epoch=epoch;return r;
 }
+// A hash/table address alone is never evidence of matching receiver groups.
+// This key is only a CURRENT-frame training group, not temporal surface identity.
+GI_FROZEN_INLINE GIFrozenRay GISampleKeyedFrozenWorld(GIFrozenWorldGuide g,
+    GIWorldGuideKey storedKey,GIWorldGuideKey receiverKey,GIPoint n,
+    uint frame,uint epoch,float fraction,float u,float v){
+    if(!GIWorldGuideKeysMatch(storedKey,receiverKey))g.valid=0;
+    return GISampleFrozenWorld(g,n,frame,epoch,fraction,u,v);
+}
 // Publish this weight with the ray. Never infer it from quantized hit positions
 // or a later guide. Apply it to ALL surface and miss radiance, not hit distance.
 // Below-hemisphere samples publish zero and remain in the native denominator.
 #ifdef __cplusplus
 static_assert(sizeof(GIFrozenWorldGuide)==276);
 static_assert(sizeof(GIFrozenRay)==36);
+static_assert(sizeof(GIWorldGuideKey)==20);
 }
 #endif
 #undef GI_FROZEN_INLINE

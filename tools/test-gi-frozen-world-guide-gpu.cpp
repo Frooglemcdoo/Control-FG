@@ -17,7 +17,8 @@ int main()try{
  for(UINT i=0;i<count;++i){
   UINT scenario=i%4;float energy[64]{};energy[63]=1e30f;energy[2]=3e28f;if(scenario==3)energy[0]=INFINITY;
   auto guide=GIFreezeWorldGuide(energy,scenario==2?255:512,100,7);GIPoint n{.6f,0,(i&4)?-.8f:.8f};
-  auto ref=GISampleFrozenWorld(guide,n,scenario==1?101:100,7,.125f,(float(i)+.5f)/4096,(float((i*73)%4096)+.5f)/4096);
+  GIPoint position{-.001f,.25f,-.25f};auto key=GIMakeWorldGuideKey(position,n),stored=key;if(i&8)stored.x+=1;
+  auto ref=GISampleKeyedFrozenWorld(guide,stored,key,n,scenario==1?101:100,7,.125f,(float(i)+.5f)/4096,(float((i*73)%4096)+.5f)/4096);
   auto actual=data[i];Require(actual.valid==ref.valid&&actual.trace==ref.trace&&actual.frame==ref.frame&&actual.epoch==ref.epoch,"Frozen ray metadata mismatch");
   float a[]={actual.direction.x,actual.direction.y,actual.direction.z,actual.weight,actual.pdf};
   float b[]={ref.direction.x,ref.direction.y,ref.direction.z,ref.weight,ref.pdf};

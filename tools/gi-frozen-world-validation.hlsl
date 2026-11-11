@@ -10,5 +10,8 @@ void main(uint3 id:SV_DispatchThreadID){
  GIFrozenWorldGuide g=GIFreezeWorldGuide(energy,scenario==2?255:512,100,7);
  GIPoint n;n.x=.6;n.y=0;n.z=(i&4)?-.8:.8;
  float u=(float(i)+.5)/4096,v=(float((i*73)%4096)+.5)/4096;
- Output[i]=GISampleFrozenWorld(g,n,scenario==1?101:100,7,.125,u,v);
+ GIPoint position;position.x=-.001;position.y=.25;position.z=-.25;
+ GIWorldGuideKey key=GIMakeWorldGuideKey(position,n),stored=key;
+ if(i&8)stored.x+=1;
+ Output[i]=GISampleKeyedFrozenWorld(g,stored,key,n,scenario==1?101:100,7,.125,u,v);
 }
