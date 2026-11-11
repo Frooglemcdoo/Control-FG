@@ -13,9 +13,9 @@ struct ApplyScope {rt_descriptor_lease::Lease* previous=application;ApplyScope()
 inline std::atomic<UINT64> calls{0},hits{0},reservations{0};
 inline rt_descriptor_lease::Snapshot Snapshot(){
  using rt_owned_assembly::Read;
- auto* manager=Read<void*>(base,0x111bb8);auto* frame=Read<void*>(base,0x136d28);
- if(!manager||!frame)return {};
- auto* timeline=Read<void*>(frame,0x88);if(!timeline)return {};
+ auto* manager=Read<void*>(base,0x111bb8);auto* deviceState=Read<void*>(base,0x136d28);
+ if(!manager||!deviceState)return {};
+ auto* timeline=Read<void*>(deviceState,0x88);if(!timeline)return {};
  auto** slots=reinterpret_cast<void**>(__readgsqword(0x58));auto* tls=slots[Read<std::uint32_t>(base,0x1115fc)];
  auto* state=Read<void*>(tls,0x20);if(!state)state=Read<void*>(base,0x111c10);
  return {manager,state,timeline,Read<std::uint64_t>(timeline),Read<std::uint64_t>(manager,8),Read<std::uint32_t>(base,0x111bc0)};

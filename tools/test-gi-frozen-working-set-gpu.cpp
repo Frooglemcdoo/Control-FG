@@ -54,8 +54,8 @@ int main()try {
  Require(generation(d.list.Get())==producer.generation&&fixture::gi_compute_hooks::Read(d.list.Get())->generation>bindingBefore,"ClearState changed recording identity");
  ID3D12CommandList* producerLists[]={d.list.Get()};
  auto first=owners.Before(d.queue.Get(),1,producerLists,generation);Require(first.count==1,"producer submit refused");d.Submit();
- // Device::Submit waits for its actual queue fence. Values here are this
- // fixture's monotonically assigned private completion cuts, not frame IDs.
+ // Device::Submit waits for its actual queue fence; the owner adapter adds
+ // its own private completion cut after the intercepted submission.
  Check(d.list->Reset(d.allocator.Get(),nullptr));
  Require(owners.After(d.queue.Get(),first),"producer fence refused");owners.Poll();
  Require(generation(d.list.Get())>producer.generation&&!owners.Take(id,retired)&&deaths==0,"producer completion retired consumer scratch");
@@ -85,5 +85,14 @@ int main()try {
  float* mapped=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  for(UINT i=0;i<count;++i)Require(mapped[i]==values[i],"split scratch data changed");D3D12_RANGE empty{};read->Unmap(0,&empty);
  fixture::gi_compute_hooks::onRecordingReset=nullptr;liveOwners=nullptr;
+ // Model a recycled COM address by dropping the private State after all owners
+ // retire, then attaching fresh State at the identical command-list address.
+ const auto oldIdentity=generation(consumer.Get());
+ Check(consumer->SetPrivateDataInterface(fixture::gi_compute_hooks::stateKey,nullptr));
+ fixture::gi_compute_hooks::InstallList(consumer.Get());fixture::gi_compute_hooks::Begin(consumer.Get(),nullptr);
+ Require(generation(consumer.Get())>oldIdentity,"recycled list address reused a recording identity");
+ const auto savedSerial=fixture::gi_compute_hooks::recordingSerial.exchange(UINT64_MAX);
+ Require(!fixture::gi_compute_hooks::NextRecording()&&fixture::gi_compute_hooks::recordingSerial==UINT64_MAX,"recording serial wrapped");
+ fixture::gi_compute_hooks::recordingSerial=savedSerial;
  std::cout<<"PASS split working set with actual Reset/ClearState hooks and private fence: 4K allocation sizing, budget rejection, two-list data preservation, last-consumer lifetime\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

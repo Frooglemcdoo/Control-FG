@@ -17,6 +17,17 @@ inline std::atomic<unsigned> liveStates{0};
 inline thread_local unsigned muted=0;
 using RecordingResetObserver=void (*)(ID3D12CommandList*,UINT64)noexcept;
 inline std::atomic<RecordingResetObserver> onRecordingReset{nullptr};
+// Object addresses may be recycled after destruction. A per-object counter is
+// insufficient for outstanding owners keyed by (address, recording identity).
+// Allocate only at creation / successful Reset, never per draw or dispatch.
+inline std::atomic<UINT64> recordingSerial{0};
+inline UINT64 NextRecording()noexcept {
+    auto previous=recordingSerial.load(std::memory_order_relaxed);
+    while(previous!=UINT64_MAX){
+        if(recordingSerial.compare_exchange_weak(previous,previous+1,std::memory_order_relaxed))return previous+1;
+    }
+    return 0; // Saturate; never wrap into an earlier live recording.
+}
 struct Mute {Mute() noexcept {++muted;} ~Mute(){--muted;} Mute(const Mute&)=delete; Mute& operator=(const Mute&)=delete;};
 inline const GUID stateKey={0xa574c93e,0x3d21,0x46df,{0x95,0x42,0xb7,0x69,0x3e,0x2a,0x01,0x21}};
 class State final : public IUnknown {
@@ -60,12 +71,13 @@ template<class F> inline void Change(ID3D12GraphicsCommandList* list,F&& fn) noe
 inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial,bool newRecording=true) noexcept {
     if(!Enabled())return;
     Change(list,[&](State& s){
-        if(s.generation==UINT64_MAX||(newRecording&&s.recordingGeneration==UINT64_MAX)){
+        if(s.generation==UINT64_MAX){
             failed=true;s.tracker.Invalidate();return;
         }
         if(newRecording){
+            const auto next=NextRecording();if(!next){failed=true;s.tracker.Invalidate();return;}
             if(s.recordingGeneration)if(const auto observer=onRecordingReset.load(std::memory_order_acquire))observer(list,s.recordingGeneration);
-            ++s.recordingGeneration;
+            s.recordingGeneration=next;
         }
         ++s.generation;s.tracker.Reset(initial);s.graphics.Reset();
     });

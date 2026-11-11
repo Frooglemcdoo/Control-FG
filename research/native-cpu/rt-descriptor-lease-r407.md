@@ -26,7 +26,8 @@ original target 1AA00. Outside owned recording job + known skinning application
 scope, forward the original call unchanged. No global allocator entry patch.
 
 Manager pointer: D3D+111BB8; generation manager+8; increment D3D+111BC0.
-Frame object D3D+136D28, timeline frame+88, retirement stamp timeline+0.
+NativeDevice/global device-state object D3D+136D28, timeline device+88, retirement
+stamp timeline+0. This pointer is stable across frames; it is not a frame identity.
 Native allocation stores this stamp in provider+20 and prefix generation in
 provider+30. CPU/GPU handles and provider are returned to context+40/+30/+50.
 Native dispatch setup 2D150 reads the context's +50/+58 heap owners; it does
