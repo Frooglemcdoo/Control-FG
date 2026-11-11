@@ -40,7 +40,7 @@ void OGIRay(uint a,uint2 pixel,uint ray,uint rays,GIShadingRegisters s,GISeconda
     ogiTrace.Store4(a+224,uint4(asuint(running),0));
 }
 void OGIFinal(uint a,uint2 pixel,uint rays,float3 output,float hitInfo,float3 throughput,float depth,
-              float3 volume,float3 point,float3 spot,float3 miss,float scale,float3 sum,
+              float3 volume,float3 pointRGB,float3 spot,float3 miss,float scale,float3 sum,
               float3 origin,float3 normal) {
     OGIZero(a);
     ogiTrace.Store4(a,uint4(pixel,rays,2));
@@ -48,9 +48,9 @@ void OGIFinal(uint a,uint2 pixel,uint rays,float3 output,float hitInfo,float3 th
     ogiTrace.Store4(a+32,asuint(float4(throughput,depth)));
     ogiTrace.Store4(a+48,asuint(float4(miss,scale)));
     ogiTrace.Store4(a+64,uint4(asuint(volume),0));
-    ogiTrace.Store4(a+80,uint4(asuint(point),0));
+    ogiTrace.Store4(a+80,uint4(asuint(pointRGB),0));
     ogiTrace.Store4(a+96,uint4(asuint(spot),0));
-    ogiTrace.Store4(a+112,uint4(asuint(output-(volume+point+spot)),0));
+    ogiTrace.Store4(a+112,uint4(asuint(output-(volume+pointRGB+spot)),0));
     ogiTrace.Store4(a+192,uint4(asuint(origin),ogiFrame));
     ogiTrace.Store4(a+208,uint4(asuint(normal),0));
     ogiTrace.Store4(a+224,uint4(asuint(sum),0));
