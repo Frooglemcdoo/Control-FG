@@ -41,3 +41,11 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'GPU fixture compile failed'}
           ./build/test-guiding-gpu.exe
           if($LASTEXITCODE -ne 0){throw 'GPU validation failed'}
+          python tools/make-gi-candidate-fixture.py research/gi-source-r267/candidate-gpu-fixture.json build/gi_candidate_fixture.h
+          if($LASTEXITCODE -ne 0){throw 'Captured accounting fixture generation failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -O3 -WX tools/gi-guided-accounting-validation.hlsl -Fo gi-guided-accounting.dxil
+          if($LASTEXITCODE -ne 0){throw 'Guided accounting shader compile failed'}
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-guided-accounting-gpu.cpp /Febuild/test-guided-accounting.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Guided accounting fixture compile failed'}
+          ./build/test-guided-accounting.exe
+          if($LASTEXITCODE -ne 0){throw 'Captured guided accounting validation failed'}
