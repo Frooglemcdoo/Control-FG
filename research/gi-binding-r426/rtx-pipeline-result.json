@@ -1,0 +1,25 @@
+{
+  "Schema": "ControlTOH.GIPipelineCheck.R426",
+  "ProcessId": 20272,
+  "StartedUtc": "2026-11-11T19:58:34.3548992Z",
+  "LogFound": true,
+  "CheckRevision": 2,
+  "StartupObserved": true,
+  "RequestedInGame": true,
+  "RayPipelineStatus": "ready",
+  "ComputePipelineStatus": "ready",
+  "BindingStatus": "ready",
+  "RayPipelineReady": true,
+  "ComputePipelinesReady": true,
+  "LiveBindingsReady": true,
+  "DeferredRenderingEnabled": false,
+  "Scope": "Pipeline creation and live root bindings only; no image quality, GPU execution, lifetime or FPS claim.",
+  "Evidence": [
+    "qpc=3611632328219 tid=76408 GI_FROZEN_R426 startup=1 check_revision=2 requested=1 diagnostics=0 deferred_dispatch_enabled=0",
+    "qpc=3611700397322 tid=76408 GI_FROZEN_R426 compute_prepared=1 hr=0x00000000 native_root_bytes=348 stages=6 deferred_dispatch_enabled=0",
+    "qpc=3612199057322 tid=76408 GI_FROZEN_R426 pipeline_prepared=1 native_hit_miss_same_state=1 deferred_dispatch_enabled=0",
+    "qpc=3612199057528 tid=76408 GI_TOGGLE_R308 ready=1 variant=0 native_original=1 new_sampler=R307 same_state=1 compact_columns=1",
+    "qpc=3612199101597 tid=76408 GI_FROZEN_R426 binding_ready=1 captured=1 attached=1 attempt=1 generation=415 deferred_dispatch_enabled=0"
+  ],
+  "AttachmentSHA256": "fae193569cdffe32472bc1b0e6f7039f4985528245d3328305e4dcdd0354938e"
+}

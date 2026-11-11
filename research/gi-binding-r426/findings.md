@@ -174,3 +174,17 @@ Fix source b8abcf3a0d39df70734c6ed6dde451398a79f385 admits those exact lifecycle
 ### R426 revision 2 ready
 
 Full Windows run 43086394131/job130752099341 SUCCESS; core43086394090/job130751778725 SUCCESS. Includes exact lifecycle allowlist and Windows collector tests (absent evidence distinct from explicit compute failure, process/session matching). Delivered ControlTOH-GI-Pipeline-Check-R426-v2.zip, Library libfile_65be189e31c881918af73336ce95c304, 6,937,711 bytes. ZIP SHA256 faf48618228b520b11ce1a7ea944ef9ac3e32fccb9b48e053f1e3295470a3876; DLL22393b4120f7bdad27877a0b68ac2e5d95433697057e1b05d2bedcad5c67b041. All18 packaged shaders byte-identical to revision1; auxiliary executable differences confined to COFF/debug timestamps (full bytes identical after timestamp normalization). Actual changes mainDLL logging, collector,README. Deferred guided rendering still disabled. Need corrected load/wait10sec/exit RTX check, no visual/movement/performance capture. Second uploaded ZIP ending(1) was byte-identical to original (ff3a89af0029c489030c93555af46e9739526e14bb521a45635b129c881e7ee8).
+
+## RTX pipeline compatibility confirmed, 2026-11-11
+
+Attachment GI-Pipeline-R426-20261111-140015-20272-a5b83376.zip (SHA256 fae193569cdffe32472bc1b0e6f7039f4985528245d3328305e4dcdd0354938e), PID20272, startup19:58:34UTC. Read the entire26-line/4166-byte probe log and cross-checked every collector evidence line against it. Revision2 startup confirms requested=1 and diagnostics=0.
+
+- Six compute stages prepared successfully, HRESULT0, real native root348bytes.
+- Frozen raygen prepared in the same state object as native hit/miss.
+- Live root binding acceptance succeeded on attempt1, generation415.
+- Existing owned ray dispatch at2560x1440, compact_columns=0. Augmented state compact_columns=1 indicates available exports, NOT selected compact dispatch.
+- Deferred dispatch remained disabled throughout. No visible noise or performance improvement was tested or demonstrated.
+
+All three required compatibility checks are ready. Do NOT request this check again or repeat the old compact-preview capture. Next integration gate remains ownership of native scene/material/descriptor contents across the two command lists, with bounded per-invocation resources and fence retirement. Merely setting sceneAndDescriptorLease=true in D3D12FrozenCompletion would not establish that ownership. The existing phase capture already supplies ordering metadata; do not repeat it.
+
+Collector packaging observation: PowerShell5.1 serializes Get-Content strings with provider metadata in Evidence (171335-byte result.json). Top-level statuses and raw log are valid and consistent. Normalize Evidence to plain strings in the next packaging update; this is not a reason for another user run. A stripped result containing readiness data only is stored in rtx-pipeline-result.json.
