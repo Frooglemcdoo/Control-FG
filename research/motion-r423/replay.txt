@@ -1,0 +1,12 @@
+12238 (347, 632) input [0.31005859375, 0.546875, 0.380126953125] filter_output [0.31005859375, 0.546875, 0.380126953125] material_compatible_neighbor_reads 8
+radiance_gate_weights [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+12238 (304, 815) input [0.61279296875, 0.5703125, 0.308837890625] filter_output [0.61279296875, 0.5703125, 0.308837890625] material_compatible_neighbor_reads 8
+radiance_gate_weights [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+12238 (850, 1007) input [0.155029296875, 0.2340087890625, 0.186767578125] filter_output [0.155029296875, 0.2340087890625, 0.186767578125] material_compatible_neighbor_reads 8
+radiance_gate_weights [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+12239 (295, 659) input [0.3935546875, 0.6328125, 0.38427734375] filter_output [0.3935546875, 0.6328125, 0.38427734375] material_compatible_neighbor_reads 8
+radiance_gate_weights [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+12239 (312, 818) input [0.051055908203125, 0.058441162109375, 0.045684814453125] filter_output [0.051055908203125, 0.058441162109375, 0.045684814453125] material_compatible_neighbor_reads 8
+radiance_gate_weights [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+12239 (858, 1001) input [0.050048828125, 0.08966064453125, 0.092529296875] filter_output [0.050048828125, 0.08966064453125, 0.092529296875] material_compatible_neighbor_reads 8
+radiance_gate_weights [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
