@@ -15,6 +15,8 @@ inline bool Enabled() noexcept {
 inline std::atomic<bool> failed{false};
 inline std::atomic<unsigned> liveStates{0};
 inline thread_local unsigned muted=0;
+using RecordingResetObserver=void (*)(ID3D12CommandList*,UINT64)noexcept;
+inline std::atomic<RecordingResetObserver> onRecordingReset{nullptr};
 struct Mute {Mute() noexcept {++muted;} ~Mute(){--muted;} Mute(const Mute&)=delete; Mute& operator=(const Mute&)=delete;};
 inline const GUID stateKey={0xa574c93e,0x3d21,0x46df,{0x95,0x42,0xb7,0x69,0x3e,0x2a,0x01,0x21}};
 class State final : public IUnknown {
@@ -22,7 +24,7 @@ class State final : public IUnknown {
 public:
     gi_reuse::ComputeBindingTracker tracker;
     gi_reuse::GraphicsTableState graphics;
-    UINT64 generation=0;
+    UINT64 generation=0,recordingGeneration=0;
     State() noexcept {tracker.Invalidate();}
     ~State(){--liveStates;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {
@@ -53,10 +55,24 @@ template<class F> inline void Change(ID3D12GraphicsCommandList* list,F&& fn) noe
     if(muted || failed.load())return;
     if(auto state=Read(list))fn(*state.Get());
 }
-inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial) noexcept {
+// Binding generation also advances on ClearState. Recording identity advances
+// ONLY at creation / successful Reset: ClearState does not erase GPU commands.
+inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial,bool newRecording=true) noexcept {
     if(!Enabled())return;
-    Change(list,[&](State& s){if(s.generation==UINT64_MAX){failed=true;s.tracker.Invalidate();return;}
-        ++s.generation;s.tracker.Reset(initial);s.graphics.Reset();});
+    Change(list,[&](State& s){
+        if(s.generation==UINT64_MAX||(newRecording&&s.recordingGeneration==UINT64_MAX)){
+            failed=true;s.tracker.Invalidate();return;
+        }
+        if(newRecording){
+            if(s.recordingGeneration)if(const auto observer=onRecordingReset.load(std::memory_order_acquire))observer(list,s.recordingGeneration);
+            ++s.recordingGeneration;
+        }
+        ++s.generation;s.tracker.Reset(initial);s.graphics.Reset();
+    });
+}
+inline UINT64 RecordingGeneration(ID3D12CommandList* list)noexcept {
+    if(!Enabled()||failed.load())return 0;
+    auto state=Read(list);return state?state->recordingGeneration:0;
 }
 inline bool Capture(ID3D12GraphicsCommandList* list,gi_reuse::ComputeBindingSnapshot& out,UINT64& generation) noexcept {
     out={};generation=0;if(!Enabled() || failed.load())return false;
@@ -108,7 +124,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list,ID3D1
 }
 inline void STDMETHODCALLTYPE ClearHook(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) {
     Lookup(list).clear(list,pso);
-    Begin(list,pso);
+    Begin(list,pso,false);
 }
 inline void STDMETHODCALLTYPE PipelineHook(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) {
     Lookup(list).pipeline(list,pso);
