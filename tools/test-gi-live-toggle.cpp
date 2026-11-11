@@ -14,6 +14,7 @@ static void Log(const char*,...){}
 namespace rt_spot_runtime {inline void OnState(ID3D12GraphicsCommandList4*,ID3D12StateObject*){} inline bool Dispatch(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*){return false;}}
 namespace rt_shadow_capture {struct Hooks{void (*dispatch)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*);};inline Hooks Lookup(ID3D12GraphicsCommandList4*){return {};}}
 #include "../src/gi_sequence_runtime.h"
+namespace gi_phase_bindings {inline void Record(ID3D12GraphicsCommandList*,unsigned,UINT,UINT,UINT) noexcept {}}
 #include "../src/gi_live_toggle.h"
 static void Require(bool v){if(!v)throw std::runtime_error("GI live toggle contract failed");}
 static const D3D12_STATE_OBJECT_DESC* source=nullptr;

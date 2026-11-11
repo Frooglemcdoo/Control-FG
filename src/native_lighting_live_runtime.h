@@ -1,5 +1,6 @@
 #pragma once
 #include "visual_settings_policy.h"
+#include "gi_phase_audit.h"
 #include "performance_compare_state.h"
 #include "diagnostic_activity.h"
 #include "gi_stack_capture.h"
@@ -39,6 +40,7 @@
 #include "free_camera_control.h"
 
 namespace native_lighting {
+namespace gi_phase_bindings { inline void Record(ID3D12GraphicsCommandList*,unsigned,UINT,UINT,UINT) noexcept; }
 namespace gi_owned_dispatch { inline void After(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept; }
 namespace gi_geometry_probe { inline void ResetInstances(ID3D12GraphicsCommandList*) noexcept; }
 namespace gi_spot_trace {
@@ -506,6 +508,8 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto hooks=Lookup(list);const auto original=hooks.dispatch;if(!original)return;
     gi_evaluator::Dispatch(list);
+    if(gi_phase_audit::Enabled()){UINT mode=0,bytes=sizeof(mode);
+      if(SUCCEEDED(list->GetPrivateData(gi_evaluator::kMode,&bytes,&mode))&&bytes==sizeof(mode)&&mode)gi_phase_bindings::Record(list,2,x,y,z);}
     gi_binding_audit::Dispatch(list,x,y,z);
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
@@ -526,7 +530,7 @@ inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D
     const HRESULT hr = original(list, allocator, alternate ? alternate : binding.selected);
     gi_evaluator::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     gi_binding_audit::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
-    if(SUCCEEDED(hr)){if(const auto cb=gi_dual_bridge::callbacks.load())cb->reset(list);gi_spot_trace::Reset(list);gi_geometry_probe::ResetInstances(list);}
+    if(SUCCEEDED(hr)){gi_phase_audit::Reset(list);if(const auto cb=gi_dual_bridge::callbacks.load())cb->reset(list);gi_spot_trace::Reset(list);gi_geometry_probe::ResetInstances(list);}
     gi_spot_trace::Bind(list,SUCCEEDED(hr)?(alternate?alternate:binding.selected):nullptr);
     if (alternate) alternate->Release();
     if (SUCCEEDED(hr)) { performance::Reset(list);BindPerformance(list,pso);binding.Recorded(); }
@@ -544,6 +548,27 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "rt_spot_capture_audit.h"
 #include "gi_binding_audit.inl"
 #include "gi_compute_hooks.inl"
+namespace gi_phase_bindings {
+inline void Record(ID3D12GraphicsCommandList* list,unsigned kind,UINT x,UINT y,UINT z) noexcept {
+ if(!gi_phase_audit::Enabled())return;
+ const auto frame=gi_phase_audit::Frame();if(!gi_phase_audit::PhaseWindow(frame))return;
+ gi_reuse::ComputeBindingSnapshot b;UINT64 generation=0;
+ const bool complete=gi_compute_hooks::Capture(list,b,generation);
+ const auto id=gi_phase_audit::Phase(list,kind,frame,generation,x,y,z,b.root.Get(),
+   b.rays?static_cast<void*>(b.rays.Get()):static_cast<void*>(b.pipeline.Get()),b.heaps[0].Get(),b.heaps[1].Get(),complete);
+ if(!id||!complete)return;
+ struct Sink {
+  unsigned long long id;
+  void Descriptor(unsigned index,gi_reuse::RootArgumentKind kind,std::uint64_t address) noexcept {
+   gi_phase_audit::Emit(6,{id,index,unsigned(kind),address});
+  }
+  void Constants(unsigned index,unsigned offset,unsigned count,const std::uint32_t* values) noexcept {
+   for(unsigned i=0;i<count;++i)gi_phase_audit::Emit(7,{id,index,offset+i,values[i]});
+  }
+ } sink{id};b.arguments.Replay(sink);
+}
+}
+
 namespace gi_owned_dispatch {
 inline void After(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexcept {
  if(!GIOwnedPipeline::Enabled()||GIOwnedPipeline::recording)return;

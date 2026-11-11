@@ -455,7 +455,9 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     const auto integrationToken=integration?integration(queue,count,lists):0;
     const auto dual=gi_dual_bridge::callbacks.load();
     const auto dualToken=dual?dual->before(queue,count,lists):0;
+    const auto phaseCall=gi_phase_audit::Submit(queue,count,lists);
     original(queue,count,lists);
+    if(phaseCall)gi_phase_audit::Emit(8,{phaseCall,GetCurrentThreadId()});
     if(dual)dual->after(queue,dualToken);
     if(const auto end=endIntegration.load())end(queue,integrationToken);
     if(const auto end=endGeometry.load())end(queue,geometryToken);
@@ -472,6 +474,7 @@ inline HRESULT ForwardFenceCall(ID3D12CommandQueue* queue,ID3D12Fence* fence,UIN
     ++submitDepth;const auto liveLocked=GINativeSubmission::BeforeFence();CaptureLease lease;QueueCall call;
     if(lease)call=BeginQueueCall(queue,operation,0,nullptr,fence,value);
     const auto result=original(queue,fence,value);
+    gi_phase_audit::Fence(queue,fence,value,operation==QueueOperation::Signal,result);
     if(lease)EndQueueCall(call,result);
     GINativeSubmission::AfterFence(queue,fence,value,operation==QueueOperation::Signal,result,liveLocked);
     --submitDepth;return result;

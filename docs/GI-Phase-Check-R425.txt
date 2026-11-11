@@ -1,0 +1,21 @@
+ControlTOH R425 - GI replacement integration check
+
+This is NOT the new GI sampler or a noise fix. Rendering remains R424.
+The replacement sampler has passed CPU and WARP checks, but it is not yet
+connected to gameplay. Existing source captures did not identify the actual
+GI ray/evaluator command-list submission relationship needed to split work.
+
+Install the contents over the existing mod with the game closed.
+Run ControlTOH\Diagnostics\Start-GI-Phase-Check.cmd.
+Keep GI enabled, load a level, play normally for 15 seconds, then exit.
+No capture key, fixed camera, video, hair/jaw location or A/B comparison.
+The launcher packages a small GI-Phase-R425 ZIP in Diagnostics. Send that ZIP.
+
+Only the first 24 observed engine frames of GI phases are recorded; submission
+metadata has a 3-second cap and a fixed 8192-event memory limit. No extra rays,
+GPU readback, injected GPU command, or GPU wait. The UI timer writes metadata.
+Normal launches leave this check disabled. It does not change saved settings.
+
+The records establish CPU recording/submission relationships and binding
+snapshots, not GPU completion, descriptor resource ownership or barrier safety.
+A dropped/incomplete trace cannot authorize suppressing native work.

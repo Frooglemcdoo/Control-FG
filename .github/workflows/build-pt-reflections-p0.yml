@@ -1455,11 +1455,20 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package owned GI source capture R424
+      - name: Verify bounded phase metadata
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-gi-phase-audit.cpp /Febuild\test-gi-phase-audit.exe /link d3d12.lib dxgi.lib
+          if errorlevel 1 exit /b 1
+          build\test-gi-phase-audit.exe
+          if errorlevel 1 exit /b 1
+
+      - name: Package GI phase integration check R425
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R424'
+          $out='ControlTOH-R425'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1502,7 +1511,8 @@ jobs:
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
-          Copy-Item docs/Owned-GI-Source-R424.txt "$out/ControlTOH/README.txt"
+          Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
+          Copy-Item docs/GI-Phase-Check-R425.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1515,10 +1525,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R424
+          name: ControlTOH-R425
           path: |
-            ControlTOH-R424.zip
-            ControlTOH-R424.sha256
+            ControlTOH-R425.zip
+            ControlTOH-R425.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

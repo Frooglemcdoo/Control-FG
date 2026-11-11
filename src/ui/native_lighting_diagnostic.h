@@ -560,6 +560,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         }
         if(msg.message!=WM_TIMER||msg.wParam!=timer)continue;
         const ULONGLONG now=GetTickCount64();
+        gi_phase_audit::Poll();
         // The dedicated launcher must accept F7/ROI movement before a capture is active.
         if(gi_spot_trace::Enabled())gi_spot_trace::InputTick();
         if(cameraRequestedAt && now-cameraRequestedAt>=3000 && free_camera::commands.Timeout())
