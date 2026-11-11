@@ -19,10 +19,10 @@ GI_GUIDE_INLINE GIDirectionalGuide GIBuildDirectionalGuide(float energy[64],floa
     bool good=GIFinite(learnedFraction)&&learnedFraction>=0&&learnedFraction<=0.5f;
     for(uint i=0;i<64;++i){good=good&&GIFinite(energy[i])&&energy[i]>=0;if(energy[i]>peak)peak=energy[i];}
     float total=0;
-    if(good&&peak>0)for(uint i=0;i<64;++i)total+=energy[i]/peak;
+    if(good&&peak>0)for(uint sumIndex=0;sumIndex<64;++sumIndex)total+=energy[sumIndex]/peak;
     if(!good||!(total>0))learnedFraction=0;
-    for(uint i=0;i<64;++i)g.mass[i]=learnedFraction>0?
-        (1-learnedFraction)/64+learnedFraction*((energy[i]/peak)/total):1.0f/64;
+    for(uint buildIndex=0;buildIndex<64;++buildIndex)g.mass[buildIndex]=learnedFraction>0?
+        (1-learnedFraction)/64+learnedFraction*((energy[buildIndex]/peak)/total):1.0f/64;
     return g;
 }
 GI_GUIDE_INLINE GIGuidedDirection GISampleDirectionalGuide(GIDirectionalGuide g,float choose,float vertical) {
@@ -37,7 +37,7 @@ GI_GUIDE_INLINE GIGuidedDirection GISampleDirectionalGuide(GIDirectionalGuide g,
     if(!GIFinite(total)||total<=0)return r;
     // Normalize the actual stored masses; evaluation must use this SAME table.
     float target=choose*total,lo=0;uint selected=63;
-    for(uint i=0;i<63;++i){float hi=lo+g.mass[i];if(target<hi){selected=i;break;}lo=hi;}
+    for(uint searchIndex=0;searchIndex<63;++searchIndex){float hi=lo+g.mass[searchIndex];if(target<hi){selected=searchIndex;break;}lo=hi;}
     float fraction=(target-lo)/g.mass[selected];
     if(fraction<0)fraction=0;
     if(fraction>0.9999999403953552f)fraction=0.9999999403953552f;

@@ -35,7 +35,10 @@ GI_WORLD_INLINE GIWorldProposal GISampleWorldGuide(GIDirectionalGuide g,GIPoint 
         float z=2*p.v-1,rad=GISqrt((1-z*z)>0?1-z*z:0),angle=6.283185307179586f*p.u;
         r.direction.x=rad*GIWorldCos(angle);r.direction.y=rad*GIWorldSin(angle);r.direction.z=z;
     }else{
-        float angle=6.283185307179586f*((u-fraction)/(1-fraction)),rad=GISqrt(1-v),z=GISqrt(v);
+        // The integer random source can return exact zero. Move that endpoint
+        // to the midpoint of its 24-bit bin instead of producing a zero PDF.
+        float cosineV=v>0?v:0.0000000298023223876953125f;
+        float angle=6.283185307179586f*((u-fraction)/(1-fraction)),rad=GISqrt(1-cosineV),z=GISqrt(cosineV);
         float x=rad*GIWorldCos(angle),y=rad*GIWorldSin(angle);
         float sign=n.z>=0?1.0f:-1.0f,a=-1/(sign+n.z),b=n.x*n.y*a;
         GIPoint t,bt;t.x=1+sign*n.x*n.x*a;t.y=sign*b;t.z=-sign*n.x;

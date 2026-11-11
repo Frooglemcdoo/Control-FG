@@ -18,6 +18,9 @@ int main(){
   for(unsigned j=0;j<4;++j){double mean=sum[j]/count,var=square[j]/count-mean*mean;double se=std::sqrt(std::max(0.,var)/count);assert(std::abs(mean-expected[j])<7*se+1e-5);}
   std::printf("PASS n=(%.1f,%.1f,%.1f) fraction=%.3f constant mean=%.6f zero-support fraction=%.6f\n",n.x,n.y,n.z,fraction,sum[0]/count,double(skipped)/count);
  }
+ for(auto n:normals)for(float u:{0.f,.125f,.5f,.99999994f})for(float fraction:{0.f,.125f,.5f}){
+  auto r=GISampleWorldGuide(guide,n,fraction,u,0);assert(r.valid&&std::isfinite(r.pdf)&&r.pdf>0);}
+ std::puts("PASS exact zero vertical coordinate across mixture boundaries and rotated receivers");
  GIPoint bad{0,0,2};assert(!GISampleWorldGuide(guide,bad,.5f,.2f,.2f).valid);
  std::puts("PASS 7.5M draws: rotated/flipped receiver normals, world-fixed proposal, cosine expectation, miss-equivalent constant field, below-hemisphere zero terms, PDF support bound");
  std::puts("Scope: estimator math only. No live bindings, learned illumination, material identity, visibility reuse, RR output or FPS claim.");

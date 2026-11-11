@@ -41,7 +41,7 @@ void Learn(uint3 id:SV_DispatchThreadID){
   if(v.guideIndex!=id.x||v.frame!=old.frame||v.generation!=old.generation||!r.training)continue;
   accumulated[r.cell]+=dot(r.contribution,float3(.2126,.7152,.0722));++next.count;
  }
- for(uint k=0;k<64;++k)next.energy[k]=next.count?old.energy[k]*.8f+.2f*accumulated[k]/next.count:0;
+ for(uint writeCell=0;writeCell<64;++writeCell)next.energy[writeCell]=next.count?old.energy[writeCell]*.8f+.2f*accumulated[writeCell]/next.count:0;
  next.guide=GIBuildDirectionalGuide(next.energy,.5f);
  next.parentGeneration=old.generation;next.nextFrame=old.frame+1;next.valid=next.count?1u:0u;
  learned[id.x]=next;
