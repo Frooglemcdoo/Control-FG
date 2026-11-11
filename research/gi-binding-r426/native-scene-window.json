@@ -1,0 +1,471 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "function": [
+    "0x128d20",
+    "0x12da38"
+  ],
+  "function_sha256": "c494bb19c0010003efeff3ebf028b99d458e81cd87a43e2c16e24e6298223da0",
+  "gi_ray_call": "0x12c5eb",
+  "gi_shade_call": "0x12cc16",
+  "later_conditional_ray_calls": {
+    "sun_shadow": "0x12d342",
+    "ao": "0x12d8ba"
+  },
+  "scene_binding_array_offset": "0x80",
+  "scene_binding_count_offset": "0x88",
+  "calls_between_ray_and_shade": [
+    {
+      "rva": "0x12c614",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c61c",
+      "target_rva": "0xa3940"
+    },
+    {
+      "rva": "0x12c628",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c630",
+      "import": "?getNativeTexture@NativeTextureContainer@d3d@@QEBAPEAVNativeTexture@2@XZ",
+      "slot_rva": "0x5dfd30"
+    },
+    {
+      "rva": "0x12c639",
+      "import": "?prepareAsUAV@NativeTexture@d3d@@QEAAXXZ",
+      "slot_rva": "0x5dff70"
+    },
+    {
+      "rva": "0x12c651",
+      "target_rva": "0x587e64"
+    },
+    {
+      "rva": "0x12c66d",
+      "target_rva": "0x130f0"
+    },
+    {
+      "rva": "0x12c679",
+      "target_rva": "0x587bc4"
+    },
+    {
+      "rva": "0x12c686",
+      "target_rva": "0x587e04"
+    },
+    {
+      "rva": "0x12c692",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c69f",
+      "import": "?getNativeTexture@NativeTextureContainer@d3d@@QEBAPEAVNativeTexture@2@XZ",
+      "slot_rva": "0x5dfd30"
+    },
+    {
+      "rva": "0x12c6b3",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c6bb",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c6c2",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c6d4",
+      "import": "??0ShaderTexture@d3d@@QEAA@W4ResourceType@1@PEAVNativeTexture@1@@Z",
+      "slot_rva": "0x5dfc80"
+    },
+    {
+      "rva": "0x12c6e1",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c6e9",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c6fa",
+      "import": "?setProviderData@ConstantValueProviderRegistry@d3d@@SAXHPEBXPEBD@Z",
+      "slot_rva": "0x5dff90"
+    },
+    {
+      "rva": "0x12c707",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c70f",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c716",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c728",
+      "import": "?setNativeTexture@ShaderTexture@d3d@@QEAAXW4ResourceType@2@PEAVNativeTexture@2@@Z",
+      "slot_rva": "0x5dfc90"
+    },
+    {
+      "rva": "0x12c74a",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c752",
+      "import": "?transitionFromUAVToConsume@NativeBufferUtilDX12@d3d@@SAXPEAVNativeBuffer@2@@Z",
+      "slot_rva": "0x5dfcf0"
+    },
+    {
+      "rva": "0x12c762",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c76a",
+      "import": "?transitionFromUAVToConsume@NativeBufferUtilDX12@d3d@@SAXPEAVNativeBuffer@2@@Z",
+      "slot_rva": "0x5dfcf0"
+    },
+    {
+      "rva": "0x12c782",
+      "target_rva": "0x587e64"
+    },
+    {
+      "rva": "0x12c79e",
+      "target_rva": "0x13070"
+    },
+    {
+      "rva": "0x12c7aa",
+      "target_rva": "0x587bc4"
+    },
+    {
+      "rva": "0x12c7b7",
+      "target_rva": "0x587e04"
+    },
+    {
+      "rva": "0x12c7c6",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c7d5",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c7dd",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c7e4",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c7f6",
+      "import": "??0ShaderBuffer@d3d@@QEAA@W4ResourceType@1@PEAVNativeBuffer@1@@Z",
+      "slot_rva": "0x5dfc98"
+    },
+    {
+      "rva": "0x12c803",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c80b",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c81c",
+      "import": "?setProviderData@ConstantValueProviderRegistry@d3d@@SAXHPEBXPEBD@Z",
+      "slot_rva": "0x5dff90"
+    },
+    {
+      "rva": "0x12c829",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c831",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c838",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c84a",
+      "import": "?setBuffer@ShaderBuffer@d3d@@QEAAXW4ResourceType@2@PEAVNativeBuffer@2@@Z",
+      "slot_rva": "0x5dfca0"
+    },
+    {
+      "rva": "0x12c862",
+      "target_rva": "0x587e64"
+    },
+    {
+      "rva": "0x12c87e",
+      "target_rva": "0x13070"
+    },
+    {
+      "rva": "0x12c88a",
+      "target_rva": "0x587bc4"
+    },
+    {
+      "rva": "0x12c897",
+      "target_rva": "0x587e04"
+    },
+    {
+      "rva": "0x12c8a6",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c8b5",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c8bd",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c8c4",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c8d6",
+      "import": "??0ShaderBuffer@d3d@@QEAA@W4ResourceType@1@PEAVNativeBuffer@1@@Z",
+      "slot_rva": "0x5dfc98"
+    },
+    {
+      "rva": "0x12c8e3",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c8eb",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c8fc",
+      "import": "?setProviderData@ConstantValueProviderRegistry@d3d@@SAXHPEBXPEBD@Z",
+      "slot_rva": "0x5dff90"
+    },
+    {
+      "rva": "0x12c909",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c911",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c918",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c92a",
+      "import": "?setBuffer@ShaderBuffer@d3d@@QEAAXW4ResourceType@2@PEAVNativeBuffer@2@@Z",
+      "slot_rva": "0x5dfca0"
+    },
+    {
+      "rva": "0x12c941",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c949",
+      "import": "?getNativeTexture@NativeTextureContainer@d3d@@QEBAPEAVNativeTexture@2@XZ",
+      "slot_rva": "0x5dfd30"
+    },
+    {
+      "rva": "0x12c952",
+      "import": "?prepareAsUAV@NativeTexture@d3d@@QEAAXXZ",
+      "slot_rva": "0x5dff70"
+    },
+    {
+      "rva": "0x12c96a",
+      "target_rva": "0x587e64"
+    },
+    {
+      "rva": "0x12c986",
+      "target_rva": "0x130f0"
+    },
+    {
+      "rva": "0x12c992",
+      "target_rva": "0x587bc4"
+    },
+    {
+      "rva": "0x12c99f",
+      "target_rva": "0x587e04"
+    },
+    {
+      "rva": "0x12c9a8",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12c9b5",
+      "import": "?getNativeTexture@NativeTextureContainer@d3d@@QEBAPEAVNativeTexture@2@XZ",
+      "slot_rva": "0x5dfd30"
+    },
+    {
+      "rva": "0x12c9c9",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c9d1",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12c9d8",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12c9ea",
+      "import": "??0ShaderTexture@d3d@@QEAA@W4ResourceType@1@PEAVNativeTexture@1@@Z",
+      "slot_rva": "0x5dfc80"
+    },
+    {
+      "rva": "0x12c9f7",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12c9ff",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12ca10",
+      "import": "?setProviderData@ConstantValueProviderRegistry@d3d@@SAXHPEBXPEBD@Z",
+      "slot_rva": "0x5dff90"
+    },
+    {
+      "rva": "0x12ca1d",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12ca25",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12ca2c",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12ca3e",
+      "import": "?setNativeTexture@ShaderTexture@d3d@@QEAAXW4ResourceType@2@PEAVNativeTexture@2@@Z",
+      "slot_rva": "0x5dfc90"
+    },
+    {
+      "rva": "0x12ca56",
+      "target_rva": "0x587e64"
+    },
+    {
+      "rva": "0x12ca72",
+      "target_rva": "0x130f0"
+    },
+    {
+      "rva": "0x12ca7e",
+      "target_rva": "0x587bc4"
+    },
+    {
+      "rva": "0x12ca8b",
+      "target_rva": "0x587e04"
+    },
+    {
+      "rva": "0x12ca97",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12caa4",
+      "import": "?getNativeTexture@NativeTextureContainer@d3d@@QEBAPEAVNativeTexture@2@XZ",
+      "slot_rva": "0x5dfd30"
+    },
+    {
+      "rva": "0x12cab8",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12cac0",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12cac7",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12cad9",
+      "import": "??0ShaderTexture@d3d@@QEAA@W4ResourceType@1@PEAVNativeTexture@1@@Z",
+      "slot_rva": "0x5dfc80"
+    },
+    {
+      "rva": "0x12cae6",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12caee",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12caff",
+      "import": "?setProviderData@ConstantValueProviderRegistry@d3d@@SAXHPEBXPEBD@Z",
+      "slot_rva": "0x5dff90"
+    },
+    {
+      "rva": "0x12cb0c",
+      "target_rva": "0x10d50"
+    },
+    {
+      "rva": "0x12cb14",
+      "target_rva": "0x10c90"
+    },
+    {
+      "rva": "0x12cb1b",
+      "import": "?getResourceTypeForValue@ConstantValueProviderRegistry@d3d@@SA?AW4ResourceType@2@H@Z",
+      "slot_rva": "0x5dfc88"
+    },
+    {
+      "rva": "0x12cb2d",
+      "import": "?setNativeTexture@ShaderTexture@d3d@@QEAAXW4ResourceType@2@PEAVNativeTexture@2@@Z",
+      "slot_rva": "0x5dfc90"
+    },
+    {
+      "rva": "0x12cb67",
+      "target_rva": "0x133a0"
+    },
+    {
+      "rva": "0x12cb6f",
+      "target_rva": "0x1510b0"
+    },
+    {
+      "rva": "0x12cb9a",
+      "target_rva": "0x1d2f20"
+    },
+    {
+      "rva": "0x12cba9",
+      "target_rva": "0x1d2ce0"
+    },
+    {
+      "rva": "0x12cbbc",
+      "target_rva": "0x1d8700"
+    },
+    {
+      "rva": "0x12cbca",
+      "target_rva": "0x1dd450"
+    },
+    {
+      "rva": "0x12cbd2",
+      "target_rva": "0x1db750"
+    },
+    {
+      "rva": "0x12cc16",
+      "import": "?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z",
+      "slot_rva": "0x5dfcc0"
+    }
+  ],
+  "scene_lease_proven": false,
+  "remaining": [
+    "Verify executed native scene scope and current frame ownership",
+    "Audit transitive/concurrent scene or material mutation",
+    "Tie descriptor allocation and resource retirement to submitted consumer"
+  ]
+}
