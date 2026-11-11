@@ -11,13 +11,13 @@ inline void Note(const char* text) noexcept {
  DWORD written=0;if(manifest!=INVALID_HANDLE_VALUE)WriteFile(manifest,text,DWORD(strlen(text)),&written,nullptr);
 }
 inline void Finish(HWND game,const char* reason) noexcept {
- rt_surface_source::request.store(savedRequest);
+ if(condition!=3)rt_surface_source::request.store(savedRequest);
  // Slots snapshot their export directory; queued work may safely finish after cancellation.
  gi_path_capture::enabled.store(false);
  Note(reason);Note("\r\n");
  if(manifest!=INVALID_HANDLE_VALUE){FlushFileBuffers(manifest);CloseHandle(manifest);manifest=INVALID_HANDLE_VALUE;}
  active=false;
- if(control_rr_capture_ui::Busy()||control_rr_capture_ui::state.load()==control_rr_capture_ui::State::Failed){
+ if(strncmp(reason,"complete:",9)!=0||control_rr_capture_ui::Busy()||control_rr_capture_ui::state.load()==control_rr_capture_ui::State::Failed){
   ShellExecuteW(game,L"open",gi_path_capture::directory,nullptr,nullptr,SW_SHOWNORMAL);
   MessageBoxW(game,L"Capture stopped before completion. Settings restored. Pending GPU copies are retained safely; files may still be saving. See manifest.txt.",L"GI path capture incomplete",MB_OK);return;
  }
@@ -29,23 +29,25 @@ inline void Finish(HWND game,const char* reason) noexcept {
  if(ShellExecuteExW(&run)&&run.hProcess)packager=run.hProcess;
  else MessageBoxW(game,L"Could not package. The capture folder is available under LOCALAPPDATA/ControlFGProbe.",L"GI path capture",MB_OK);
 }
-inline bool Start(uint64_t now) noexcept {
+inline bool Start(uint64_t now,bool motion=false) noexcept {
+ if(motion&&(rt_surface_source::manualGI.load()!=4||rt_surface_source::request.load()!=0||control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::RawBypass))return false;
  if(active||packager||control_rr_capture_ui::Busy()||control_rr_capture_ui::state.load()==control_rr_capture_ui::State::Failed||
-    control_rr_capture_ui::completedPairs.load()>control_rr_capture_ui::PairLimit()-2||
+    control_rr_capture_ui::completedPairs.load()>control_rr_capture_ui::PairLimit()-(motion?1:2)||
     capture_suite::active||performance_capture::Active()||control_gi_button::Active()||gi_stack_capture::enabled.load()||
     free_camera::commands.Pending()||!IsNativeBlend(LiveSelection::GetMode(selection.Read()))||
     !control_rr::RRUserRuntimeWorkRequested()||GetFGUserMultiplier()!=kSLSelectionOff)return false;
  wchar_t env[MAX_PATH]{};if(!GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH))return false;
- swprintf_s(gi_path_capture::directory,L"%s\\ControlFGProbe\\GI-Path-R383-%lu-%llu",env,GetCurrentProcessId(),now);
+ swprintf_s(gi_path_capture::directory,L"%s\\ControlFGProbe\\GI-Motion-R421-%lu-%llu",env,GetCurrentProcessId(),now);
  if(!CreateDirectoryW(gi_path_capture::directory,nullptr))return false;
  wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",gi_path_capture::directory);
  manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);if(manifest==INVALID_HANDLE_VALUE)return false;
- Note("R383 GI path comparison. Two consecutive evaluated frames per condition: RAW then Stable.\r\nFour frames total. Full-screen stride-4 point samples; not full-resolution image-quality proof. Native GPU readback remains full size. No performance measurement.\r\nRaw GI before filter / GI at RR input / HDR scene before RR / RR output / guides share frame IDs. No intermediate temporal-output image is captured.\r\nCounters prove CPU dispatch recording; successful RR output copies retire through GPU fences. Requested state alone is not coverage.\r\nHold still throughout; one beep starts each condition; two beeps after successful packaging. Settings restore on completion/failure.\r\n");
+ if(motion)Note("R421 full-resolution motion pair. Two consecutive evaluated frames. Keep moving the camera/character to reproduce the GI-lit jaw/hair issue. No lighting-mode switch; no GI hit dump. Captures are not performance measurements. Full-resolution readback and disk output can affect timing. One beep arms the request; two beeps mean packaging completed.\r\n");
+ else Note("R383 GI path comparison. Two consecutive evaluated frames per condition: RAW then Stable.\r\nFour frames total. Full-screen stride-4 point samples; not full-resolution image-quality proof. Native GPU readback remains full size. No performance measurement.\r\nRaw GI before filter / GI at RR input / HDR scene before RR / RR output / guides share frame IDs. No intermediate temporal-output image is captured.\r\nCounters prove CPU dispatch recording; successful RR output copies retire through GPU fences. Requested state alone is not coverage.\r\nHold still throughout; one beep starts each condition; two beeps after successful packaging. Settings restore on completion/failure.\r\n");
  savedRequest=rt_surface_source::request.load();selectionAtStart=selection.Read();
- for(unsigned i=0;i<3;++i){gi_path_capture::validFrames[i]=0;gi_path_capture::invalidFrames[i]=0;}
- condition=1;waiting=false;deadline=now+5000;active=true;
- gi_path_capture::condition.store(1);gi_path_capture::enabled.store(true);control_diagnostics::captureActive=true;
- rt_surface_source::request.store(8);start=rt_surface_source::Read(8);return true;
+ for(unsigned i=0;i<4;++i){gi_path_capture::validFrames[i]=0;gi_path_capture::invalidFrames[i]=0;}
+ condition=motion?3:1;waiting=false;deadline=now+5000;active=true;
+ gi_path_capture::condition.store(condition);gi_path_capture::enabled.store(true);control_diagnostics::captureActive=true;
+ if(!motion)rt_surface_source::request.store(8);start=rt_surface_source::Read(8);return true;
 }
 inline void Tick(HWND game,uint64_t now) noexcept {
  if(packager){
@@ -60,6 +62,7 @@ inline void Tick(HWND game,uint64_t now) noexcept {
  if(!active)return;
  if(GetForegroundWindow()!=game||!game||IsIconic(game)){Finish(game,"incomplete: focus lost");return;}
  if(selection.Read()!=selectionAtStart||!control_rr::RRUserRuntimeWorkRequested()||GetFGUserMultiplier()!=kSLSelectionOff){Finish(game,"incomplete: rendering settings changed");return;}
+ if(condition==3&&(rt_surface_source::manualGI.load()!=4||rt_surface_source::request.load()!=savedRequest)){Finish(game,"incomplete: GI settings changed during motion capture");return;}
  if(!waiting){if(now<deadline)return;Beep(800,120);
   if(!control_rr_capture_ui::Request()){Finish(game,"incomplete: capture request rejected");return;}
   waiting=true;deadline=now+130000;return;
@@ -68,6 +71,10 @@ inline void Tick(HWND game,uint64_t now) noexcept {
  if(state==control_rr_capture_ui::State::Failed){Finish(game,"incomplete: buffer capture failed");return;}
  if(now>deadline){Finish(game,"incomplete: capture timeout");return;}
  if(state!=control_rr_capture_ui::State::Complete)return;
+ if(condition==3){
+  const bool valid=gi_path_capture::validFrames[3].load()==2&&!gi_path_capture::invalidFrames[3].load();
+  Finish(game,valid?"complete: full-resolution consecutive motion pair saved; lighting unchanged":"incomplete: motion pair failed frame or raw-boundary validation");return;
+ }
  const unsigned phase=condition==1?8:3;auto delta=rt_surface_source::Read(phase);
  char line[256]{};for(unsigned i=0;i<rt_surface_source::count;++i){delta[i]-=start[i];sprintf_s(line,"condition=%u %s=%llu\r\n",condition,rt_surface_source::names[i],static_cast<unsigned long long>(delta[i]));Note(line);}
  sprintf_s(line,"condition=%u verified_frames=%u invalid_frames=%u\r\n",condition,gi_path_capture::validFrames[condition].load(),gi_path_capture::invalidFrames[condition].load());Note(line);

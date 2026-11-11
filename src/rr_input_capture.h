@@ -137,7 +137,8 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    const auto& b=c->giBoundary;
    const bool verified=okay&&c->preGICaptured&&c->preGIFrame==c->frame&&c->outputCaptured&&c->evaluationResult==1&&
     gi_path_capture::BoundaryMatches(c->pathCondition,b.valid,b.applied,b.frame,c->frame,b.stage,b.spatialPasses,b.spatialObserved)&&
-    giCompared&&(c->pathCondition!=1||giDifferent==0);
+    giCompared&&((c->pathCondition!=1&&c->pathCondition!=3)||giDifferent==0)&&
+    gi_path_capture::PairAligned(c->pathCondition,c->pairIndex,c->previousFrame,c->frame);
    (verified?gi_path_capture::validFrames[c->pathCondition]:gi_path_capture::invalidFrames[c->pathCondition]).fetch_add(1);
   }
 #endif
@@ -151,7 +152,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
    out<<"\"gi_sampling_experiment\":\"R264_current_frame_256_creation\",";
 #endif
-   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":"<<(c->pathCondition?2:4)<<",\"gi_signal_boundary\":\"after_filter_at_rr_input\","
+   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":"<<(c->pathCondition==3?1:c->pathCondition?2:4)<<",\"gi_signal_boundary\":\"after_filter_at_rr_input\","
       <<"\"pre_gi_frame\":"<<c->preGIFrame<<",\"pre_gi_captured\":"<<(c->preGICaptured?"true":"false")
       <<",\"pre_gi_tick_ms\":"<<c->preGITick<<",\"evaluation_tick_ms\":"<<c->evaluationTick<<",";
 #endif
@@ -300,7 +301,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #ifdef CONTROL_RR_GI_SEQUENCE
    c->preGIIndex=outputIndex+1;c->names[c->preGIIndex]=L"pre-filter-gi.rgba16f";c->pixelBytes[c->preGIIndex]=8;
 #endif
-   c->exportStride=gi_path_capture::enabled.load()?gi_path_capture::stride:1;
+   c->exportStride=gi_path_capture::enabled.load()?gi_path_capture::ExportStride(gi_path_capture::condition.load()):1;
    c->pathCondition=gi_path_capture::enabled.load()?gi_path_capture::condition.load():0;
    c->exportRoot[0]=0;if(c->pathCondition)wcscpy_s(c->exportRoot,gi_path_capture::directory);
    c->policy.BeginPrepare();
@@ -405,7 +406,7 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
   rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
  // Prepare both slots immediately; only actual GPU recording waits for settling.
  if(select<2&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&!settled){
-  control_rr_capture_ui::detail.store(L"Waiting for 5 seconds of gameplay. Hold still.");
+  control_rr_capture_ui::detail.store(gi_path_capture::enabled.load()&&gi_path_capture::condition.load()==3?L"Arming motion capture. Keep reproducing the issue while moving.":L"Waiting for 5 seconds of gameplay. Hold still.");
   select=2;
  }
 #ifdef CONTROL_RR_GI_SEQUENCE

@@ -981,6 +981,8 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-path-capture.exe
           if not "%errorlevel%"=="0" exit /b 1
+          python tools/test-motion-capture-contract.py
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-full-chain.cpp /Febuild\test-gi-full-chain.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-full-chain.exe
@@ -1425,11 +1427,11 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package character coverage eligibility correction R420
+      - name: Package full-resolution motion capture R421
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R420'
+          $out='ControlTOH-R421'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1471,7 +1473,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/Character-Coverage-R420.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/Motion-Capture-R421.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1484,10 +1486,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R420
+          name: ControlTOH-R421
           path: |
-            ControlTOH-R420.zip
-            ControlTOH-R420.sha256
+            ControlTOH-R421.zip
+            ControlTOH-R421.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

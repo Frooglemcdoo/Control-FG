@@ -1,0 +1,27 @@
+ControlTOH R421 - Full-resolution motion capture
+
+R420 did not fix the jaw/neck noise or red hair speckles. This build does not
+claim another visual fix. It adds a focused capture to locate the unstable
+signal before further rendering changes.
+
+CAPTURE MOTION replaces the old GI-path comparison button. It requires the
+existing Native Blend / RR ON / FG OFF / RELAX OFF configuration and no active
+lighting diagnostic override. It does not change lighting or switch conditions.
+Keep the camera/character moving under the GI illumination that exposes the
+problem. One beep arms the capture; two beeps mean the ZIP is ready.
+
+The capture records one consecutive pair at full resolution: raw GI before its
+filter boundary, GI at RR, accumulated diffuse/specular lighting, HDR scene
+input, depth, motion, material/normal buffers, RR guides and RR output. The
+large per-ray hit dump is excluded. There is no stationary comparison phase.
+
+Capturing requires full-sized GPU readbacks and disk output, so it can affect
+frame timing. It is not a performance benchmark or zero-overhead recording.
+No capture runs continuously. It does not include the native packed character
+reconstruction map or effective per-fragment coverage; those remain separate
+evidence gaps. Both frames must have matching boundaries and consecutive IDs.
+Incomplete pairs are reported as failures rather than successful packages.
+
+Install with the game closed. Existing rendering remains R420, whose coverage
+guard was visually ineffective in the user's test. Preserve projector/desk/
+plant appearance when investigating the remaining GI-lit character artifacts.

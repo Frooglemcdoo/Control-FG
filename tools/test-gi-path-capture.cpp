@@ -17,7 +17,13 @@ int main(){
  assert(!gi_path_capture::BoundaryMatches(2,true,false,9108,9108,S::BothSteadySpatial,6,6));
  assert(!gi_path_capture::BoundaryMatches(2,false,true,9108,9108,S::BothSteadySpatial,6,6));
  assert(!gi_path_capture::BoundaryMatches(2,true,true,9108,9108,S::BothSteadySpatial,0,0));
- assert(!gi_path_capture::BoundaryMatches(3,true,true,9108,9108,S::RawBypass,0,0));
+ assert(gi_path_capture::BoundaryMatches(3,true,true,9108,9108,S::RawBypass,0,0));
+ assert(!gi_path_capture::BoundaryMatches(3,true,true,9108,9108,S::BothSteadySpatial,6,6));
+ assert(gi_path_capture::ExportStride(3)==1 && gi_path_capture::ExportStride(1)==4);
+ assert(gi_path_capture::PairAligned(3,0,0,10));
+ assert(gi_path_capture::PairAligned(3,1,10,11));
+ assert(!gi_path_capture::PairAligned(3,1,10,12));
+ assert(!gi_path_capture::PairAligned(3,1,0,12));
  assert(gi_path_capture::Extent(3840,4)==960 && gi_path_capture::Extent(2161,4)==541);
  gi_path_capture::enabled=true;
  for(unsigned n=1;n<=2;++n){
