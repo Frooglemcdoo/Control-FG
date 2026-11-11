@@ -20,7 +20,9 @@ set "CONTROLTOH_GI_RAY_TRACE=0"
 set "CONTROLTOH_GI_BIND_AUDIT=0"
 set "CONTROLTOH_GI_GEOMETRY=0"
 set "CONTROLTOH_GI_CAPTURE=0"
-set "CONTROLTOH_GI_EVALUATOR=1"
+rem Keep the current single-producer path; the legacy evaluator flag disables it.
+set "CONTROLTOH_GI_EVALUATOR="
+set "CONTROLTOH_GI_SINGLE=1"
 echo R424: owned GI source capture while moving. No lighting settings are changed.
 echo Keep your current reproducing settings, Owned GI and RR ON, FG OFF, RELAX OFF.
 echo An orange box marks the captured region. Ctrl+arrow keys move that box.

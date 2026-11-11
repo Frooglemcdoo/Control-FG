@@ -4,6 +4,12 @@ def mod(name,file):
  s=importlib.util.spec_from_file_location(name,ROOT/'tools'/file);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 c=mod('collection','collect-rr-boundary.py');t=mod('trace_test','test-gi-owned-source-trace.py')
 class Collection(unittest.TestCase):
+ def test_launcher_keeps_single_producer(self):
+  text=(ROOT/'tools/diagnostics/Start-GI-Owned-Source.cmd').read_text()
+  self.assertIn('set "CONTROLTOH_GI_SINGLE=1"',text)
+  self.assertNotIn('set "CONTROLTOH_GI_EVALUATOR=1"',text)
+  self.assertIn('-OwnedSource -CollectExisting -RequireRR',text)
+
  def test_source_join_and_bad_metadata(self):
   with tempfile.TemporaryDirectory() as tmp:
    root=pathlib.Path(tmp);folder=root/'Control-FG'/'Diagnostics';folder.mkdir(parents=True)
