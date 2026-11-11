@@ -16,6 +16,10 @@ jobs:
           if (!$dxc) { throw 'DXC unavailable' }
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX tools/gi-frozen-world-validation.hlsl -Fo gi-frozen-world.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Sampler HLSL compile failed' }
+          foreach ($entry in @('Clear','Accumulate','Freeze')) {
+            & $dxc.FullName -T cs_6_0 -E $entry -HV 2018 -WX src/shaders/gi_frozen_guide_build.hlsl -Fo "gi-guide-$entry.dxil"
+            if ($LASTEXITCODE -ne 0) { throw "Guide builder compile failed: $entry" }
+          }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /O2 /W4 /WX tools\test-gi-frozen-world-guide.cpp /Fe:gi-frozen-cpu.exe
@@ -29,6 +33,14 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-phase-audit.cpp /Fe:gi-phase.exe /link d3d12.lib dxgi.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-phase.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-split-phase-plan.cpp /Fe:gi-split.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-split.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-guide-build-gpu.cpp /Fe:gi-guide-build.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-guide-build.exe
           if not "%errorlevel%"=="0" exit /b 1
           "@
           Set-Content -Path validate-gi-core.cmd -Value $commands -Encoding ASCII
