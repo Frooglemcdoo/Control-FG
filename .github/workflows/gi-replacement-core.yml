@@ -1,7 +1,7 @@
 name: Validate GI replacement core
 on:
   push:
-    branches: [work/gi-replacement-core-r425]
+    branches: [work/gi-replacement-core-r425, work/gi-replacement-binding-r426]
   workflow_dispatch:
 jobs:
   validate:
@@ -57,6 +57,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-sbt-snapshot-gpu.cpp /Fe:gi-sbt-snapshot.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-sbt-snapshot.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-ray-constants-gpu.cpp /Fe:gi-ray-constants.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-ray-constants.exe
           if not "%errorlevel%"=="0" exit /b 1
           "@
           Set-Content -Path validate-gi-core.cmd -Value $commands -Encoding ASCII
