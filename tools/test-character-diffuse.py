@@ -96,7 +96,13 @@ def oracle(resources,p,center,samples):
 rng=np.random.default_rng(360);families=json.loads((root/'research/character-surface-r346/families.json').read_text());checks=0
 for family in families:
  base=root/'build'/('character-'+family['name']+'-hq-cubic.dxbc');new=root/'build'/('character-'+family['name']+'-hq-diffuse.dxbc')
- d=decode(base);fd=decode(new);w=words(base.read_bytes());fw=words(new.read_bytes())
+ d=decode(base);fd=decode(new);w=words(base.read_bytes())
+ from character_coverage_guard import guarded_diffuse
+ from character_diffuse import filtered_diffuse
+ expected_guarded,_=guarded_diffuse(base.read_bytes(),d)
+ assert new.read_bytes()==expected_guarded, 'Gameplay shader must include exact validated coverage guard'
+ # Numerical filter oracle tests the unchanged inner block; guard has dedicated tests.
+ fw=words(filtered_diffuse(base.read_bytes(),d))
  load=next(i for i in d['instructions'] if i['name']=='ld' and i['operands'][-1]=='t[3][3].xyzw');at=load['dword']+(w[load['dword']]>>24);size=len(fw)-len(w);code=fw[at:at+size]
  output=int(re.search(r'r\[(\d+)\]',load['operands'][0])[1]);coord=w[load['dword']+4]
  decl=next(i['dword'] for i in d['instructions'] if i['name']=='dcl_temps');temp=w[decl+1]

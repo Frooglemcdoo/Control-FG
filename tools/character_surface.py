@@ -202,7 +202,8 @@ def main():
   hq=cubic_volume(data,old);hp=folder/'neck-hq-temporary.dxbc';hp.write_bytes(hq)
   info=decode(hp)
   from character_diffuse import filtered_diffuse
-  filtered=filtered_diffuse(hq,info)
+  from character_coverage_guard import guarded_diffuse
+  filtered=guarded_diffuse(hq,info)[0]
   diffuse=base_component_view(hq,info,0);dim=base_component_view(hq,info,2)
   def add_filter(b):
    fp=folder/'diffuse-filter-temporary.dxbc';fp.write_bytes(b)

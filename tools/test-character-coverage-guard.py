@@ -1,4 +1,4 @@
-"""Offline candidate validates native coverage before existing reconstruction."""
+"""Validate selected native coverage before production reconstruction."""
 import ast, base64, json, tempfile
 from pathlib import Path
 import numpy as np
@@ -37,4 +37,4 @@ with tempfile.TemporaryDirectory() as temporary:
                 assert not reads and np.array_equal(result[0],regs[0])
             checks+=1
 print(f'PASS {checks} emitted guard cases; 12 exact reversible candidate transforms and unchanged resource bindings')
-print('Offline only: production generator untouched; no GPU/PSO validation or in-game fix claim.')
+print('CPU checks only; GPU validation is separate and no in-game fix is claimed.')

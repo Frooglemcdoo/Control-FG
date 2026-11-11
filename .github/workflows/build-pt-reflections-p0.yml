@@ -189,6 +189,14 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-character-diffuse-gpu.exe
           if not "%errorlevel%"=="0" exit /b 1
+          python tools/test-character-native-remap.py
+          if not "%errorlevel%"=="0" exit /b 1
+          python tools/test-character-coverage-guard.py
+          if not "%errorlevel%"=="0" exit /b 1
+          python tools/prepare-character-coverage-gpu.py
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-character-diffuse-gpu.exe
+          if not "%errorlevel%"=="0" exit /b 1
           python tools/test-neck-isolation.py
           if not "%errorlevel%"=="0" exit /b 1
           python tools/test-character-capture-contract.py
@@ -1417,11 +1425,11 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package guide-history continuity correction R419
+      - name: Package character coverage eligibility correction R420
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R419'
+          $out='ControlTOH-R420'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1463,7 +1471,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/History-Continuity-R419.txt "$out/ControlTOH/README.txt"
+          Copy-Item docs/Character-Coverage-R420.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1476,10 +1484,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R419
+          name: ControlTOH-R420
           path: |
-            ControlTOH-R419.zip
-            ControlTOH-R419.sha256
+            ControlTOH-R420.zip
+            ControlTOH-R420.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

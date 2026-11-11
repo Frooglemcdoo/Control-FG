@@ -183,7 +183,7 @@ inline void Paint(HWND window) noexcept {
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
     RECT bounds{}; GetClientRect(window, &bounds);
     HBRUSH background = CreateSolidBrush(theme::kBackground); FillRect(dc, &bounds, background); DeleteObject(background);
-    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R419",{14,8,kWidth-12,32},theme::kAccent);
+    DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R420",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
@@ -488,7 +488,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             else if(index==kModeCount+12 && !capture_suite::active && !control_gi_button::Active() && control_rr::RRUserRequested()) {
                 rt_surface_source::manualGI.store(control_relax::Cycle(rt_surface_source::manualGI.load()));
                 control_rr_gi::stageMode=control_rr_gi::StageMode::RawBypass;
-                Trace("RELAX_R419 requested=%s bypass=%u",control_relax::Name(control_relax::requested.load()),unsigned(rt_surface_source::manualGI.load()==4));
+                Trace("RELAX_R420 requested=%s bypass=%u",control_relax::Name(control_relax::requested.load()),unsigned(rt_surface_source::manualGI.load()==4));
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);

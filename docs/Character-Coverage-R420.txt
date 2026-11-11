@@ -1,0 +1,17 @@
+ControlTOH R420 - Character reconstruction coverage guard
+
+The character diffuse filter now checks the native selected coverage sample,
+not just the configured sample count. When the native selector is invalid or
+unsupported, the original native diffuse read is retained and our neighboring
+sample gather is skipped. Valid sample-zero filtering remains unchanged.
+
+This is a verified eligibility correction, not a proven fix for the recorded
+jaw/neck noise or red hair speckles. Those artifacts can also exist upstream.
+Native lighting, RR guides, ray count and global clamp are unchanged. RELAX
+remains off by default. No new GPU pass, readback or continuous logging is added.
+The shader uses one additional temporary register; game FPS is not measured.
+
+Install with the game closed. No stationary capture or diagnostic sequence is
+needed. Assess during the camera/character movement that normally exposes the
+issue, under GI illumination. Projector, desk and plant appearance must remain
+acceptable. R419 history-continuity correction is retained.
