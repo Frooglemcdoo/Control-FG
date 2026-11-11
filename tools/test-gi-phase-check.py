@@ -22,3 +22,26 @@ assert 'incomplete_or_overflowed_trace' in m.analyze(rows)['warnings']
 assert 'phase_submission_missing_or_repeated' in m.analyze(rows[:4]+rows[-1:])['warnings']
 assert 'no_gi_phases' in m.analyze([])['warnings']
 print('PASS phase parser: recording/submission distinction, incomplete evidence and no false admission')
+# A bounded target prefix may be structurally complete despite a LATER overflow.
+# Preserve the global warning and never convert that result into admission.
+rows=[]
+def add(kind, data):
+    rows.append(e(len(rows)+1, kind, data))
+    return len(rows)
+for frame in range(100,124):
+    for kind in (1,2):
+        phase=add(kind,[frame,kind*10,frame,1,1,1,11,20+kind,30,40,1])
+        for index in range(8):add(6,[phase,index,1,1000+index+kind])
+        call=add(3,[frame,50,1])
+        add(4,[call,0,kind*10,phase,0,0])
+        add(8,[call])
+last=len(rows)
+for _ in range(30):add(5,[124,99,88,1,1,0])
+rows.append(dict(status=True,first_frame=100,stopped=1,reserved=len(rows)+1,written=len(rows),dropped=1))
+r=m.analyze(rows)
+assert r['target_prefix']['recording_and_submission_complete']
+assert r['target_prefix']['last_required_event']==last
+assert r['warnings']==['incomplete_or_overflowed_trace'] and not r['native_suppression_authorized']
+assert not m.analyze(rows[:5]+rows[6:])['target_prefix']['recording_and_submission_complete']
+assert not m.analyze(rows[:last-1]+rows[last:])['target_prefix']['recording_and_submission_complete']
+print('PASS target prefix: late overflow preserved, missing bindings/events rejected, no repeat-capture requirement inferred')

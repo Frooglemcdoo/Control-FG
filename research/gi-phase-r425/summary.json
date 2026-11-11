@@ -1,0 +1,384 @@
+{
+  "phase_records": 48,
+  "target_prefix": {
+    "recording_and_submission_complete": true,
+    "last_required_event": 2452,
+    "scope": "Only the recorded 24-frame phase window; later overflow remains a trace-wide warning, not GPU/resource admission"
+  },
+  "frame_relationships": [
+    {
+      "frame": 2762,
+      "ray_event": 1,
+      "evaluator_event": 15,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2763,
+      "ray_event": 73,
+      "evaluator_event": 87,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2764,
+      "ray_event": 324,
+      "evaluator_event": 338,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2765,
+      "ray_event": 474,
+      "evaluator_event": 488,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2766,
+      "ray_event": 552,
+      "evaluator_event": 566,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2767,
+      "ray_event": 648,
+      "evaluator_event": 663,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2768,
+      "ray_event": 755,
+      "evaluator_event": 769,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2769,
+      "ray_event": 882,
+      "evaluator_event": 899,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2770,
+      "ray_event": 989,
+      "evaluator_event": 1003,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2771,
+      "ray_event": 1122,
+      "evaluator_event": 1136,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2772,
+      "ray_event": 1214,
+      "evaluator_event": 1228,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2773,
+      "ray_event": 1316,
+      "evaluator_event": 1330,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2774,
+      "ray_event": 1404,
+      "evaluator_event": 1418,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2775,
+      "ray_event": 1487,
+      "evaluator_event": 1501,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2776,
+      "ray_event": 1612,
+      "evaluator_event": 1626,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2777,
+      "ray_event": 1702,
+      "evaluator_event": 1716,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2778,
+      "ray_event": 1785,
+      "evaluator_event": 1799,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2779,
+      "ray_event": 1865,
+      "evaluator_event": 1879,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2780,
+      "ray_event": 1961,
+      "evaluator_event": 1975,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2781,
+      "ray_event": 2055,
+      "evaluator_event": 2069,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2782,
+      "ray_event": 2135,
+      "evaluator_event": 2149,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2783,
+      "ray_event": 2236,
+      "evaluator_event": 2250,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2784,
+      "ray_event": 2343,
+      "evaluator_event": 2357,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    },
+    {
+      "frame": 2785,
+      "ray_event": 2426,
+      "evaluator_event": 2440,
+      "relationship": "ray_in_earlier_nonoverlapping_execute_call",
+      "differing_binding_slots": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "same_root": true,
+      "same_heaps": true
+    }
+  ],
+  "warnings": [
+    "incomplete_or_overflowed_trace"
+  ],
+  "native_suppression_authorized": false,
+  "limitations": "CPU metadata only; no GPU completion, barrier/resource ownership, SBT writer lifetime or temporal correctness proof",
+  "source": {
+    "filename": "GI-Phase-R425-20261111-104355.zip",
+    "library_file_id": "libfile_2cf0c0d58c448191bea2870a46ec199b",
+    "log_sha256": "9238c40bbaf6e000e076438b00a438d409a80b27e3c77b6a66215cb3c4793b17"
+  },
+  "target_queue_count": 1,
+  "overlapping_target_queue_calls": [],
+  "retained_events": 8192,
+  "first_dropped_event": 8193
+}
