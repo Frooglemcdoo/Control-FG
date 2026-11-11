@@ -26,6 +26,12 @@ jobs:
             & $dxc.FullName -T cs_6_0 -E $entry -HV 2018 -WX src/shaders/gi_frozen_guide_build.hlsl -Fo "gi-guide-$entry.dxil"
             if ($LASTEXITCODE -ne 0) { throw "Guide builder compile failed: $entry" }
           }
+          & $dxc.FullName -T lib_6_3 -HV 2018 -WX src/shaders/gi_frozen_raygen.hlsl -Fo gi-frozen-raygen.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen raygen compile failed' }
+          python tools/gi_frozen_evaluator.py --output gi-frozen-evaluator.hlsl
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen evaluator generation failed' }
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX -I src/shaders gi-frozen-evaluator.hlsl -Fo gi-frozen-evaluator.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen evaluator compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\assemble-validated-dxil.cpp /Fe:assemble-validated-dxil.exe
