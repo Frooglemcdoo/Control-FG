@@ -1,6 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/frozen_guide_training.h"
 #include <array>
+#include "../src/gi_reuse/d3d12_frozen_evaluator.h"
 using namespace gi_reuse;
 int main()try{
  Device d(false);constexpr UINT width=18,height=3,count=width/2*height;
@@ -34,17 +35,18 @@ int main()try{
  texture(3,DXGI_FORMAT_R32G32B32A32_FLOAT,false,false,clip);texture(24,DXGI_FORMAT_R32_UINT,true,false,materials);
  const auto color=texture(27,DXGI_FORMAT_R32G32B32A32_FLOAT,false,true,{}),distance=texture(28,DXGI_FORMAT_R32_FLOAT,false,true,{});
  D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,27,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,2,0,0,0}};
- D3D12_ROOT_PARAMETER parameters[8]{};
+ D3D12_ROOT_PARAMETER parameters[4]{};
  for(UINT i=0;i<2;++i){parameters[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;parameters[i].DescriptorTable={1,ranges+i};}
- parameters[2].ParameterType=parameters[3].ParameterType=parameters[5].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;
- parameters[2].Descriptor={1,0};parameters[3].Descriptor={4,0};parameters[5].Descriptor={1,18};
- parameters[4].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[4].Constants={0,18,8};
- parameters[6].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;parameters[6].Descriptor={0,18};
- parameters[7].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;parameters[7].Descriptor={0,18};
- D3D12_ROOT_SIGNATURE_DESC rd{8,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,error;
+ parameters[2].ParameterType=parameters[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_CBV;
+ parameters[2].Descriptor={1,0};parameters[3].Descriptor={4,0};
+ D3D12_ROOT_SIGNATURE_DESC rd{4,parameters,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> blob,error;
  Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));ComPtr<ID3D12RootSignature> root;
  Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
- auto code=Read("gi-frozen-evaluator-fixture.dxil");D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};
+ auto code=Read("gi-frozen-evaluator-fixture.dxil");
+ D3D12FrozenEvaluator evaluator;Check(evaluator.Initialize(d.device.Get(),root.Get(),blob->GetBufferPointer(),blob->GetBufferSize(),{code.data(),code.size()}));
+ const char* idle="[numthreads(1,1,1)]void main(){}";ComPtr<ID3DBlob> idleCode;
+ Check(D3DCompile(idle,strlen(idle),nullptr,nullptr,nullptr,"main","cs_5_0",0,0,&idleCode,&error));
+ D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={idleCode->GetBufferPointer(),idleCode->GetBufferSize()};
  ComPtr<ID3D12PipelineState> pso;Check(d.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
  std::vector<float> lighting(128),system(320);for(UINT i=0;i<4;++i)lighting[17*4+i]=1;
  system[6*4]=system[7*4+1]=system[8*4+2]=1;for(UINT i=0;i<4;++i)system[(22+i)*4+i]=1;
@@ -54,10 +56,18 @@ int main()try{
  std::vector<float> weight(count);const float cycle[]={0,.5f,1,1.125f};for(UINT i=0;i<count;++i)weight[i]=cycle[i%4];auto weights=d.Upload(weight);
  const auto training=d.Buffer((count+1)*sizeof(GITrainingRecord),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  std::vector<unsigned char> sentinel((count+1)*sizeof(GITrainingRecord),0xcd);auto initial=d.Upload(sentinel);d.list->CopyResource(training.Get(),initial.Get());d.Transition(training.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
- d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(pso.Get());d.list->SetComputeRootDescriptorTable(0,gpu(0));d.list->SetComputeRootDescriptorTable(1,gpu(27));
- d.list->SetComputeRootConstantBufferView(2,light->GetGPUVirtualAddress());d.list->SetComputeRootConstantBufferView(3,gi->GetGPUVirtualAddress());d.list->SetComputeRootConstantBufferView(5,sys->GetGPUVirtualAddress());
- d.list->SetComputeRootUnorderedAccessView(6,training->GetGPUVirtualAddress());d.list->SetComputeRootShaderResourceView(7,weights->GetGPUVirtualAddress());
- for(UINT phase=0;phase<2;++phase){UINT control[]={width,height,100,7,phase,phase,1,0};d.list->SetComputeRoot32BitConstants(4,8,control,0);d.list->Dispatch(2,1,1);d.Uav(color.Get());d.Uav(distance.Get());d.Uav(training.Get());}
+ ComputeBindingTracker tracker;tracker.Root(root.Get());tracker.Pipeline(pso.Get());
+ ID3D12DescriptorHeap* heaps[]={d.views.Get()};tracker.Heaps(1,heaps);
+ tracker.Descriptor(0,RootArgumentKind::Table,gpu(0).ptr);tracker.Descriptor(1,RootArgumentKind::Table,gpu(27).ptr);
+ tracker.Descriptor(2,RootArgumentKind::CBV,light->GetGPUVirtualAddress());tracker.Descriptor(3,RootArgumentKind::CBV,gi->GetGPUVirtualAddress());
+ ComputeBindingSnapshot bindings;Require(tracker.Capture(bindings)&&evaluator.Accept(bindings),"valid native bindings rejected");
+ auto missing=bindings;missing.arguments.Root(1);Require(!evaluator.Accept(missing),"missing native bindings admitted");
+ Require(!evaluator.Record(d.list.Get(),bindings,width+1,height,100,7,0,0,sys->GetGPUVirtualAddress(),training->GetGPUVirtualAddress(),weights->GetGPUVirtualAddress(),true),"odd width admitted");
+ Require(!evaluator.Record(d.list.Get(),bindings,width,height,100,7,0,0,sys->GetGPUVirtualAddress()+4,training->GetGPUVirtualAddress(),weights->GetGPUVirtualAddress(),true),"unaligned constants admitted");
+ for(UINT phase=0;phase<2;++phase){
+  Require(evaluator.Record(d.list.Get(),bindings,width,height,100,7,phase,phase,sys->GetGPUVirtualAddress(),training->GetGPUVirtualAddress(),weights->GetGPUVirtualAddress(),true),"production evaluator recording failed");
+  d.Uav(color.Get());d.Uav(distance.Get());d.Uav(training.Get());
+ }
  struct ReadTexture{ComPtr<ID3D12Resource> data;D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;};
  auto readTexture=[&](ID3D12Resource* source){ReadTexture r{};const auto desc=source->GetDesc();UINT64 bytes=0;d.device->GetCopyableFootprints(&desc,0,1,0,&r.footprint,nullptr,nullptr,&bytes);r.data=d.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
   d.Transition(source,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=source;from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
