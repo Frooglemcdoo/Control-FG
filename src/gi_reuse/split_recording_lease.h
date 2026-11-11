@@ -12,7 +12,7 @@ class GISplitRecordingLease {
  std::array<Recording,2> recordings_{};
  U64 frame_=0,queue_=0,required_=0,completed_=0;
  unsigned pending_=0;
- bool cancelled_=false,quarantined_=false;
+ bool cancelled_=false,quarantined_=false,consumerRecordingClaimed_=false;
 public:
  bool Begin(U64 frame,U64 list,U64 generation)noexcept {
   if(frame_||!frame||!list||!generation)return false;
@@ -61,6 +61,19 @@ public:
  bool Retirable()const noexcept {
   if(!frame_||quarantined_||pending_||!recordings_[0].sealed||completed_<required_)return false;
   return cancelled_||(recordings_[1].list&&recordings_[1].sealed);
+ }
+ // Recording the consumer requires an actual, separately submitted producer.
+ // Completion is unnecessary here: same-queue execution supplies GPU ordering.
+ // The host holds its bookkeeping lock through consumer command recording.
+ bool CanRecordConsumer(U64 frame,U64 queue,U64 list,U64 generation)const noexcept {
+  return frame_&&frame==frame_&&queue_&&queue==queue_&&!pending_&&!cancelled_&&!quarantined_&&!consumerRecordingClaimed_&&
+   recordings_[0].executed&&recordings_[1].list==list&&list&&
+   recordings_[1].generation==generation&&generation&&
+   !recordings_[1].sealed&&!recordings_[1].executed;
+ }
+ bool ClaimConsumerRecording(U64 frame,U64 queue,U64 list,U64 generation)noexcept {
+  if(!CanRecordConsumer(frame,queue,list,generation))return false;
+  consumerRecordingClaimed_=true;return true;
  }
  bool SubmittedBoth()const noexcept {return !quarantined_&&recordings_[0].executed&&recordings_[1].executed;}
  bool Quarantine()noexcept {quarantined_=true;return false;}

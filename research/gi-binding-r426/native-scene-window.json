@@ -13,6 +13,205 @@
   },
   "scene_binding_array_offset": "0x80",
   "scene_binding_count_offset": "0x88",
+  "scene_join_call": "0x128f3b",
+  "scene_bind_call": "0x128f5b",
+  "normal_ray_to_shade_control_flow": {
+    "start": "0x12c5f1",
+    "sole_exit": "0x12cc16",
+    "instruction_count": 339,
+    "branches": [
+      {
+        "rva": "0x12c648",
+        "kind": "jle",
+        "successors": [
+          "0x12c68b",
+          "0x12c64a"
+        ]
+      },
+      {
+        "rva": "0x12c65d",
+        "kind": "jne",
+        "successors": [
+          "0x12c68b",
+          "0x12c65f"
+        ]
+      },
+      {
+        "rva": "0x12c69a",
+        "kind": "je",
+        "successors": [
+          "0x12c6aa",
+          "0x12c69c"
+        ]
+      },
+      {
+        "rva": "0x12c6a8",
+        "kind": "jmp",
+        "successors": [
+          "0x12c6ac"
+        ]
+      },
+      {
+        "rva": "0x12c731",
+        "kind": "jne",
+        "successors": [
+          "0x12c930",
+          "0x12c737"
+        ]
+      },
+      {
+        "rva": "0x12c73a",
+        "kind": "jne",
+        "successors": [
+          "0x12c930",
+          "0x12c740"
+        ]
+      },
+      {
+        "rva": "0x12c779",
+        "kind": "jle",
+        "successors": [
+          "0x12c7bc",
+          "0x12c77b"
+        ]
+      },
+      {
+        "rva": "0x12c78e",
+        "kind": "jne",
+        "successors": [
+          "0x12c7bc",
+          "0x12c790"
+        ]
+      },
+      {
+        "rva": "0x12c859",
+        "kind": "jle",
+        "successors": [
+          "0x12c89c",
+          "0x12c85b"
+        ]
+      },
+      {
+        "rva": "0x12c86e",
+        "kind": "jne",
+        "successors": [
+          "0x12c89c",
+          "0x12c870"
+        ]
+      },
+      {
+        "rva": "0x12c937",
+        "kind": "jbe",
+        "successors": [
+          "0x12ca44",
+          "0x12c93d"
+        ]
+      },
+      {
+        "rva": "0x12c961",
+        "kind": "jle",
+        "successors": [
+          "0x12c9a4",
+          "0x12c963"
+        ]
+      },
+      {
+        "rva": "0x12c976",
+        "kind": "jne",
+        "successors": [
+          "0x12c9a4",
+          "0x12c978"
+        ]
+      },
+      {
+        "rva": "0x12c9b0",
+        "kind": "je",
+        "successors": [
+          "0x12c9c0",
+          "0x12c9b2"
+        ]
+      },
+      {
+        "rva": "0x12c9be",
+        "kind": "jmp",
+        "successors": [
+          "0x12c9c2"
+        ]
+      },
+      {
+        "rva": "0x12ca4d",
+        "kind": "jle",
+        "successors": [
+          "0x12ca90",
+          "0x12ca4f"
+        ]
+      },
+      {
+        "rva": "0x12ca62",
+        "kind": "jne",
+        "successors": [
+          "0x12ca90",
+          "0x12ca64"
+        ]
+      },
+      {
+        "rva": "0x12ca9f",
+        "kind": "je",
+        "successors": [
+          "0x12caaf",
+          "0x12caa1"
+        ]
+      },
+      {
+        "rva": "0x12caad",
+        "kind": "jmp",
+        "successors": [
+          "0x12cab1"
+        ]
+      },
+      {
+        "rva": "0x12cb3a",
+        "kind": "jne",
+        "successors": [
+          "0x12cb44",
+          "0x12cb3c"
+        ]
+      },
+      {
+        "rva": "0x12cb42",
+        "kind": "jmp",
+        "successors": [
+          "0x12cb5d"
+        ]
+      },
+      {
+        "rva": "0x12cb91",
+        "kind": "jne",
+        "successors": [
+          "0x12cbc8",
+          "0x12cb93"
+        ]
+      },
+      {
+        "rva": "0x12cb47",
+        "kind": "je",
+        "successors": [
+          "0x12cb51",
+          "0x12cb49"
+        ]
+      },
+      {
+        "rva": "0x12cb4f",
+        "kind": "jmp",
+        "successors": [
+          "0x12cb5d"
+        ]
+      }
+    ],
+    "acyclic": true,
+    "calls_assumed_to_return": true,
+    "transitive_mutation_proven_absent": false
+  },
   "calls_between_ray_and_shade": [
     {
       "rva": "0x12c614",

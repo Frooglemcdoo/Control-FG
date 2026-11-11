@@ -65,6 +65,10 @@ int main()try {
  fixture::gi_compute_hooks::InstallList(consumer.Get());fixture::gi_compute_hooks::Begin(consumer.Get(),nullptr);
  const Recording shading{reinterpret_cast<UINT64>(consumer.Get()),generation(consumer.Get())};
  Require(owners.Attach(id,1,shading),"consumer attach failed");
+ Require(owners.CanRecordConsumer(id,1,d.queue.Get(),shading),"real producer submission did not admit consumer recording");
+ Require(!owners.CanRecordConsumer(id,2,d.queue.Get(),shading),"wrong frame admitted consumer recording");
+ Require(owners.ClaimConsumerRecording(id,1,d.queue.Get(),shading),"consumer recording claim failed");
+ Require(!owners.ClaimConsumerRecording(id,1,d.queue.Get(),shading),"duplicate consumer commands admitted");
  D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
  barrier.Transition={weights,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};
  consumer->ResourceBarrier(1,&barrier);consumer->CopyBufferRegion(read.Get(),0,weights,0,count*sizeof(float));Check(consumer->Close());
@@ -74,6 +78,7 @@ int main()try {
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"event failed");
  Check(fence->SetEventOnCompletion(2,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"consumer timed out");CloseHandle(event);
  owners.Poll();Require(!owners.Take(id,retired)&&deaths==0,"closed list retired before reset");
+ Require(!owners.CanRecordConsumer(id,1,d.queue.Get(),shading),"executed consumer admitted a second recording");
  // A refused Reset must not seal the consumer or change its recording identity.
  fixture::gi_compute_hooks::Hooks* intercepted=nullptr;
  for(auto& h:fixture::gi_compute_hooks::hooks)if(h.table==*reinterpret_cast<void***>(consumer.Get()))intercepted=&h;

@@ -45,6 +45,38 @@ def audit(path):
                             (0x12D2FF,0xA81A0),(0x12D318,0xA8190),
                             (0x12D878,0xA81A0),(0x12D891,0xA8190)]:
         assert calls[address]['target_rva'] == hex(target)
+    # Normal control-flow pairing: from the native GI ray return, every local
+    # branch reconverges at GI6. Calls are treated as returning; this does not
+    # prove transitive side effects or exceptional/fault paths.
+    start, stop = 0x12C5F1, 0x12CC16
+    body = {i.address:i for i in instructions if start <= i.address < stop}
+    pending, visited, branches = [start], set(), []
+    while pending:
+        address = pending.pop()
+        if address == stop or address in visited:
+            continue
+        if address not in body:
+            raise ValueError(f'GI continuation exits interval at {address:#x}')
+        visited.add(address)
+        ins = body[address]
+        after = address + ins.size
+        if ins.group(capstone.CS_GRP_RET):
+            raise ValueError('GI continuation returns before shading')
+        if ins.group(capstone.CS_GRP_JUMP):
+            operand = ins.operands[0]
+            if operand.type != capstone.x86.X86_OP_IMM:
+                raise ValueError('Indirect GI continuation branch')
+            successors = [operand.imm] if ins.mnemonic == 'jmp' else [operand.imm, after]
+            # Acyclicity is part of this exact native interval's contract.
+            if any(target <= address for target in successors):
+                raise ValueError('Backward branch in GI continuation')
+            branches.append({'rva':hex(address), 'kind':ins.mnemonic,
+                             'successors':[hex(t) for t in successors]})
+        else:
+            successors = [after]
+        pending.extend(successors)
+    if calls[0x128F3B].get('target_rva') != '0xa8bf0' or calls[0x128F5B].get('target_rva') != '0xa8080':
+        raise ValueError('Native scene join/bind order changed')
     # These later ray passes are CONDITIONAL. Their presence in code alone does
     # not imply they executed in the capture or authorize delayed GI dispatch.
     interval = [{'rva': hex(a), **value} for a,value in calls.items()
@@ -54,6 +86,12 @@ def audit(path):
             'gi_ray_call': '0x12c5eb', 'gi_shade_call': '0x12cc16',
             'later_conditional_ray_calls': {'sun_shadow':'0x12d342','ao':'0x12d8ba'},
             'scene_binding_array_offset':'0x80', 'scene_binding_count_offset':'0x88',
+            'scene_join_call':'0x128f3b', 'scene_bind_call':'0x128f5b',
+            'normal_ray_to_shade_control_flow':{
+                'start':hex(start), 'sole_exit':hex(stop),
+                'instruction_count':len(visited), 'branches':branches,
+                'acyclic':True, 'calls_assumed_to_return':True,
+                'transitive_mutation_proven_absent':False},
             'calls_between_ray_and_shade':interval,
             'scene_lease_proven':False,
             'remaining':['Verify executed native scene scope and current frame ownership',

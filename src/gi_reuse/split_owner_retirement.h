@@ -51,6 +51,14 @@ public:
   if(!e->lease.AttachConsumer(frame,consumer.list,consumer.generation))return false;
   e->recordings[1]=consumer;return true;
  }
+ bool CanRecordConsumer(U64 id,U64 frame,U64 queue,Recording consumer)noexcept {
+  const auto* e=Find(id);
+  return e&&e->lease.CanRecordConsumer(frame,queue,consumer.list,consumer.generation);
+ }
+ bool ClaimConsumerRecording(U64 id,U64 frame,U64 queue,Recording consumer)noexcept {
+  auto* e=Find(id);
+  return e&&e->lease.ClaimConsumerRecording(frame,queue,consumer.list,consumer.generation);
+ }
  bool CancelUnattached(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.CancelUnattachedConsumer();}
  bool Seal(Recording recording)noexcept {
   bool found=false;if(state_)for(auto& e:state_->entries)if(e.owner)

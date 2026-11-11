@@ -31,6 +31,14 @@ public:
   return state_?state_->owners.Admit(frame,producer,bytes,owner):0;
  }
  bool Attach(UINT64 id,UINT64 frame,Recording consumer)noexcept{return state_&&state_->owners.Attach(id,frame,consumer);}
+ bool CanRecordConsumer(UINT64 id,UINT64 frame,ID3D12CommandQueue* queue,Recording consumer)noexcept {
+  return state_&&queue==state_->queue.Get()&&
+   state_->owners.CanRecordConsumer(id,frame,reinterpret_cast<UINT64>(queue),consumer);
+ }
+ bool ClaimConsumerRecording(UINT64 id,UINT64 frame,ID3D12CommandQueue* queue,Recording consumer)noexcept {
+  return state_&&queue==state_->queue.Get()&&
+   state_->owners.ClaimConsumerRecording(id,frame,reinterpret_cast<UINT64>(queue),consumer);
+ }
  bool Seal(Recording r)noexcept{return state_&&state_->owners.Seal(r);}
  bool CancelUnattached(UINT64 id)noexcept{return state_&&state_->owners.CancelUnattached(id);}
  Batch Before(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists,Generation generation)noexcept {
