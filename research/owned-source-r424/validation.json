@@ -1,0 +1,54 @@
+{
+  "date": "2026-11-11",
+  "rendering_baseline": "R421/R423",
+  "owned_evaluator_source_sha256": "c208beb15a32855be5506f9d1c9a586b38e5f44d00fe1c8e832c841ce244174f",
+  "secondary_source_sha256": "20f8d07d5ba8383ef4b211da7af9d6c7e2d776c7dcd3b60f32d8705346557eab",
+  "research_validation_run": 43034970557,
+  "runtime_commit": "3f0fb4573f0902f791337733994612c188939781",
+  "runtime_workflow_run": 43039215992,
+  "evidence_gap": "R423 motion inputs show strong diffuse GI samples but contain no selected-owned-evaluator per-ray light decomposition. Existing native probe metadata is attached to the original PSO; owned selection obtains a separate alternate PSO.",
+  "data_added": [
+    "per-ray native secondary result and primary throughput",
+    "surface volume/ambient, point and spot terms; miss-volume fallback",
+    "actual native branch classification, hit material, positions and normals",
+    "native running sum, fade-scaled output and decomposition residual",
+    "engine frame token and source/RR frame join"
+  ],
+  "capture_scope": {
+    "source_frames": 1,
+    "rr_frames": 2,
+    "roi_gi_pixels": [
+      256,
+      256
+    ],
+    "record_capacity": 262144,
+    "stride_bytes": 256,
+    "consecutive_source_pair": false
+  },
+  "not_proven": [
+    "in-game source availability and image parity",
+    "which source causes Jesse motion artifacts",
+    "in-game performance effect during capture",
+    "noise fix or performance gain"
+  ],
+  "launcher_review": "Explicit GI_SINGLE=1; GI_EVALUATOR flag cleared because its presence disables the default single producer.",
+  "preceding_full_build": {
+    "commit": "6777b3d0e64082a1b19ab2f360e6aca4003f2929",
+    "run": 43037535974,
+    "result": "success",
+    "not_delivered": "Missing idle F7/ROI gate correction, fixed in current commit."
+  },
+  "full_build_result": "success",
+  "input_gate_review": "Dedicated trace launcher accepts F7 and ROI keys while ordinary diagnostics are idle.",
+  "package": {
+    "file": "/workspace/scratch/bb222ddfca4b/deliverables-r424/ControlTOH-R424.zip",
+    "size": 6821335,
+    "zip_sha256": "8abf317b3bbf1e899be0b9d57411c6a1895d6853f52a5dc0fb198771399df434",
+    "dll_sha256": "4381518e0521cc69374b7ef931eb2d306b4c79da843fb4b766b979290b423c83",
+    "files": 85,
+    "source_commit": "3f0fb4573f0902f791337733994612c188939781",
+    "workflow_run": 43039215992,
+    "artifact_id": 13864454108
+  },
+  "library_file_id": "libfile_56ac2c90761c819184237aca68f76bd3"
+}

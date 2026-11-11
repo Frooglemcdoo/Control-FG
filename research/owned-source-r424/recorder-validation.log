@@ -1,0 +1,3 @@
+2026-11-11T14:05:10.8412423Z Ran 3 tests in 0.007s
+2026-11-11T14:05:10.8937003Z Owned source trace: pinned source verified; original arithmetic preserved.
+2026-11-11T14:05:11.8189308Z OGI1 GPU recorder passed: ROI, complete ray sets, overflow guard, disabled stores.
