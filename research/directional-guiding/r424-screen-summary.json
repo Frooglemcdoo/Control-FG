@@ -1,0 +1,3440 @@
+{
+ "scope": "Conditional offline second-moment screening, not rendered variance or a runtime fix. Geometry directions reconstructed, no new rays traced.",
+ "bounds_mean": "Bounds cover uncertain reconstructed directions only; not statistical confidence intervals. No actual rays, temporal result or GPU timing measured.",
+ "variants": [
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9425496439532792,
+    0.9893567747467525
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9168004171704295,
+    0.9739787596135459
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0580303020872908,
+    1.0584446704262236
+   ],
+   "guided_fold_upper_range": [
+    0.877552349811955,
+    0.986205133399433
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9045259793530401,
+    0.9886529868081969
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8602726905257381,
+    0.9612532416308843
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1293888972855373,
+    1.1301838299288258
+   ],
+   "guided_fold_upper_range": [
+    0.7965100603951366,
+    0.9852929417943085
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8557365672604512,
+    1.0100612520556307
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.787429862857602,
+    0.9654910719326071
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.3229294869262396,
+    1.3244908678650895
+   ],
+   "guided_fold_upper_range": [
+    0.6925220388076756,
+    1.0130405611682185
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9476057985474835,
+    0.9621289693584831
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9091893483431489,
+    0.9097347679059665
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0582843677263258,
+    1.0582843677263258
+   ],
+   "guided_fold_upper_range": [
+    0.8808961329254167,
+    0.9323848177405247
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.913550844085735,
+    0.9312518306160149
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8441663518784625,
+    0.8448026747017497
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.129854210248995,
+    1.129854210248995
+   ],
+   "guided_fold_upper_range": [
+    0.8034815210600368,
+    0.8772565751667845
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8729576919920222,
+    0.8838559055632379
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7558591133203293,
+    0.7568135975552601
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.3237629259183359,
+    1.3237629259183359
+   ],
+   "guided_fold_upper_range": [
+    0.7112041075853887,
+    0.7926355850190603
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8818818601695262,
+    0.9736941363056995
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8137751005937862,
+    0.926302695911204
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0388552568816234,
+    1.0395923607061732
+   ],
+   "guided_fold_upper_range": [
+    0.7506178353424122,
+    0.9385751421495748
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8113157898608189,
+    0.9546509850676683
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7220832037987445,
+    0.8816302828006082
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0888022843393903,
+    1.0903186356272292
+   ],
+   "guided_fold_upper_range": [
+    0.6281627513557181,
+    0.9053566167317134
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.7254033584077498,
+    0.9290227750195172
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6179415526423271,
+    0.8429331037944308
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2256087510554217,
+    1.2289946179190954
+   ],
+   "guided_fold_upper_range": [
+    0.49415925748431805,
+    0.8884177021552401
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9155203753909313,
+    0.933464495483924
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8487889228528018,
+    0.8489848708748552
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0387547202953098,
+    1.0387547202953098
+   ],
+   "guided_fold_upper_range": [
+    0.8079587110595052,
+    0.8812070812868582
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8738454000165266,
+    0.8957363817937719
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7693531757845693,
+    0.7695817818102985
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0885778885921578,
+    1.0885778885921578
+   ],
+   "guided_fold_upper_range": [
+    0.713222068650172,
+    0.8138470638737261
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8426124776243095,
+    0.8536206371389468
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6958902057246626,
+    0.6962331147632561
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2249820824338207,
+    1.2249820824338207
+   ],
+   "guided_fold_upper_range": [
+    0.6422225737857509,
+    0.7386533418494905
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8826787500724891,
+    0.9752273188523244
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8155783028489586,
+    0.9501153603119202
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0386387721143366,
+    1.0394718564705914
+   ],
+   "guided_fold_upper_range": [
+    0.7499456511798581,
+    0.9678917035354212
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8135954125316353,
+    0.9791556687174084
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7267298709526965,
+    0.9357464789618628
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0883386007096125,
+    1.0900291486755678
+   ],
+   "guided_fold_upper_range": [
+    0.6276130375508965,
+    0.9729833050997734
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.7291879260420329,
+    1.0599150866251106
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6226170016509812,
+    0.9917137340096085
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2245227575228832,
+    1.2281981806696154
+   ],
+   "guided_fold_upper_range": [
+    0.49395627868982434,
+    1.0776569702969145
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9172584583982671,
+    0.9389026639455328
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8559739961578301,
+    0.8561611223437999
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.038547413104045,
+    1.038547413104045
+   ],
+   "guided_fold_upper_range": [
+    0.811909766743748,
+    0.8909164223177387
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8760163997817936,
+    0.9081182309157849
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7839163168139471,
+    0.7841346306975784
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.088123249772523,
+    1.088123249772523
+   ],
+   "guided_fold_upper_range": [
+    0.7181572420146455,
+    0.8359536971211569
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.844928014580753,
+    0.8809395113600378
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7255400551153436,
+    0.7258675259407907
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2238299073753462,
+    1.2238299073753462
+   ],
+   "guided_fold_upper_range": [
+    0.6474863128679558,
+    0.7874286360068603
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8043501924196422,
+    0.9340359053151229
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6820398902443209,
+    0.7887309070064296
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.051902189527593,
+    1.0523334028742044
+   ],
+   "guided_fold_upper_range": [
+    0.6319238028714036,
+    0.8116677021890129
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.711537394231717,
+    0.9031990165773877
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.5420006831276368,
+    0.6727116967501068
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1167024510545158,
+    1.117544281212654
+   ],
+   "guided_fold_upper_range": [
+    0.4894405408349357,
+    0.7012614358444221
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.6145183867898701,
+    0.8751427038177176
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.4043417192350462,
+    0.5446837360416511
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2922727640060723,
+    1.2939001430344523
+   ],
+   "guided_fold_upper_range": [
+    0.367554060423163,
+    0.57168647012888
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8224726656565595,
+    0.8395304355702538
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6614576816639955,
+    0.6620031012268132
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0522034291772873,
+    1.0522034291772873
+   ],
+   "guided_fold_upper_range": [
+    0.6352163952975226,
+    0.6830415527558571
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.7367709759344517,
+    0.7798006390487247
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.5159352921598891,
+    0.5165716149831763
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1172791669786315,
+    1.1172791669786315
+   ],
+   "guided_fold_upper_range": [
+    0.4994370619348528,
+    0.5300292034126967
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.652533746205201,
+    0.7268987999738313
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.37847806194410155,
+    0.37943254617903244
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2933599800785567,
+    1.2933599800785567
+   ],
+   "guided_fold_upper_range": [
+    0.37917921975956326,
+    0.37963151038206283
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.7079454075980154,
+    0.9202456579885295
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.5760326888164775,
+    0.7521664505618251
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0291165894567624,
+    1.029856486894236
+   ],
+   "guided_fold_upper_range": [
+    0.49741770883246195,
+    0.7821496595618009
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.6064176068052508,
+    0.8877730064477258
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.4363204805540489,
+    0.658298620375662
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0696273767241895,
+    1.0711598053770635
+   ],
+   "guided_fold_upper_range": [
+    0.36843528082027766,
+    0.7025743166391009
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.5191923141150502,
+    0.8603677351457479
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.31921091826769543,
+    0.5926008073437006
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1839840721030939,
+    1.1873461147448217
+   ],
+   "guided_fold_upper_range": [
+    0.2661933747167493,
+    0.6529426972387141
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8113601152757722,
+    0.8143555203543559
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6255196876080746,
+    0.625715635630128
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0289075166327528,
+    1.0289075166327528
+   ],
+   "guided_fold_upper_range": [
+    0.5779881205578912,
+    0.6632011336640984
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.7375894977453866,
+    0.7722654572947731
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.5096263490144307,
+    0.5098549550401598
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0692093838722314,
+    1.0692093838722314
+   ],
+   "guided_fold_upper_range": [
+    0.48230788998213586,
+    0.5314905975308973
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.6632127062201583,
+    0.7654629206510339
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.42833271783259874,
+    0.4286756268711922
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1829158002166695,
+    1.1829158002166695
+   ],
+   "guided_fold_upper_range": [
+    0.39869779443933934,
+    0.46684418602779343
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.7040999877880084,
+    0.9186352690862679
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.5695455481857693,
+    0.7612123409362087
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.028898352780977,
+    1.0296998089686136
+   ],
+   "guided_fold_upper_range": [
+    0.491184539641307,
+    0.7959614457057476
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.6024213441649076,
+    0.8859239330856132
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.429921995943475,
+    0.6835408928530003
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0691832567128494,
+    1.0708186504934445
+   ],
+   "guided_fold_upper_range": [
+    0.3627211548915145,
+    0.7376878741362537
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.515000739538706,
+    0.8580620728804976
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.3128328910875038,
+    0.6593779820640415
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1829458554168963,
+    1.1864551966385624
+   ],
+   "guided_fold_upper_range": [
+    0.260563707451482,
+    0.742482145848445
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8046207534690217,
+    0.8114989887630923
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6159326160461442,
+    0.616119742232114
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0287140734828182,
+    1.0287140734828182
+   ],
+   "guided_fold_upper_range": [
+    0.5714945783431382,
+    0.6511686336460916
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.7298865513082899,
+    0.7697470625405842
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.4994152999652428,
+    0.4996336138488743
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0687900898737699,
+    1.0687900898737699
+   ],
+   "guided_fold_upper_range": [
+    0.47658300925623964,
+    0.5177377073017023
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.6557664099420967,
+    0.7632315187076163
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.41867045782426576,
+    0.4189979286497128
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.181834205152405,
+    1.181834205152405
+   ],
+   "guided_fold_upper_range": [
+    0.3854031290586925,
+    0.46177170485447777
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.6242774446704008,
+    0.8769097173451458
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.41249062983832246,
+    0.5254516455715385
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0513682352009732,
+    1.0518469070722727
+   ],
+   "guided_fold_upper_range": [
+    0.3614502984880816,
+    0.5444691716610947
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.5320758560603985,
+    0.851166186133986
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.2916067664098577,
+    0.38324204219438457
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1145391551241055,
+    1.115434411471493
+   ],
+   "guided_fold_upper_range": [
+    0.2592602301959982,
+    0.39351550011950354
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.4343134388880659,
+    0.8347913410567849
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.20403974889924337,
+    0.2691047799448508
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2848561241975378,
+    1.2864542277572506
+   ],
+   "guided_fold_upper_range": [
+    0.1986806090990136,
+    0.27687475818953833
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.6579645822065321,
+    0.7262125638502223
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.3836317264939366,
+    0.38417714605675435
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0516720634426164,
+    1.0516720634426164
+   ],
+   "guided_fold_upper_range": [
+    0.377619249881557,
+    0.3893277599910914
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.587537689324063,
+    0.6796410861555597
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.2665424526563356,
+    0.26717877547962277
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.115097127786966,
+    1.115097127786966
+   ],
+   "guided_fold_upper_range": [
+    0.26358713140105966,
+    0.27175175052022094
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.5392145440503188,
+    0.6482022027582977
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.18646226257368545,
+    0.1874167468086163
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2857686457680149,
+    1.2857686457680149
+   ],
+   "guided_fold_upper_range": [
+    0.17731067629309127,
+    0.20028405972023092
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.5646358275844024,
+    0.8658302368772398
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.3625551772015166,
+    0.6199925221324659
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0279984642167914,
+    1.0287136886181887
+   ],
+   "guided_fold_upper_range": [
+    0.3212306877915038,
+    0.68136552599433
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.49149390297678747,
+    0.8423648494902624
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.2614158661432442,
+    0.5895292624664996
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0663900264911361,
+    1.0677988778361667
+   ],
+   "guided_fold_upper_range": [
+    0.23964175248033273,
+    0.6722954638393451
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.4397462930417972,
+    0.8757045159061285
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.19010105700013455,
+    0.7043623415145879
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1761295244161936,
+    1.1789998252350684
+   ],
+   "guided_fold_upper_range": [
+    0.16278286164194286,
+    0.8388984935177736
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.670915557643226,
+    0.7445043738827091
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.41522398350388146,
+    0.4154199315259349
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0278971374502008,
+    1.0278971374502008
+   ],
+   "guided_fold_upper_range": [
+    0.4124505150298745,
+    0.4192006701583265
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.5977145605107906,
+    0.7249790553107267
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.3224650097957882,
+    0.3226936158215172
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0660482704103462,
+    1.0660482704103462
+   ],
+   "guided_fold_upper_range": [
+    0.2817569828274803,
+    0.37481520605513086
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.5454713192264941,
+    0.7391062102270538
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.2842346204149542,
+    0.2845775294535477
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1747482723951215,
+    1.1747482723951215
+   ],
+   "guided_fold_upper_range": [
+    0.1884815630296637,
+    0.4069294235572558
+   ],
+   "fallback_samples": 653
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.5624973893824217,
+    0.8647272031080944
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.356659502073086,
+    0.6172804945075882
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.02778491427073,
+    1.028535754504793
+   ],
+   "guided_fold_upper_range": [
+    0.3183434863783408,
+    0.6792800814911063
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.49010971799390235,
+    0.8414196061778122
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.2574077987657794,
+    0.590247556832775
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0659240341114935,
+    1.0674055137508798
+   ],
+   "guided_fold_upper_range": [
+    0.23804362652869443,
+    0.6744516035260474
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.4381821973166982,
+    0.8899430261267012
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.18846763367963126,
+    0.7175273088580935
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.175143708863466,
+    1.1780990324702367
+   ],
+   "guided_fold_upper_range": [
+    0.16044554957988608,
+    0.8573532705623239
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.6636216273270412,
+    0.7447174721249571
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.4081519732660286,
+    0.4083390994519983
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0276451857525426,
+    1.0276451857525426
+   ],
+   "guided_fold_upper_range": [
+    0.39942788481985625,
+    0.41968509064790227
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.5919443254641505,
+    0.7279384000635717
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.3196644116440907,
+    0.31988272552772207
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0655192849758155,
+    1.0655192849758155
+   ],
+   "guided_fold_upper_range": [
+    0.2714547679748731,
+    0.38154246583387047
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "hair",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.5418062254075767,
+    0.7470932453787184
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.2885719999608481,
+    0.2888994707862951
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1735686152004456,
+    1.1735686152004456
+   ],
+   "guided_fold_upper_range": [
+    0.18193788089674343,
+    0.4250857604543077
+   ],
+   "fallback_samples": 821
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    1.001910071294212,
+    1.0105023473147285
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8540897157546081,
+    1.0124124186089403
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0689066088057773,
+    1.069320241143588
+   ],
+   "guided_fold_upper_range": [
+    1.004142446023236,
+    1.0194883978495657
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    1.0129241379749814,
+    1.0303190942984284
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8568128995223397,
+    1.0432572596075804
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.153859758087413,
+    1.1546512135219233
+   ],
+   "guided_fold_upper_range": [
+    1.028029081490545,
+    1.0562608105044904
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    1.0624808288709418,
+    1.1090860095749657
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8895940495747134,
+    1.1727058614291803
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.3939063903518913,
+    1.396079577215382
+   ],
+   "guided_fold_upper_range": [
+    1.1355046075344126,
+    1.202422514768401
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9953573925497935,
+    1.015002607522481
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8542269781272563,
+    1.0103600000722743
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0696174103210925,
+    1.0696174103210925
+   ],
+   "guided_fold_upper_range": [
+    0.9850701104506195,
+    1.0217732216443576
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9976299022209258,
+    1.042241296251002
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8577160062027399,
+    1.0398711984719275
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1552773358424662,
+    1.1552773358424662
+   ],
+   "guided_fold_upper_range": [
+    0.9923781412832489,
+    1.0613046168434286
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    1.0216596564634821,
+    1.1460195396947288
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8944464077544293,
+    1.167679196158211
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.3969508788502933,
+    1.3969508788502933
+   ],
+   "guided_fold_upper_range": [
+    1.0696540213975916,
+    1.2119175481606317
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9890153996880862,
+    0.9996148957008254
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8881303628225842,
+    0.9921261163996729
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0500314517604834,
+    1.0510447964996743
+   ],
+   "guided_fold_upper_range": [
+    0.9761772693947,
+    0.9992853915823783
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9881703794503115,
+    1.0079268596079156
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.878239360738762,
+    1.0023472866651972
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1109919888504562,
+    1.113232811701105
+   ],
+   "guided_fold_upper_range": [
+    0.9743446410869864,
+    1.0147092634729447
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    1.0104251415381185,
+    1.0563190701056755
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8895085374409801,
+    1.0779085976334999
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2810190338082943,
+    1.2866459981465563
+   ],
+   "guided_fold_upper_range": [
+    1.022609410568662,
+    1.1045069651427137
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9912253282971168,
+    0.9984908119626182
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8900384222188709,
+    0.989716140259735
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0502315297605989,
+    1.0502315297605989
+   ],
+   "guided_fold_upper_range": [
+    0.9872653556018801,
+    0.9951466905291867
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    1.0014958398867801,
+    1.0016653975503094
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8868705663894146,
+    1.0031612374370893
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.111268466750186,
+    1.111268466750186
+   ],
+   "guided_fold_upper_range": [
+    1.0024169845098272,
+    1.0048103839346116
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    1.0227096514068283,
+    1.0758384867871083
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.924112131622424,
+    1.0985481381939364
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2807845945432972,
+    1.2807845945432972
+   ],
+   "guided_fold_upper_range": [
+    1.07303063867564,
+    1.1100640791618424
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9850634141573191,
+    0.9952041847167908
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9220874125350522,
+    0.9886559639392815
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0457112809995863,
+    1.0468220063595401
+   ],
+   "guided_fold_upper_range": [
+    0.9676064444231811,
+    0.9903827109380263
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9803523021121519,
+    0.9998200185004651
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9102843174969679,
+    0.9941431568326708
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1018465305414185,
+    1.1042981479442053
+   ],
+   "guided_fold_upper_range": [
+    0.9573892722078502,
+    0.9996390740667397
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9918100941104274,
+    1.0373059416359354
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9184898360454525,
+    1.0531880098313398
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2584970131763273,
+    1.2650676519060398
+   ],
+   "guided_fold_upper_range": [
+    0.9822382320567057,
+    1.074811476934495
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9866006899771775,
+    0.9977794595280611
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9289236819379108,
+    0.9843801495052384
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0434580952052803,
+    1.0434580952052803
+   ],
+   "guided_fold_upper_range": [
+    0.9805536373212982,
+    0.9928590938730985
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9882923806658555,
+    0.9999173026045707
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9235104711085437,
+    0.9882096832704259
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0966402308810865,
+    1.0966402308810865
+   ],
+   "guided_fold_upper_range": [
+    0.9830087809530361,
+    0.9997340582866358
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 4,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    1.018071328607818,
+    1.0274170650042138
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.9484395753692081,
+    1.0454883936120316
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2448725026904757,
+    1.2448725026904757
+   ],
+   "guided_fold_upper_range": [
+    1.0397902719430594,
+    1.058114527885245
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9479553568134519,
+    0.964029294638131
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7533503829659253,
+    0.9167633718614752
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0648246555276886,
+    1.0652132800111234
+   ],
+   "guided_fold_upper_range": [
+    0.8956322651948836,
+    0.9293516964167914
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.929403570319521,
+    0.955962795555354
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6995046432322698,
+    0.892476824677445
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.144642778985378,
+    1.1457276181542995
+   ],
+   "guided_fold_upper_range": [
+    0.85842943673049,
+    0.9164009252262298
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9442684119050802,
+    1.0006995512031633
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6576887861362491,
+    0.9449679631082433
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.367938937237222,
+    1.3718430498876644
+   ],
+   "guided_fold_upper_range": [
+    0.879132733855522,
+    1.0012981033434563
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9481528219494979,
+    0.9585070482959919
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7505268483004714,
+    0.9066598702454896
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0639805082940967,
+    1.0639805082940967
+   ],
+   "guided_fold_upper_range": [
+    0.8665652453577462,
+    0.9247544070164824
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9352146493557811,
+    0.9425410691769504
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6956005262635437,
+    0.8777557185327314
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1429062498617109,
+    1.1429062498617109
+   ],
+   "guided_fold_upper_range": [
+    0.8152211876592229,
+    0.9059772911628667
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9449345872455012,
+    0.9849692911450554
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.656671089986775,
+    0.9299038783905565
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.3641966935346528,
+    1.3641966935346528
+   ],
+   "guided_fold_upper_range": [
+    0.8229183623140216,
+    0.978185995009193
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9326557410108345,
+    0.9494325359047592
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7768907220807126,
+    0.8862353270505785
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.042273799835952,
+    1.0436310036167173
+   ],
+   "guided_fold_upper_range": [
+    0.8629417512891101,
+    0.9061658475958355
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9072248373341305,
+    0.9333120430607686
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.712791677540614,
+    0.8427624248740406
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0957445010876414,
+    1.0980273517333976
+   ],
+   "guided_fold_upper_range": [
+    0.8036215156471792,
+    0.8762522893540325
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.898635342819314,
+    0.9554017877967365
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.657729152446754,
+    0.8540371306160505
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2464214824820556,
+    1.2512915886717046
+   ],
+   "guided_fold_upper_range": [
+    0.7801665192774493,
+    0.9172425290508456
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9186561317958163,
+    0.9630069844340688
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7819853981890208,
+    0.8816631162298849
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0415254049699578,
+    1.0415254049699578
+   ],
+   "guided_fold_upper_range": [
+    0.881036326585552,
+    0.8819459837788096
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.8963832240860772,
+    0.9493720138403893
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7294645668787916,
+    0.8457552379264665
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0933616588308284,
+    1.0933616588308284
+   ],
+   "guided_fold_upper_range": [
+    0.8371884227608108,
+    0.8496214058344901
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9292392431021055,
+    0.9575886451794393
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7123918817100325,
+    0.8868278882815448
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2400534148669822,
+    1.2400534148669822
+   ],
+   "guided_fold_upper_range": [
+    0.8636118065329054,
+    0.8973052090210523
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9340788178966546,
+    0.9476126112263257
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8215507413412191,
+    0.8943269744232345
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.036780332798669,
+    1.0383325282184646
+   ],
+   "guided_fold_upper_range": [
+    0.8648112149764203,
+    0.898802245862219
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9122978564927745,
+    0.9293556846378882
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7678891125975205,
+    0.8569386714813978
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0837277465578101,
+    1.0874424912145078
+   ],
+   "guided_fold_upper_range": [
+    0.8128908995141889,
+    0.8662477710175697
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9029914836046401,
+    0.9396474224029133
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7285378269309821,
+    0.8667177517127771
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.218542515824648,
+    1.2281803429537503
+   ],
+   "guided_fold_upper_range": [
+    0.7896138514935357,
+    0.8789719473936942
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9242746860268044,
+    0.9669506171193003
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8357688355787771,
+    0.8912253031461048
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0342994487742494,
+    1.0342994487742494
+   ],
+   "guided_fold_upper_range": [
+    0.8901001680703627,
+    0.8937184241019407
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9008665031620218,
+    0.9544655725015149
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7906328635016544,
+    0.8553320756635365
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0781539919248013,
+    1.0781539919248013
+   ],
+   "guided_fold_upper_range": [
+    0.8535684999134703,
+    0.8561279700345986
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 8,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9100525117118065,
+    0.9568534390574184
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.769857132526401,
+    0.8669059507692245
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2049774436985463,
+    1.2049774436985463
+   ],
+   "guided_fold_upper_range": [
+    0.8612475001995507,
+    0.8694595858808252
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9264483913855895,
+    0.9425466578939429
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7098924631893851,
+    0.8740529939998603
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0612349399850205,
+    1.06226886310272
+   ],
+   "guided_fold_upper_range": [
+    0.8459315783960374,
+    0.893388253578337
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9102556634226908,
+    0.9408905393101074
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6583499466317033,
+    0.8511462027327978
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1372649778108992,
+    1.1400751845517887
+   ],
+   "guided_fold_upper_range": [
+    0.8053679612435448,
+    0.8903151217459336
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9252124633717631,
+    1.0121118307755979
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6340862028572248,
+    0.9417103194982989
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.353004806385686,
+    1.3625311960560522
+   ],
+   "guided_fold_upper_range": [
+    0.8378053559403421,
+    1.0224749924724394
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9228081936295703,
+    0.9486790639518196
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7153542356363718,
+    0.8714872575813898
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.062105476436298,
+    1.062105476436298
+   ],
+   "guided_fold_upper_range": [
+    0.8349600057751921,
+    0.8879718537785374
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9186679573618706,
+    0.9364816703616732
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.672994435454356,
+    0.8551496277235435
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.1404476285591165,
+    1.1404476285591165
+   ],
+   "guided_fold_upper_range": [
+    0.7957351216891807,
+    0.8819631461734392
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "whole",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9488550325696083,
+    1.0111255372127987
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6867477813786252,
+    0.9599805697824068
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.3673240508306836,
+    1.3673240508306836
+   ],
+   "guided_fold_upper_range": [
+    0.8355258929530162,
+    1.0161464456951115
+   ],
+   "fallback_samples": 0
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9101349754029622,
+    0.9346072573153751
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7307659446241641,
+    0.85422090843491
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.038994237121472,
+    1.0425181306797606
+   ],
+   "guided_fold_upper_range": [
+    0.8051062204337164,
+    0.8752889984470285
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8831492142405073,
+    0.930077349453548
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.672216534239381,
+    0.8265640072766782
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0892591172841293,
+    1.0967201540630678
+   ],
+   "guided_fold_upper_range": [
+    0.7465811489611699,
+    0.8702499173080658
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8871078634549755,
+    1.0037234170721667
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.6605122188573043,
+    0.9064837272646159
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2372402932895739,
+    1.256414564754657
+   ],
+   "guided_fold_upper_range": [
+    0.7551664257231173,
+    1.006909258576936
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9130412002010548,
+    0.9563512170071254
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.769714699167316,
+    0.8693924172081803
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0409149333299548,
+    1.0409149333299548
+   ],
+   "guided_fold_upper_range": [
+    0.8596324337050096,
+    0.873797057004084
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9060608592780431,
+    0.9528226854861417
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7425928737165097,
+    0.8588835447641846
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0937916014994327,
+    1.0937916014994327
+   ],
+   "guided_fold_upper_range": [
+    0.848285235725251,
+    0.8636665173734119
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9897554439599059,
+    0.9933412432791907
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8086606806675846,
+    0.9830966872390966
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.251210023017811,
+    1.251210023017811
+   ],
+   "guided_fold_upper_range": [
+    0.9785864940242892,
+    0.9851321186017319
+   ],
+   "fallback_samples": 394
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.125,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.914669391092105,
+    0.9460186361946988
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7834457198928495,
+    0.8796933989074265
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.033221171450294,
+    1.039093523905789
+   ],
+   "guided_fold_upper_range": [
+    0.8185627822193356,
+    0.8883805282475508
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.25,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.8962714351461066,
+    0.944748113209066
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.738944712257681,
+    0.8684036902024972
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.078158722653613,
+    1.0906942639770068
+   ],
+   "guided_fold_upper_range": [
+    0.7750398206197343,
+    0.8892006186417861
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "pixel",
+   "fraction": 0.5,
+   "seeds": 4,
+   "two_stage_region_upper_range": [
+    0.9047696312371009,
+    1.0084622830809569
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.7422089509146761,
+    0.9631152853568515
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2158187925083344,
+    1.2479493034968896
+   ],
+   "guided_fold_upper_range": [
+    0.7934701895324011,
+    1.0169698409358563
+   ],
+   "fallback_samples": 639
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.125,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.920922614451123,
+    0.9622985110569179
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.827764657940713,
+    0.8832211255080408
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0350259485128699,
+    1.0350259485128699
+   ],
+   "guided_fold_upper_range": [
+    0.8787579885216543,
+    0.8852353205913029
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.25,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9091204318634334,
+    0.9562776140906484
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8006988337921991,
+    0.8653980459540814
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.0820680208120854,
+    1.0820680208120854
+   ],
+   "guided_fold_upper_range": [
+    0.8593957383941738,
+    0.868106862289379
+   ],
+   "fallback_samples": 1085
+  },
+  {
+   "capture": "jaw",
+   "side": 16,
+   "grouping": "world_normal",
+   "layout": "block",
+   "fraction": 0.5,
+   "seeds": 1,
+   "two_stage_region_upper_range": [
+    0.9544987783482178,
+    0.9811514377976537
+   ],
+   "guided_subset_moment_bounds_range": [
+    0.8386013979030481,
+    0.9356502161458714
+   ],
+   "guided_miss_moment_bounds_range": [
+    1.2264210577489507,
+    1.2264210577489507
+   ],
+   "guided_fold_upper_range": [
+    0.9339642670363297,
+    0.9393860120925933
+   ],
+   "fallback_samples": 1085
+  }
+ ],
+ "seed_hypothesis": {
+  "hair": {
+   "limitation": "Seed/3-unit range inferred from captured geometry, not exported raygen constants; sensitivity analysis only.",
+   "fits": [
+    {
+     "frame_offset": -1,
+     "batch": 0,
+     "median_angle_degrees": 56.999720877306544
+    },
+    {
+     "frame_offset": -1,
+     "batch": 1,
+     "median_angle_degrees": 56.840402461298986
+    },
+    {
+     "frame_offset": -1,
+     "batch": 2,
+     "median_angle_degrees": 56.96528791349301
+    },
+    {
+     "frame_offset": -1,
+     "batch": 3,
+     "median_angle_degrees": 57.36810977887336
+    },
+    {
+     "frame_offset": 0,
+     "batch": 0,
+     "median_angle_degrees": 57.0047751047066
+    },
+    {
+     "frame_offset": 0,
+     "batch": 1,
+     "median_angle_degrees": 57.035758082967135
+    },
+    {
+     "frame_offset": 0,
+     "batch": 2,
+     "median_angle_degrees": 57.011942504496
+    },
+    {
+     "frame_offset": 0,
+     "batch": 3,
+     "median_angle_degrees": 57.06605894737358
+    },
+    {
+     "frame_offset": 1,
+     "batch": 0,
+     "median_angle_degrees": 0.020641606970390792
+    },
+    {
+     "frame_offset": 1,
+     "batch": 1,
+     "median_angle_degrees": 57.10818571146194
+    },
+    {
+     "frame_offset": 1,
+     "batch": 2,
+     "median_angle_degrees": 57.158418199125805
+    },
+    {
+     "frame_offset": 1,
+     "batch": 3,
+     "median_angle_degrees": 56.97691005093341
+    },
+    {
+     "frame_offset": 2,
+     "batch": 0,
+     "median_angle_degrees": 57.272577583867246
+    },
+    {
+     "frame_offset": 2,
+     "batch": 1,
+     "median_angle_degrees": 56.9752146428869
+    },
+    {
+     "frame_offset": 2,
+     "batch": 2,
+     "median_angle_degrees": 56.716290510533256
+    },
+    {
+     "frame_offset": 2,
+     "batch": 3,
+     "median_angle_degrees": 57.1612231710902
+    }
+   ],
+   "miss_range_error_percentiles": [
+    -0.0032645600738625546,
+    -0.0015912780916864876,
+    -0.0002011007187552316,
+    0.0006936883717749919,
+    0.001015176161957676
+   ],
+   "fixed_candidate_trials": [
+    {
+     "side": 8,
+     "layout": "pixel",
+     "seed": 0,
+     "grouping": "world_normal",
+     "folds": 2,
+     "native_fallback_samples": 821,
+     "samples": 58070,
+     "uncertain_direction_count": 0,
+     "trials": [
+      {
+       "fraction": 0.0,
+       "luminance_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "red_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "green_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "blue_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "per_fold_luminance_upper_ratio": [
+        1.0,
+        1.0
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        1.0,
+        1.0
+       ]
+      },
+      {
+       "fraction": 0.125,
+       "luminance_second_moment_ratio_bounds": [
+        0.5730928212571726,
+        0.5730928212571726
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.5691781123116844,
+        0.5691781123116844
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.5743055679765056,
+        0.5743055679765056
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.600564074664004,
+        0.600564074664004
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0301019380504468,
+        1.0301019380504468
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.5957026776060282,
+        0.5619155575995417
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.8662526498972382,
+        0.7068401713599345
+       ]
+      },
+      {
+       "fraction": 0.25,
+       "luminance_second_moment_ratio_bounds": [
+        0.43356339566718344,
+        0.43356339566718344
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.43012485871440803,
+        0.43012485871440803
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.4347981631577116,
+        0.4347981631577116
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.46731078148553024,
+        0.46731078148553024
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0717004227380351,
+        1.0717004227380351
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.48091579382546723,
+        0.4101545676379405
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.8282795032008982,
+        0.6052838924662852
+       ]
+      },
+      {
+       "fraction": 0.5,
+       "luminance_second_moment_ratio_bounds": [
+        0.3158625641230345,
+        0.3158625641230345
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.3146788948559332,
+        0.3146788948559332
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.31674544251240067,
+        0.31674544251240067
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.3561160799137023,
+        0.3561160799137023
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.18861991785744,
+        1.18861991785744
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.39093178389558203,
+        0.2787518258227064
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.7985115027390622,
+        0.5173510613839724
+       ]
+      }
+     ]
+    },
+    {
+     "side": 8,
+     "layout": "block",
+     "seed": 0,
+     "grouping": "world_normal",
+     "folds": 2,
+     "native_fallback_samples": 821,
+     "samples": 58070,
+     "uncertain_direction_count": 0,
+     "trials": [
+      {
+       "fraction": 0.0,
+       "luminance_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "red_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "green_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "blue_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "per_fold_luminance_upper_ratio": [
+        1.0,
+        1.0
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        1.0,
+        1.0
+       ]
+      },
+      {
+       "fraction": 0.125,
+       "luminance_second_moment_ratio_bounds": [
+        0.6189860449434954,
+        0.6189860449434954
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.6138217557355827,
+        0.6138217557355827
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.6204182286515249,
+        0.6204182286515249
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.6487856339802044,
+        0.6487856339802044
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0292868767020502,
+        1.0292868767020502
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.5730610737454763,
+        0.6550558133977703
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.8121880954873361,
+        0.8067979494561591
+       ]
+      },
+      {
+       "fraction": 0.25,
+       "luminance_second_moment_ratio_bounds": [
+        0.5025138683905119,
+        0.5025138683905119
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.49690940154463786,
+        0.49690940154463786
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.5042170781081308,
+        0.5042170781081308
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.538945608142328,
+        0.538945608142328
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0700133158828706,
+        1.0700133158828706
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.4773890429760125,
+        0.5222470682492019
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.7701016395507905,
+        0.7324122288397217
+       ]
+      },
+      {
+       "fraction": 0.5,
+       "luminance_second_moment_ratio_bounds": [
+        0.42026570692266674,
+        0.42026570692266674
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.41326902171979657,
+        0.41326902171979657
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.422616155936268,
+        0.422616155936268
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.4667556953995762,
+        0.4667556953995762
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.184669418690355,
+        1.184669418690355
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.4591659261584539,
+        0.3897132239476555
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.7620852276820306,
+        0.6581804792406364
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "jaw": {
+   "limitation": "Seed/3-unit range inferred from captured geometry, not exported raygen constants; sensitivity analysis only.",
+   "fits": [
+    {
+     "frame_offset": -1,
+     "batch": 0,
+     "median_angle_degrees": 57.79722677464191
+    },
+    {
+     "frame_offset": -1,
+     "batch": 1,
+     "median_angle_degrees": 57.0374111516641
+    },
+    {
+     "frame_offset": -1,
+     "batch": 2,
+     "median_angle_degrees": 57.37362137238044
+    },
+    {
+     "frame_offset": -1,
+     "batch": 3,
+     "median_angle_degrees": 55.863608577003376
+    },
+    {
+     "frame_offset": 0,
+     "batch": 0,
+     "median_angle_degrees": 56.4982141702948
+    },
+    {
+     "frame_offset": 0,
+     "batch": 1,
+     "median_angle_degrees": 57.66063157677754
+    },
+    {
+     "frame_offset": 0,
+     "batch": 2,
+     "median_angle_degrees": 57.381961110340214
+    },
+    {
+     "frame_offset": 0,
+     "batch": 3,
+     "median_angle_degrees": 56.534071888327375
+    },
+    {
+     "frame_offset": 1,
+     "batch": 0,
+     "median_angle_degrees": 0.05607489965270659
+    },
+    {
+     "frame_offset": 1,
+     "batch": 1,
+     "median_angle_degrees": 56.296985664137104
+    },
+    {
+     "frame_offset": 1,
+     "batch": 2,
+     "median_angle_degrees": 57.33084983173421
+    },
+    {
+     "frame_offset": 1,
+     "batch": 3,
+     "median_angle_degrees": 56.26231304822846
+    },
+    {
+     "frame_offset": 2,
+     "batch": 0,
+     "median_angle_degrees": 56.930058973260415
+    },
+    {
+     "frame_offset": 2,
+     "batch": 1,
+     "median_angle_degrees": 57.1706326416111
+    },
+    {
+     "frame_offset": 2,
+     "batch": 2,
+     "median_angle_degrees": 57.6004868762994
+    },
+    {
+     "frame_offset": 2,
+     "batch": 3,
+     "median_angle_degrees": 56.55872537351914
+    }
+   ],
+   "miss_range_error_percentiles": [
+    -0.002511607120726289,
+    -0.001318189605652087,
+    0.0008465254616769613,
+    0.0019539306459866526,
+    0.00214786800256217
+   ],
+   "fixed_candidate_trials": [
+    {
+     "side": 8,
+     "layout": "pixel",
+     "seed": 0,
+     "grouping": "world_normal",
+     "folds": 2,
+     "native_fallback_samples": 639,
+     "samples": 4751,
+     "uncertain_direction_count": 0,
+     "trials": [
+      {
+       "fraction": 0.0,
+       "luminance_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "red_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "green_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "blue_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "per_fold_luminance_upper_ratio": [
+        1.0,
+        1.0
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        1.0,
+        1.0
+       ]
+      },
+      {
+       "fraction": 0.125,
+       "luminance_second_moment_ratio_bounds": [
+        0.8533621429518422,
+        0.8533621429518422
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.8511324852943639,
+        0.8511324852943639
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.8554610566886873,
+        0.8554610566886873
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.8789452046776712,
+        0.8789452046776712
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0447366576768515,
+        1.0447366576768515
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.8481685062130531,
+        0.8587252378745522
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.9228656425543117,
+        0.9304965003975304
+       ]
+      },
+      {
+       "fraction": 0.25,
+       "luminance_second_moment_ratio_bounds": [
+        0.795097512463076,
+        0.795097512463076
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.791051609495175,
+        0.791051609495175
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.7985781800211864,
+        0.7985781800211864
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.8351930346437328,
+        0.8351930346437328
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.1005129868403838,
+        1.1005129868403838
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.7869829780755501,
+        0.803476808197965
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.8917817990107326,
+        0.9033157134523435
+       ]
+      },
+      {
+       "fraction": 0.5,
+       "luminance_second_moment_ratio_bounds": [
+        0.7557324065054708,
+        0.7557324065054708
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.7477765274873589,
+        0.7477765274873589
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.7618305656931367,
+        0.7618305656931367
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.8199113137023754,
+        0.8199113137023754
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.25881491930946,
+        1.25881491930946
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.7456533140150641,
+        0.7661403600223413
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.8707852521070637,
+        0.8849471543984072
+       ]
+      }
+     ]
+    },
+    {
+     "side": 8,
+     "layout": "block",
+     "seed": 0,
+     "grouping": "world_normal",
+     "folds": 2,
+     "native_fallback_samples": 1085,
+     "samples": 4751,
+     "uncertain_direction_count": 0,
+     "trials": [
+      {
+       "fraction": 0.0,
+       "luminance_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "red_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "green_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "blue_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0,
+        1.0
+       ],
+       "per_fold_luminance_upper_ratio": [
+        1.0,
+        1.0
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        1.0,
+        1.0
+       ]
+      },
+      {
+       "fraction": 0.125,
+       "luminance_second_moment_ratio_bounds": [
+        0.8672482167682175,
+        0.8672482167682175
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.8646171703003858,
+        0.8646171703003858
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.8693810989968884,
+        0.8693810989968884
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.8900807914105971,
+        0.8900807914105971
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0420595277975406,
+        1.0420595277975406
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.8690136392591573,
+        0.8664514889707111
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.9592684023388424,
+        0.9079798144293755
+       ]
+      },
+      {
+       "fraction": 0.25,
+       "luminance_second_moment_ratio_bounds": [
+        0.8199757188100343,
+        0.8199757188100343
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.8156841217054291,
+        0.8156841217054291
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.8233212820427154,
+        0.8233212820427154
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.8546525743034276,
+        0.8546525743034276
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.0943626997130564,
+        1.0943626997130564
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.8233095255266332,
+        0.8184711857612833
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.9450562235937884,
+        0.8749194952162462
+       ]
+      },
+      {
+       "fraction": 0.5,
+       "luminance_second_moment_ratio_bounds": [
+        0.8098480596547416,
+        0.8098480596547416
+       ],
+       "red_second_moment_ratio_bounds": [
+        0.8027015010096926,
+        0.8027015010096926
+       ],
+       "green_second_moment_ratio_bounds": [
+        0.815140277640898,
+        0.815140277640898
+       ],
+       "blue_second_moment_ratio_bounds": [
+        0.8613715874681447,
+        0.8613715874681447
+       ],
+       "miss_second_moment_ratio_bounds": [
+        1.241815554324996,
+        1.241815554324996
+       ],
+       "per_fold_luminance_upper_ratio": [
+        0.8317161663047291,
+        0.7999790744479199
+       ],
+       "two_stage_whole_region_upper_ratios": [
+        0.947670357675525,
+        0.8621777019792167
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
