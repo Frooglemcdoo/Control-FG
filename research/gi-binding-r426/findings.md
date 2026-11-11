@@ -162,3 +162,11 @@ No movement route, image judgement, performance run, large capture, or repeated
 compact-preview test. Need actual RTX state-object and live root-binding result.
 Deferred guided dispatch is still disabled. Continue scene/descriptor ownership
 integration after reading that result; do not claim this check fixes the noise.
+
+## R426 user pipeline check: logging failure (2026-11-11)
+
+User attachment GI-Pipeline-R426-20261111-131628-57216-eb374b01.zip contains a 3379-byte process-matched probe log and all-false result with no Evidence. The entire log was inspected. It records diagnostics=0 and character pipeline readiness, with no GI readiness/failure lines. This is NOT proof of pipeline failure, wrong installed DLL, or disabled RT.
+
+Confirmed source defect: probe.cpp::Log returns before writing any non-character/non-RT-R411 event when control_diagnostics::Active() is false. R426 incorrectly assumed direct global Log bypassed this gate. GI_FROZEN_R426 and GI_TOGGLE_R308 were suppressed. Missing evidence cannot be recovered from this file.
+
+Fix source b8abcf3a0d39df70734c6ed6dde451398a79f385 admits those exact lifecycle marker tokens through the existing small-event allowlist, adds startup=1/check_revision=2/requested/diagnostics marker, and gives collector separate ready/failed/not_observed statuses. Binding rejected is distinct from absent. Rendering and shaders unchanged. No broad diagnostics enabled. Portable allowlist test passes GCC -Wall -Wextra -Werror; Windows full/collector validation pending. Full run43086394131, core43086394090. Do not ask user to rerun the old package.
