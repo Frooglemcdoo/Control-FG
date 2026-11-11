@@ -1,0 +1,69 @@
+{
+  "scope": "synthetic coherent-tile integrand, no actual light directions, PDF mismatch or GPU cost measured",
+  "trials": [
+    {
+      "training_rays_per_update": 2,
+      "hotspot_moves_every_frames": 0,
+      "guided_two_ray_variance": 22.427475734868842,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 0.2919202301390428,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 2,
+      "hotspot_moves_every_frames": 1,
+      "guided_two_ray_variance": 136.2194642622211,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 1.773058092981022,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 2,
+      "hotspot_moves_every_frames": 8,
+      "guided_two_ray_variance": 130.83007122488021,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 1.7029087424982,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 2,
+      "hotspot_moves_every_frames": 32,
+      "guided_two_ray_variance": 115.06185117630257,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 1.497666633226522,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 256,
+      "hotspot_moves_every_frames": 0,
+      "guided_two_ray_variance": 1.1820253356966859,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 0.01538546344251674,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 256,
+      "hotspot_moves_every_frames": 1,
+      "guided_two_ray_variance": 150.00699572107695,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 1.9525191881171498,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 256,
+      "hotspot_moves_every_frames": 8,
+      "guided_two_ray_variance": 25.002856785497016,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 0.32544187287239085,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    },
+    {
+      "training_rays_per_update": 256,
+      "hotspot_moves_every_frames": 32,
+      "guided_two_ray_variance": 7.239768876949,
+      "uniform_independent_two_ray_variance": 76.8274118041992,
+      "ratio": 0.0942341894244743,
+      "max_analytic_mean_error": 2.220446049250313e-16
+    }
+  ]
+}

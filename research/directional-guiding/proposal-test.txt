@@ -1,0 +1,6 @@
+CURRENT two-ray diagonal strata analytic variance 75.607929076 (single-frame toy only)
+MATCHED analytic mean 1.611718751, two-ray variance baseline 76.827411803 guided 1.181932013 ratio 0.015384, single contribution peak 100.000000 -> 3.172306
+MOVED analytic mean 1.611718751, two-ray variance baseline 76.827411803 stale 150.252219879 ratio 1.955711
+REMOVED constant fallback mean 0.200000000, variance 0.036400366 (not zero with stale guide)
+PASS actual C++ sampler: 1M draws, histogram, weighted energy, support floor, HDR normalization, invalid fallback; analytic stale/light-removal/miss/color cases
+LIMIT: discrete toy integrands and independent draws, not Control rays, production shader binding, guide learning, or in-game image/FPS validation.
