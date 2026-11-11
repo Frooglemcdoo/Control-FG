@@ -9,6 +9,16 @@ struct Result {GIWorldProposal proposal;uint cell;float contribution[3];uint tra
 struct Learned {GIDirectionalGuide guide;float energy[64];uint parentGeneration,nextFrame,valid,count;};
 static_assert(sizeof(Frozen)==520&&sizeof(Input)==48&&sizeof(Result)==48&&sizeof(Learned)==528);
 uint Cell(GIPoint d){float u=GIWorldAtan2(d.y,d.x)*.1591549430918953f;if(u<0)u+=1;return std::min(uint(u*8),7u)+8*std::min(uint((d.z+1)*4),7u);}
+// CPU and GPU transcendental rounding may place an exact bin-boundary ray
+// on opposite sides. Allow only adjacent bins within 2e-5 bin units, never
+// an arbitrary cell. The synthetic lighting oracle uses the GPU's chosen bin.
+bool CellMatches(GIPoint d,uint cell){
+ if(cell>=64)return false;float u=GIWorldAtan2(d.y,d.x)*.1591549430918953f;if(u<0)u+=1;
+ const float x=u*8,y=(d.z+1)*4,eps=2e-5f;
+ const int loX=static_cast<int>(std::floor(x-eps)),hiX=static_cast<int>(std::floor(x+eps));
+ const int loY=std::max(0,std::min(7,static_cast<int>(std::floor(y-eps)))),hiY=std::max(0,std::min(7,static_cast<int>(std::floor(y+eps))));
+ return (cell%8==uint((loX+8)%8)||cell%8==uint((hiX+8)%8))&&cell/8>=uint(loY)&&cell/8<=uint(hiY);
+}
 bool Close(float a,float b){return std::isfinite(a)&&std::isfinite(b)&&std::abs(a-b)<=2e-4f+2e-4f*std::abs(b);}
 int main()try{
  Device gpu(false);std::vector<Frozen> guides(6);
@@ -79,7 +89,7 @@ int main()try{
  float observed[6][64]{};uint counts[6]{};
  for(UINT i=0;i<count;++i){auto v=in[i];auto r=results[i];if(i>=640){Require(!r.proposal.valid&&!r.training,"Stale generation/frame/index admitted");continue;}
   auto cpu=GISampleWorldGuide(guides[v.guideIndex].guide,v.normal,v.fraction,v.u,v.v);Require(cpu.valid==r.proposal.valid&&cpu.trace==r.proposal.trace&&r.training,"GPU validity mismatch");
-  Require(Close(cpu.direction.x,r.proposal.direction.x)&&Close(cpu.direction.y,r.proposal.direction.y)&&Close(cpu.direction.z,r.proposal.direction.z)&&Close(cpu.pdf,r.proposal.pdf)&&Close(cpu.throughputWeight,r.proposal.throughputWeight),"GPU proposal/PDF mismatch");Require(Cell(cpu.direction)==r.cell,"World cell differs");
+  Require(Close(cpu.direction.x,r.proposal.direction.x)&&Close(cpu.direction.y,r.proposal.direction.y)&&Close(cpu.direction.z,r.proposal.direction.z)&&Close(cpu.pdf,r.proposal.pdf)&&Close(cpu.throughputWeight,r.proposal.throughputWeight),"GPU proposal/PDF mismatch");Require(CellMatches(cpu.direction,r.cell)&&CellMatches(r.proposal.direction,r.cell),"World cell differs beyond numeric boundary tolerance");
   const float value[3]={r.cell==63?100.f:.2f,r.cell==63?20.f:.3f,r.cell==63?1.f:.4f};for(uint c=0;c<3;++c)Require(Close(value[c]*cpu.throughputWeight,r.contribution[c]),"Contribution mismatch");
   observed[v.guideIndex][r.cell]+=.2126f*r.contribution[0]+.7152f*r.contribution[1]+.0722f*r.contribution[2];++counts[v.guideIndex];
  }

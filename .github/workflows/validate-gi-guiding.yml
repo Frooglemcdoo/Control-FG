@@ -49,7 +49,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Guided accounting fixture compile failed'}
           ./build/test-guided-accounting.exe
           if($LASTEXITCODE -ne 0){throw 'Captured guided accounting validation failed'}
-          & $dxc -T cs_6_0 -E Learn -D GI_GUIDE_CURRENT_FRAME=1 -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-learn-current.dxil
+          & $dxc -T cs_6_0 -E LearnCurrent -HV 2018 -O3 -WX tools/gi-guiding-validation.hlsl -Fo gi-guide-learn-current.dxil
           if($LASTEXITCODE -ne 0){throw 'Current-frame learning compile failed'}
           cl /nologo /std:c++17 /EHsc /W4 /DGI_GUIDE_CURRENT_FRAME tools/test-gi-guiding-gpu.cpp /Febuild/test-current-guide.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if($LASTEXITCODE -ne 0){throw 'Current-frame fixture compile failed'}

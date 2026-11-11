@@ -98,6 +98,39 @@ void Learn(uint3 id:SV_DispatchThreadID){
 #endif
  learned[id.x]=next;
 }
+// Bounded current-frame research cohort: exactly 128 contiguous pilot slots.
+// Live admission/grouping is not implemented. Each slot's identity is checked;
+// no group scans the full image. One lane per angular cell performs reduction.
+groupshared float pilotEnergy[128];
+groupshared uint pilotCell[128];
+groupshared uint pilotValid[128];
+groupshared float cellEnergy[64];
+[numthreads(128,1,1)]
+void LearnCurrent(uint3 group:SV_GroupID,uint lane:SV_GroupIndex){
+ uint guideCount,stride,count;frozen.GetDimensions(guideCount,stride);inputs.GetDimensions(count,stride);
+ if(group.x>=guideCount)return;
+ Frozen old=frozen[group.x];uint index=group.x*128+lane;
+ pilotEnergy[lane]=0;pilotCell[lane]=0;pilotValid[lane]=0;
+ if(index<count){
+  Input v=inputs[index];Result r=results[index];
+  // Native pilot required. Do not admit already-guided samples into this mode.
+  if(v.guideIndex==group.x&&v.frame==old.frame&&v.generation==old.generation&&v.fraction==0&&r.training&&r.cell<64){
+   pilotEnergy[lane]=dot(r.contribution,float3(.2126,.7152,.0722));pilotCell[lane]=r.cell;pilotValid[lane]=1;
+  }
+ }
+ GroupMemoryBarrierWithGroupSync();
+ if(lane<64){
+  float sum=0;for(uint k=0;k<128;++k)if(pilotValid[k]&&pilotCell[k]==lane)sum+=pilotEnergy[k];
+  cellEnergy[lane]=sum;
+ }
+ GroupMemoryBarrierWithGroupSync();
+ if(lane==0){
+  Learned next=(Learned)0;for(uint j=0;j<128;++j)next.count+=pilotValid[j];
+  for(uint c=0;c<64;++c)next.energy[c]=next.count?cellEnergy[c]/next.count:0;
+  next.guide=GIBuildDirectionalGuide(next.energy,.5f);next.parentGeneration=old.generation;next.nextFrame=old.frame;next.valid=next.count?1u:0u;
+  learned[group.x]=next;
+ }
+}
 Prepared PrepareTable(GIDirectionalGuide guide,uint generation,uint frame){
  Prepared p=(Prepared)0;p.generation=generation;p.frame=frame;
  float total=0;for(uint sumCell=0;sumCell<64;++sumCell)total+=guide.mass[sumCell];
