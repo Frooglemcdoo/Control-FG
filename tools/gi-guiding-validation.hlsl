@@ -33,19 +33,19 @@ GIWorldProposal FastSample(uint guideIndex,GIPoint n,float fraction,float u,floa
   pick=(pick-rowLo)/rowMass;float colLo=0;uint col=7;
   for(uint ci=0;ci<7;++ci){float hi=prepared[guideIndex].columnCDF[row*8+ci];if(pick<hi){col=ci;break;}colLo=hi;}
   float colMass=prepared[guideIndex].columnCDF[row*8+col]-colLo;
-  float x=(float(col)+clamp((pick-colLo)/colMass,0,0.9999999403953552f))/8;
+  float x=min((float(col)+clamp((pick-colLo)/colMass,0,0.9999999403953552f))/8,0.9999999403953552f);
   float y=min((float(row)+v)/8,0.9999999403953552f);
-  float z=2*y-1,rad=sqrt(max(0,1-z*z)),angle=6.283185307179586f*x;
+  float z=clamp(2*y-1,-.9999999403953552f,.9999999403953552f),rad=sqrt(max(0,1-z*z)),angle=6.283185307179586f*x;
   r.direction.x=rad*cos(angle);r.direction.y=rad*sin(angle);r.direction.z=z;
-  guideDensity=rowMass*colMass*5.092958178940651f;
+
  }else{
   float cosineV=v>0?v:0.0000000298023223876953125f;
   float angle=6.283185307179586f*((u-fraction)/(1-fraction)),rad=sqrt(1-cosineV),z=sqrt(cosineV);
   float x=rad*cos(angle),y=rad*sin(angle),sign=n.z>=0?1.0f:-1.0f,a=-1/(sign+n.z),b=n.x*n.y*a;
   float3 t=float3(1+sign*n.x*n.x*a,sign*b,-sign*n.x),bt=float3(b,sign+n.y*n.y*a,-n.y);
   float3 d=x*t+y*bt+z*float3(n.x,n.y,n.z);r.direction.x=d.x;r.direction.y=d.y;r.direction.z=d.z;
-  if(fraction>0)guideDensity=CellMass(guideIndex,WorldCell(r.direction))*5.092958178940651f;
  }
+ if(fraction>0)guideDensity=CellMass(guideIndex,WorldCell(r.direction))*5.092958178940651f;
  float cosine=max(0,GIDot(n,r.direction)),base=cosine*.3183098861837907f;
  r.pdf=(1-fraction)*base+fraction*guideDensity;
  if(!isfinite(r.pdf)||r.pdf<=0)return r;

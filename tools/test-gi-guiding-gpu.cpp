@@ -16,6 +16,7 @@ int main()try{
  GIPoint normals[]={{0,0,1},{0,0,-1},{1,0,0},{0,1,0},{.6f,0,.8f}};
  std::mt19937 gen(424);std::uniform_real_distribution<float> random(.0001f,.9999f);std::vector<Input> in;
  for(uint i=0;i<5;++i)for(uint j=0;j<128;++j)in.push_back({normals[i],j%3==0?0.f:j%3==1?.125f:.5f,random(gen),random(gen),i,guides[i].generation,100,{}});
+ for(uint group=0;group<5;++group)for(uint edge=0;edge<8;++edge){auto& v=in[group*128+edge];v.fraction=.5f;v.u=edge%4==0?0.f:edge%4==1?.125f:edge%4==2?.5f:.99999994f;v.v=edge<4?0.f:.99999994f;}
  auto bad=in[0];bad.generation++;in.push_back(bad);bad=in[1];bad.frame--;in.push_back(bad);bad=in[2];bad.guideIndex=100;in.push_back(bad);
  const UINT count=static_cast<UINT>(in.size()),gcount=static_cast<UINT>(guides.size());
  auto old=gpu.Upload(guides),input=gpu.Upload(in);

@@ -32,7 +32,11 @@ GI_WORLD_INLINE GIWorldProposal GISampleWorldGuide(GIDirectionalGuide g,GIPoint 
        !GIFinite(u)||!GIFinite(v)||u<0||u>=1||v<0||v>=1)return r;
     if(fraction>0&&u<fraction){
         GIGuidedDirection p=GISampleDirectionalGuide(g,u/fraction,v);if(!p.valid)return r;
-        float z=2*p.v-1,rad=GISqrt((1-z*z)>0?1-z*z:0),angle=6.283185307179586f*p.u;
+        float z=2*p.v-1;
+        // Keep finite-precision pole samples inside their azimuth cell.
+        if(z<-.9999999403953552f)z=-.9999999403953552f;
+        if(z>.9999999403953552f)z=.9999999403953552f;
+        float rad=GISqrt((1-z*z)>0?1-z*z:0),angle=6.283185307179586f*p.u;
         r.direction.x=rad*GIWorldCos(angle);r.direction.y=rad*GIWorldSin(angle);r.direction.z=z;
     }else{
         // The integer random source can return exact zero. Move that endpoint
