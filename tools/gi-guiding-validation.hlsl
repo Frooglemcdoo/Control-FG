@@ -12,6 +12,8 @@ StructuredBuffer<Frozen> frozen : register(t0);
 StructuredBuffer<Input> inputs : register(t1);
 RWStructuredBuffer<Result> results : register(u0);
 RWStructuredBuffer<Learned> learned : register(u1);
+StructuredBuffer<Result> pilots : register(t3);
+RWStructuredBuffer<float4> resolved : register(u3);
 uint WorldCell(GIPoint d) {
  float u=GIWorldAtan2(d.y,d.x)*0.1591549430918953f;if(u<0)u+=1;
  return min(uint(u*8),7u)+8*min(uint((d.z+1)*4),7u);
@@ -152,4 +154,12 @@ void Publish(uint3 id:SV_DispatchThreadID){
  uint count,stride;frozen.GetDimensions(count,stride);if(id.x>=count)return;
  Frozen old=frozen[id.x];Learned n=learned[id.x];
  published[id.x]=PrepareTable(n.guide,old.generation+1,n.nextFrame);
+}
+[numthreads(64,1,1)]
+void ResolveCurrent(uint3 id:SV_DispatchThreadID){
+ uint count,stride;inputs.GetDimensions(count,stride);if(id.x>=count)return;
+ Result first=pilots[id.x],second=results[id.x];
+ if(!first.training||!second.training||first.proposal.throughputWeight!=1){resolved[id.x]=0;return;}
+ // The pilot is never reweighted using a distribution learned from itself.
+ resolved[id.x]=float4((first.contribution+second.contribution)*.5f,1);
 }

@@ -38,9 +38,10 @@ int main()try{
  auto out=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true),next=gpu.Buffer(gGuard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
  auto init=gpu.Upload(guard),gInit=gpu.Upload(gGuard);gpu.list->CopyResource(out.Get(),init.Get());gpu.list->CopyResource(next.Get(),gInit.Get());
  gpu.Transition(out.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);gpu.Transition(next.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
- D3D12_DESCRIPTOR_RANGE ranges[6]{};D3D12_ROOT_PARAMETER params[6]{};
+ D3D12_DESCRIPTOR_RANGE ranges[8]{};D3D12_ROOT_PARAMETER params[8]{};
  for(UINT i=0;i<6;++i){ranges[i].RangeType=i<3?D3D12_DESCRIPTOR_RANGE_TYPE_SRV:D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=i<3?i:i-3;params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i].DescriptorTable={1,&ranges[i]};}
- D3D12_ROOT_SIGNATURE_DESC rd{6,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
+ for(UINT i=6;i<8;++i){ranges[i].RangeType=i==6?D3D12_DESCRIPTOR_RANGE_TYPE_SRV:D3D12_DESCRIPTOR_RANGE_TYPE_UAV;ranges[i].NumDescriptors=1;ranges[i].BaseShaderRegister=3;params[i].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[i].DescriptorTable={1,&ranges[i]};}
+ D3D12_ROOT_SIGNATURE_DESC rd{8,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob> bytes,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&bytes,&error));ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,bytes->GetBufferPointer(),bytes->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto Make=[&](const char* name){auto code=Read(name);D3D12_COMPUTE_PIPELINE_STATE_DESC d{};d.pRootSignature=root.Get();d.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> p;Check(gpu.device->CreateComputePipelineState(&d,IID_PPV_ARGS(&p)));return p;};
  auto sample=Make("gi-guide-sample.dxil"),publish=Make("gi-guide-publish.dxil"),prepare=Make("gi-guide-prepare.dxil");
 #ifdef GI_GUIDE_CURRENT_FRAME
@@ -83,6 +84,18 @@ int main()try{
  gpu.list->SetPipelineState(sample.Get());gpu.list->Dispatch((count+63)/64+1,1,1);
  gpu.Transition(nextOutput.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
  auto nextRead=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.list->CopyResource(nextRead.Get(),nextOutput.Get());
+#ifdef GI_GUIDE_CURRENT_FRAME
+ std::vector<unsigned char> pairGuard((count+1)*16,0xcd);auto pairInit=gpu.Upload(pairGuard);
+ auto pairOutput=gpu.Buffer(pairGuard.size(),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST,true);
+ gpu.list->CopyResource(pairOutput.Get(),pairInit.Get());gpu.Transition(pairOutput.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+ gpu.Transition(out.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ gpu.Transition(nextOutput.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+ gpu.list->SetComputeRootDescriptorTable(6,gpu.View(out.Get(),10,sizeof(Result),count+1,false));
+ gpu.list->SetComputeRootDescriptorTable(7,gpu.View(pairOutput.Get(),11,16,count+1,true));
+ auto resolve=Make("gi-guide-resolve-current.dxil");gpu.list->SetPipelineState(resolve.Get());gpu.list->Dispatch((count+63)/64+1,1,1);
+ gpu.Transition(pairOutput.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ auto pairRead=gpu.Buffer(pairGuard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.list->CopyResource(pairRead.Get(),pairOutput.Get());
+#endif
  gpu.Submit();
  Result* results=nullptr;Result* previous=nullptr;Learned* learned=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&results)));Check(before->Map(0,nullptr,reinterpret_cast<void**>(&previous)));Check(trained->Map(0,nullptr,reinterpret_cast<void**>(&learned)));
  Require(!memcmp(results,previous,guard.size()),"Learning changed same-frame sample output");
@@ -112,9 +125,18 @@ int main()try{
   if(std::abs(r.proposal.pdf-results[i].proposal.pdf)>1e-4)++changed;
  }
  Require(changed>100,"Published guide was not actually used");Require(!memcmp(nextResults+count,guard.data()+count*sizeof(Result),sizeof(Result)),"Next frame guard changed");
+#ifdef GI_GUIDE_CURRENT_FRAME
+ float* pairs=nullptr;Check(pairRead->Map(0,nullptr,reinterpret_cast<void**>(&pairs)));
+ for(uint i=0;i<count;++i){
+  if(i>=640){for(uint c=0;c<4;++c)Require(pairs[i*4+c]==0,"Resolve admitted invalid stage");continue;}
+  Require(pairs[i*4+3]==1,"Valid two-ray result rejected");
+  for(uint c=0;c<3;++c)Require(Close(pairs[i*4+c],.5f*(results[i].contribution[c]+nextResults[i].contribution[c])),"Pilot was reweighted or two-ray denominator changed");
+ }
+ Require(!memcmp(pairs+count*4,pairGuard.data()+count*16,16),"Resolve guard changed");pairRead->Unmap(0,nullptr);
+#endif
  nextRead->Unmap(0,nullptr);read->Unmap(0,nullptr);before->Unmap(0,nullptr);trained->Unmap(0,nullptr);
 #ifdef GI_GUIDE_CURRENT_FRAME
- std::cout<<"PASS current-frame split: 640 native pilots retained unchanged, fresh guided second samples, no previous lighting history, shared contribution correction, same-frame publication, stale identity rejection, no CPU readback between stages\n";
+ std::cout<<"PASS current-frame split: 640 native pilots retained unchanged, fresh guided second samples, GPU two-ray resolve, no previous lighting history, bounded 128-pilot groups, shared contribution correction, same-frame publication, stale identity rejection, no CPU readback between stages\n";
 #else
  std::cout<<"PASS GPU-only publication: 640 next-frame proposals and weights use learned guide, stale identities rejected, no CPU readback between frames, changed PDFs="<<changed<<"\n";
 #endif
