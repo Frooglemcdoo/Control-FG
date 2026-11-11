@@ -253,6 +253,9 @@ static void OpenLog() {
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
     QueryPerformanceFrequency(&frequency);
+    char frozenPrepare[4]{};
+    const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';
+    Log("GI_FROZEN_R426 startup=1 check_revision=2 requested=%u diagnostics=%u deferred_dispatch_enabled=0",unsigned(frozenRequested),unsigned(control_diagnostics::Active()));
     Log("RR_CHARACTER_SUPPORT_R418 build=R425 lifecycle_logging=1 diagnostics=%u skin_record_limit=32 hair_record_limit=32 rendering=R424 guide_history=mode_changes_only character_coverage_guard=valid_sample_zero character_diffuse=r421_radiance_rejection_restored",unsigned(control_diagnostics::Active()));
     Log("PROBE v2.1.2 internal_build=pt-reflections-p0 source_revision=pt-reflections-p0 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
     Log("CAPABILITIES fg=fixed_2x_to_6x_plus_dynamic rr=models_E_F_default_F hdr10_bridge=1 rr_guides=gbuffer_material_envbrdf rr_hit_distance=off rr_specular_mvec=off rr_diagnostic_readbacks=off streamline_sdk=2.14.1");

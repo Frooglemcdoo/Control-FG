@@ -1,4 +1,4 @@
-R426 - Frozen GI pipeline compatibility check
+R426 revision 2 - Frozen GI pipeline compatibility check
 
 This is NOT the hair/jaw noise fix and does not enable deferred guided rendering.
 It prepares the new raygen in Control's real DXR state object and prepares six
@@ -19,3 +19,7 @@ Why this is needed: automated software-GPU checks cover compute and buffer
 preservation, but cannot validate Control's DXR state object on the RTX driver.
 A successful check is not proof that the new split rendering path is safe or that
 the visible noise has improved. Scene/descriptor lifetime integration remains.
+
+Revision 2 fixes the diagnostic-off log filter that discarded revision 1 results.
+It adds a startup/request marker and distinguishes not-observed from failure.
+Rendering and shaders are unchanged.

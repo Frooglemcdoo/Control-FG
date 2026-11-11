@@ -35,6 +35,12 @@ $text=$lines -join "`r`n"
 $result=[ordered]@{
     Schema='ControlTOH.GIPipelineCheck.R426'; ProcessId=$GameProcessId; StartedUtc=$RunStartedUtc
     LogFound=($logs.Count -eq 1)
+    CheckRevision=2
+    StartupObserved=($text -match 'GI_FROZEN_R426 startup=1 check_revision=2')
+    RequestedInGame=($text -match 'GI_FROZEN_R426 startup=1 check_revision=2 requested=1')
+    RayPipelineStatus=$(if ($text -match 'GI_FROZEN_R426 pipeline_prepared=1') {'ready'} elseif ($text -match 'GI_TOGGLE_R308.*(?:create_failed|record_failed|exception)=1|GI_FROZEN_R426 pipeline_prepared=0') {'failed'} else {'not_observed'})
+    ComputePipelineStatus=$(if ($text -match 'GI_FROZEN_R426 compute_prepared=1') {'ready'} elseif ($text -match 'GI_FROZEN_R426 compute_prepared=0') {'failed'} else {'not_observed'})
+    BindingStatus=$(if ($text -match 'GI_FROZEN_R426 binding_ready=1') {'ready'} elseif ($text -match 'GI_FROZEN_R426 binding_ready=0') {'rejected'} else {'not_observed'})
     RayPipelineReady=($text -match 'GI_FROZEN_R426 pipeline_prepared=1')
     ComputePipelinesReady=($text -match 'GI_FROZEN_R426 compute_prepared=1')
     LiveBindingsReady=($text -match 'GI_FROZEN_R426 binding_ready=1')
@@ -47,5 +53,5 @@ Compress-Archive -Path (Join-Path $stage '*') -DestinationPath ($stage+'.zip')
 Write-Host ('Send: '+$stage+'.zip')
 if (!$result.LogFound) { Write-Warning 'No matching process log. Send the ZIP and the launch error; do not repeat visual captures.' }
 elseif (!$result.RayPipelineReady -or !$result.ComputePipelinesReady -or !$result.LiveBindingsReady) {
-    Write-Warning 'One or more checks did not pass. Send the ZIP; do not repeat the run yet.'
+    Write-Warning 'One or more checks failed or were not observed. Send the ZIP; do not repeat the run yet.'
 }

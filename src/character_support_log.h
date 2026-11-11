@@ -8,7 +8,10 @@ inline bool IsLifecycleEvent(const char* format) noexcept {
     const char* const markers[] = {
         "RR_CHARACTER_SUPPORT_R418",
         "RR_CHARACTER_BASE_ALBEDO_R417",
-        "RR_HAIR_OPACITY_READY"
+        "RR_HAIR_OPACITY_READY",
+        // Bounded pipeline creation / first-and-final binding results only.
+        "GI_FROZEN_R426",
+        "GI_TOGGLE_R308"
     };
     for (const char* marker : markers) {
         const auto n = std::strlen(marker);
