@@ -32,6 +32,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Frozen evaluator generation failed' }
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX -I src/shaders gi-frozen-evaluator.hlsl -Fo gi-frozen-evaluator.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Frozen evaluator compile failed' }
+          python -c "from pathlib import Path; p=Path('gi-frozen-evaluator.hlsl'); Path('gi-frozen-evaluator-test-main.hlsl').write_text(p.read_text().replace('gi_evaluator_secondary.generated.hlsl','gi-frozen-evaluator-fixture.hlsl'))"
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX -I src/shaders -I tools gi-frozen-evaluator-test-main.hlsl -Fo gi-frozen-evaluator-fixture.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen evaluator fixture compile failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\assemble-validated-dxil.cpp /Fe:assemble-validated-dxil.exe
@@ -67,6 +70,10 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-ray-constants-gpu.cpp /Fe:gi-ray-constants.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-ray-constants.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-frozen-evaluator-gpu.cpp /Fe:gi-frozen-evaluator.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-frozen-evaluator.exe
           if not "%errorlevel%"=="0" exit /b 1
           "@
           Set-Content -Path validate-gi-core.cmd -Value $commands -Encoding ASCII
