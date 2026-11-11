@@ -124,3 +124,23 @@ change RELAX, run a GPU capture, or promise a noise/FPS improvement. The small
 load-and-exit result reports ray, compute and binding readiness independently.
 Successful shader compile/WARP tests cannot answer RTX-driver DXR integration.
 Do not ask for another moving hair/jaw visual comparison for this package.
+
+
+Further native static audit (renderer SHA ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433):
+A8BF0 is a job/queue synchronization join, not itself an AS build. A8C13 calls
+waitJob; async path A8C45 waits its scene fence, A8C61 executes deferred thread
+cleanup, A8C8F signals the async fence, A8C95 submits graphics, and A8CB4 queues
+its wait on the graphics queue. It runs before A8080 binds g_rtScene. Preserve
+this native ordering; do not create a competing queue/scheduler.
+A3940 (called immediately after GI rays) prepares the three hit textures for
+consumption at A3972/A3985/A3998. The observed 12C5F1..12CC1C path then prepares
+outputs/providers and GI6. Its imported calls contain no AS build, but this is
+not an audit of every transitive callee or concurrently scheduled mutation.
+1510B0 is only `mov eax,[rcx+28]; ret`. These narrow findings reduce the remaining
+scope; they do not by themselves certify the full native scene lease.
+
+
+38513c997155786cc98f01c105e9e4557555539c core validation:
+run 43082297242 / job 130737667715 PASS, including all CPU/WARP contracts,
+complement record identity, bounded working allocation and the new exact-session
+pipeline collector. Full DLL run 43082297245 remains the packaging gate.
