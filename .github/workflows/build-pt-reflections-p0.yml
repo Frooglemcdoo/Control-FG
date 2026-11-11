@@ -683,6 +683,14 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 tools\test-spec-phase-gpu.cpp /Febuild\test-spec-phase-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
 
+      - name: Compile owned GI source recorder fixture
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-source-recorder-gpu.cpp /Febuild\test-owned-source-recorder.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+
       - name: Compile PT reflection DXIL libraries
         shell: powershell
         run: |
@@ -827,8 +835,6 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Owned source embedding failed'}
           & $dxc -T cs_6_0 -E main -HV 2018 -O3 -WX tools/gi-owned-source-recorder-validation.hlsl -Fo gi-owned-source-recorder.dxil
           if($LASTEXITCODE -ne 0){throw 'Recorder shader compile failed'}
-          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-owned-source-recorder-gpu.cpp /Febuild/test-owned-source-recorder.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if($LASTEXITCODE -ne 0){throw 'Recorder GPU fixture compile failed'}
           ./build/test-owned-source-recorder.exe
           if($LASTEXITCODE -ne 0){throw 'Recorder GPU validation failed'}
           python tools/analyze-gi-owned-source.py build/owned-source-recorder-fixture.bin --output build/owned-source-recorder-fixture.json
