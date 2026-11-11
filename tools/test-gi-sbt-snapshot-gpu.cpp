@@ -41,8 +41,10 @@ int main()try {
  D3D12FrozenRaygenRecords records;
  Require(FAILED(records.Initialize(d.device.Get(),bytes.data(),base,localBase,2559,1440,100,7,65536,0,.125f)),"odd frozen width admitted");
  Check(records.Initialize(d.device.Get(),bytes.data(),base,localBase,2560,1440,100,7,65536,0,.125f));
+ Require(records.Matches(2560,1440,100,7,65536,0,base,localBase)&&!records.Matches(2560,1440,101,7,65536,0,base,localBase),"stale frozen identity admitted");
  Require(records.At(0).SizeInBytes==96&&records.At(1).StartAddress-records.At(0).StartAddress==128&&!records.At(2).StartAddress,"frozen record stride wrong");
- auto recordBack=d.Buffer(256,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);d.list->CopyResource(recordBack.Get(),records.Resource());
+ Require(records.NativeComplement().StartAddress-records.At(0).StartAddress==256,"complement record missing");
+ auto recordBack=d.Buffer(D3D12FrozenRaygenRecords::Bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);d.list->CopyResource(recordBack.Get(),records.Resource());
  d.Submit();
  // Simulate native upload-buffer reuse AFTER the original recording completed.
  void* mapped=nullptr;D3D12_RANGE empty{0,0};Check(source->Map(0,&empty,&mapped));std::memset(mapped,0xee,1024);source->Unmap(0,nullptr);
@@ -61,10 +63,10 @@ int main()try {
  Require(!std::memcmp(mapped,bytes.data(),static_cast<size_t>(copy.Bytes())),"SBT changed when native upload reused");back->Unmap(0,&empty);
  Check(localBack->Map(0,nullptr,&mapped));Require(!std::memcmp(mapped,bytes.data(),static_cast<size_t>(localCopy.Bytes())),"SBT changed when native DEFAULT reused");localBack->Unmap(0,&empty);
  Check(recordBack->Map(0,nullptr,&mapped));const auto* recordBytes=static_cast<const unsigned char*>(mapped);
- for(UINT phase=0;phase<2;++phase){const auto* record=recordBytes+phase*128;Require(!memcmp(record,bytes.data(),32),"frozen identifier changed");
+ for(UINT phase=0;phase<3;++phase){const auto* record=recordBytes+phase*128;Require(!memcmp(record,bytes.data(),32),"frozen identifier changed");
   UINT64 address=0;std::memcpy(&address,record+32,8);Require(address==base,"frozen guide root wrong");std::memcpy(&address,record+40,8);Require(address==localBase,"frozen weight root wrong");
   UINT control[8]{};std::memcpy(control,record+48,32);float fraction=0;std::memcpy(&fraction,record+76,4);
-  Require(control[0]==2560&&control[1]==1440&&control[2]==100&&control[3]==7&&control[4]==65536&&control[5]==phase&&control[6]==phase&&fraction==.125f,"frozen phase constants wrong");
+  Require(control[0]==2560&&control[1]==1440&&control[2]==100&&control[3]==7&&control[4]==65536&&control[5]==(phase?1u:0u)&&control[6]==(phase==1?1u:0u)&&fraction==.125f,"frozen phase constants wrong");
   for(UINT i=80;i<128;++i)Require(record[i]==0,"frozen record padding nonzero");
  }recordBack->Unmap(0,&empty);
  std::cout<<"PASS GPU SBT snapshot: native DEFAULT/UPLOAD reuse and explicit source-state restoration, ABI/range rejection, preserved offsets/bytes, one-shot recording. Referenced geometry lifetime remains external.\n";return 0;

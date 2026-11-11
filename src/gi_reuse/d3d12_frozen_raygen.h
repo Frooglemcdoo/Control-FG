@@ -49,8 +49,10 @@ public:
 // the older basis. Do not mix unmodified native draws with Duff reconstruction.
 class D3D12FrozenRaygenRecords {
  Microsoft::WRL::ComPtr<ID3D12Resource> records_;
+ std::array<UINT,6> identity_{};
+ D3D12_GPU_VIRTUAL_ADDRESS guides_=0,weights_=0;
 public:
- static constexpr UINT RecordSize=96,Stride=128,Bytes=256;
+ static constexpr UINT RecordSize=96,Stride=128,Bytes=384;
  HRESULT Initialize(ID3D12Device* device,const void* identifier,
                     D3D12_GPU_VIRTUAL_ADDRESS guides,D3D12_GPU_VIRTUAL_ADDRESS weights,
                     UINT width,UINT height,UINT frame,UINT epoch,UINT guideSlots,
@@ -59,10 +61,10 @@ public:
      width<2||(width&1)||!height||width>16384||height>16384||!frame||!epoch||
      !guideSlots||guideSlots>65536||trainingParity>1||!std::isfinite(fraction)||fraction<0||fraction>.5f)return E_INVALIDARG;
   std::array<unsigned char,Bytes> bytes{};
-  for(UINT phase=0;phase<2;++phase){
+  for(UINT phase=0;phase<3;++phase){
    auto* target=bytes.data()+phase*Stride;std::memcpy(target,identifier,32);
    std::memcpy(target+32,&guides,8);std::memcpy(target+40,&weights,8);
-   const UINT control[]={width,height,frame,epoch,guideSlots,trainingParity^phase,phase,0};
+   const UINT control[]={width,height,frame,epoch,guideSlots,trainingParity^(phase?1u:0u),phase==1?1u:0u,0};
    std::memcpy(target+48,control,sizeof(control));std::memcpy(target+76,&fraction,4);
   }
   D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
@@ -72,10 +74,20 @@ public:
   auto hr=device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&data));if(FAILED(hr))return hr;
   void* mapped=nullptr;const D3D12_RANGE empty{};hr=data->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
   if(!mapped){data->Unmap(0,&empty);return E_UNEXPECTED;}
-  std::memcpy(mapped,bytes.data(),Bytes);const D3D12_RANGE written{0,Bytes};data->Unmap(0,&written);records_=std::move(data);return S_OK;
+  std::memcpy(mapped,bytes.data(),Bytes);const D3D12_RANGE written{0,Bytes};data->Unmap(0,&written);records_=std::move(data);identity_={width,height,frame,epoch,guideSlots,trainingParity};
+  guides_=guides;weights_=weights;return S_OK;
+ }
+ bool Matches(UINT width,UINT height,UINT frame,UINT epoch,UINT guideSlots,UINT parity,
+              D3D12_GPU_VIRTUAL_ADDRESS guides,D3D12_GPU_VIRTUAL_ADDRESS weights)const noexcept {
+  return records_&&identity_==std::array<UINT,6>{width,height,frame,epoch,guideSlots,parity}&&guides_==guides&&weights_==weights;
  }
  D3D12_GPU_VIRTUAL_ADDRESS_RANGE At(UINT phase)const noexcept {
   return records_&&phase<2?D3D12_GPU_VIRTUAL_ADDRESS_RANGE{records_->GetGPUVirtualAddress()+phase*Stride,RecordSize}:D3D12_GPU_VIRTUAL_ADDRESS_RANGE{};
+ }
+ // Third immutable record traces only the complement with guide use disabled.
+ // It cannot accidentally read uninitialized guide contents on recovery.
+ D3D12_GPU_VIRTUAL_ADDRESS_RANGE NativeComplement()const noexcept {
+  return records_?D3D12_GPU_VIRTUAL_ADDRESS_RANGE{records_->GetGPUVirtualAddress()+2*Stride,RecordSize}:D3D12_GPU_VIRTUAL_ADDRESS_RANGE{};
  }
  ID3D12Resource* Resource()const noexcept{return records_.Get();}
 };

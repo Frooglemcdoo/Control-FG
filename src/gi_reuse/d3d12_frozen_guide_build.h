@@ -16,6 +16,7 @@ class D3D12FrozenGuideBuild {
    !(d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&(!write||(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS));
  }
 public:
+ bool Ready()const noexcept{return root_&&stages_[0]&&stages_[1]&&stages_[2]&&stages_[3];}
  HRESULT Initialize(ID3D12Device* device,const std::array<D3D12_SHADER_BYTECODE,4>& shaders)noexcept {
   if(root_||!device)return E_INVALIDARG;
   for(const auto& shader:shaders)if(!shader.pShaderBytecode||!shader.BytecodeLength)return E_INVALIDARG;

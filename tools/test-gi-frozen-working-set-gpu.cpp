@@ -1,6 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/d3d12_frozen_working_set.h"
 #include "../src/gi_reuse/split_recording_lease.h"
+#include "../src/gi_reuse/d3d12_frozen_completion.h"
 int main()try {
  using namespace gi_reuse;Device d(false);
  auto layout=D3D12FrozenWorkingSet::Describe(18,3,16);Require(bool(layout)&&layout.count==27,"bad compact count");
