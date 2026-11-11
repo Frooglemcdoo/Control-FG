@@ -24,13 +24,14 @@ int main()try {
  D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=4;rd.pParameters=params;
  ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
  ComPtr<ID3D12RootSignature> root;Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
- ComPtr<ID3D12PipelineState> clear,accumulate,freeze;
- const char* names[]={"gi-guide-Clear.dxil","gi-guide-Accumulate.dxil","gi-guide-Freeze.dxil"};ID3D12PipelineState** out[]={clear.GetAddressOf(),accumulate.GetAddressOf(),freeze.GetAddressOf()};
- for(UINT i=0;i<3;++i){auto code=Read(names[i]);D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};Check(d.device->CreateComputePipelineState(&pd,__uuidof(ID3D12PipelineState),reinterpret_cast<void**>(out[i])));}
+ ComPtr<ID3D12PipelineState> clear,claim,accumulate,freeze;
+ const char* names[]={"gi-guide-Clear.dxil","gi-guide-Claim.dxil","gi-guide-Accumulate.dxil","gi-guide-Freeze.dxil"};ID3D12PipelineState** out[]={clear.GetAddressOf(),claim.GetAddressOf(),accumulate.GetAddressOf(),freeze.GetAddressOf()};
+ for(UINT i=0;i<4;++i){auto code=Read(names[i]);D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};Check(d.device->CreateComputePipelineState(&pd,__uuidof(ID3D12PipelineState),reinterpret_cast<void**>(out[i])));}
  d.list->SetComputeRootSignature(root.Get());d.list->SetComputeRootShaderResourceView(0,input->GetGPUVirtualAddress());
  d.list->SetComputeRootUnorderedAccessView(1,cells->GetGPUVirtualAddress());d.list->SetComputeRootUnorderedAccessView(2,frozen->GetGPUVirtualAddress());
  UINT control[]={1024,slots,100,7};d.list->SetComputeRoot32BitConstants(3,4,control,0);
  d.list->SetPipelineState(clear.Get());d.list->Dispatch(1,1,1);d.Uav(cells.Get());d.Uav(frozen.Get());
+ d.list->SetPipelineState(claim.Get());d.list->Dispatch(16,1,1);d.Uav(cells.Get());
  d.list->SetPipelineState(accumulate.Get());d.list->Dispatch(16,1,1);d.Uav(cells.Get());
  // A later colliding key must not contaminate the original cell's energy/key.
  d.list->SetComputeRootShaderResourceView(0,colliding->GetGPUVirtualAddress());control[0]=1;d.list->SetComputeRoot32BitConstants(3,4,control,0);
@@ -43,6 +44,7 @@ int main()try {
  void* mapped=nullptr;D3D12_RANGE range{0,bytes};Check(back->Map(0,&range,&mapped));
  auto* bins=static_cast<GITrainingCell*>(mapped);auto* guides=reinterpret_cast<GIKeyedGuide*>(static_cast<unsigned char*>(mapped)+slots*sizeof(GITrainingCell));
  auto ai=GITrainingHash(a)%slots,bi=GITrainingHash(b)%slots,ci=GITrainingHash(c)%slots;
+ std::cout<<"training cell: state="<<bins[ai].state<<" count="<<bins[ai].count<<" poison="<<bins[ai].poison<<" valid="<<guides[ai].guide.valid<<"\n";
  Require(guides[ai].guide.valid==1&&GIWorldGuideKeysMatch(guides[ai].key,a),"Training guide unavailable or wrong key");
  float energy[64],total=0;for(UINT i=0;i<64;++i){std::memcpy(&energy[i],&bins[ai].energy[i],4);total+=energy[i];}
  Require(total==float(bins[ai].count)&&total>=256&&total<=512,"Training count/energy mismatch or collision contamination");
