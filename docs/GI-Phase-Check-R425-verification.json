@@ -1,0 +1,13 @@
+{
+  "zip": "ControlTOH-R425.zip",
+  "bytes": 6776221,
+  "sha256": "236c1d0730e3580eda20ae9807d4db41165a60eef1e992a507c10c45b060aba9",
+  "dll_sha256": "b17afdc204521326c4b107546a3dea5908157ed79a6186c97a2397c068ec0339",
+  "ci_original_zip_sha256": "78ce3ce32210427c76ad5a63e561d87948df31ff12016674e291353203cb2544",
+  "unchanged_shader_files": 18,
+  "compiled_commit": "954c767859b3a326a7a826378f5e1c3c045d2973",
+  "collector_commit": "72e922435e84fcad09eccfaeb54f550ce658c901",
+  "full_build_run": 43057781351,
+  "collector_validation_run": 43058567089,
+  "rendering": "R424 unchanged; passive scheduling check only; frozen sampler not live"
+}

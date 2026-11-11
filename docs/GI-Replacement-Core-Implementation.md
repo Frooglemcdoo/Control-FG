@@ -74,3 +74,27 @@ visibility rays, moving-surface reconstruction or the visual defects.
 
 No runtime include references the new core yet. R424 gameplay remains unchanged.
 The first replacement build is not ready; no complete noise fix is claimed.
+
+## R425 live integration blocker and next build
+
+The source review found that existing captures identify ray and GI6 work but do
+not join their command-list recording IDs to ExecuteCommandLists. The bounded,
+opt-in `gi_phase_audit.h` now supplies that CPU metadata without GPU readback,
+extra rays or injected GPU work. See `GI-Phase-Check-Contract.md` for limitations.
+R425 remains R424 rendering; it does not connect the frozen sampler to gameplay.
+
+Windows validation 43058104325 passed sampler and metadata tests, including
+recording markers surviving ClearState, clearing on Reset, concurrent event
+publication and capacity overflow. Validation 43058567089 additionally passed
+the actual CMD timestamp and collector tests, including stale-session rejection
+and paths with spaces. The Python parser rejects incomplete evidence and never
+authorizes native suppression. Full DLL build uses commit
+954c767859b3a326a7a826378f5e1c3c045d2973; its validated collector updates are in
+72e922435e84fcad09eccfaeb54f550ce658c901. No gameplay noise/FPS claim follows.
+
+Next user input needed is the short automatic phase-check ZIP, not another
+hair/jaw/source video. This is a scheduling integration prerequisite. The old
+captures already established source contributions; do not repeat them merely
+to recover the new command-list relationship. After this result, continue the
+split-phase implementation and separately enforce native SBT and descriptor
+resource lifetimes, output publication and barriers.
