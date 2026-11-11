@@ -47,7 +47,7 @@ inline void SaveReference(HWND game) noexcept {
  Trace("GI_JOINT_R285_REFERENCE saved=%u width=%ld height=%ld present=%llu framing_only=1 synchronized=0 hdr=0",unsigned(ok),r.right,r.bottom,presentCount.load());
 }
 inline void FrameTick(HWND game,const RECT& client) noexcept {
- if(!gi_spot_trace::JointTrace())return;
+ if(!gi_spot_trace::JointTrace()&&!gi_spot_trace::OwnedTrace())return;
  const UINT gx=gi_spot_trace::gridWidth.load(),gy=gi_spot_trace::gridHeight.load();if(!gx||!gy)return;
  if(!frameWindow){WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.hInstance=selfModule;wc.lpfnWndProc=FrameProc;wc.lpszClassName=L"ControlTOHGIFrameR284";
   if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return;
@@ -56,10 +56,15 @@ inline void FrameTick(HWND game,const RECT& client) noexcept {
  }
  const auto phase=gi_spot_trace::phase.load();const bool visible=phase==gi_spot_trace::Phase::Idle||phase==gi_spot_trace::Phase::Countdown;
  if(!visible){ShowWindow(frameWindow,SW_HIDE);return;}
- const int width=client.right,height=client.bottom;
+ int width=client.right,height=client.bottom;int offsetX=0,offsetY=0;
+ if(gi_spot_trace::OwnedTrace()){
+  UINT roi[4]{};gi_spot_trace::OwnedROI(gx,gy,roi);
+  offsetX=int(UINT64(roi[0])*width/gx);offsetY=int(UINT64(roi[1])*height/gy);
+  width=int(UINT64(roi[2])*width/gx);height=int(UINT64(roi[3])*height/gy);
+ }
  POINT at{};ClientToScreen(game,&at);
- SetWindowPos(frameWindow,HWND_TOPMOST,at.x,at.y,width,height,SWP_NOACTIVATE|SWP_SHOWWINDOW);InvalidateRect(frameWindow,nullptr,FALSE);
- if(!referenceAttempted&&phase==gi_spot_trace::Phase::Countdown&&GetTickCount64()-gi_spot_trace::armedAt>=4000){referenceAttempted=true;SaveReference(game);}
+ SetWindowPos(frameWindow,HWND_TOPMOST,at.x+offsetX,at.y+offsetY,width,height,SWP_NOACTIVATE|SWP_SHOWWINDOW);InvalidateRect(frameWindow,nullptr,FALSE);
+ if(!gi_spot_trace::OwnedTrace()&&!referenceAttempted&&phase==gi_spot_trace::Phase::Countdown&&GetTickCount64()-gi_spot_trace::armedAt>=4000){referenceAttempted=true;SaveReference(game);}
 }
 inline void Tick(HWND game) noexcept {
  if(!gi_spot_trace::Enabled())return;

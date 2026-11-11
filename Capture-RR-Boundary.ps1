@@ -1,10 +1,10 @@
-param([switch]$DiagnosticsOnly, [switch]$CollectExisting, [int]$GameProcessId=0, [switch]$RequireRR, [switch]$GiBoundary, [switch]$GiSequence, [switch]$GiStack)
+param([switch]$DiagnosticsOnly, [switch]$CollectExisting, [int]$GameProcessId=0, [switch]$RequireRR, [switch]$GiBoundary, [switch]$GiSequence, [switch]$GiStack, [switch]$OwnedSource)
 $ErrorActionPreference = 'Stop'
 $games = @(Get-Process -Name 'Control_DX12' -ErrorAction SilentlyContinue)
 $root = Join-Path $env:LOCALAPPDATA 'ControlFGProbe'
 if ($GameProcessId -gt 0) { $gameId = $GameProcessId }
 elseif ($games.Count -eq 1) { $gameId = $games[0].Id }
-elseif (($DiagnosticsOnly -or $GiStack) -and $games.Count -eq 0) {
+elseif (($DiagnosticsOnly -or $GiStack -or $OwnedSource) -and $games.Count -eq 0) {
     $latest = Get-ChildItem -LiteralPath $root -File -Filter 'probe-*.log' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $latest -or $latest.Name -notmatch '-(\d+)\.log$') { throw 'No Control probe log found.' }
     $gameId = [int]$Matches[1]
@@ -22,6 +22,7 @@ if ($CollectExisting) { $collectorArgs += '--collect-existing' }
 if ($GiBoundary) { $collectorArgs += '--gi-boundary' }
 if ($GiSequence) { $collectorArgs += '--gi-sequence' }
 if ($GiStack) { $collectorArgs += '--gi-stack' }
+if ($OwnedSource) { $collectorArgs += '--owned-source' }
 if ($RequireRR) { $collectorArgs += '--require-rr' }
 if (Get-Command py -ErrorAction SilentlyContinue) { & py -3 @collectorArgs }
 else { & python @collectorArgs }

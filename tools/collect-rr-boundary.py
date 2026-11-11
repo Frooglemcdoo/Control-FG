@@ -175,7 +175,7 @@ def validate_gi_sequence_pair(pair, ordinal):
 
 
 def collect_logs(root, local, pid, destination):
-    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Writer-R305-{pid}-*.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Writer-R305-{pid}-*.json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
+    for directory, pattern in [(root, f'probe-*-{pid}.log'), (local / 'Control-FG' / 'Diagnostics', f'GI-Owned-Source-R424-{pid}.*'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Owned-Source-R424-{pid}.*'), (local / 'Control-FG' / 'Diagnostics', f'GI-Writer-R305-{pid}-*.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Writer-R305-{pid}-*.json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (local / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (local / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (local / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R28[123]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R284-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-frame[0-9][0-9].json'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Joint-R285-{pid}-reference.bmp'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Spot-R274-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'GI-Ray-R27[78]-{pid}.bin'), (Path(os.environ.get('TEMP', str(local))) / 'Control-FG' / 'Diagnostics', f'Lighting-*-{pid}-*.log')]:
         if not directory.exists():
             continue
         for source in directory.rglob(pattern):
@@ -270,6 +270,34 @@ def validate_stack_sources(local,pid,rr_frame):
     return dict(same_frame_verified=True,engine_frame=rr_frame,source_frames=records)
 
 
+def validate_owned_source(local,pid,rr_frame,destination):
+    roots={local/'Control-FG'/'Diagnostics',Path(os.environ.get('TEMP',str(local)))/'Control-FG'/'Diagnostics'}
+    paths={p.resolve() for root in roots for p in root.glob(f'GI-Owned-Source-R424-{pid}.json')}
+    if len(paths)!=1:raise ValueError('Expected exactly one owned-source capture')
+    path=next(iter(paths));m=json.loads(path.read_text());raw=path.with_suffix('.bin').read_bytes()
+    if (m.get('schema')!='OGI1' or m.get('pid')!=pid or m.get('engine_frame')!=rr_frame or
+        m.get('overflow') is not False or m.get('evaluator')!='owned' or m.get('source_frames')!=1):
+        raise ValueError('Owned source is incomplete or not the matching RR frame')
+    spec=importlib.util.spec_from_file_location('owned_source',Path(__file__).with_name('analyze-gi-owned-source.py'))
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    parsed=module.analyze(raw)
+    if parsed['frame_token']!=rr_frame or parsed['records']!=m.get('records') or parsed['records']>m.get('capacity',0):
+        raise ValueError('Owned source header/metadata mismatch')
+    x,y,w,h=m['roi']
+    if w<=0 or h<=0 or x<0 or y<0 or x+w>m['width'] or y+h>m['height']:
+        raise ValueError('Owned source ROI invalid')
+    if parsed['valid_pixels']+parsed['invalid_receivers']!=w*h:
+        raise ValueError('Owned source ROI coverage incomplete')
+    if any(not(x<=p['pixel'][0]<x+w and y<=p['pixel'][1]<y+h) for p in parsed['pixels']):
+        raise ValueError('Owned source pixel outside ROI')
+    # Keep all binary records; limit the human-readable ranking, never lighting.
+    parsed['pixels']=parsed['pixels'][:64]
+    parsed['ranking']='64 brightest output pixels in ROI; not automatic character attribution'
+    (destination/'owned-source-analysis.json').write_text(json.dumps(parsed,indent=2,allow_nan=False))
+    return dict(same_frame_verified=True,engine_frame=rr_frame,metadata=m,
+                source_frames=1,rr_frames=2,consecutive_source_pair=False)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--pid', type=int, required=True)
@@ -280,8 +308,9 @@ def main():
     parser.add_argument('--gi-boundary', action='store_true')
     parser.add_argument('--gi-sequence', action='store_true')
     parser.add_argument('--gi-stack', action='store_true')
+    parser.add_argument('--owned-source', action='store_true')
     args = parser.parse_args()
-    if args.gi_boundary or args.gi_sequence or args.gi_stack:
+    if args.gi_boundary or args.gi_sequence or args.gi_stack or args.owned_source:
         args.require_rr = True
     if args.gi_boundary and args.gi_sequence:
         parser.error("Choose one GI capture protocol")
@@ -294,6 +323,7 @@ def main():
     if args.gi_sequence:
         prefix = 'GI-Sequence-R263-'
     if args.gi_stack:prefix='GI-Stack-R285-'
+    if args.owned_source:prefix='GI-Owned-Source-R424-'
     destination = args.output / (prefix + time.strftime('%Y%m%d-%H%M%S') + '-' + str(args.pid) + '-' + str(time.time_ns() % 1000000000))
     destination.mkdir(parents=True, exist_ok=False)
     report = {'schema': 'control-rr-boundary-r157', 'pid': args.pid, 'started_unix': started, 'pairs': [], 'complete': False, 'diagnostics_only': args.diagnostics_only}
@@ -313,7 +343,7 @@ def main():
             positions = [(i, f'stationary-pair-{i}') for i in range(1, 5)]
             report['sequence_build'] = 'R263'
             report['inter_pair_gaps_expected'] = True
-        if args.gi_stack:positions=[(1,'full-screen-rr')]
+        if args.gi_stack or args.owned_source:positions=[(1,'full-screen-rr')]
         for ordinal, label in positions:
             if args.diagnostics_only:
                 break
@@ -346,11 +376,18 @@ def main():
                     current = pair[0][1]
                     if current['frame'] <= previous['frame'] or any(current.get(k) != previous.get(k) for k in ('preset', 'width', 'height', 'lighting_mode')):
                         raise ValueError('Sequence configuration changed or frames are out of order')
+            if args.owned_source:
+                for _,data in pair:
+                    if (data.get('pre_gi_captured') is not True or data.get('pre_gi_frame')!=data['frame'] or
+                        data.get('export_stride')!=1 or not data.get('projection_valid') or not data.get('motion_scale_valid')):
+                        raise ValueError('Owned source RR pair lacks matched full-resolution GI/motion metadata')
             report['pairs'].append({'label': label, 'frames': [data for _, data in pair]})
             print(f'Pair {ordinal} saved: {label}.', flush=True)
             # Overlay status is the completion notification.
         if args.gi_stack:
             report['source_join']=validate_stack_sources(local,args.pid,report['pairs'][0]['frames'][0]['frame'])
+        if args.owned_source:
+            report['source_join']=validate_owned_source(local,args.pid,report['pairs'][0]['frames'][0]['frame'],destination)
         report['complete'] = not args.diagnostics_only
     except Exception as error:
         report['error'] = str(error)

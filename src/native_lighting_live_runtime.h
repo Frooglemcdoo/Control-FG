@@ -16,6 +16,9 @@
 #include "gi_source_policy.h"
 #include "../build/gi_spot_pcf.generated.h"
 #include "../build/gi_spot_trace.generated.h"
+#ifdef CONTROL_GI_LONG_SEQUENCE
+#include "../build/gi_owned_source_trace.generated.h"
+#endif
 #include "native_lighting_live_state.h"
 #include "rr_lighting_diagnostic.h"
 #include "native_lighting_report.h"

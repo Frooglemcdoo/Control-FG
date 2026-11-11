@@ -1,0 +1,35 @@
+ControlTOH R424 - moving owned-GI source attribution
+
+Rendering remains the accepted R421/R423 configuration. This is not a new
+noise fix. RELAX, ray count, clamps, RR guides and lighting settings are not
+changed by the new diagnostic. Ordinary launches leave source tracing disabled.
+
+The older per-ray probe attached to the native evaluator, not the alternate
+owned evaluator. R423's moving RR pair has raw GI, but no actual per-ray source
+breakdown. R424 adds that missing information inside the selected owned shader.
+It records volume/ambient, point and spot contributions and miss-volume terms;
+volume/ambient here is GI's irradiance source, not a claim about screen-space fog.
+
+With the game closed, run ControlTOH/Diagnostics/Start-GI-Owned-Source.cmd.
+Keep the settings that reproduce the issue: Native Blend, Owned GI, RR ON,
+FG OFF, RELAX OFF. Leave the native GI ray count unchanged.
+
+An orange 256x256 GI-pixel box marks the recorded area. Ctrl+arrow keys move it.
+Position the affected hair OR jaw/neck inside the box. Press F7 (or ARM GI TRACE)
+and continue reproducing the movement; there is a five-second arm delay.
+Do not hold still. Do not also start CAPTURE MOTION or CAPTURE RR.
+When SAVED appears, close the game normally. The launcher packages the capture
+and opens the resulting folder. Send its ZIP(s). Start a new session for a
+second location. If FAILED appears, retain the packaged diagnostics.
+
+Scope: one traced source frame joined by engine frame ID to the first of two
+consecutive RR frames. It is not a consecutive pair of source traces and does
+not measure performance. Only the selected region contains per-ray records;
+the RR pair remains full resolution. The binary source budget is 64 MiB and
+native two-ray data uses about 48 MiB for a fully valid 256x256 region.
+Overflow or missing frame/region coverage is reported as incomplete.
+
+The trace uses the same light arithmetic and one evaluator dispatch. Shader
+compilation, source-preservation checks, and synthetic GPU recording tests are
+validated in CI. They do not establish in-game visual parity or explain the
+Jesse artifact until the new actual source data is collected.

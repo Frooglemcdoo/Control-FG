@@ -413,7 +413,7 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
   rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
  // Prepare both slots immediately; only actual GPU recording waits for settling.
  if(select<2&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&!settled){
-  control_rr_capture_ui::detail.store(gi_path_capture::enabled.load()&&gi_path_capture::condition.load()==3?L"Arming motion capture. Keep reproducing the issue while moving.":L"Waiting for 5 seconds of gameplay. Hold still.");
+  control_rr_capture_ui::detail.store((gi_stack_capture::motion.load()||(gi_path_capture::enabled.load()&&gi_path_capture::condition.load()==3))?L"Arming motion capture. Keep reproducing the issue while moving.":L"Waiting for 5 seconds of gameplay. Hold still.");
   select=2;
  }
 #ifdef CONTROL_RR_GI_SEQUENCE

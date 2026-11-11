@@ -815,6 +815,24 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'GI endpoint estimator regression failed'}
           python tools/test-gi-live-sampling.py --dxc $dxc
           if($LASTEXITCODE -ne 0){throw 'Live GI sampling coverage/energy checks failed'}
+          python tools/test-owned-source-collection.py
+          if($LASTEXITCODE -ne 0){throw 'Owned source frame join validation failed'}
+          python tools/test-gi-owned-source-trace.py
+          if($LASTEXITCODE -ne 0){throw 'Owned source schema/source preservation failed'}
+          python tools/generate-gi-owned-source-trace.py
+          if($LASTEXITCODE -ne 0){throw 'Owned source generation failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -O3 -WX build/gi_owned_source.generated.hlsl -Fo build/gi-owned-source.dxil
+          if($LASTEXITCODE -ne 0){throw 'Owned source shader compile failed'}
+          python tools/embed-gi-owned-source-trace.py build/gi-owned-source.dxil build/gi_owned_source_trace.generated.h
+          if($LASTEXITCODE -ne 0){throw 'Owned source embedding failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -O3 -WX tools/gi-owned-source-recorder-validation.hlsl -Fo gi-owned-source-recorder.dxil
+          if($LASTEXITCODE -ne 0){throw 'Recorder shader compile failed'}
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-owned-source-recorder-gpu.cpp /Febuild/test-owned-source-recorder.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Recorder GPU fixture compile failed'}
+          ./build/test-owned-source-recorder.exe
+          if($LASTEXITCODE -ne 0){throw 'Recorder GPU validation failed'}
+          python tools/analyze-gi-owned-source.py build/owned-source-recorder-fixture.bin --output build/owned-source-recorder-fixture.json
+          if($LASTEXITCODE -ne 0){throw 'GPU recorder decode failed'}
           & $dxc -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_owned_lighting.hlsl -Fo build/gi_evaluator.dxil
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator compile failed' }
           python tools/embed-gi-evaluator.py build/gi_evaluator.dxil build/gi_evaluator.generated.h
@@ -1431,11 +1449,11 @@ jobs:
           build\test-relax-quality.exe
           if errorlevel 1 exit /b 1
 
-      - name: Package reconstruction-map capture R423
+      - name: Package owned GI source capture R424
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R423'
+          $out='ControlTOH-R424'
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1477,7 +1495,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Material collector integration test failed' }
           python tools/rt-scene-probe/test-instances.py
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
-          Copy-Item docs/Reconstruction-Map-R423.txt "$out/ControlTOH/README.txt"
+          Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
+          Copy-Item docs/Owned-GI-Source-R424.txt "$out/ControlTOH/README.txt"
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1490,10 +1509,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R423
+          name: ControlTOH-R424
           path: |
-            ControlTOH-R423.zip
-            ControlTOH-R423.sha256
+            ControlTOH-R424.zip
+            ControlTOH-R424.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json
