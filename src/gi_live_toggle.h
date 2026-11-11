@@ -98,12 +98,15 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     gi_phase_bindings::Record(list,1,desc->Width,desc->Height,desc->Depth);
     const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();
     const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
+    const bool useCompact=CompactRequested()&&useNew&&record->GetDesc().Width==192&&desc->Width>=2&&(desc->Width&1)==0&&desc->Height>0&&
+        desc->MissShaderTable.StrideInBytes==32&&desc->HitGroupTable.StrideInBytes==96;
     if(single){gi_reuse::singleRayApplied.store(useNew);if(useNew)++gi_reuse::singleRayDispatches;}
-    if(applied.exchange(version)!=version)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",useNew?"new":"native",version);
+    // Include mode/route in the key: the GI menu owns a separate revision.
+    const auto routeVersion=version*4+(useNew?1ull:0ull)+(useCompact?2ull:0ull);
+    if(applied.exchange(routeVersion)!=routeVersion)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu compact_columns=%u width=%u height=%u gpu_completion=0",useNew?"new":"native",version,useCompact?1u:0u,desc->Width,desc->Height);
     settings_check::Record(useNew?settings_check::OwnedRays:settings_check::NativeRays);
     if(useNew){auto custom=*desc;
-     if(record->GetDesc().Width==192&&desc->Width>=2&&(desc->Width&1)==0&&desc->Height>0&&
-        desc->MissShaderTable.StrideInBytes==32&&desc->HitGroupTable.StrideInBytes==96){
+     if(useCompact){
       // Both halves execute here with the same native bindings and SBT lifetime.
       // There is no deferred replay, guide use, extra ray, or partial fallback.
       custom.Width=desc->Width/2;

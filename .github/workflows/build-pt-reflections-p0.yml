@@ -1469,7 +1469,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out='ControlTOH-R425'
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1513,7 +1513,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          Copy-Item docs/GI-Phase-Check-R425.txt "$out/ControlTOH/README.txt"
+          if ($out -eq 'ControlTOH-GI-Compact-Preview') {
+            Copy-Item docs/GI-Compact-Preview.txt "$out/ControlTOH/README.txt"
+            Copy-Item tools/diagnostics/Start-GI-Compact-Preview.cmd $diagnostics
+          } else {
+            Copy-Item docs/GI-Phase-Check-R425.txt "$out/ControlTOH/README.txt"
+          }
           Copy-Item docs/Rendering-Work-Audit-R386.md "$out/ControlTOH/RENDERING-WORK-AUDIT.md"
           python tools/test-organized-package.py "$out"
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
@@ -1526,10 +1531,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ControlTOH-R425
+          name: ${{ github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
             ControlTOH-R425.zip
             ControlTOH-R425.sha256
+            ControlTOH-GI-Compact-Preview.zip
+            ControlTOH-GI-Compact-Preview.sha256
             build/gi-joint-light-validation.json
             build/gi-joint-oracle-analysis.json
             build/gi-ray-trace-validation.json

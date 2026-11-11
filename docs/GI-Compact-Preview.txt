@@ -1,0 +1,31 @@
+CONTROLTOH - GI compact scheduling preview
+
+This is a staged integration build, NOT the hair/jaw noise fix.
+The frozen guide and new reconstruction are not connected to gameplay yet.
+
+Install over the existing ControlTOH installation, with Control closed.
+Normal launch keeps the new compact scheduling OFF.
+To enable it for this session, run:
+ControlTOH\Diagnostics\Start-GI-Compact-Preview.cmd
+Select GI: OWNED in the existing lighting panel. GI: NATIVE uses native rays.
+The launcher does not change RR, RELAX or ray-count settings, start a capture,
+or persist environment settings after the session.
+
+The supported native GI variant traces alternate columns in two half-width
+passes instead of one full-width pass. Each receiver is still traced once.
+Odd widths and unsupported variants/ABIs use the existing owned raygen.
+Both phases run immediately on the original ray command list with its bindings,
+shader table and lifetime. The evaluator and output filtering are unchanged.
+
+Checks: receiver coverage and payload namespace tests, Microsoft DXIL validation,
+GPU core fixtures on WARP, full Windows DLL build and package checks.
+Not established: in-game visual parity, RTX 5090 timings, hair/jaw noise reduction.
+WARP test results do not establish any of those gameplay results.
+
+The legacy startup banner still identifies the R425/R424 rendering baseline.
+The GI_TOGGLE_R308 log includes compact_columns=1 when the compact dispatch is
+actually recorded, plus its width and height. Creation readiness alone is not
+proof that the compact route was selected. compact_columns=0 is the old route.
+
+No new source capture is requested. The previously supplied hair, jaw and R425
+phase-check captures have already been analyzed.
