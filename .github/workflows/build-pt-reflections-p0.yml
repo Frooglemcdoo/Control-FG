@@ -5,6 +5,7 @@ on:
     branches:
       - work/rt-replacement-r392
       - work/gi-replacement-core-r425
+      - work/gi-replacement-binding-r426
       - work/gi-modernization
       - work/r285-gi-stack-capture
       - work/r284-gi-wide-sequence
@@ -860,6 +861,8 @@ jobs:
           }
           python -c "from pathlib import Path;Path('build/gi_temporal.generated.h').write_text(''.join('static const unsigned char kTemporal%d[]={'%v+','.join(str(x) for x in Path('build/gi-temporal-%d.dxil'%v).read_bytes())+'};'+chr(10) for v in (0,1)))"
           if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
+          python tools/build-gi-frozen.py --dxc $dxc --output build
+          if($LASTEXITCODE -ne 0){throw 'Frozen GI runtime embedding failed'}
           python tools/gi_live_sampling.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'Live GI producer DXIL validation failed'}
           python tools/test-spec-phase-precision.py

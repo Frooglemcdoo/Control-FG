@@ -1,6 +1,8 @@
 #pragma once
 #include "gi_reuse/native_gi_identity.h"
 #include "gi_reuse/owned_request.h"
+#include "gi_reuse/d3d12_frozen_raygen.h"
+#include "../build/gi_frozen.generated.h"
 // Both raygens share one state object: native hit/miss identifiers remain valid.
 namespace gi_live_toggle {
 inline const GUID kRecord={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x66,0x77,0x01}};
@@ -11,6 +13,12 @@ inline constexpr LPCWSTR kExport=L"controlNewGIRayGen";
 inline constexpr LPCWSTR kCompactExports[2]={L"controlCompactGIRayGenA",L"controlCompactGIRayGenB"};
 inline bool CompactRequested() noexcept {
  static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_COMPACT",v,4)==1&&v[0]=='1';}();
+ return enabled;
+}
+// Internal pipeline preparation only. Does NOT activate deferred rays or claim
+// scene leases; Dispatch below remains the existing native/compact route.
+inline bool FrozenPipelineRequested() noexcept {
+ static const bool enabled=[] {char v[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",v,4)==1&&v[0]=='1';}();
  return enabled;
 }
 inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12_STATE_OBJECT_DESC* desc,REFIID iid,void** out) {
@@ -28,8 +36,11 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
  }
  if(match==desc->NumSubobjects)return next(device,desc,iid,out);
  try {
-  const bool compact=variant==0&&gi_reuse::SingleProducerEnabled()&&CompactRequested();
-  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+3);
+  const bool frozen=variant==0&&gi_reuse::SingleProducerEnabled()&&FrozenPipelineRequested();
+  const bool compact=variant==0&&gi_reuse::SingleProducerEnabled()&&(CompactRequested()||frozen);
+  gi_reuse::D3D12FrozenRaygenAugment frozenAugment;
+  if(frozen&&FAILED(frozenAugment.Initialize(device,{gi_frozen_shader::kRaygen,sizeof(gi_frozen_shader::kRaygen)})))return next(device,desc,iid,out);
+  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+(frozen?6:3));
   std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
   std::vector<std::vector<LPCWSTR>> names(desc->NumSubobjects);
   for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -43,6 +54,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
     if(objects[target].Type==D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)return next(device,desc,iid,out);
     names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);names[i].push_back(kExport);
     if(compact){names[i].push_back(kCompactExports[0]);names[i].push_back(kCompactExports[1]);}
+    if(frozen)names[i].push_back(gi_reuse::D3D12FrozenRaygenAugment::Export);
     associations[i].NumExports=static_cast<UINT>(names[i].size());associations[i].pExports=names[i].data();break;
    }
    associations[i].pSubobjectToAssociate=objects.data()+target;objects[i].pDesc=&associations[i];
@@ -64,7 +76,9 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
    objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&compactLibs[0]});
    objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&compactLibs[1]});
   }
-  objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&lib});auto augmented=*desc;augmented.NumSubobjects=static_cast<UINT>(objects.size());augmented.pSubobjects=objects.data();
+  objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&lib});
+  if(frozen&&!frozenAugment.Append(objects))return next(device,desc,iid,out);
+  auto augmented=*desc;augmented.NumSubobjects=static_cast<UINT>(objects.size());augmented.pSubobjects=objects.data();
   void* candidate=nullptr;const HRESULT hr=next(device,&augmented,iid,&candidate);
   if(FAILED(hr)||!candidate){if(candidate)static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 create_failed=1 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return next(device,desc,iid,out);}
   Microsoft::WRL::ComPtr<ID3D12StateObject> state;Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> props;
@@ -73,6 +87,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   const void* phaseIdentifiers[2]={nullptr,nullptr};
   if(compact&&identifier){for(unsigned p=0;p<2;++p)phaseIdentifiers[p]=props->GetShaderIdentifier(kCompactExports[p]);
    if(!phaseIdentifiers[0]||!phaseIdentifiers[1])identifier=nullptr;}
+  if(frozen&&identifier&&!props->GetShaderIdentifier(gi_reuse::D3D12FrozenRaygenAugment::Export))identifier=nullptr;
   Microsoft::WRL::ComPtr<ID3D12Resource> record;
   if(identifier){
    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
@@ -85,6 +100,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   }else prepared=E_FAIL;
   if(FAILED(prepared)){static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 record_failed=1 native_fallback=1");return next(device,desc,iid,out);}
   const UINT variantTag=variant+1;state->SetPrivateData(gi_reuse::nativeGIVariantKey,sizeof(variantTag),&variantTag);
+  if(frozen)Log("GI_FROZEN_R426 pipeline_prepared=1 native_hit_miss_same_state=1 deferred_dispatch_enabled=0");
   *out=candidate;ready.store(true);Log("GI_TOGGLE_R308 ready=1 variant=%u native_original=1 new_sampler=R307 same_state=1 compact_columns=%u",variant,compact?1u:0u);return hr;
  }catch(...){Log("GI_TOGGLE_R308 exception=1 native_fallback=1");return next(device,desc,iid,out);}
 }

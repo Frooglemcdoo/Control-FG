@@ -35,6 +35,8 @@ jobs:
           python -c "from pathlib import Path; p=Path('gi-frozen-evaluator.hlsl'); Path('gi-frozen-evaluator-test-main.hlsl').write_text(p.read_text().replace('gi_evaluator_secondary.generated.hlsl','gi-frozen-evaluator-fixture.hlsl'))"
           & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX -I src/shaders -I tools gi-frozen-evaluator-test-main.hlsl -Fo gi-frozen-evaluator-fixture.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Frozen evaluator fixture compile failed' }
+          python tools/build-gi-frozen.py --dxc $dxc.FullName --output build/frozen
+          if ($LASTEXITCODE -ne 0) { throw 'Frozen runtime bundle failed' }
           $commands=@"
           call "$vs\VC\Auxiliary\Build\vcvars64.bat"
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\assemble-validated-dxil.cpp /Fe:assemble-validated-dxil.exe
