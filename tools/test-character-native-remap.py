@@ -44,17 +44,27 @@ with tempfile.TemporaryDirectory() as temporary:
         coverage = instructions[start_index-1]
         assert coverage['name'] == 'firstbit_lo'
         register, lane = re.fullmatch(r'r\[(\d+)\]\.([xyzw])', coverage['operands'][0]).groups()
-        for parity in range(4):
-            x, y = 4+(parity&1), 4+(parity>>1)
-            for case in range(64):
-                packed = int(rng.integers(0, 2**32, dtype=np.uint32))
-                resources = {11:np.full((5,5,4),np.uint32(packed),np.uint32).view(np.float32), 3:np.zeros((10,10,4),np.float32)}
-                regs = np.zeros((128,4),np.float32)
-                regs[int(register),'xyzw'.index(lane)] = np.uint32(0).view(np.float32)
-                _, reads = execute(code, regs, (x+.5,y+.5), resources, 0, 1)
-                selected = (packed >> ((x&1)*8+(y&1)*16)) & 3
-                expected = (3,(x&~1)+(selected&1),(y&~1)+(selected>>1))
-                assert reads[-1] == expected, (family['name'], reads[-1], expected)
-                checks += 1
-print(f'PASS {checks} native remap cases: 12 pinned families, all pixel parities, randomized map words, single coverage sample')
+        for sample_index in (0, 0xffffffff):
+            for parity in range(4):
+                x, y = 4+(parity&1), 4+(parity>>1)
+                for case in range(64):
+                    packed = int(rng.integers(0, 2**32, dtype=np.uint32))
+                    resources = {11:np.full((5,5,4),np.uint32(packed),np.uint32).view(np.float32), 3:np.zeros((10,10,4),np.float32)}
+                    regs = np.zeros((128,4),np.float32)
+                    regs[int(register),'xyzw'.index(lane)] = np.uint32(sample_index).view(np.float32)
+                    _, reads = execute(code, regs, (x+.5,y+.5), resources, 0, 1)
+                    shift = (2*sample_index+(x&1)*8+(y&1)*16) & 31
+                    selected = (packed >> shift) & 3
+                    expected = (3,(x&~1)+(selected&1),(y&~1)+(selected>>1))
+                    assert reads[-1] == expected, (family['name'], reads[-1], expected)
+                    checks += 1
+print(f'PASS {checks} native remap cases: 12 pinned families, all pixel parities, randomized map words, sample zero and zero-coverage sentinel')
 print('Scope: coordinate arithmetic only; does not prove selected source surface matches destination depth/motion.')
+
+# Deterministic divergence: valid sample-zero selector is 0, sentinel selector is 3.
+for parity in range(4):
+    valid_shift = (parity&1)*8+(parity>>1)*16
+    invalid_shift = (valid_shift-2)&31
+    packed = 3 << invalid_shift
+    assert ((packed>>valid_shift)&3) == 0 and ((packed>>invalid_shift)&3) == 3
+print('PASS zero-coverage sentinel selects different map bits in all four parities; sample count alone does not prove selector zero')
