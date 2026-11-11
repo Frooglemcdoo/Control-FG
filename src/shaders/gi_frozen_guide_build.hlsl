@@ -22,7 +22,7 @@ void Accumulate(uint3 id:SV_DispatchThreadID) {
  }else if(old!=2)return; // No spin-lock between thread groups; training omission is allowed.
  DeviceMemoryBarrier();
  if(cells[slot].x!=r.key.x||cells[slot].y!=r.key.y||cells[slot].z!=r.key.z||cells[slot].normal!=r.key.normal)return;
- if(!all(isfinite(r.direction))||abs(dot(r.direction,r.direction)-1)>0.0001f||!isfinite(r.energy)||r.energy<0){
+ if(!GIFinitePoint(r.direction)||abs(GIDot(r.direction,r.direction)-1)>0.0001f||!isfinite(r.energy)||r.energy<0){
   InterlockedExchange(cells[slot].poison,1,old);return;
  }
  uint bin=GIFrozenCell(r.direction);
