@@ -37,11 +37,11 @@ inline bool Start(uint64_t now,bool motion=false) noexcept {
     free_camera::commands.Pending()||!IsNativeBlend(LiveSelection::GetMode(selection.Read()))||
     !control_rr::RRUserRuntimeWorkRequested()||GetFGUserMultiplier()!=kSLSelectionOff)return false;
  wchar_t env[MAX_PATH]{};if(!GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH))return false;
- swprintf_s(gi_path_capture::directory,L"%s\\ControlFGProbe\\GI-Motion-R421-%lu-%llu",env,GetCurrentProcessId(),now);
+ swprintf_s(gi_path_capture::directory,L"%s\\ControlFGProbe\\GI-Motion-R422-%lu-%llu",env,GetCurrentProcessId(),now);
  if(!CreateDirectoryW(gi_path_capture::directory,nullptr))return false;
  wchar_t path[MAX_PATH]{};swprintf_s(path,L"%s\\manifest.txt",gi_path_capture::directory);
  manifest=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,0,nullptr);if(manifest==INVALID_HANDLE_VALUE)return false;
- if(motion)Note("R421 full-resolution motion pair. Two consecutive evaluated frames. Keep moving the camera/character to reproduce the GI-lit jaw/hair issue. No lighting-mode switch; no GI hit dump. Captures are not performance measurements. Full-resolution readback and disk output can affect timing. One beep arms the request; two beeps mean packaging completed.\r\n");
+ if(motion)Note("R422 full-resolution motion pair. Two consecutive evaluated frames. Keep moving the camera/character to reproduce the GI-lit jaw/hair issue. No lighting-mode switch; no GI hit dump. Captures are not performance measurements. Full-resolution readback and disk output can affect timing. One beep arms the request; two beeps mean packaging completed.\r\n");
  else Note("R383 GI path comparison. Two consecutive evaluated frames per condition: RAW then Stable.\r\nFour frames total. Full-screen stride-4 point samples; not full-resolution image-quality proof. Native GPU readback remains full size. No performance measurement.\r\nRaw GI before filter / GI at RR input / HDR scene before RR / RR output / guides share frame IDs. No intermediate temporal-output image is captured.\r\nCounters prove CPU dispatch recording; successful RR output copies retire through GPU fences. Requested state alone is not coverage.\r\nHold still throughout; one beep starts each condition; two beeps after successful packaging. Settings restore on completion/failure.\r\n");
  savedRequest=rt_surface_source::request.load();selectionAtStart=selection.Read();
  for(unsigned i=0;i<4;++i){gi_path_capture::validFrames[i]=0;gi_path_capture::invalidFrames[i]=0;}

@@ -1,0 +1,28 @@
+ControlTOH R422 - Surface-guided character diffuse reconstruction
+
+This build changes the existing character diffuse reconstruction. R421's
+captures showed bright diffuse samples reaching the hair/skin color before RR.
+The previous filter rejected neighbors whose lighting differed strongly from
+the center, preserving precisely those isolated bright samples.
+
+R422 removes that radiance-dependent rejection. Normal, material, native mask,
+coverage, finite-value and MSAA guards remain. The existing local footprint and
+center weight remain. It averages diffuse illumination, not albedo textures,
+normal maps, specular shading or the final image. No new pass, history, ray or
+resource is added; the shader executes fewer arithmetic instructions.
+
+Native GI ray count and sampling remain unchanged. RELAX remains OFF by default.
+World/plant/desk/projector shader replacements are unchanged. This does not
+guarantee identical appearances in character shadows, reflections, or light
+boundaries: local illumination averaging can soften small lighting edges.
+
+Install with the game closed. Keep Enhanced Character Lighting ON and RELAX OFF.
+Check the same moving jaw/neck and hair views with RR ON. Inspect skin brightness,
+hair detail and light/shadow edges as well as speckles. No fresh capture is needed
+initially. CAPTURE MOTION remains available if a follow-up is needed.
+
+Validation includes emitted-shader impulse and flat-surface energy tests,
+existing material/normal/mask/coverage tests and Windows GPU readbacks. Captured
+buffer replay is approximate because the native reconstruction map was not in
+R421's capture; its noise reduction is not an in-game RR quality guarantee.
+No FPS improvement or complete visual fix is claimed before gameplay testing.

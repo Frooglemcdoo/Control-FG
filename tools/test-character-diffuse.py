@@ -89,7 +89,6 @@ def oracle(resources,p,center,samples):
    val=resources[3][sy,sx,:3].astype(float)
    if not np.all(abs(val)<1e20):continue
    weight=np.clip((np.dot(nn,n)-.95)*20,0,1)**2*(2 if xx==0 or yy==0 else 1)
-   weight*=np.clip(1-np.max(abs(val-c)/(.5*np.maximum(abs(val),abs(c))+.0001)),0,1)
    total+=weight*val;den+=weight
  return total/den
 
@@ -101,7 +100,7 @@ for family in families:
  from character_diffuse import filtered_diffuse
  expected_guarded,_=guarded_diffuse(base.read_bytes(),d)
  assert new.read_bytes()==expected_guarded, 'Gameplay shader must include exact validated coverage guard'
- # Numerical filter oracle tests the unchanged inner block; guard has dedicated tests.
+ # Numerical filter oracle tests the current inner block; guard has dedicated tests.
  fw=words(filtered_diffuse(base.read_bytes(),d))
  load=next(i for i in d['instructions'] if i['name']=='ld' and i['operands'][-1]=='t[3][3].xyzw');at=load['dword']+(w[load['dword']]>>24);size=len(fw)-len(w);code=fw[at:at+size]
  output=int(re.search(r'r\[(\d+)\]',load['operands'][0])[1]);coord=w[load['dword']+4]

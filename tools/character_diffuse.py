@@ -1,4 +1,4 @@
-"""R360: native-map-aware, material/normal/radiance guarded diffuse reconstruction.
+"""R422: native-map-aware, surface-guided diffuse reconstruction.
 No new bindings, passes, histories or changes to material/rig/specular shading.
 MSAA paths deliberately retain the original sample: coverage-index remapping is
 not validated for neighboring pixels. Normal/material guards are NOT depth or
@@ -84,14 +84,10 @@ def block(temp,output,center_source,position,depth_cb):
    code+=ins('lt',dst(a,7),absolute(tap),imm(1e20))
    code+=ins('and',dst(a,1),src(a,0),src(a,0x55))+ins('and',dst(a,1),src(a,0),src(a,0xaa))
    code+=ins('if',src(a,0),flags=1<<18)
-   # Reject strong radiance discontinuities; never filter material/albedo RGB.
-   code+=ins('add',dst(a,7),src(tap),neg(output))
-   code+=ins('max',dst(b,7),absolute(tap),absolute(output))
-   code+=ins('mad',dst(b,7),src(b),imm(.5),imm(.0001))
-   code+=ins('div',dst(a,7),absolute(a),src(b))
-   code+=ins('max',dst(a,1),src(a,0),src(a,0x55))+ins('max',dst(a,1),src(a,0),src(a,0xaa))
-   code+=ins('add',dst(a,1),imm(1),neg(a,0),flags=1<<13)
-   code+=ins('mul',dst(weight,1),src(weight,0),src(a,0))
+   # R422: weights depend on surface guides, never on noisy radiance.
+   # Bright Monte Carlo samples must contribute to nearby compatible receivers;
+   # the old radiance gate isolated precisely the spikes seen in R421 captures.
+   # This filters illumination only: native material/albedo/specular remain intact.
    code+=ins('mad',dst(total,7),src(tap),src(weight,0),src(total))
    code+=ins('add',dst(total,8),src(total,0xff),src(weight,0))
    code+=ins('endif')*4
