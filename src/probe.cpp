@@ -1106,6 +1106,7 @@ static bool Exchange(Patch& p, bool install) {
 static void NativeCpuPoll(unsigned long long present) noexcept { native_cpu::Poll(present); native_directstorage::Poll(present); native_loader_trace::Poll(present); native_loader_early::Poll(present); native_texture_contract::Poll(present); native_gpu_storage::Poll(present); }
 #include "pt_reflection_loader.h"
 static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[]() noexcept -> unsigned long long {unsigned long long frame=0;DWORD fault=0;return ReadEngineFrameSafe(&frame,&fault)?frame:0;};return true;}();
+#include "gi_scene_audit.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
 #include "rr_world_albedo_runtime.h"
@@ -1527,6 +1528,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             return TRUE;
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
+        gi_scene_audit::Install(renderer,d3d);
         Log("NATIVE_CPU_R218_INSTALL ready=%u",unsigned(native_cpu::Install(renderer)));
         native_cpu::InstallAppendHooks(renderer);
         Log("NATIVE_CPU_R222_INSTALL ready=%u",unsigned(native_cpu::InstallWorkload(renderer)));

@@ -10,9 +10,17 @@ namespace gi_phase_audit {
 using U64=unsigned long long;
 using FrameReader=U64(*)() noexcept;
 inline std::atomic<FrameReader> frameReader{nullptr};
+using Observer=void(*)(U64,U64,unsigned) noexcept;
+inline std::atomic<Observer> observer{nullptr};
+
 inline constexpr unsigned capacity=8192;
 struct Event {std::atomic<bool> ready{false};unsigned kind=0;std::array<U64,12> data{};};
 inline Event events[capacity];
+inline std::atomic<bool> relevantSubmit[capacity]{};
+inline void Observe(U64 id,U64 frame,unsigned point) noexcept {
+ if(!id||id>capacity||((point==3||point==8)&&!relevantSubmit[id-1].load()))return;
+ if(const auto f=observer.load())f(id,frame,point);
+}
 inline std::atomic<unsigned> next{0},dropped{0};
 inline std::atomic<U64> firstFrame{0},startedAt{0};
 inline std::atomic<bool> stopped{false};
@@ -53,6 +61,7 @@ inline U64 Phase(ID3D12GraphicsCommandList* list,unsigned kind,U64 frame,U64 gen
  if(FAILED(list->GetPrivateData(markerKey,&bytes,&m))||bytes!=sizeof(m))m={};
  if(m.count<16)m.ids[m.count++]=id;else m.overflow=1;
  if(FAILED(list->SetPrivateData(markerKey,sizeof(m),&m)))Emit(9,{id,1});
+ Observe(id,frame,kind);
  return id;
 }
 inline U64 Submit(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
@@ -63,8 +72,10 @@ inline U64 Submit(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* 
  for(UINT i=0;i<count;++i){if(!lists[i])continue;Marker m{};UINT bytes=sizeof(m);
   if(FAILED(lists[i]->GetPrivateData(markerKey,&bytes,&m))||bytes!=sizeof(m)||!m.count)continue;
   if(m.count>16){Emit(9,{call,2});continue;}
+  if(call&&call<=capacity)relevantSubmit[call-1]=true;
   for(unsigned j=0;j<m.count;++j)Emit(4,{call,i,reinterpret_cast<U64>(lists[i]),m.ids[j],j,m.overflow});
  }
+ Observe(call,Frame(),3);
  return call;
 }
 inline void Fence(ID3D12CommandQueue* queue,ID3D12Fence* fence,U64 value,bool signal,HRESULT hr) noexcept {

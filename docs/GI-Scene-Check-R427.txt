@@ -1,0 +1,21 @@
+ControlTOH R427 - bounded native scene metadata check
+
+Install over the existing ControlTOH mod, with Control closed.
+Run ControlTOH\Diagnostics\Start-GI-Scene-Check.cmd.
+Load a level with RT indirect lighting enabled. Wait about 15 seconds,
+then exit normally. Send the GI-Scene-R427-*.zip made beside the launcher.
+No video, camera route, hotkey, stationary pose or comparison is needed.
+If the collector reports a warning, send that ZIP; do not repeat the run.
+
+This is a narrow integration check, NOT a noise-fix or performance build.
+R425 already established the GI command ordering. R426 already confirmed
+pipeline compatibility. Those checks do not need to be repeated.
+R427 adds the native scene/material writer activity, scene fence values,
+and descriptor heap identities missing from those earlier logs.
+
+The probe is automatic, opt-in, bounded to the existing 24-frame/3-second
+metadata window and uses no GPU readback, added rays or GPU waits.
+After the window the native hooks only forward their original calls.
+Live deferred guided rendering and native-work suppression remain disabled.
+Native single-ray rendering is retained. No RELAX tuning changes.
+Normal game launch does not enable the scene check.
