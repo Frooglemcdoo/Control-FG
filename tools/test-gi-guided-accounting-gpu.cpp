@@ -38,7 +38,7 @@ int main()try{
  D3D12_ROOT_SIGNATURE_DESC rd{2,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};ComPtr<ID3DBlob>b,e;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&b,&e));
  ComPtr<ID3D12RootSignature> root;Check(gpu.device->CreateRootSignature(0,b->GetBufferPointer(),b->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto code=Read("gi-guided-accounting.dxil");D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> pso;Check(gpu.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
- gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pso.Get());gpu.list->SetComputeRootDescriptorTable(0,gpu.View(input.Get(),0,sizeof(Pixel),count,false));gpu.list->SetComputeRootDescriptorTable(1,gpu.View(output.Get(),1,sizeof(Output),count+1,true));gpu.list->Dispatch((count+63)/64+1,1,1);
+ gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pso.Get());gpu.list->SetComputeRootDescriptorTable(0,gpu.View(input.Get(),0,sizeof(uint),count*(sizeof(Pixel)/sizeof(uint)),false));gpu.list->SetComputeRootDescriptorTable(1,gpu.View(output.Get(),1,sizeof(Output),count+1,true));gpu.list->Dispatch((count+63)/64+1,1,1);
  gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);auto read=gpu.Buffer(guard.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);gpu.list->CopyResource(read.Get(),output.Get());gpu.Submit();
  Output* out=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&out)));bool missSensitive=false,zeroSensitive=false;double maxNativeError=0;
  for(uint p=0;p<count;++p){const auto& in=pixels[p];const auto& got=out[p];
