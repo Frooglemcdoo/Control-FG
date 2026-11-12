@@ -4,6 +4,7 @@
 #include "d3d12_frozen_raygen.h"
 #include "d3d12_frozen_working_set.h"
 #include "frozen_ray_constants.h"
+#include "d3d12_saved_heap_switch.h"
 namespace gi_reuse {
 // Actual GI6 replacement command sequence. The host supplies independently
 // owned native bindings/SBT/scene and recording leases. This does not infer
@@ -26,6 +27,7 @@ public:
   // not qualify. No current game hook supplies this proof yet.
   bool separateProducerSubmitted=false,sceneAndDescriptorLease=false;
   ComputeBindingSnapshot ray,shade;
+  GraphicsTableState graphics; // Current consumer graphics tables, not producer state.
   D3D12_DISPATCH_RAYS_DESC preservedTables{};
   D3D12_GPU_VIRTUAL_ADDRESS rayConstants=0;
   std::array<ID3D12Resource*,3> hits{};
@@ -34,7 +36,8 @@ public:
  };
  // Shared admission for guided completion and uniform complement recovery.
  // All referenced scene data must still be leased; recovery cannot repair a
- // lost scene lease, missing submission, or a different active heap pair.
+ // lost scene lease or missing submission. Different recorded heap pairs
+ // require current graphics-table coverage for restoration after the switch.
  static bool AcceptReplay(const Inputs& p,const D3D12FrozenWorkingSet& work,
                           const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
   if(!trace||!p.separateProducerSubmitted||!p.sceneAndDescriptorLease||!p.ray.Ready()||!p.ray.rays||
@@ -44,7 +47,7 @@ public:
   if(!records.MatchesStateObject(p.ray.rays.Get()))return false;
   if(!records.Matches(p.width,p.height,p.frame,p.epoch,p.slots,p.trainingParity,
       work.Get(D3D12FrozenWorkingSet::Guides)->GetGPUVirtualAddress(),work.Get(D3D12FrozenWorkingSet::Weights)->GetGPUVirtualAddress()))return false;
-  for(unsigned i=0;i<2;++i)if(p.ray.heaps[i].Get()!=p.shade.heaps[i].Get())return false;
+  if(!D3D12SavedHeapSwitch::Accept(p.ray,p.shade,p.graphics))return false;
   const auto& d=p.preservedTables;
   if(d.Width!=p.width||d.Height!=p.height||d.Depth!=1||!d.MissShaderTable.StartAddress||
      d.MissShaderTable.SizeInBytes!=32||d.MissShaderTable.StrideInBytes!=32||
@@ -86,11 +89,11 @@ public:
   Transition(list,work.Get(D3D12FrozenWorkingSet::Weights),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   Transition(list,work.Get(D3D12FrozenWorkingSet::Guides),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
   for(unsigned i=0;i<3;++i)Transition(list,p.hits[i],p.hitStates[i],D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-  if(!p.ray.Restore(list))return Result::FailedAfterCommands;
+  if(!D3D12SavedHeapSwitch::ToRay(list,p.ray,p.shade,p.graphics))return Result::FailedAfterCommands;
   auto dispatch=p.preservedTables;dispatch.Width=p.width/2;dispatch.RayGenerationShaderRecord=records.NativeComplement();
   trace(list,&dispatch);
   for(unsigned i=0;i<3;++i)Transition(list,p.hits[i],D3D12_RESOURCE_STATE_UNORDERED_ACCESS,p.hitStates[i]);
-  if(!p.shade.Restore(list))return Result::FailedAfterCommands;
+  if(!D3D12SavedHeapSwitch::ToShade(list,p.ray,p.shade,p.graphics))return Result::FailedAfterCommands;
   return Result::NativeShadeRequired;
  }
  static Result Record(ID3D12GraphicsCommandList4* list,const Inputs& p,D3D12FrozenWorkingSet& work,
@@ -110,10 +113,11 @@ public:
   if(!builder.Record(list,training,work.Count(),cells,guides,p.slots,p.frame,p.epoch,p.shade))return Result::FailedAfterCommands;
   Transition(list,weights,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   for(unsigned i=0;i<3;++i)Transition(list,p.hits[i],p.hitStates[i],D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-  if(!p.ray.Restore(list))return Result::FailedAfterCommands;
+  if(!D3D12SavedHeapSwitch::ToRay(list,p.ray,p.shade,p.graphics))return Result::FailedAfterCommands;
   auto dispatch=p.preservedTables;dispatch.Width=p.width/2;dispatch.RayGenerationShaderRecord=records.At(1);trace(list,&dispatch);
   for(unsigned i=0;i<3;++i)Transition(list,p.hits[i],D3D12_RESOURCE_STATE_UNORDERED_ACCESS,p.hitStates[i]);
   Transition(list,weights,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+  if(!D3D12SavedHeapSwitch::ToShade(list,p.ray,p.shade,p.graphics))return Result::FailedAfterCommands;
   // Phase B does not train, but the same shader still binds a training UAV.
   Transition(list,training,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
   D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=p.output;list->ResourceBarrier(1,&b);

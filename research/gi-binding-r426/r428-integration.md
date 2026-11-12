@@ -119,7 +119,7 @@ uniform missing-half rays only when the independent replay admission still
 passes. It restores the original hit states and shade bindings, returning
 NativeShadeRequired so the host can run full native GI6 shading exactly once.
 No full ray retry occurs. A failed/partial guided recording is not retried.
-Missing scene ownership, producer submission, exact heap pair, SBT/constant
+Missing scene ownership, producer submission, valid retained heaps, SBT/constant
 identity, or hit resources still rejects recovery. The host must claim the
 consumer once through the retirement owner before calling this entry point.
 
@@ -151,3 +151,21 @@ proven cancelled/reset consumer), preserve native graphics/async ordering, and
 handle exceptional termination without reusing recorded resources. No new user
 capture is needed for this finding. Recovery core run43162577274 passed for
 commit10ef8ac; full DLL validation is still in progress for that commit.
+
+
+## Descriptor-heap change at the consumer
+
+Added D3D12SavedHeapSwitch and used it for both guided completion and uniform
+complement recovery. A producer/consumer heap change no longer automatically
+rejects an otherwise valid replay. The helper deliberately binds the retained
+ray heaps, restores ray bindings, and then restores the consumer heaps plus
+its current graphics descriptor tables and compute bindings. Returning to the
+same heap does not itself resurrect graphics tables invalidated by a switch.
+All admission checks run before recording; unknown graphics coverage still
+rejects a heap change. Matching heaps require no switch or graphics replay.
+
+The new WARP fixture executes two compute dispatches using different CBV heaps
+and then a real graphics draw without rebinding its table. It reads back both
+compute values and the graphics pixel to verify restoration. Validation pending.
+The earlier prepare hook compile error was an ADL ambiguity caused by the shared
+Scope type; commit48afa3b qualifies its Read helper. No live dispatch is enabled.
