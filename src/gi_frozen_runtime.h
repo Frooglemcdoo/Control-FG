@@ -35,7 +35,7 @@ inline void Stop(const char* reason)noexcept {
 inline void Reject(const char* reason,HRESULT hr=E_INVALIDARG)noexcept {
  const auto n=++rejected;
  if(attemptPolicy.Rejected())Stop("repeated_rejection");
- if(n<=8||n%600==0)Log("GI_FROZEN_R428 rejected=%llu reason=%s hr=0x%08lX",n,reason,static_cast<unsigned long>(hr));
+ if(failed.load()||n<=8||n%600==0)Log("GI_FROZEN_R428 rejected=%llu reason=%s hr=0x%08lX",n,reason,static_cast<unsigned long>(hr));
 }
 inline bool SameScope(const Scope& a,const Scope& b)noexcept {
  return a.token&&a.token==b.token&&a.frame==b.frame&&a.owner==b.owner&&a.pass==b.pass;
