@@ -1,0 +1,75 @@
+{
+  "renderer_sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "writes": [
+    {
+      "site": "0xa6c8c",
+      "body": "0xa6c00",
+      "import": "?buildBottomLevelAccelerationStructure@DeviceUtilRaytracing@d3d@@SAXW4RaytracingAccelerationBuildFlags@2@PEBURaytracingGeometryDesc@2@HAEAVNativeBuffer@2@H2H_NPEAV52@H@Z",
+      "bytes": "ff154e885300"
+    },
+    {
+      "site": "0x15101b",
+      "body": "0x150fa0",
+      "import": "?buildBottomLevelAccelerationStructure@DeviceUtilRaytracing@d3d@@SAXW4RaytracingAccelerationBuildFlags@2@PEBURaytracingGeometryDesc@2@HAEAVNativeBuffer@2@H2H_NPEAV52@H@Z",
+      "bytes": "ff15bfe44800"
+    },
+    {
+      "site": "0xa8bca",
+      "body": "0xa89c0",
+      "import": "?buildTopLevelAccelerationStructure@DeviceUtilRaytracing@d3d@@SAXW4RaytracingAccelerationBuildFlags@2@AEAVNativeBuffer@2@H11_N@Z",
+      "bytes": "ff1570695300"
+    },
+    {
+      "site": "0x151060",
+      "body": "0x151040",
+      "import": "?compactAccelerationStructure@DeviceUtilRaytracing@d3d@@SAXAEAVNativeBuffer@2@H0H@Z",
+      "bytes": "48ff25e9e84800"
+    }
+  ],
+  "provider_tables": {
+    "deformed_geometry": {
+      "vtable": "0x627e38",
+      "update": "0xa67b0",
+      "build": "0xa6c00",
+      "finalize": "0x10d40"
+    },
+    "compactable_geometry": {
+      "vtable": "0x6332f0",
+      "update": "0x10d40",
+      "build": "0x150fa0",
+      "finalize": "0x151040"
+    }
+  },
+  "worker_virtual_calls": [
+    {
+      "site": "0xa8a6c",
+      "slot": "0x28"
+    },
+    {
+      "site": "0xa8ab4",
+      "slot": "0x30"
+    },
+    {
+      "site": "0xa8ad9",
+      "slot": "0x30"
+    },
+    {
+      "site": "0xa8b3c",
+      "slot": "0x38"
+    }
+  ],
+  "deformed_geometry_compute_dispatch": {
+    "site": "0xa6ba6",
+    "body": "0xa67b0",
+    "import": "?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z",
+    "bytes": "ff1514915300"
+  },
+  "scene_lease_proven": false,
+  "scope": "Pinned renderer IAT-relative AS writes and listed provider tables/worker loops only.",
+  "remaining": [
+    "All callers of provider methods and pool reuse, including deferred jobs.",
+    "Writers of source geometry/material resources outside these AS routines.",
+    "Live retained resource acquisition and transaction integration."
+  ],
+  "mutated_writer_rejections": 4
+}

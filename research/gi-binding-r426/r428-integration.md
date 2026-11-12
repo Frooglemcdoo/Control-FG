@@ -283,3 +283,31 @@ then26600. The2AE34 allocation is inside device initialization and initializes
 the two8MiB native SBT slots at context+0/50, not a BLAS suballocation arena.
 These findings narrow the allocation audit but do not establish coverage of
 renderer-side in-place geometry updates or AS suballocation reuse.
+
+## Windows validation and native writer inventory
+
+Commitbc6861d passed core43206721683 and full DLL43206721489
+(job131143629891). Full logs explicitly pass injected PSO/dispatch forwarding
+without native observation in both fixture configurations. Commit2bd74b5 adds
+the ownership router and passes core43208251590/job131148842148, including its
+real callback-to-owner two-list submit/reset fixture. Full DLL43208251572 is
+still in progress at this checkpoint.
+
+Recovered the exact renderer from existing Library file
+libfile_92683e01aa6881918adcb950f9a57327 (renderer_rmdwin10_f(1).dll).
+The similarly named file in Control Epic Compatiable has SHA85baaf70... and is
+NOT the pinned renderer; it was not used for address assertions. The exact
+SHAebfb5b47... copy is now local at ../evidence-renderer/renderer_rmdwin10_f(1).dll.
+
+Added reproducible audit-gi-native-writers.py and native-writers-r428.json.
+All four IAT-relative AS write sites in the pinned renderer are accounted for:
+two BLAS builds, one TLAS build and one compact tail call. The deformed-geometry
+vtable points update+28 to A67B0 (which dispatches compute at A6BA6), build+30 to
+A6C00; the compactable-geometry table points build+30 to150FA0 and finalize+38 to
+151040. Existing scene worker A89C0 has corresponding update/build/finalize
+virtual loops before its TLAS build. Mutated writer instructions are rejected.
+
+This establishes these routes, not exclusivity of their callers. Register-
+indirect call coverage, deferred allocation jobs and pool slot reuse/source
+geometry writes still need closure. No sceneAndDescriptorLease was fabricated,
+no guided dispatch enabled and no new user capture requested.
