@@ -1108,6 +1108,7 @@ static void NativeCpuPoll(unsigned long long present) noexcept { native_cpu::Pol
 static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[]() noexcept -> unsigned long long {unsigned long long frame=0;DWORD fault=0;return ReadEngineFrameSafe(&frame,&fault)?frame:0;};return true;}();
 #include "gi_scene_audit.h"
 #include "gi_native_render_scope.h"
+#include "gi_native_prepare_scope.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
 #include "rr_world_albedo_runtime.h"
@@ -1532,7 +1533,11 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         gi_scene_audit::Install(renderer,d3d);
         {char enabled[4]{};
          if(GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_RENDER",enabled,4)==1&&enabled[0]=='1')
-          Log("GI_RENDER_SCOPE_R428 ready=%u",unsigned(gi_native_render_scope::Install(renderer,d3d)));
+          {
+           const bool renderReady=gi_native_render_scope::Install(renderer,d3d);
+           const bool prepareReady=gi_native_prepare_scope::Install(renderer,d3d);
+           Log("GI_RENDER_SCOPE_R428 ready=%u prepareReady=%u",unsigned(renderReady),unsigned(prepareReady));
+          }
         }
         Log("NATIVE_CPU_R218_INSTALL ready=%u",unsigned(native_cpu::Install(renderer)));
         native_cpu::InstallAppendHooks(renderer);

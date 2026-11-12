@@ -15,6 +15,28 @@
     "invoker_arguments": 2,
     "scene_writer_exclusion_proven": false
   },
+  "native_prepare_invocation": {
+    "slot": "0x632270",
+    "thunk": "0x13de60",
+    "body": [
+      "0x123d60",
+      "0x124a2b"
+    ],
+    "closure_adjustment": 8,
+    "owner_offset_from_closure": "0x28",
+    "pass_argument_indirection": 0,
+    "rtti": ".?AV?$_Func_impl_no_alloc@V<lambda_24236ec75cfde1e55375cf6938b6c969>@@XPEAVOrderSolverPassData@rend@@@std@@",
+    "return_type": "void",
+    "invoker_arguments": 2,
+    "ordering": [
+      "prepare entry",
+      "graphics flush/signal",
+      "material hook",
+      "scene job launch"
+    ],
+    "warning": "Blocking the material/worker hooks alone does not move the earlier graphics signal after delayed rays.",
+    "scene_writer_exclusion_proven": false
+  },
   "function_sha256": "c494bb19c0010003efeff3ebf028b99d458e81cd87a43e2c16e24e6298223da0",
   "gi_ray_call": "0x12c5eb",
   "gi_shade_call": "0x12cc16",

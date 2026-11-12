@@ -48,6 +48,21 @@ def audit(path):
     assert signature==1 and offset==0 and constructor==0 and self_rva==locator
     type_name=pe.get_data(type_rva+16,256).split(b'\0')[0].decode('ascii')
     assert type_name=='.?AV?$_Func_impl_no_alloc@V<lambda_3fcbfcc8218bc8a321cc2ff11664c281>@@XPEAVOrderSolverPassData@rend@@@std@@'
+    # The earliest material hook is too late for writer exclusion: the native
+    # graphics fence has already been signalled. Identify the enclosing prepare
+    # invoker before any callback body work, not just material/AS recording.
+    assert pe.get_data(0x13DE60,9)==bytes.fromhex('4883c108e9f75efeff')
+    assert struct.unpack('<Q',pe.get_data(0x632270,8))[0]-pe.OPTIONAL_HEADER.ImageBase==0x13DE60
+    prepare_locator=struct.unpack('<Q',pe.get_data(0x632258,8))[0]-pe.OPTIONAL_HEADER.ImageBase
+    assert prepare_locator==0x6D24F8
+    a=struct.unpack('<6I',pe.get_data(prepare_locator,24))
+    assert a[0:3]==(1,0,0) and a[5]==prepare_locator
+    prepare_type=pe.get_data(a[3]+16,256).split(b'\0')[0].decode('ascii')
+    assert prepare_type=='.?AV?$_Func_impl_no_alloc@V<lambda_24236ec75cfde1e55375cf6938b6c969>@@XPEAVOrderSolverPassData@rend@@@std@@'
+    assert any(e.struct.BeginAddress==0x123D60 and e.struct.EndAddress==0x124A2B
+               for e in pe.DIRECTORY_ENTRY_EXCEPTION)
+    assert pe.get_data(0x123D91,3)==bytes.fromhex('4c8bf1') # r14=closure+8
+    assert pe.get_data(0x124114,4)==bytes.fromhex('498b4620') # owner=[r14+20h]
     direct_call(0xC7C59,0xC51D0)
     job=relative_memory(0x1249F0)
     assert job==relative_memory(0xA8C02)==0x90E9E8
@@ -141,6 +156,13 @@ def audit(path):
             'native_render_invocation':{'slot':'0x631da0','thunk':'0x13e860',
                 'body':'0x128d20','closure_adjustment':8,'pass_argument_indirection':1,
                 'rtti':type_name,'return_type':'void','invoker_arguments':2,
+                'scene_writer_exclusion_proven':False},
+            'native_prepare_invocation':{'slot':'0x632270','thunk':'0x13de60',
+                'body':['0x123d60','0x124a2b'],'closure_adjustment':8,
+                'owner_offset_from_closure':'0x28','pass_argument_indirection':0,
+                'rtti':prepare_type,'return_type':'void','invoker_arguments':2,
+                'ordering':['prepare entry','graphics flush/signal','material hook','scene job launch'],
+                'warning':'Blocking the material/worker hooks alone does not move the earlier graphics signal after delayed rays.',
                 'scene_writer_exclusion_proven':False},
             'function_sha256': hashlib.sha256(pe.get_data(lo,hi-lo)).hexdigest(),
             'gi_ray_call': '0x12c5eb', 'gi_shade_call': '0x12cc16',

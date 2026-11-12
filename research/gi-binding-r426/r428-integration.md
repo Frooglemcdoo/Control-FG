@@ -127,3 +127,27 @@ WARP can check rejection and compile this path but cannot execute DXR recovery.
 It is not wired into the live game yet and does not make an enabled build ready.
 Native writer exclusion, complete host integration, and an actual DXR runtime
 validation remain outstanding. No repeat user ordering capture is warranted.
+
+
+## Earlier preparation boundary
+
+The full preparation callback starts at renderer123D60, before graphics flush
+124130 and scene-fence signal124152. Material hook12491D runs later. Therefore
+blocking only material/prepare-worker/record-worker hooks is insufficient: the
+async writer could wait for a native graphics signal placed BEFORE delayed GI
+rays. Any scene gate must block admission at this earlier preparation boundary.
+
+Recovered callback slot632270 -> thunk13DE60 -> body123D60..124A2B; exact thunk,
+RTTI, closure owner offset28h and unwind extent are now reproduced by the static
+audit. Added gi_native_prepare_scope.h, installed beside the render scope only
+under the still-disabled CONTROLTOH_GI_FROZEN_RENDER flag. It forwards both native
+arguments unchanged to the thunk, notifies before any native preparation and
+runs cleanup on normal/exception exit. It notifies even with unreadable metadata
+so a future gate cannot treat a failed read as permission to bypass exclusion.
+
+This boundary hook does NOT implement writer exclusion yet. The future gate
+must cover preparation admission through actual consumer submission (or a
+proven cancelled/reset consumer), preserve native graphics/async ordering, and
+handle exceptional termination without reusing recorded resources. No new user
+capture is needed for this finding. Recovery core run43162577274 passed for
+commit10ef8ac; full DLL validation is still in progress for that commit.

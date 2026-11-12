@@ -6,9 +6,16 @@ static HMODULE verifiedRenderer=nullptr,verifiedD3d=nullptr;
 static constexpr char kRendererHash[]="fixture",kD3dHash[]="fixture";
 static bool HashMatches(HMODULE,const char*)noexcept{return true;}
 #include "../src/gi_native_render_scope.h"
+#include "../src/gi_native_prepare_scope.h"
 namespace s=gi_native_render_scope;
 static void* expectedRoot=nullptr;static void* expectedPass=nullptr;
 static unsigned calls=0,exits=0,aborts=0;static bool throwNative=false;
+static unsigned preparationCalls=0,preparationEntries=0,preparationExits=0;
+static void Prepare(void* root,void* argument){
+ assert(root==expectedRoot&&argument==expectedPass);
+ assert(preparationEntries==preparationExits+1);
+ ++preparationCalls;if(throwNative)throw std::runtime_error("prepare failure");
+}
 static void Native(void* root,void* pass){
  assert(root==expectedRoot&&pass==expectedPass);
  assert(s::current.token&&s::current.owner==*static_cast<void**>(root)&&s::current.pass==pass&&s::current.frame==11);
@@ -37,9 +44,29 @@ int main(){
  throwNative=true;
  try{reinterpret_cast<s::Native>(*slot)(closure,&pass);assert(false);}catch(const std::runtime_error&){}
  assert(calls==2&&exits==2&&aborts==1&&s::current.token==77&&s::current.owner==reinterpret_cast<void*>(300));
+ namespace prep=gi_native_prepare_scope;
+ const unsigned char prepareThunk[]={0x48,0x83,0xc1,0x08,0xe9,0xf7,0x5e,0xfe,0xff};
+ std::memcpy(r+0x13de60,prepareThunk,sizeof(prepareThunk));
+ std::memcpy(r+0x123d60,tail,6);target=reinterpret_cast<void*>(&Prepare);std::memcpy(r+0x123d66,&target,8);
+ auto** prepareSlot=reinterpret_cast<void**>(r+0x632270);*prepareSlot=r+0x13de60;
+ assert(prep::Install(verifiedRenderer,verifiedD3d));assert(!prep::Install(verifiedRenderer,verifiedD3d));
+ prep::entering=+[](const prep::Scope& scope)noexcept{
+  assert(scope.token&&scope.frame==11&&scope.owner==reinterpret_cast<void*>(100)&&scope.pass==reinterpret_cast<void*>(200));
+  ++preparationEntries;
+ };
+ prep::leaving=+[](const prep::Scope& scope,bool returned)noexcept{
+  assert(scope.token&&returned==!throwNative);++preparationExits;
+ };
+ void* prepareClosure[6]{};prepareClosure[5]=reinterpret_cast<void*>(100);
+ expectedRoot=prepareClosure+1;expectedPass=&pass;throwNative=false;
+ reinterpret_cast<s::Native>(*prepareSlot)(prepareClosure,&pass);
+ throwNative=true;
+ try{reinterpret_cast<s::Native>(*prepareSlot)(prepareClosure,&pass);assert(false);}catch(const std::runtime_error&){}
+ assert(preparationCalls==2&&preparationEntries==2&&preparationExits==2&&s::current.token==77);
+ *prepareSlot=r+0x13de60;prep::original=nullptr;prep::d3d=nullptr;prep::entering=nullptr;prep::leaving=nullptr;
  s::Scope read{};assert(!s::Read(reinterpret_cast<void*>(1),&pass,&read)&&!read.token&&!read.owner);
  s::serial=UINT64_MAX;assert(s::Next()==0&&s::serial==UINT64_MAX);
  *slot=r+0x13e860;s::original=nullptr;s::d3d=nullptr;s::leaving=nullptr;
  VirtualFree(r,0,MEM_RELEASE);VirtualFree(d,0,MEM_RELEASE);
- std::puts("PASS native GI render scope: exact thunk forwarding, full callback scope, normal/exception cleanup and prior TLS restoration.");
+ std::puts("PASS native GI render scope: exact render/prepare thunk forwarding, preparation entry before native work, full callback scope, normal/exception cleanup and prior TLS restoration.");
 }
