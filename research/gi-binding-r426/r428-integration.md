@@ -411,3 +411,24 @@ an unsubmitted producer. The release callback only opens the scene gate and
 must not reenter the router. GPU owner retirement remains independent. Added
 real-submit and successful-Reset coverage for both boundaries. Windows validation
 pending for this checkpoint; live dispatch activation is still incomplete.
+
+## Retained original heap and native-fence admission
+
+Core43214779966 passed for1dfd5e9, including original recording-context parsing
+and actual-submit/Reset-driven scene release. Full DLL validation was still in
+progress when the next change was prepared.
+
+The whole invocation now retains the original queue, native fence and actual
+bound resource/sampler heaps via D3D12NativeGIHeapLease. Acquisition checks real
+child devices, heap types, exact native record identities and actual fence
+completion twice. A borrowed parser's completed field is deliberately ignored.
+Both producer and consumer validate those saved records and native retirement
+cut without reading the consumer thread's TLS. Native scene-content ownership
+is still an independent requirement. Rearm clears the heap lease only after
+whole-owner retirement. A WARP fixture exercises the real fence, including a
+fabricated completed=0 with an already-completed epoch, which must reject.
+
+Additional static inspection found direct pool-release callers at A6030,150AA0
+and150CC0; provider update/build/finalize entry pointers appear in the audited
+provider vtables. This inspection is not a complete indirect-call/source-write
+closure and does not change scene_lease_proven=false.

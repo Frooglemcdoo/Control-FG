@@ -1,5 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/d3d12_saved_heap_switch.h"
+#include "../src/gi_reuse/d3d12_native_gi_heap_lease.h"
+#include "test-gi-native-heap-lease.inl"
 int main()try{
  using namespace gi_reuse;Device d(false);
  const char* cs="cbuffer Input:register(b0){uint value;};cbuffer Index:register(b1){uint index;};RWStructuredBuffer<uint> output:register(u0);[numthreads(1,1,1)]void main(){output[index]=value;}";
@@ -17,6 +19,7 @@ int main()try{
  ComPtr<ID3D12RootSignature> root;Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
  D3D12_COMPUTE_PIPELINE_STATE_DESC cd{};cd.pRootSignature=root.Get();cd.CS={compute->GetBufferPointer(),compute->GetBufferSize()};
  ComPtr<ID3D12PipelineState> pipeline;Check(d.device->CreateComputePipelineState(&cd,IID_PPV_ARGS(&pipeline)));
+ TestNativeHeapLease(d,root.Get(),pipeline.Get());
  std::vector<UINT> av(64),bv(64);av[0]=17;bv[0]=29;auto a=d.Upload(av),b=d.Upload(bv);
  ComPtr<ID3D12DescriptorHeap> other;auto hd=d.views->GetDesc();Check(d.device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&other)));
  D3D12_CONSTANT_BUFFER_VIEW_DESC view{a->GetGPUVirtualAddress(),256};d.device->CreateConstantBufferView(&view,d.views->GetCPUDescriptorHandleForHeapStart());

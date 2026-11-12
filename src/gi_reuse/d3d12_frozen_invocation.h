@@ -3,6 +3,7 @@
 #include "d3d12_frozen_completion.h"
 #include "d3d12_frozen_pipeline_bundle.h"
 #include "d3d12_native_gi_textures.h"
+#include "d3d12_native_gi_heap_lease.h"
 namespace gi_reuse {
 // The whole owner placed in D3D12SplitOwnerRetirement. The live host supplies
 // native scene ownership and actual queue/recording evidence. This object must
@@ -14,6 +15,7 @@ class D3D12FrozenInvocation {
  D3D12GISbtSnapshot tables_;
  D3D12FrozenRaygenRecords records_;
  D3D12NativeGITextures textures_;
+ D3D12NativeGIHeapLease nativeHeaps_;
  Microsoft::WRL::ComPtr<ID3D12Resource> output_;
  Microsoft::WRL::ComPtr<ID3D12Device> device_;
  Ptr pipelines_;
@@ -32,6 +34,7 @@ public:
   D3D12FrozenPipelineBundle* pipelines=nullptr;
   ID3D12Resource* nativeSbt=nullptr;
   const void* nativeOwner=nullptr;
+  NativeGIRecording recording{};
   D3D12_DISPATCH_RAYS_DESC dispatch{};
   D3D12FrozenProducer::Inputs ray{};
   UINT64 budget=0;
@@ -42,7 +45,8 @@ public:
  D3D12FrozenInvocation& operator=(const D3D12FrozenInvocation&)=delete;
  HRESULT Prepare(const Preparation& p)noexcept {
   if(prepared_||producerAttempted_||(device_&&!rearmed_)||!p.device||!p.pipelines||!p.nativeOwner||!p.nativeSbt||
-     !p.budget||!p.ray.nativeSingleRayAbi||!p.ray.sceneAndDescriptorLease||
+     !p.budget||p.recording.device!=p.device||p.recording.heaps.frame!=p.ray.frame||
+     p.recording.heaps.deviceEpoch!=p.ray.epoch||!p.ray.nativeSingleRayAbi||!p.ray.sceneAndDescriptorLease||
      !p.ray.ray.Ready()||!p.ray.ray.rays||p.ray.ray.root.Get()!=p.pipelines->constants.NativeRoot()||
      p.dispatch.Width!=p.ray.width||p.dispatch.Height!=p.ray.height||p.dispatch.Depth!=1)return E_INVALIDARG;
   // Keep a failed partial allocation private. Its owner may be destroyed since
@@ -50,6 +54,7 @@ public:
   if(device_&&(device_.Get()!=p.device||pipelines_.Get()!=p.pipelines||
      !work_.Matches(p.ray.width,p.ray.height,p.ray.slots)))return E_INVALIDARG;
   const bool reused=rearmed_;rearmed_=false;device_=p.device;pipelines_=p.pipelines;
+  if(!nativeHeaps_.Acquire(p.recording,p.ray.ray))return E_INVALIDARG;
   auto hr=reused?S_OK:work_.Initialize(p.device,D3D12FrozenWorkingSet::Describe(p.ray.width,p.ray.height,p.ray.slots),p.budget);
   if(FAILED(hr))return hr;
   hr=reused?S_OK:constants_.Initialize(p.device,p.pipelines->constants);if(FAILED(hr))return hr;
@@ -77,12 +82,12 @@ public:
  bool RearmAfterRetirement()noexcept {
   if(!prepared_||!producerRecorded_||rearmed_)return false;
   if(!constants_.RearmAfterRetirement()||!tables_.RearmAfterRetirement()||!records_.RearmAfterRetirement())return false;
-  textures_.ResetAfterRetirement();output_.Reset();savedRay_={};savedShade_={};producer_={};bytes_=0;
+  nativeHeaps_={};textures_.ResetAfterRetirement();output_.Reset();savedRay_={};savedShade_={};producer_={};bytes_=0;
   prepared_=producerAttempted_=producerRecorded_=consumerAttempted_=false;rearmed_=true;return true;
  }
  UINT64 AllocationBytes()const noexcept{return prepared_?bytes_:0;}
  bool AcceptProducer(ID3D12GraphicsCommandList4* list,D3D12FrozenProducer::Trace trace)const noexcept {
-  return prepared_&&!producerAttempted_&&D3D12FrozenProducer::Accept(list,producer_,work_,constants_,tables_,records_,trace);
+  return prepared_&&!producerAttempted_&&nativeHeaps_.Validate(producer_.frame,nativeHeaps_.Queue())&&D3D12FrozenProducer::Accept(list,producer_,work_,constants_,tables_,records_,trace);
  }
  D3D12FrozenProducer::Result RecordProducer(ID3D12GraphicsCommandList4* list,D3D12FrozenProducer::Trace trace)noexcept {
   if(!AcceptProducer(list,trace))return D3D12FrozenProducer::Result::RejectedBeforeCommands;
@@ -94,6 +99,7 @@ public:
   const void* nativeOwner=nullptr;
   const void* outputContainer=nullptr;
   bool producerSubmitted=false,sceneAndDescriptorLease=false;
+  ID3D12CommandQueue* queue=nullptr;
   UINT frame=0,epoch=0;
   ComputeBindingSnapshot shade;
   GraphicsTableState graphics;
@@ -101,7 +107,8 @@ public:
  D3D12FrozenCompletion::Result RecordConsumer(ID3D12GraphicsCommandList4* list,const Consumption& p,
                                              D3D12FrozenCompletion::Trace trace)noexcept {
   if(!producerRecorded_||consumerAttempted_||!p.producerSubmitted||!p.sceneAndDescriptorLease||
-     p.frame!=producer_.frame||p.epoch!=producer_.epoch)return D3D12FrozenCompletion::Result::RejectedBeforeCommands;
+     p.frame!=producer_.frame||p.epoch!=producer_.epoch||
+     !nativeHeaps_.Validate(p.frame,p.queue))return D3D12FrozenCompletion::Result::RejectedBeforeCommands;
   // Host already claimed this consumer recording in the retirement pool. Even
   // admission failure cannot permit a second consumer attempt/full native ray.
   consumerAttempted_=true;
