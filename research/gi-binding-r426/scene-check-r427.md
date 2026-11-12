@@ -131,5 +131,23 @@ checks owned dispatch plus the argument adjustment. Uninstalling the observer
 leaves the owned tail patch active. The capture now counts24 observed GI frames
 across gaps and emits Execute metadata only for lists carrying GI markers.
 Install event25 adds revision2 in data[4]; the collector requires it.
-Windows validation and the R427-v2 package are pending after these corrections.
+Windows core43154556907/job130971345655 and full43154556884/job130971345792
+both passed for source12db035cfd37a5d25009e918718a3868d79118c2. The downloaded
+R427-v2 archive checksum, DLL presence, exact collector/README and unchanged18
+sidecar shader files were verified. ZIP6940995bytes, SHA256
+b87292911a05bef339e525d34d2254e1f440a4e0f4a995f1c8b2508c443baac1.
+Library file libfile_e813b97f0bf48191a4d37a5fac58cdbd.
+
+Offline phase parser now distinguishes complete observed pairs from a complete
+24-frame target and recognizes revision2 observed-frame gaps. Portable legacy,
+late-overflow, missing-event and revision2-gap tests pass; no lease is granted.
+
+Next user action: one corrected R427-v2 launch/load15seconds/exit with RT GI on,
+using the same Start-GI-Scene-Check.cmd. Send GI-Scene-R427-v2 ZIP. This repeat is
+needed because our prior observer disabled owned recording; explicitly own that
+mistake, do not claim the original test validated the normal owned pipeline.
+When it arrives, first check install event25 revision2 and startup
+RT_RECORD_R411_INSTALL ready=1, then inspect all metadata/fences/writer intervals.
+Do not repeat old R425/R426 or request video/stationary camera. Guided rendering
+remains disabled and no noise/FPS improvement has been demonstrated.
 No live guided rendering, noise fix or FPS gain is claimed.

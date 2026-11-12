@@ -45,3 +45,14 @@ assert r['warnings']==['incomplete_or_overflowed_trace'] and not r['native_suppr
 assert not m.analyze(rows[:5]+rows[6:])['target_prefix']['recording_and_submission_complete']
 assert not m.analyze(rows[:last-1]+rows[last:])['target_prefix']['recording_and_submission_complete']
 print('PASS target prefix: late overflow preserved, missing bindings/events rejected, no repeat-capture requirement inferred')
+
+
+# Revision2 counts observed GI frames, allowing native frame gaps during loading.
+for row in rows:
+    if row.get('kind') in (1,2,3,5) and row['data'][0]>=102:row['data'][0]+=180
+assert not m.analyze(rows)['target_prefix']['recording_and_submission_complete']
+rows.insert(-1,e(len(rows),25,[427,1,0,4,2]))
+r=m.analyze(rows)
+assert r['target_prefix']['recording_and_submission_complete']
+assert r['target_prefix']['observed_pairs_complete']
+print('PASS revision2 observed-frame window: load gaps retained; legacy semantics preserved')

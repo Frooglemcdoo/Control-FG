@@ -88,13 +88,20 @@ def analyze(rows):
     if not phases:
         warnings.append('no_gi_phases')
     frames = sorted(grouped)
-    target_complete = (target_complete and frames == list(range(status.get('first_frame', -1), status.get('first_frame', -1)+24))
+    observed_complete = (target_complete and all(i in events for i in range(1,target_end+1))
+                         and not any(w != 'incomplete_or_overflowed_trace' for w in warnings))
+    revision2 = any(e['kind']==25 and e['data'][:5]==[427,1,0,4,2] for e in events.values())
+    expected_window = (len(frames)==24 and frames[0]==status.get('first_frame')) if revision2 else (
+        frames == list(range(status.get('first_frame', -1),status.get('first_frame', -1)+24)))
+    target_complete = (target_complete and expected_window
                        and all(i in events for i in range(1, target_end+1))
                        and not any(w != 'incomplete_or_overflowed_trace' for w in warnings))
     return dict(phase_records=len(phases),
                 target_prefix=dict(recording_and_submission_complete=target_complete,
+                                   observed_pairs_complete=observed_complete,
+                                   observed_frame_count=len(frames),
                                    last_required_event=target_end,
-                                   scope='Only the recorded 24-frame phase window; later overflow remains a trace-wide warning, not GPU/resource admission'), frame_relationships=pairs, warnings=sorted(set(warnings)),
+                                   scope='Only the recorded GI phase window; later overflow remains a trace-wide warning, not GPU/resource admission'), frame_relationships=pairs, warnings=sorted(set(warnings)),
                 native_suppression_authorized=False,
                 limitations='CPU metadata only; no GPU completion, barrier/resource ownership, SBT writer lifetime or temporal correctness proof')
 
@@ -102,3 +109,4 @@ def analyze(rows):
 if __name__ == '__main__':
     rows = [json.loads(line) for line in Path(sys.argv[1]).read_text(encoding='utf-8-sig').splitlines() if line.strip()]
     print(json.dumps(analyze(rows), indent=2))
+

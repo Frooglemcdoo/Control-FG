@@ -1,0 +1,12 @@
+{
+  "source_commit": "12db035cfd37a5d25009e918718a3868d79118c2",
+  "core_run": 43154556907,
+  "full_run": 43154556884,
+  "zip_sha256": "b87292911a05bef339e525d34d2254e1f440a4e0f4a995f1c8b2508c443baac1",
+  "dll_sha256": "7c3610d7a5de66a48fe6b397b27e4ad90d26f956d0ebb98898f4249e4f971661",
+  "bytes": 6940995,
+  "unchanged_sidecar_shaders": 18,
+  "new_collector_and_readme_verified": true,
+  "scope": "Corrects observer/owned-recorder patch conflict and capture gaps only; live guided rendering disabled",
+  "library_file_id": "libfile_e813b97f0bf48191a4d37a5fac58cdbd"
+}
