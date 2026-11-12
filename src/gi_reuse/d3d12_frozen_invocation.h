@@ -232,8 +232,12 @@ public:
   // Missing/changed output can still use the independent uniform-complement
   // recovery and original native GI6 shader. It does not trigger a full ray retry.
   if(textures_.AcquireOutputAtShade(p.outputContainer,device_.Get(),output_,&outputStatus_))input.output=output_.Get();
-  completionReason_=D3D12FrozenCompletion::GuidedRejection(input,work_,pipelines_->evaluator,pipelines_->guide,records_,trace);
-  return D3D12FrozenCompletion::RecordOrRecover(list,input,work_,pipelines_->evaluator,pipelines_->guide,records_,trace);
+  const auto result=D3D12FrozenCompletion::RecordOrRecover(list,input,work_,pipelines_->evaluator,pipelines_->guide,records_,trace);
+  // Diagnose only bounded recovery. Successful guided frames do not repeat
+  // the admission/resource-description checks just for logging.
+  completionReason_=result==D3D12FrozenCompletion::Result::NativeShadeRequired?
+   D3D12FrozenCompletion::GuidedRejection(input,work_,pipelines_->evaluator,pipelines_->guide,records_,trace):nullptr;
+  return result;
  }
 };
 }
