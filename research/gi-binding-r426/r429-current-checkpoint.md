@@ -1,3 +1,7 @@
+# Superseded by R430 unguided-recovery correction
+
+See r430-current-checkpoint.md and r429-session-summary.json.
+
 # R429 fallback/status correction
 
 User rejected R428: no motion-noise improvement and substantial FPS loss.
