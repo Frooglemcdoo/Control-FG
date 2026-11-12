@@ -532,3 +532,38 @@ establish that loading overlaps the user's GI calls, nor that every write caller
 is covered by the existing RT preparation gate. Further work must cover this
 loader's publication/lifetime contract. No global map lock or guessed source
 lease has been enabled.
+
+## Private hit-source snapshots (implementation started)
+
+The local workspace had reverted to an older snapshot after interruption; the
+554920d Git checkpoint was recovered without asking for another capture.
+
+Instead of treating model reference counts or the RT preparation gate as proof
+of immutable source bytes, add private copies of the index/attribute views read
+by native hit shaders. Copy at the ORIGINAL ray use under its native source
+state/order contract, then use rebased local-root addresses for BOTH ray groups.
+The original TLAS/BLAS protection, material/texture/descriptor protection and
+whole-invocation retirement requirements remain. This is not a new ray budget,
+path tracing conversion, or RELAX blur adjustment.
+
+Added NativeHitSnapshotPlan: validates full native declared bounds, rejects
+ambiguous/overflowing/duplicate backing allocations, merges shared ranges,
+preserves 256-byte address alignment, packs ranges into one private buffer and
+changes only the two native GPU addresses. Native constants and two-row hit
+record indexing are unchanged. Logical width is bounded; committed allocation
+accounting is additionally enforced by D3D12NativeHitSnapshot. Larger storage
+replacement budgets its temporary old+new allocation peak. Reuse rewrites fresh
+bytes only after explicit whole-owner retirement; idle committed bytes remain
+visible to the eventual shared budget.
+
+CPU fixtures pass GCC warnings-as-errors and ASan/UBSan (LSan disabled because
+the runner uses ptrace). They simulate source mutation and verify private views,
+R16 tails, unchanged constants/rows, shared ranges, alias/overflow/budget rejects.
+Windows WARP fixture added to core CI: actual CopyBufferRegion, native source
+mutation, readback, retired reuse and debug-layer validation. GPU results pending.
+
+Still not connected to the game: original native source-lease acquisition,
+private-SBT rebasing/upload, invocation ownership and live producer/consumer
+coordination. No source-content proof boolean is set merely by constructing a
+plan. No FPS/image claim or new gameplay ZIP is made. The copy cost must be
+measured; copied bytes and actual committed bytes need bounded reporting.
