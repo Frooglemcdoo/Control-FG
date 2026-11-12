@@ -1,3 +1,7 @@
+# Superseded by R431 mipmapped output correction
+
+See r431-current-checkpoint.md and r430-session-summary.json.
+
 # R430 unguided recovery accounting
 
 R429 logs at 20261112-104716: see r429-session-summary.json. All sampled

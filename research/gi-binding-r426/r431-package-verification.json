@@ -1,0 +1,14 @@
+{
+  "file": "/workspace/scratch/bb222ddfca4b/deliverables/ControlTOH-GI-Frozen-R431.zip",
+  "bytes": 6992245,
+  "sha256": "54f486eef069215667822b28327124fd6a7797b4dd902ad80d30f2a219b9f35d",
+  "dll_sha256": "5cef7a85cc21cea225741e8432ba270d9bdc46b5166110870fedcb477984e5e0",
+  "source_commit": "15329087433debee1b614b3e34ffcc65b040bea9",
+  "run": 43269235727,
+  "artifact_id": 13966649999,
+  "members": 88,
+  "zip_verified": true,
+  "enabled_launcher_verified": true,
+  "runtime_markers_verified": true,
+  "scope": "Native mipmapped output admission correction; guided visual quality and cost not yet measured in game."
+}
