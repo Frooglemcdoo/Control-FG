@@ -83,15 +83,18 @@ struct Probe {
   output=Buffer(g.device.Get(),count*sizeof(Hits::value_type),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
   readback=Buffer(g.device.Get(),count*sizeof(Hits::value_type),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  }
- Hits Trace(GPU& g,D3D12_GPU_VIRTUAL_ADDRESS scene){
-  g.list->SetComputeRootSignature(root.Get());g.list->SetPipelineState(pipeline.Get());
-  g.list->SetComputeRootShaderResourceView(0,scene);g.list->SetComputeRootUnorderedAccessView(1,output->GetGPUVirtualAddress());if(rays)g.list->SetComputeRootShaderResourceView(2,rays->GetGPUVirtualAddress());g.list->Dispatch((count+7)/8,1,1);
+ void Record(ID3D12GraphicsCommandList* list,D3D12_GPU_VIRTUAL_ADDRESS scene){
+  list->SetComputeRootSignature(root.Get());list->SetPipelineState(pipeline.Get());
+  list->SetComputeRootShaderResourceView(0,scene);list->SetComputeRootUnorderedAccessView(1,output->GetGPUVirtualAddress());if(rays)list->SetComputeRootShaderResourceView(2,rays->GetGPUVirtualAddress());list->Dispatch((count+7)/8,1,1);
   D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition.pResource=output.Get();
   b.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;b.Transition.StateBefore=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;b.Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
-  g.list->ResourceBarrier(1,&b);g.list->CopyResource(readback.Get(),output.Get());
-  std::swap(b.Transition.StateBefore,b.Transition.StateAfter);g.list->ResourceBarrier(1,&b);g.Flush();
+  list->ResourceBarrier(1,&b);list->CopyResource(readback.Get(),output.Get());
+  std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
+ }
+ Hits Read(){
   void* data=nullptr;D3D12_RANGE range{0,count*sizeof(Hits::value_type)};Check(readback->Map(0,&range,&data),"read hits");Hits hits(count);std::memcpy(hits.data(),data,count*sizeof(Hits::value_type));D3D12_RANGE noWrite{0,0};readback->Unmap(0,&noWrite);return hits;
  }
+ Hits Trace(GPU& g,D3D12_GPU_VIRTUAL_ADDRESS scene){Record(g.list.Get(),scene);g.Flush();return Read();}
 };
 static ComPtr<ID3D12Resource> MakeBLAS(GPU& g){
  const float vertices[]={-0.75f,-0.75f,0, 0,0.75f,0, 0.75f,-0.75f,0};auto upload=Upload(g,vertices,sizeof(vertices));
@@ -119,6 +122,7 @@ static Hits Native(GPU& g,Probe& probe,const std::vector<Instance>& instances){
  return probe.Trace(g,scene->GetGPUVirtualAddress());
 }
 #include "replay-gpu.h"
+#include "queued-gpu.h"
 int main(int argc,char** argv){try{
  GPU g;Probe probe(g);auto blas=MakeBLAS(g);
  CheckNv(NvAPI_Initialize(),"NvAPI initialize");
@@ -127,6 +131,7 @@ int main(int argc,char** argv){try{
  std::cout<<"Driver query status="<<driverStatus<<" version="<<driver<<" branch="<<branch<<"\n";
  NVAPI_D3D12_RAYTRACING_CLUSTER_OPERATIONS_CAPS cluster{};const auto clusterStatus=NvAPI_D3D12_GetRaytracingCaps(g.device.Get(),NVAPI_D3D12_RAYTRACING_CAPS_TYPE_CLUSTER_OPERATIONS,&cluster,sizeof(cluster));
  std::cout<<"Cluster query status="<<clusterStatus<<" caps="<<unsigned(cluster)<<"\n";
+ if(argc>1&&std::string(argv[1])=="--queued"){QueuedValidation(g,blas.Get());return 0;}
  std::vector<Instance> v(4);for(unsigned i=0;i<4;++i){v[i].transform[0]=v[i].transform[5]=v[i].transform[10]=1;v[i].transform[3]=float(i)*2;v[i].idMask=0xff000007;v[i].contributionFlags=0x01000000;v[i].blas=blas->GetGPUVirtualAddress();}
  std::vector<std::vector<Instance>> scenes{v,v};v[1].transform[3]=8;scenes.push_back(v);v[2].idMask=7;scenes.push_back(v);
  v.resize(2);scenes.push_back(v);v.push_back(scenes[0][2]);v[2].transform[3]=10;scenes.push_back(v);scenes.push_back({});

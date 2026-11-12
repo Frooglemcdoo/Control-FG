@@ -73,8 +73,11 @@ public:
   CheckNv(NvAPI_D3D12_BuildRaytracingPartitionedTlasIndirect(list,&params),"PTLAS record");
   UAVBarrier(list,result_.Get());++recordedBuilds;return upload;
  }
- // Standalone validator calls this only after fence completion. A live backend
- // requires per-recording journals and queue ownership before sharing this state.
+ // Queued caller must establish successful Execute+Signal on the bound queue
+ // through SubmissionJournal, retain uploads/dependencies and forbid replay.
+ // This advances recording state only; it is NOT a GPU-completion/retirement signal.
+ void Submitted(){initialized_=true;}
+ // Existing serialized validation path remains supported.
  void Complete(){initialized_=true;}
 };
 }
