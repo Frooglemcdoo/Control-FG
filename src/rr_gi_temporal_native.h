@@ -36,9 +36,15 @@ static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
  const bool previous=control_rr_gi::spatialDispatch;
  __try {
   control_rr_gi::spatialDispatch=true;
-  const auto stageTicket=RRStageTimingBegin(reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),gi_stage_timing::Stage::SpatialDispatch);
+
+#ifdef CONTROL_RR_GI_SEQUENCE
+ const auto stageTicket=RRStageTimingBegin(reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),gi_stage_timing::Stage::SpatialDispatch);
+#endif
   if(control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list))){++rrNativeGISpatialApplied;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GISpatial);}
-  RRStageTimingEnd(stageTicket,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+
+#ifdef CONTROL_RR_GI_SEQUENCE
+ RRStageTimingEnd(stageTicket,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+#endif
  }__finally {control_rr_gi::spatialDispatch=previous;}
 }
 static void RRNativeHookGITemporalBind(void* record){
@@ -59,9 +65,15 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
   context.list&&context.frame==rrNativeFrame.Key().frame;
  SetLastError(saved);
  if(!eligible){rrNativeDispatchOriginal(state,groups);return;}
+
+#ifdef CONTROL_RR_GI_SEQUENCE
  const auto stageTicket=RRStageTimingBegin(reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),gi_stage_timing::Stage::TemporalDispatch);
+#endif
  const bool used=control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+
+#ifdef CONTROL_RR_GI_SEQUENCE
  RRStageTimingEnd(stageTicket,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+#endif
 #ifdef CONTROL_RR_GI_SEQUENCE
  if(used&&(control_rr_gi::rawBypass||gi_path_capture::enabled.load())){
   const DWORD captureSaved=GetLastError();

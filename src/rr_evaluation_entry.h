@@ -137,11 +137,15 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const unsigned comparePhase=control_compare::phase.load();
     const auto compareTiming=control_compare::enabled.load()?native_lighting::performance::Begin(list,(rrAttempt?native_lighting::performance::Stage::RREvaluation:native_lighting::performance::Stage::SREvaluation),0,0,0):native_lighting::performance::kInvalid;
     const bool compareCPU=control_compare::enabled.load()&&native_lighting::performance::enabled.load();
+#ifdef CONTROL_RR_GI_SEQUENCE
     const auto stageTicket=RRStageTimingBegin(list,gi_stage_timing::Stage::Reconstruction);
     SetLastError(incomingError);
+#endif
     const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);
     const DWORD nativeError=GetLastError();
+#ifdef CONTROL_RR_GI_SEQUENCE
     RRStageTimingEnd(stageTicket,list);
+#endif
     if(!rrAttempt&&branch==0)settings_check::Record((result&0xFFF00000u)!=0xBAD00000u?settings_check::SRSuccess:settings_check::SRFailure);
     native_lighting::performance::End(compareTiming);
     if(compareCPU)control_compare::CPU(comparePhase,2,RRPerfClock()-perfNativeStart);
