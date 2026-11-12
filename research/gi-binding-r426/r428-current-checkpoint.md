@@ -1,72 +1,64 @@
-# R428 current checkpoint — 2026-11-12
+# R428 enabled experimental build ready — 2026-11-12
 
-Enabled candidate b0616f18c86af663871357738cb61b71b8747ff1 passed core
-43246772693 and all rendering/full-DLL checks in full43246772683.
-Packaging failed solely because test-gi-frozen-launch.py called cl outside
-vcvars environment (job131281529318). That run's artifact has reports ONLY;
-DO NOT deliver it as a build. The fixture now initializes VSROOT/vcvars when
-needed and also runs early in core CI. Full packaging rerun required.
+Source/build commit: 0e82c15d5f7574867f51f1b01f4d2e8e05e36f85.
+Windows core run43249366979/job131290639156 SUCCESS.
+Full DLL/package run43249366980/job131290638737 SUCCESS.
+Artifact13959631244: ControlTOH-GI-Frozen-R428.
 
+Verified inner ZIP: ControlTOH-GI-Frozen-R428.zip, 6991147 bytes.
+SHA256: 80ccfc2040520b99c314643a9f65ae4c6c801ced27e3dd357fe35201c6f2f76c.
+DLL SHA256: 51e15fd14f99e56426b2b715ec063e6695caf05b9fbd5d73ac899d18bda90ed6.
+Outer artifact digest, inner ZIP digest/CRC, 88 package members, expected root
+DLLs, enabled launcher and runtime markers verified. Actual Windows CMD test
+passed in core and package: paths with spaces, child GI flags, cleared inherited
+diagnostics and parent environment preservation. Package/migration tests passed.
+The earlier b0616f1 run failed only the fixture's compiler environment setup;
+its reports-only artifact is NOT this deliverable.
 
-Latest validated integration: 4fc555cb9d9911650e29dc14ded4a2fecd303372.
-Windows core run43242659085 and FULL DLL run43242658970/job131267084977
-both SUCCESS. Its artifact remains R427v2 diagnostics, NOT an enabled R428.
+## What is enabled
 
-This continuation fixes incomplete-hit shading on phase-B rejection, carries
-producer readiness, and requires owned full-shader mode for uniform-complement
-recovery. Portable policy/retirement tests pass. New Windows validation pending.
-Fatal rejection suppresses the failed invocation's GI6 and latches replacement
-off; it does not guarantee a clean failed frame. Do not describe it as full
-recovery. Only an actually recorded complement permits normal GI6 afterward.
+Launch ControlTOH\Diagnostics\Start-GI-Frozen-R428.cmd with the game closed.
+Normal launch leaves guided rendering disabled. Existing GI OWNED/NATIVE toggle
+controls requests; RR and RELAX settings are unchanged. Same configured ray
+count: phase A trains from half the rays, phase B guides the remaining half in
+the current frame. No cross-frame scene reuse or extra full native ray retry.
 
-An opt-in R428 candidate is now wired and packaging is renamed to
-ControlTOH-GI-Frozen-R428. It is NOT ready for delivery until its own full build
-and launcher test pass. Earlier artifacts remain R427v2 diagnostics.
-No measured FPS or hair/jaw improvement. Existing R425–427 captures suffice;
-do not request another duplicate phase/heap capture.
+Full prepare/join gate, saved original native heap/fence lease, private geometry,
+SBT/constants, actual same-queue producer/consumer submissions and final fence
+plus both recording seals are connected. Retired owners can reuse allocations
+inside the shared 768 MiB budget. See r428-integration.md for exact-build native
+contract assumptions and limitations; this is experimental live integration,
+not universal ownership proof for arbitrary external resource writers.
 
-## Completed this continuation
+## Failure behavior / limits
 
-- Registry acquisition validates actual backing, complete native view bounds,
-  wrapper identity/state and aliases under the native retirement lock.
-- Frozen-render source-only startup installs creation/release tracking while
-  leaving legacy AS/instance/barrier diagnostics off.
-- Original-ray CPU writer accessor snapshots before the native writer scheduling
-  callback, which occurs AFTER the original ray call. Exact D3D audit saved.
-- Whole-invocation preflight counts all nine real committed buffers and growth
-  overlap before allocation. Shared reservation covers preparing, active and
-  retired idle storage; owner destruction releases it after GPU members.
-- Existing four R306 binding captures imply59.62–180.47 MiB union lower bounds.
-  Actual packed bytes/copy count and GPU duration are unknown. Full sample hashes
-  and limits are in hit-copy-lower-bound-r428.json.
-- Private source transitions are prebuilt and batched into at most two barrier
-  API calls per invocation; separate source CopyBufferRegion calls remain.
+Preparation rejection before replacement commands preserves the existing path.
+An actually recorded uniform complement permits compatible OWNED full shading.
+Phase-B rejection never runs full GI6 on half-complete hits. Fatal partial
+failure aborts that invocation and disables replacement for the session; its
+current-frame image may be stale/incorrect. Native/owned toggles cannot make a
+native reconstruction basis compatible with owned rays. No recovery guarantee
+is made after loss of scene/resource validity.
 
-## Still required
+No in-game visual or FPS improvement has been measured. Copies/guide computation
+have real cost. Existing four R306 captures imply 59.62–180.47 MiB union copy
+lower bounds; actual packed size can be greater. Do not promise FPS gains.
 
-1. Validate the enabled candidate's Windows full DLL and actual CMD launcher.
-2. Inspect the resulting ZIP: R428 README/launcher, expected root DLLs/shaders,
-   exact commit/build identity and no mislabeled R427 capture instructions.
-3. Deliver as the first experimental visual build, not a confirmed noise fix.
-   Only in-game producer/consumer logs establish actual guided dispatch. Fatal
-   partial failure may produce one incorrect frame then disables replacement.
+## Next input needed
 
-The native contract and coordinator are connected only under FROZEN_RENDER=1.
-See the opt-in activation boundary in r428-integration.md for the combined
-prepare/join/heap/fence/private-copy contract and supported-engine limitations.
+User motion comparison at the existing jaw/neck and GI-lit hair locations,
+with RR on and RELAX off, plus render FPS comparison. Projector/desk/plant must
+remain clean. Standstill does not reproduce the reported problem. Actual
+GI_FROZEN_R428 producer/consumer log entries establish activation; menu labels
+or startup alone do not. If unchanged/broken, inspect existing logs from that
+same run before asking for more work. Do NOT request R425–427 ordering/heap/
+scene captures again; those checkpoints are already complete.
 
-## Local evidence and source
+## Source and evidence
 
-Repo: /workspace/scratch/bb222ddfca4b/control-live-r428
-Branch: work/gi-replacement-binding-r426, Frooglemcdoo/Control-FG.
-Correct binaries restored:
-- ../evidence/d3d_rmdwin10_f.dll SHA cceb99cb... (correct exact build)
-- ../evidence/renderer_rmdwin10_f.dll SHA ebfb5b47... (correct exact build)
-- ../evidence/Control Epic Compatiable/rl_rmdwin10_f.dll SHA a79234e4...
-The D3D copy INSIDE Control Epic Compatiable is a DIFFERENT hash; do not use it.
-Set PYTHONPATH=../pydeps for pefile/capstone. Use bash with login=false.
-Library helpers restored in ../library-current. Source is committed remotely.
-
-Useful files: d3d12_native_hit_snapshot.h, d3d12_live_scene_owners.h,
-d3d12_frozen_invocation.h, frozen_allocation_budget.h, gi_native_job_runtime.h,
-gi_frozen_lifetime.h, r428-integration.md and exact native audit JSON/scripts.
+Repo /workspace/scratch/bb222ddfca4b/control-live-r428.
+Branch work/gi-replacement-binding-r426, Frooglemcdoo/Control-FG.
+Correct native binaries: ../evidence/d3d_rmdwin10_f.dll (cceb99cb...) and
+../evidence/renderer_rmdwin10_f.dll (ebfb5b47...). The D3D DLL inside the
+Control Epic Compatiable evidence subfolder has a different hash; do not use it.
+PYTHONPATH=../pydeps for pefile/capstone. Shell bash with login=false.

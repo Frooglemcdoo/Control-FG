@@ -1,0 +1,14 @@
+{
+  "file": "/workspace/scratch/bb222ddfca4b/deliverables/ControlTOH-GI-Frozen-R428.zip",
+  "bytes": 6991147,
+  "sha256": "80ccfc2040520b99c314643a9f65ae4c6c801ced27e3dd357fe35201c6f2f76c",
+  "dll_sha256": "51e15fd14f99e56426b2b715ec063e6695caf05b9fbd5d73ac899d18bda90ed6",
+  "source_commit": "0e82c15d5f7574867f51f1b01f4d2e8e05e36f85",
+  "run": 43249366980,
+  "artifact_id": 13959631244,
+  "members": 88,
+  "zip_verified": true,
+  "enabled_launcher_verified": true,
+  "runtime_markers_verified": true,
+  "scope": "First enabled experimental visual build; no in-game FPS or noise improvement measured."
+}
