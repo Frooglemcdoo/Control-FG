@@ -1,0 +1,12 @@
+{
+  "source_commit": "3bc264542c369d6591a584d1b7b68cfb715cd254",
+  "branch": "work/gi-stage-diagnostic-r432",
+  "workflow_run": 43278316274,
+  "artifact_id": 13970884124,
+  "ci_zip_sha256": "a9cb31e0d4c206c197931def07680024e194f2e3127e57a0603b41773399c6e4",
+  "dll_sha256": "99a7b0498cc8c6d014a709d18cd18bc0c63283011bb25a5a31a7e72c8f9459ef",
+  "external_shaders_unchanged_from_R431": 18,
+  "validation": "Windows CI passed; no in-game RTX performance or visual result claimed",
+  "delivered_zip_sha256": "150c9c7e3227f277552e60b94633d187fbbf9bd9e6a70d3cbb01272ce106f743",
+  "size_bytes": 6944989
+}

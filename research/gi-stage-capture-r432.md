@@ -38,7 +38,17 @@ capture contract. Existing path-policy test was run without GCC -Werror because
 its pre-existing compact if formatting triggers misleading-indentation; the new
 timing-policy test passes -Wall -Wextra -Werror.
 
-Windows build and on-GPU validation are pending. Automatic approval review
-blocked the push to Frooglemcdoo/Control-FG for CI, requiring user approval for
-that upload. Do not claim a DLL/package is available. No alternate publication
-or API upload was attempted after the block.
+Windows CI run 43278316274 passed all build/validation steps for source
+3bc264542c369d6591a584d1b7b68cfb715cd254. Earlier run 43276548376 failed
+an isolated temporal-filter fixture because capture timing hooks were not gated
+for noncapture builds; the correction was compiled and tested in the passing run.
+The user explicitly approved upload of this branch and Windows CI.
+
+Final delivered package: ControlTOH-GI-Stages-R432.zip, 6,944,989 bytes.
+SHA256: 150c9c7e3227f277552e60b94633d187fbbf9bd9e6a70d3cbb01272ce106f743.
+Library ID: libfile_04b74e22f388819198a5630b785dd658.
+The CI artifact digest and inner ZIP hash matched. The delivered ZIP normalizes
+Windows path separators and includes BUILD-SOURCE.json. The DLL is unchanged
+from CI; all 18 external shaders match the prior R431 package byte-for-byte.
+New timestamp coverage tests and existing rendering/WARP tests passed. Actual
+in-game capture coverage and RTX 5090 quality/performance remain untested.

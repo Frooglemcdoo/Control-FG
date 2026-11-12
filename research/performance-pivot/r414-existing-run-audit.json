@@ -1,0 +1,928 @@
+{
+  "file": "Performance-R414-60480-272967046.zip",
+  "sha256": "16f7ed63e4ed2227bf0b0b8153b6cae40acb988559241b3d81d50639234574fd",
+  "outcome": "Outcome: INCOMPLETE: game lost focus",
+  "verified_frame_rows": 9098,
+  "phases": [
+    {
+      "phase": "native_rr_begin",
+      "intervals": 798,
+      "mean_frame_ms": 15.002801629072682,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "native_rr_confirm",
+      "intervals": 798,
+      "mean_frame_ms": 15.023836967418546,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "owned_native_raw",
+      "intervals": 803,
+      "mean_frame_ms": 14.944623412204233,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "intervals": 763,
+      "mean_frame_ms": 15.690758453473132,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "intervals": 760,
+      "mean_frame_ms": 15.765375657894737,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "plus_character",
+      "intervals": 764,
+      "mean_frame_ms": 15.691139005235602,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "full_rr",
+      "intervals": 760,
+      "mean_frame_ms": 15.775509078947369,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "full_rr_repeat",
+      "intervals": 754,
+      "mean_frame_ms": 15.883271220159152,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "native_rr_end",
+      "intervals": 782,
+      "mean_frame_ms": 15.340034910485933,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "loaded_native_sr",
+      "intervals": 789,
+      "mean_frame_ms": 15.188551077313054,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "intervals": 786,
+      "mean_frame_ms": 15.246856615776082,
+      "coverage_ok": true,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "native_rr_return",
+      "intervals": 541,
+      "mean_frame_ms": 15.109388354898336,
+      "coverage_ok": false,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "full_rr_no_gpu_queries",
+      "intervals": 0,
+      "mean_frame_ms": 0,
+      "coverage_ok": false,
+      "skipped_gpu_samples": 0
+    },
+    {
+      "phase": "full_rr_profile_return",
+      "intervals": 0,
+      "mean_frame_ms": 0,
+      "coverage_ok": false,
+      "skipped_gpu_samples": 0
+    }
+  ],
+  "gpu_stages": [
+    {
+      "phase": "native_rr_begin",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11202133333333333
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.112776
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.03068
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.030218666666666668
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.06606133333333333
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.25998933333333335
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.2614666666666667
+    },
+    {
+      "phase": "native_rr_begin",
+      "stage": "rr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 3.0892083333333336
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11130666666666666
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.112848
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.030463999999999998
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.030242666666666668
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.06653333333333333
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.2804453333333333
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.26265333333333335
+    },
+    {
+      "phase": "native_rr_confirm",
+      "stage": "rr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 3.104989166666667
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "shadow_rays",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.111616
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "selector",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.11284430769230769
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "spatial0",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.03075446153846154
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "spatial1",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.030331076923076922
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "composition",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.06671753846153847
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.4117316923076923
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "gi_temporal_visibility",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.15108923076923078
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "gi_evaluator",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.2627003076923077
+    },
+    {
+      "phase": "owned_native_raw",
+      "stage": "rr_evaluation",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 3.1169915384615385
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.15194933333333333
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.10987466666666666
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "history",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.033445333333333334
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.042410666666666666
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.049557333333333335
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.050416
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.38809333333333335
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "gi_temporal_visibility",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.12751466666666667
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.2616853333333333
+    },
+    {
+      "phase": "owned_native_lighting_raw",
+      "stage": "rr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 3.1268208333333334
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.15021866666666667
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11014933333333334
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "history",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.033608
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.04247733333333333
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.04984266666666667
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.050333333333333334
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.3903546666666667
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "gi_temporal_visibility",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.13067466666666666
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.2637813333333333
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "relax_receiver_export",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.040672
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "relax_including_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 1.1231666666666666
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "rr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 3.147645
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "relax_prepare_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.08509066666666668
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "relax_denoise_including_dispatches",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.994152
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "relax_dispatch",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.9563253333333334
+    },
+    {
+      "phase": "owned_native_lighting_relax",
+      "stage": "relax_finish_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.034506666666666665
+    },
+    {
+      "phase": "plus_character",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.15081866666666666
+    },
+    {
+      "phase": "plus_character",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11024533333333333
+    },
+    {
+      "phase": "plus_character",
+      "stage": "history",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.033672
+    },
+    {
+      "phase": "plus_character",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.042272000000000004
+    },
+    {
+      "phase": "plus_character",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.049728
+    },
+    {
+      "phase": "plus_character",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.050541333333333334
+    },
+    {
+      "phase": "plus_character",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.392256
+    },
+    {
+      "phase": "plus_character",
+      "stage": "gi_temporal_visibility",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.130968
+    },
+    {
+      "phase": "plus_character",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.263832
+    },
+    {
+      "phase": "plus_character",
+      "stage": "relax_receiver_export",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.04079466666666667
+    },
+    {
+      "phase": "plus_character",
+      "stage": "relax_including_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 1.1253516666666668
+    },
+    {
+      "phase": "plus_character",
+      "stage": "rr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 3.1584433333333335
+    },
+    {
+      "phase": "plus_character",
+      "stage": "relax_prepare_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.08532533333333334
+    },
+    {
+      "phase": "plus_character",
+      "stage": "relax_denoise_including_dispatches",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.9963623333333333
+    },
+    {
+      "phase": "plus_character",
+      "stage": "relax_dispatch",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.9584853333333333
+    },
+    {
+      "phase": "plus_character",
+      "stage": "relax_finish_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.03429066666666667
+    },
+    {
+      "phase": "full_rr",
+      "stage": "shadow_rays",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.1508829090909091
+    },
+    {
+      "phase": "full_rr",
+      "stage": "selector",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.11010327272727273
+    },
+    {
+      "phase": "full_rr",
+      "stage": "history",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.03332072727272727
+    },
+    {
+      "phase": "full_rr",
+      "stage": "spatial0",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.04270254545454545
+    },
+    {
+      "phase": "full_rr",
+      "stage": "spatial1",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.049847272727272726
+    },
+    {
+      "phase": "full_rr",
+      "stage": "composition",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.050804363636363634
+    },
+    {
+      "phase": "full_rr",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.3919069090909091
+    },
+    {
+      "phase": "full_rr",
+      "stage": "gi_temporal_visibility",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.13017018181818182
+    },
+    {
+      "phase": "full_rr",
+      "stage": "gi_evaluator",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.26394181818181817
+    },
+    {
+      "phase": "full_rr",
+      "stage": "relax_receiver_export",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.040855272727272726
+    },
+    {
+      "phase": "full_rr",
+      "stage": "relax_including_conversion",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 1.1279
+    },
+    {
+      "phase": "full_rr",
+      "stage": "rr_evaluation",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 3.1639981818181817
+    },
+    {
+      "phase": "full_rr",
+      "stage": "relax_prepare_conversion",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.085504
+    },
+    {
+      "phase": "full_rr",
+      "stage": "relax_denoise_including_dispatches",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.9985141818181819
+    },
+    {
+      "phase": "full_rr",
+      "stage": "relax_dispatch",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.9609076363636363
+    },
+    {
+      "phase": "full_rr",
+      "stage": "relax_finish_conversion",
+      "sampled_presents": 11,
+      "mean_gpu_ms": 0.034583272727272726
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.15247466666666668
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11009866666666666
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "history",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.033352
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.04271733333333333
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.049856
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.050605333333333335
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.38910666666666666
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "gi_temporal_visibility",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.12751466666666667
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.26293866666666665
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "relax_receiver_export",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.04081333333333333
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "relax_including_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 1.1702566666666667
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "rr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 3.168845
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "relax_prepare_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.08508533333333333
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "relax_denoise_including_dispatches",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 1.0411061666666668
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "relax_dispatch",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.9853546666666667
+    },
+    {
+      "phase": "full_rr_repeat",
+      "stage": "relax_finish_conversion",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.03453866666666667
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "shadow_rays",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.112384
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "selector",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.1131323076923077
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "spatial0",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.030712615384615383
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "spatial1",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.03033846153846154
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "composition",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.10789907692307692
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.26255507692307695
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "gi_evaluator",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 0.2638276923076923
+    },
+    {
+      "phase": "native_rr_end",
+      "stage": "rr_evaluation",
+      "sampled_presents": 13,
+      "mean_gpu_ms": 3.14763
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.10978133333333333
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11080266666666666
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "history",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.03305333333333333
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.043013333333333334
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.050192
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.06116
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.20951733333333333
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.23774133333333333
+    },
+    {
+      "phase": "loaded_native_sr",
+      "stage": "sr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.3894186666666667
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "shadow_rays",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.10893333333333334
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "selector",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.11044266666666666
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "history",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.03301066666666667
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "spatial0",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.043144
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "spatial1",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.04988533333333333
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "composition",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.060944
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.20859466666666668
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "gi_evaluator",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.23765333333333333
+    },
+    {
+      "phase": "loaded_native_sr_repeat",
+      "stage": "sr_evaluation",
+      "sampled_presents": 12,
+      "mean_gpu_ms": 0.38851199999999997
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "shadow_rays",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.108676
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "selector",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.111404
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "spatial0",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.030768
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "spatial1",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.030331999999999998
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "composition",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.067816
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "gi_rays_including_reuse",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.25028
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "gi_evaluator",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 0.26286
+    },
+    {
+      "phase": "native_rr_return",
+      "stage": "rr_evaluation",
+      "sampled_presents": 8,
+      "mean_gpu_ms": 3.1250875000000002
+    }
+  ],
+  "relax_failure_rows": 0,
+  "members": {
+    "": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "comparison.csv": "951a8316a4ffc4bd1fd262df11a24e76e84f98e76eef18c5c660a8ad81df2992",
+    "frame-times.csv": "a497375de5ce345ea5b549099f85677f4d6aac0dff8fdff96f701744173b362d",
+    "gpu-stage-summary.csv": "ec35dd1af7ec1c8258252a2c7be5184db97e005303caf2e72fcde1dc10eb4111",
+    "gpu-timings.csv": "6de2023ebbeed9cc1149291a2c1699e7084dc6542c45cef1d5fba47c2fab74bb",
+    "mod-settings.ini": "9520850e0d72de2cf7f3199c763703a7b577bd65024d3a47adafc7b9408159cb",
+    "relax-dispatches.csv": "f3050c183074ab07b428ff53941509a4501232f748fc01149c7b4e12ef485f9b",
+    "relax-failures.csv": "a1374338691fc620f3632fb1436ae5519c4c4f6e6094d1e1334b8ff0609ef383",
+    "renderer.ini": "63396604fe9435f25baf7793e5bdd0ce7a463e13310644bc45a0c9d054916a44",
+    "settings-original.txt": "09142984ece1fe6eddbbe6ee102573eb64f8a15a0bbee5986b8b71508db8f46f",
+    "settings-restored.txt": "5aa68eb9cf9cdc774385e234a686ded508418e7ed4513a0b4f9c12e4ec2e71a8",
+    "SUMMARY.txt": "ae7966f85877ee6adc1885ca85cbb32c0a675b0bd8911fb4419f35b342eaf66c"
+  },
+  "limits": [
+    "Global comparison is incomplete; completed phases remain partial historical evidence.",
+    "RR return lacks coverage and no-query/profile-return controls have no frames.",
+    "Stage durations are selected GPU spans, not recoverable frame-time savings.",
+    "This predates the frozen path and does not time its copies, preparation gate or split scheduling.",
+    "Loaded SR is not an untouched-engine reference; glass was disabled."
+  ]
+}

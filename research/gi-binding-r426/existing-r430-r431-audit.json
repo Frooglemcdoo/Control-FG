@@ -1,0 +1,143 @@
+{
+  "archives": [
+    {
+      "file": "Control-FG-Compact-Logs-20261112-111958-8c029ade.zip",
+      "sha256": "6e61ff7eafceac9341ffc66554a8f7be2cf26d3ad4a7c22b58d407f7b76686f7",
+      "sessions": [
+        "a78da89822e1287395cd2a565533af5e86a2ca0c3c987ecb48439d727ca3c951",
+        "3177583c50c9ef89c399156dde578d5beff808b92ee9b16f17b7d1af402650e6"
+      ]
+    },
+    {
+      "file": "Control-FG-Compact-Logs-20261112-114235-0934e077.zip",
+      "sha256": "9d3c9e4acc432b87879b1161a04efccc275d5896ca2aa4b0a8c25df66e359606",
+      "sessions": [
+        "a78da89822e1287395cd2a565533af5e86a2ca0c3c987ecb48439d727ca3c951",
+        "3177583c50c9ef89c399156dde578d5beff808b92ee9b16f17b7d1af402650e6",
+        "fb76df59a8c921a34e388a26915c4969e109f3d9b6640a144954a9a7709b7a8c"
+      ]
+    }
+  ],
+  "unique_sessions": [
+    {
+      "member": "probe\\probe-20261112-164520-638-67324.log",
+      "sha256": "a78da89822e1287395cd2a565533af5e86a2ca0c3c987ecb48439d727ca3c951",
+      "logged_producer_indices": [
+        1,
+        2,
+        3,
+        4,
+        600
+      ],
+      "logged_guided_consumer_indices": [],
+      "logged_complement_consumer_indices": [
+        1,
+        2,
+        3,
+        4,
+        600
+      ],
+      "maximum_logged_retained_bytes": 758185984,
+      "preparation_failures_logged": [
+        "qpc=4360425090323 tid=53856 GI_FROZEN_R428 rejected=1 reason=preparation hr=0x8007000E",
+        "qpc=4360425918762 tid=53856 GI_FROZEN_R428 rejected=2 reason=preparation hr=0x8007000E",
+        "qpc=4360426698167 tid=53856 GI_FROZEN_R428 rejected=3 reason=preparation hr=0x8007000E",
+        "qpc=4360427698629 tid=53856 GI_FROZEN_R428 rejected=4 reason=preparation hr=0x8007000E",
+        "qpc=4360428440377 tid=53856 GI_FROZEN_R428 rejected=5 reason=preparation hr=0x8007000E",
+        "qpc=4360429140853 tid=53856 GI_FROZEN_R428 rejected=6 reason=preparation hr=0x8007000E",
+        "qpc=4360429834718 tid=53856 GI_FROZEN_R428 rejected=7 reason=preparation hr=0x8007000E",
+        "qpc=4360430492033 tid=53856 GI_FROZEN_R428 rejected=8 reason=preparation hr=0x8007000E"
+      ],
+      "stops": [],
+      "fallback_details": [],
+      "runtime_configuration": [
+        "qpc=4359694281243 tid=53856 RT_MODE_R411 diagnostics=0 heap_refresh=0 allocator_probe=0",
+        "qpc=4359694426196 tid=53856 RT_MODE_R411 preparation_comparison=R413 preparation=owned",
+        "qpc=4359694426351 tid=53856 RT_MODE_R411 selection_comparison=R412 selection=native selection_hook=0"
+      ]
+    },
+    {
+      "member": "probe\\probe-20261112-171852-970-61420.log",
+      "sha256": "3177583c50c9ef89c399156dde578d5beff808b92ee9b16f17b7d1af402650e6",
+      "logged_producer_indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "logged_guided_consumer_indices": [],
+      "logged_complement_consumer_indices": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "maximum_logged_retained_bytes": 499712000,
+      "preparation_failures_logged": [],
+      "stops": [
+        "qpc=4380016979813 tid=15556 GI_FROZEN_R429 stopped=1 reason=repeated_rejection source_tracking=0 retirement_observers=1 producers=8 consumers=7 rejections=8 restart_required=1"
+      ],
+      "fallback_details": [
+        "qpc=4380009515386 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380011407718 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380013940100 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380014517560 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380014920028 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380015429963 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380016578142 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5",
+        "qpc=4380016980288 tid=15556 GI_FROZEN_R429 fallback_detail=output_acquisition output_stage=resource_description_or_device native_flags=5 alias=0 state=8 width=2560 height=1440 mips=12 samples=1 resource_flags=5"
+      ],
+      "runtime_configuration": [
+        "qpc=4379793372094 tid=15556 RT_MODE_R411 diagnostics=0 heap_refresh=0 allocator_probe=0",
+        "qpc=4379793430002 tid=15556 RT_MODE_R411 preparation_comparison=R413 preparation=owned",
+        "qpc=4379793430129 tid=15556 RT_MODE_R411 selection_comparison=R412 selection=native selection_hook=0"
+      ]
+    },
+    {
+      "member": "probe\\probe-20261112-174109-770-14940.log",
+      "sha256": "fb76df59a8c921a34e388a26915c4969e109f3d9b6640a144954a9a7709b7a8c",
+      "logged_producer_indices": [
+        1,
+        2,
+        3,
+        4,
+        600,
+        1200
+      ],
+      "logged_guided_consumer_indices": [
+        1,
+        2,
+        3,
+        4,
+        600,
+        1200
+      ],
+      "logged_complement_consumer_indices": [],
+      "maximum_logged_retained_bytes": 758579200,
+      "preparation_failures_logged": [
+        "qpc=4393685570350 tid=75032 GI_FROZEN_R428 rejected=1 reason=preparation hr=0x8007000E",
+        "qpc=4393686151787 tid=75032 GI_FROZEN_R428 rejected=2 reason=preparation hr=0x8007000E",
+        "qpc=4393686723166 tid=75032 GI_FROZEN_R428 rejected=3 reason=preparation hr=0x8007000E",
+        "qpc=4393688660025 tid=75032 GI_FROZEN_R428 rejected=4 reason=preparation hr=0x8007000E",
+        "qpc=4393689345063 tid=75032 GI_FROZEN_R428 rejected=5 reason=preparation hr=0x8007000E",
+        "qpc=4393689881735 tid=75032 GI_FROZEN_R428 rejected=6 reason=preparation hr=0x8007000E",
+        "qpc=4393690447151 tid=75032 GI_FROZEN_R428 rejected=7 reason=preparation hr=0x8007000E",
+        "qpc=4393691078980 tid=75032 GI_FROZEN_R428 rejected=8 reason=preparation hr=0x8007000E"
+      ],
+      "stops": [],
+      "fallback_details": [],
+      "runtime_configuration": [
+        "qpc=4393155172174 tid=75032 RT_MODE_R411 diagnostics=0 heap_refresh=0 allocator_probe=0",
+        "qpc=4393155632806 tid=75032 RT_MODE_R411 preparation_comparison=R413 preparation=owned",
+        "qpc=4393155632897 tid=75032 RT_MODE_R411 selection_comparison=R412 selection=native selection_hook=0"
+      ]
+    }
+  ],
+  "limits": [
+    "Indices are bounded log observations, not a complete frame or invocation population.",
+    "Retained bytes are aggregate owned allocations, not per-frame copy traffic or total VRAM.",
+    "Preparation HRESULT 0x8007000E also covers local reservation/preflight failure; device OOM is not established.",
+    "QPC events are CPU recording events, not GPU timestamps or Present cadence.",
+    "Older sessions bundled again are deduplicated by content hash."
+  ]
+}

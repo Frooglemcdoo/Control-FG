@@ -1,5 +1,12 @@
 # Performance pivot: evidence audit
 
+November 12 follow-up: the existing R414 upload has now been recovered and its
+raw rows verified. See `../rt-ownership-suppression-map.md` and
+`r414-existing-run-audit.json`. It contains the detailed conversion/denoise and
+loaded-SR measurements discussed below, although the overall run is incomplete
+after focus loss. The R391 ranking below is historical, not a current bottleneck
+diagnosis or a reason to request those same measurements again.
+
 Date: 2026-11-10. Goal: retain the accepted visual improvements while recovering
 the user-reported 20+ FPS loss. CPU ownership experiments are paused. This audit
 makes no rendering changes and does not claim a recovered frame-rate gain.
