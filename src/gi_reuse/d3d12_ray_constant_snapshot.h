@@ -50,6 +50,9 @@ class D3D12GIRayConstantSnapshot {
  bool dataCommon_=false;
 public:
  static constexpr UINT Bytes=FrozenRayConstants::Bytes,GIConstantOffset=FrozenRayConstants::GIConstantOffset;
+ D3D12GIRayConstantSnapshot()=default;
+ D3D12GIRayConstantSnapshot(const D3D12GIRayConstantSnapshot&)=delete;
+ D3D12GIRayConstantSnapshot& operator=(const D3D12GIRayConstantSnapshot&)=delete;
  HRESULT Initialize(ID3D12Device* device,const D3D12GIRayConstantPipeline& pipeline)noexcept {
   if(data_||!device||!pipeline.NativeRoot()||!pipeline.CopyRoot()||!pipeline.Pipeline())return E_INVALIDARG;
   D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;

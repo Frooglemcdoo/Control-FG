@@ -89,8 +89,13 @@ an exact token/frame/owner/pass in TLS, restores the previous scope, and invokes
 host cleanup in __finally on normal return or native exception. It establishes
 an invocation identity and cleanup boundary, NOT writer exclusion. Regression
 fixture invokes the real instruction thunk with two arguments and checks both
-normal and exception unwinding. Windows validation pending for this delta.
+normal and exception unwinding. Windows core run43159995782 passed for this scope delta.
 
 Outstanding remains the native writer/descriptor ownership gate and live host
 transaction wiring. Do not replace that gate with a true boolean, silently ship
 the diagnostic package, or request another already-completed ordering capture.
+
+Recyclable snapshot/work owners are now noncopyable. Otherwise a copied ComPtr-
+backed wrapper could rearm and overwrite an allocation still owned by another
+invocation. Compile-time assertions cover this ownership rule. Shared immutable
+pipeline bundles remain shareable. Full DLL validation pending on final commit.

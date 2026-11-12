@@ -55,6 +55,9 @@ class D3D12FrozenRaygenRecords {
  bool ready_=false;
 public:
  static constexpr UINT RecordSize=96,Stride=128,Bytes=384;
+ D3D12FrozenRaygenRecords()=default;
+ D3D12FrozenRaygenRecords(const D3D12FrozenRaygenRecords&)=delete;
+ D3D12FrozenRaygenRecords& operator=(const D3D12FrozenRaygenRecords&)=delete;
  HRESULT Initialize(ID3D12Device* device,const void* identifier,
                     D3D12_GPU_VIRTUAL_ADDRESS guides,D3D12_GPU_VIRTUAL_ADDRESS weights,
                     UINT width,UINT height,UINT frame,UINT epoch,UINT guideSlots,

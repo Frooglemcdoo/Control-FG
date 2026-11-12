@@ -1,11 +1,17 @@
 #include "gpu_test_device.h"
 #include <atomic>
+#include <type_traits>
 #include "../src/gi_reuse/d3d12_frozen_working_set.h"
 #include "../src/gi_reuse/d3d12_split_owner_retirement.h"
 #include "../src/gi_reuse/d3d12_frozen_completion.h"
 #include "../src/gi_reuse/d3d12_frozen_producer.h"
 #include "../src/gi_reuse/d3d12_frozen_pipeline_bundle.h"
 #include "../src/gi_reuse/graphics_table_state.h"
+static_assert(!std::is_copy_constructible_v<gi_reuse::D3D12FrozenWorkingSet>);
+static_assert(!std::is_copy_constructible_v<gi_reuse::D3D12GIRayConstantSnapshot>);
+static_assert(!std::is_copy_constructible_v<gi_reuse::D3D12FrozenRaygenRecords>);
+static_assert(!std::is_copy_assignable_v<gi_reuse::D3D12GIRayConstantSnapshot>);
+static_assert(!std::is_copy_assignable_v<gi_reuse::D3D12FrozenRaygenRecords>);
 namespace gi_reuse {namespace runtime {inline bool Enabled()noexcept{return false;}}}
 namespace fixture {
 inline void Trace(const char*,...){}

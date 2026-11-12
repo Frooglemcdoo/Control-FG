@@ -12,6 +12,9 @@ class D3D12FrozenWorkingSet {
  UINT width_=0,height_=0,slots_=0;
  UINT64 allocationBytes_=0;
 public:
+ D3D12FrozenWorkingSet()=default;
+ D3D12FrozenWorkingSet(const D3D12FrozenWorkingSet&)=delete;
+ D3D12FrozenWorkingSet& operator=(const D3D12FrozenWorkingSet&)=delete;
  enum Buffer : unsigned {Training,Weights,Cells,Guides};
  struct Layout {
   UINT width=0,height=0,slots=0,count=0;
