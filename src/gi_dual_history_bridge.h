@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "gi_frozen_submission_bridge.h"
 #include "nrd_diffuse_bridge.h"
 #include <d3d12.h>
 // Only exact GI binds and command-list lifetime events enter this adapter.

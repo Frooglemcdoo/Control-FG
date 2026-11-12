@@ -45,6 +45,7 @@
 #include "free_camera_control.h"
 
 namespace native_lighting {
+namespace gi_compute_hooks { inline bool Muted()noexcept; }
 namespace gi_phase_bindings { inline void Record(ID3D12GraphicsCommandList*,unsigned,UINT,UINT,UINT) noexcept; }
 namespace gi_owned_dispatch { inline void After(ID3D12GraphicsCommandList*,UINT,UINT,UINT) noexcept; }
 namespace gi_geometry_probe { inline void ResetInstances(ID3D12GraphicsCommandList*) noexcept; }
@@ -497,6 +498,7 @@ inline ListHooks Lookup(ID3D12GraphicsCommandList* list) noexcept {
 inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).set;
     if (!original) return;
+    if(gi_compute_hooks::Muted()){original(list,pso);return;}
     Binding binding(pso);
     auto* alternate = rt_spot_runtime::SelectCompute(binding.selected);
     if(!alternate)alternate=gi_source_probe::Select(binding.selected);
@@ -513,6 +515,7 @@ inline void STDMETHODCALLTYPE SetHook(ID3D12GraphicsCommandList* list, ID3D12Pip
 }
 inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) {
     const auto hooks=Lookup(list);const auto original=hooks.dispatch;if(!original)return;
+    if(gi_compute_hooks::Muted()){original(list,x,y,z);return;}
     gi_evaluator::Dispatch(list);
     gi_frozen_prepare::CheckBinding(list);
     if(gi_phase_audit::Enabled()){UINT mode=0,bytes=sizeof(mode);

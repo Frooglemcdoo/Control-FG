@@ -36,9 +36,11 @@ int main()try {
  fixture::gi_compute_hooks::EnableForDenoiser();fixture::gi_compute_hooks::InstallList(d.list.Get());
  fixture::gi_compute_hooks::Begin(d.list.Get(),nullptr);
  static decltype(owners)* liveOwners=nullptr;liveOwners=&owners;
- fixture::gi_compute_hooks::onRecordingReset=+[](ID3D12CommandList* list,UINT64 previous)noexcept {
+ fixture::gi_compute_hooks::onFrozenRecordingReset=+[](ID3D12CommandList* list,UINT64 previous)noexcept {
   liveOwners->Seal({reinterpret_cast<UINT64>(list),previous});
  };
+ static unsigned legacyResets=0;
+ fixture::gi_compute_hooks::onRecordingReset=+[](ID3D12CommandList*,UINT64)noexcept{++legacyResets;};
  const auto generation=&fixture::gi_compute_hooks::RecordingGeneration;
  Require(FAILED(scratch.Initialize(d.device.Get(),layout,1))&&!scratch.Get(D3D12FrozenWorkingSet::Training),"budget failure published partial set");
  Check(scratch.Initialize(d.device.Get(),layout,4*1024*1024));
@@ -132,13 +134,15 @@ int main()try {
  fixture::gi_compute_hooks::Hooks* intercepted=nullptr;
  for(auto& h:fixture::gi_compute_hooks::hooks)if(h.table==*reinterpret_cast<void***>(consumer.Get()))intercepted=&h;
  Require(intercepted!=nullptr,"missing Reset interposer");const auto savedReset=intercepted->reset;
+ const auto beforeRefused=legacyResets;
  intercepted->reset=&RefusedSplitReset;const auto refused=consumer->Reset(allocator.Get(),nullptr);intercepted->reset=savedReset;
- Require(FAILED(refused)&&generation(consumer.Get())==shading.generation&&!owners.Take(id,retired),"failed Reset retired consumer");
+ Require(FAILED(refused)&&legacyResets==beforeRefused&&generation(consumer.Get())==shading.generation&&!owners.Take(id,retired),"failed Reset retired consumer");
  Check(consumer->Reset(allocator.Get(),nullptr));Require(owners.Take(id,retired)&&owners.RetainedBytes()==0,"completed/reset consumer not retired");
  retired.reset();Require(deaths==1,"invocation resources not released exactly once");
  float* mapped=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  for(UINT i=0;i<count;++i)Require(mapped[i]==values[i],"split scratch data changed");D3D12_RANGE empty{};read->Unmap(0,&empty);
- fixture::gi_compute_hooks::onRecordingReset=nullptr;liveOwners=nullptr;
+ Require(legacyResets>=2,"independent observer displaced the existing Reset observer");
+ fixture::gi_compute_hooks::onRecordingReset=nullptr;fixture::gi_compute_hooks::onFrozenRecordingReset=nullptr;liveOwners=nullptr;
  for(unsigned mode=0;mode<2;++mode){
   D3D12SplitOwnerRetirement<Invocation,2,8*1024*1024> bad;Check(bad.Initialize(d.queue.Get()));
   auto object=std::make_unique<Invocation>(deaths);const Recording r{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())};

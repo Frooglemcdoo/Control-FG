@@ -231,3 +231,25 @@ That does NOT prove how soon both lists reset. Keep bounded allocation/reuse
 accounting and report pool starvation; do not assume a fixed two-list ring or
 silently raise the memory budget. Existing captures remain sufficient for the
 previous ordering questions; do not ask the user to repeat them.
+
+
+## Submission/reset bridge and injected command isolation
+
+Added a split-GI submission observer independent of NRD/diagnostic callbacks.
+It captures one callback set across Execute, marks success only after native
+Execute returns, and notifies once on normal completion or C++ unwind. A failed
+return is not GPU completion evidence. The scope itself never signals a fence.
+Added a separate successful-recording-reset callback so the split owner can
+seal recordings without displacing another feature's observer.
+
+Muted injected compute now bypasses native lighting PSO selection, metadata,
+profiling and dispatch replacement as well as the binding tracker. Previously
+tracker muting alone still allowed those native lighting hooks to process
+injected guide/evaluator kernels. Forwarding preserves the exact PSO and dispatch
+dimensions and leaves the outer native binding metadata unchanged.
+
+Tests cover matching callback/token despite observer changes, exactly-once
+completion, failed Execute notification, coexistence of reset observers, failed
+Reset not sealing, and nested injected forwarding without native observation.
+Windows validation pending. These bridges do not yet connect a complete live
+split invocation owner or enable the guided rendering path.

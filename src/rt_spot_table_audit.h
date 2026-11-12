@@ -455,8 +455,10 @@ inline void STDMETHODCALLTYPE ExecuteHook(ID3D12CommandQueue* queue,UINT count,I
     const auto integrationToken=integration?integration(queue,count,lists):0;
     const auto dual=gi_dual_bridge::callbacks.load();
     const auto dualToken=dual?dual->before(queue,count,lists):0;
+    gi_frozen_submission::Call frozenCall(queue,count,lists);
     const auto phaseCall=gi_phase_audit::Submit(queue,count,lists);
     original(queue,count,lists);
+    frozenCall.Submitted();frozenCall.Finish();
     if(phaseCall){gi_phase_audit::Emit(8,{phaseCall,GetCurrentThreadId()});gi_phase_audit::Observe(phaseCall,gi_phase_audit::Frame(),8);}
     if(dual)dual->after(queue,dualToken);
     if(const auto end=endIntegration.load())end(queue,integrationToken);

@@ -98,6 +98,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-saved-heap-switch.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-frozen-submission-bridge.cpp /Fe:gi-frozen-submission-bridge.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-frozen-submission-bridge.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-frozen-working-set-gpu.cpp /Fe:gi-frozen-working-set.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-frozen-working-set.exe

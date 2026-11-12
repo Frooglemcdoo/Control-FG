@@ -15,8 +15,11 @@ inline bool Enabled() noexcept {
 inline std::atomic<bool> failed{false};
 inline std::atomic<unsigned> liveStates{0};
 inline thread_local unsigned muted=0;
+inline bool Muted()noexcept{return muted!=0;}
 using RecordingResetObserver=void (*)(ID3D12CommandList*,UINT64)noexcept;
 inline std::atomic<RecordingResetObserver> onRecordingReset{nullptr};
+// Independent split-GI lifetime observer: never replace another feature's hook.
+inline std::atomic<RecordingResetObserver> onFrozenRecordingReset{nullptr};
 // Object addresses may be recycled after destruction. A per-object counter is
 // insufficient for outstanding owners keyed by (address, recording identity).
 // Allocate only at creation / successful Reset, never per draw or dispatch.
@@ -76,7 +79,10 @@ inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial,b
         }
         if(newRecording){
             const auto next=NextRecording();if(!next){failed=true;s.tracker.Invalidate();return;}
-            if(s.recordingGeneration)if(const auto observer=onRecordingReset.load(std::memory_order_acquire))observer(list,s.recordingGeneration);
+            if(s.recordingGeneration){
+                if(const auto observer=onRecordingReset.load(std::memory_order_acquire))observer(list,s.recordingGeneration);
+                if(const auto observer=onFrozenRecordingReset.load(std::memory_order_acquire))observer(list,s.recordingGeneration);
+            }
             s.recordingGeneration=next;
         }
         ++s.generation;s.tracker.Reset(initial);s.graphics.Reset();

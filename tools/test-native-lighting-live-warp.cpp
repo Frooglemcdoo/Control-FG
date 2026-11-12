@@ -720,7 +720,31 @@ static void TestSpecParallelBinding(ID3D12Device* device,ID3D12PipelineState* ow
     SetSpecularSampleChoice(0);specularParallelEnabled=false;specularParallelDispatches=0;Check(list->Close());
     puts("PASS SPEC16 binding, dispatch expansion, PSO restore, off/non-16/depth fallback and stale binding clearing");
 }
+static ID3D12PipelineState* injectedPipeline=nullptr;
+static unsigned injectedSets=0,injectedDispatches=0;
+static void STDMETHODCALLTYPE InjectedSet(ID3D12GraphicsCommandList*,ID3D12PipelineState* pso){injectedPipeline=pso;++injectedSets;}
+static void STDMETHODCALLTYPE InjectedDispatch(ID3D12GraphicsCommandList*,UINT x,UINT y,UINT z){
+ if(x!=7||y!=11||z!=1)throw std::runtime_error("injected dispatch dimensions changed");++injectedDispatches;
+}
+static void TestInjectedForwarding(){
+ using namespace native_lighting;
+ // This object supports ONLY the original forwarding callbacks. Any observer,
+ // PSO substitution or metadata access while muted will fail this fixture.
+ void* table[1]{};void** object=table;
+ auto* list=reinterpret_cast<ID3D12GraphicsCommandList*>(&object);
+ const auto saved=listHooks[0];listHooks[0]={};listHooks[0].table=table;
+ listHooks[0].set=&InjectedSet;listHooks[0].dispatch=&InjectedDispatch;
+ auto* pipeline=reinterpret_cast<ID3D12PipelineState*>(16);
+ {gi_compute_hooks::Mute outer;gi_compute_hooks::Mute inner;
+  SetHook(list,pipeline);ComputeDispatchHook(list,7,11,1);
+ }
+ listHooks[0]=saved;
+ if(gi_compute_hooks::Muted()||injectedSets!=1||injectedDispatches!=1||injectedPipeline!=pipeline)
+  throw std::runtime_error("injected work entered native lighting observers");
+ puts("PASS injected compute forwarding: exact PSO/dimensions, no native substitution/observation, nested mute restoration");
+}
 int main() try {
+    TestInjectedForwarding();
     control_visual::SetLighting(false);
     native_lighting::ApplyVisualLightingSelection(); // Establish saved preference before diagnostic selections.
     TestCapturePipelineDescription();
