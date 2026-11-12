@@ -1,3 +1,17 @@
+# R431 rejected; full RT replacement assessment authorized
+
+Latest user result: speckles remain and performance tanked again. Newest
+session probe-20261112-174109-770-14940 in compact bundle114235 records
+guided=1 at consumers1-4,600,1200, intermittent E_OUTOFMEMORY preparation,
+and retained bytes up to758579200. This proves guided command recording,
+not useful learned sampling or quantified per-pass GPU cost.
+Stop advancing the current-frame private-copy guided GI method.
+User explicitly requests a complete RT redesign. See research/rt-replacement-reset.md.
+No additional user capture is currently required. Normal launch disables the
+experimental path; no runtime teardown or files removed by this assessment.
+
+## Historical build record
+
 # R431 native mipmapped output correction
 
 User R430 result: performance cost seems fixed; speckles persist. Exact new
