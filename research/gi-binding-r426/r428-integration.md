@@ -362,3 +362,34 @@ inline tracker to an external tracker BETWEEN ray and shade. That rejection was
 correct: tracker identity changes invalidate the captured source. The fixture
 now establishes the external tracker before producer acquisition and retains it
 through consumption; no production admission was loosened to pass the test.
+
+## Command-list destruction and bounded reuse
+
+Core43212437025/job131163187841 passed for a4ccaa1, including the native texture
+acquisition fixture and compilation/rejection of the complete invocation owner.
+
+The R427 v2 evidence contains22 distinct producer/consumer list addresses in24
+frames. That does not prove Reset frequency or destruction, but a pool must not
+silently assume every list resets. Added optional admission-time registration
+through Microsoft's ID3DDestructionNotifier. It registers once per tracking State,
+keeps no notifier/list reference cycle, and carries only a raw identity and atomic
+recording generation. The callback never dereferences the dying command list.
+Successful Reset refreshes that generation. Replacing/removing private data does
+not invoke the callback or fabricate destruction. Its small independent context
+survives metadata removal until genuine destruction, with a4096-context cap.
+
+Actual destruction is an alternative recording seal; it is NOT a GPU completion
+signal. The same private consumer fence must still complete before allocation
+reuse. A missing notifier interface rejects observation; it never uses the
+IUnknown::Release diagnostic return count as a substitute. No new Release hook
+or per-dispatch query is introduced. The live host must wire the independent
+onFrozenRecordingDestroyed observer to the ownership router's seal operation.
+
+Sources:
+- https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/nn-d3dcommon-id3ddestructionotifier
+- https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/nf-d3dcommon-id3ddestructionotifier-registerdestructioncallback
+- https://learn.microsoft.com/en-us/windows/win32/api/unknwn/nf-unknwn-iunknown-release
+
+Added real WARP list destruction tests: private-data removal versus actual
+object destruction, no notifier retention cycle, latest Reset identity, and
+GPU-fence retirement remaining independent. Windows validation pending.

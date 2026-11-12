@@ -28,6 +28,7 @@ inline bool PatchSlot(void** slot,void* expected,void* replacement)noexcept {
 #include "test-gi-native-textures.inl"
 HRESULT STDMETHODCALLTYPE RefusedSplitReset(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*){return E_FAIL;}
 struct Invocation {gi_reuse::D3D12FrozenWorkingSet scratch;int* deaths;explicit Invocation(int& n):deaths(&n){}~Invocation(){++*deaths;}};
+#include "test-gi-list-destruction.inl"
 int main()try {
  using namespace gi_reuse;Device d(false);TestNativeGITextures(d);
  auto layout=D3D12FrozenWorkingSet::Describe(18,3,16);Require(bool(layout)&&layout.count==27,"bad compact count");
@@ -225,5 +226,6 @@ int main()try {
  const auto savedSerial=fixture::gi_compute_hooks::recordingSerial.exchange(UINT64_MAX);
  Require(!fixture::gi_compute_hooks::NextRecording()&&fixture::gi_compute_hooks::recordingSerial==UINT64_MAX,"recording serial wrapped");
  fixture::gi_compute_hooks::recordingSerial=savedSerial;
+ TestGIListDestruction(d);
  std::cout<<"PASS split working set with actual Reset/ClearState hooks and private fence: 4K allocation sizing, budget rejection, two-list data preservation, last-consumer lifetime\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

@@ -2,6 +2,7 @@
 #include "compute_root_arguments.h"
 #include "graphics_table_state.h"
 #include <d3d12.h>
+#include <d3dcommon.h>
 #include <utility>
 #include <wrl/client.h>
 

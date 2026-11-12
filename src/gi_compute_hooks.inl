@@ -20,6 +20,21 @@ using RecordingResetObserver=void (*)(ID3D12CommandList*,UINT64)noexcept;
 inline std::atomic<RecordingResetObserver> onRecordingReset{nullptr};
 // Independent split-GI lifetime observer: never replace another feature's hook.
 inline std::atomic<RecordingResetObserver> onFrozenRecordingReset{nullptr};
+inline std::atomic<RecordingResetObserver> onFrozenRecordingDestroyed{nullptr};
+// Optional actual D3D object destruction notification. Private-data removal is
+// NOT destruction, and IUnknown::Release's diagnostic count is not used.
+struct DestructionContext {
+ ID3D12CommandList* identity=nullptr; // Identity only: never dereference in callback.
+ std::atomic<UINT64> recording{0};
+};
+inline std::atomic<unsigned> destructionContexts{0};
+inline void CALLBACK Destroyed(void* opaque)noexcept {
+ auto* context=static_cast<DestructionContext*>(opaque);
+ const auto identity=context->identity;const auto recording=context->recording.load(std::memory_order_acquire);
+ // The native object is being destroyed. No QI/GetPrivateData/GetDesc calls.
+ if(recording)if(const auto observer=onFrozenRecordingDestroyed.load(std::memory_order_acquire))observer(identity,recording);
+ delete context;--destructionContexts;
+}
 // Object addresses may be recycled after destruction. A per-object counter is
 // insufficient for outstanding owners keyed by (address, recording identity).
 // Allocate only at creation / successful Reset, never per draw or dispatch.
@@ -39,6 +54,7 @@ public:
     gi_reuse::ComputeBindingTracker tracker;
     gi_reuse::GraphicsTableState graphics;
     UINT64 generation=0,recordingGeneration=0;
+    DestructionContext* destruction=nullptr; // Owned by notifier, not this private state.
     State() noexcept {tracker.Invalidate();}
     ~State(){--liveStates;}
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID iid,void** out) override {
@@ -56,6 +72,24 @@ inline ComPtr<State> Read(ID3D12Object* list) noexcept {
         if(bytes==sizeof(object))result.Attach(static_cast<State*>(object));else object->Release();
     }
     return result;
+}
+// Called at admission on the list's recording thread. One registration per
+// tracking State, not per frame/Reset. The notifier reference is released after
+// registration so it cannot keep the command list alive in a retention cycle.
+inline bool ObserveDestruction(ID3D12CommandList* list,UINT64 expected)noexcept {
+ if(!list||!expected)return false;
+ auto state=Read(list);
+ if(!state||state->recordingGeneration!=expected)return false;
+ if(state->destruction)return state->destruction->recording.load(std::memory_order_acquire)==expected;
+ ComPtr<ID3DDestructionNotifier> notifier;
+ if(FAILED(list->QueryInterface(IID_PPV_ARGS(&notifier))))return false;
+ if(destructionContexts.fetch_add(1)>=4096){--destructionContexts;return false;}
+ auto* context=new(std::nothrow) DestructionContext;
+ if(!context){--destructionContexts;return false;}
+ context->identity=list;context->recording.store(expected,std::memory_order_release);
+ UINT id=0;
+ if(FAILED(notifier->RegisterDestructionCallback(&Destroyed,context,&id))){delete context;--destructionContexts;return false;}
+ state->destruction=context;return true;
 }
 inline bool Attach(ID3D12GraphicsCommandList* list) noexcept {
     if(Read(list))return true;
@@ -84,6 +118,7 @@ inline void Begin(ID3D12GraphicsCommandList* list,ID3D12PipelineState* initial,b
                 if(const auto observer=onFrozenRecordingReset.load(std::memory_order_acquire))observer(list,s.recordingGeneration);
             }
             s.recordingGeneration=next;
+            if(s.destruction)s.destruction->recording.store(next,std::memory_order_release);
         }
         ++s.generation;s.tracker.Reset(initial);s.graphics.Reset();
     });
