@@ -34,8 +34,17 @@ static void TestNativeGITextures(Device& d){
  Require(acquired.ReadAtShade(owner.data(),states)&&states[0]==0xc0&&states[1]==0x40&&states[2]==0x40,
   "exact read states/external tracker not retained");
  ComPtr<ID3D12Resource> output;
+ D3D12NativeGITextures::OutputStatus diagnostic;
+ textures[3].native[0x38]=0x20;
+ Require(!acquired.AcquireOutputAtShade(textures[3].container.data(),d.device.Get(),output,&diagnostic)&&
+   !output&&diagnostic.nativeFlags==0x20&&std::strcmp(diagnostic.stage,"container")==0,"unsupported output reason lost");
+ textures[3].native[0x38]=0;
+ textures[3].State(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ Require(!acquired.AcquireOutputAtShade(textures[3].container.data(),d.device.Get(),output,&diagnostic)&&
+   !output&&diagnostic.state==0x40&&std::strcmp(diagnostic.stage,"tracked_state")==0,"output state rejection lost");
+ textures[3].State(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  Require(!acquired.AcquireOutputAtShade(bundle[0],d.device.Get(),output)&&!output,"hit admitted as raw output");
- Require(acquired.AcquireOutputAtShade(textures[3].container.data(),d.device.Get(),output)&&output==textures[3].resource,
+ Require(acquired.AcquireOutputAtShade(textures[3].container.data(),d.device.Get(),output,&diagnostic)&&diagnostic.width==18&&diagnostic.height==3&&std::strcmp(diagnostic.stage,"ready")==0&&output==textures[3].resource,
   "raw output acquisition failed");
  auto* changed=textures[3].resource.Get();std::memcpy(textures[1].native.data()+0x88,&changed,8);
  Require(!acquired.ReadAtShade(owner.data(),states)&&states[0]==0,"changed resource published partial shade states");

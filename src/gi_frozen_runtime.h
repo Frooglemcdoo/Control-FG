@@ -109,7 +109,6 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   }
   if(result!=gi_reuse::D3D12FrozenProducer::Result::Recorded){Stop("partial_failure");Reject("producer_partial_failure");return true;}
   pending.producerReady=true;
-  attemptPolicy.Succeeded();
   gi_reuse::singleRayApplied.store(true);++gi_reuse::singleRayDispatches;
   settings_check::Record(settings_check::OwnedRays);
   const auto n=++produced;if(n<=4||n%600==0)Log("GI_FROZEN_R428 producer=%llu width=%u height=%u held_bytes=%llu native_ray_suppressed=1",
@@ -144,15 +143,26 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
  input.frame=static_cast<UINT>(pending.scope.frame);input.epoch=pending.epoch;input.shade=std::move(bindings);
  native_lighting::gi_compute_hooks::CaptureGraphics(list,input.graphics);
  const auto trace=native_lighting::rt_shadow_capture::Lookup(rays.Get()).dispatch;
+ const char* completionReason="consumer_admission";
+ gi_reuse::D3D12NativeGITextures::OutputStatus outputStatus;
  const auto result=gi_frozen_lifetime::router->Access([&](auto& pool){
   using Result=gi_reuse::D3D12FrozenCompletion::Result;
   const typename std::remove_reference_t<decltype(pool)>::Recording recording{reinterpret_cast<UINT64>(list),generation};
   auto* owner=pool.View(pending.id);
   if(!owner||!pool.AttachAndClaimConsumer(pending.id,pending.scope.frame,pending.original.queue,recording))return Result::RejectedBeforeCommands;
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;
-  return owner->RecordConsumer(rays.Get(),input,trace);
+  const auto completedResult=owner->RecordConsumer(rays.Get(),input,trace);
+  completionReason=owner->CompletionReason();outputStatus=owner->OutputStatus();return completedResult;
  });
  using Result=gi_reuse::D3D12FrozenCompletion::Result;
+ if(result==Result::Recorded)attemptPolicy.Succeeded();
+ if(result==Result::NativeShadeRequired){
+  Reject(completionReason?completionReason:"unguided_completion");
+  const auto n=rejected.load();
+  if(failed.load()||n<=8||n%600==0)Log("GI_FROZEN_R429 fallback_detail=%s output_stage=%s native_flags=%u alias=%u state=%u width=%llu height=%u mips=%u samples=%u resource_flags=%u",
+   completionReason?completionReason:"unknown",outputStatus.stage,outputStatus.nativeFlags,outputStatus.alias,outputStatus.state,
+   outputStatus.width,outputStatus.height,outputStatus.mips,outputStatus.samples,outputStatus.flags);
+ }
  if(result==Result::Recorded||result==Result::NativeShadeRequired){
   const auto n=++completed;if(n<=4||n%600==0)Log("GI_FROZEN_R428 consumer=%llu guided=%u native_complement=%u",n,
    unsigned(result==Result::Recorded),unsigned(result==Result::NativeShadeRequired));

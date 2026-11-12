@@ -70,10 +70,23 @@ public:
  static bool Accept(const Inputs& p,const D3D12FrozenWorkingSet& work,
                     const D3D12FrozenEvaluator& evaluator,const D3D12FrozenGuideBuild& builder,
                     const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
-  if(!AcceptReplay(p,work,records,trace)||!evaluator.Accept(p.shade)||!builder.Ready()||!p.output)return false;
-  const auto o=p.output->GetDesc();return o.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&o.Width==p.width&&
-   o.Height==p.height&&o.DepthOrArraySize==1&&o.MipLevels==1&&(o.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+  return GuidedRejection(p,work,evaluator,builder,records,trace)==nullptr;
  }
+ static const char* GuidedRejection(const Inputs& p,const D3D12FrozenWorkingSet& work,
+                    const D3D12FrozenEvaluator& evaluator,const D3D12FrozenGuideBuild& builder,
+                    const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
+  if(!AcceptReplay(p,work,records,trace))return "replay_contract";
+  if(!evaluator.Accept(p.shade))return "evaluator_bindings";
+  if(!builder.Ready())return "guide_builder";
+  if(!p.output)return "output_acquisition";
+  const auto o=p.output->GetDesc();
+  if(o.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D)return "output_dimension";
+  if(o.Width!=p.width||o.Height!=p.height)return "output_extent";
+  if(o.DepthOrArraySize!=1||o.MipLevels!=1)return "output_subresources";
+  if(!(o.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return "output_uav";
+  return nullptr;
+ }
+
  // Call exactly once for an admitted consumer recording. This decides BEFORE
  // any completion commands. It never retries a partially recorded completion.
  // NativeShadeRequired means the uniform missing half is now traced and native

@@ -199,6 +199,10 @@ public:
   return result==D3D12FrozenProducer::Result::RejectedBeforeCommands?
    D3D12FrozenProducer::Result::FailedAfterCommands:result;
  }
+ D3D12NativeGITextures::OutputStatus outputStatus_;
+ D3D12NativeGITextures::OutputStatus OutputStatus()const noexcept{return outputStatus_;}
+ const char* completionReason_="not_attempted";
+ const char* CompletionReason()const noexcept{return completionReason_;}
  struct Consumption {
   const void* nativeOwner=nullptr;
   const void* outputContainer=nullptr;
@@ -227,7 +231,8 @@ public:
   if(!textures_.ReadAtShade(p.nativeOwner,input.hitStates))return D3D12FrozenCompletion::Result::RejectedBeforeCommands;
   // Missing/changed output can still use the independent uniform-complement
   // recovery and original native GI6 shader. It does not trigger a full ray retry.
-  if(textures_.AcquireOutputAtShade(p.outputContainer,device_.Get(),output_))input.output=output_.Get();
+  if(textures_.AcquireOutputAtShade(p.outputContainer,device_.Get(),output_,&outputStatus_))input.output=output_.Get();
+  completionReason_=D3D12FrozenCompletion::GuidedRejection(input,work_,pipelines_->evaluator,pipelines_->guide,records_,trace);
   return D3D12FrozenCompletion::RecordOrRecover(list,input,work_,pipelines_->evaluator,pipelines_->guide,records_,trace);
  }
 };

@@ -10,6 +10,13 @@ namespace gi_reuse {
 // Retaining a resource does NOT exclude writes or extend native wrapper life.
 // This reads actual containers, never the later AA ShaderTexture globals.
 class D3D12NativeGITextures {
+public:
+ struct OutputStatus {
+  const char* stage="not_attempted";
+  UINT nativeFlags=0,alias=0,state=0,flags=0,height=0,mips=0,samples=0;
+  UINT64 width=0;
+ };
+private:
  struct Texture {
   const void* container=nullptr;
   const void* native=nullptr;
@@ -22,18 +29,20 @@ class D3D12NativeGITextures {
  const void* owner_=nullptr;
  const void* bundle_=nullptr;
  UINT width_=0,height_=0;
- static bool ReadContainer(const void* container,Texture* out)noexcept {
+ static bool ReadContainer(const void* container,Texture* out,OutputStatus* status=nullptr)noexcept {
   if(!out)return false;*out={};if(!container)return false;
   __try {
    Texture next;next.container=container;
    const auto* native=*reinterpret_cast<const unsigned char*const*>(static_cast<const unsigned char*>(container)+8);
    if(!native)return false;next.native=native;
    UINT flags=0;std::memcpy(&flags,native+0x38,4);
+   if(status){status->nativeFlags=flags;status->alias=native[0x68];}
    if((flags&0x30u)||native[0x68])return false;
    std::memcpy(&next.tracker,native+0x50,8);
    if(!next.tracker)next.tracker=native+0x40;
    std::memcpy(&next.state,static_cast<const unsigned char*>(next.tracker)+0x20,4);
    std::memcpy(&next.resource,native+0x88,8);
+   if(status)status->state=next.state;
    if(!next.resource)return false;*out=next;return true;
   }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
  }
@@ -51,10 +60,11 @@ class D3D12NativeGITextures {
  }
  // Keep SEH and COM-only POD locals separate from C++ owning objects.
  static bool Retain(const Texture& texture,ID3D12Device* device,UINT width,UINT height,
-                    ID3D12Resource** out)noexcept {
+                    ID3D12Resource** out,OutputStatus* status=nullptr)noexcept {
   if(!out)return false;*out=nullptr;
   __try {
    const auto d=texture.resource->GetDesc();
+   if(status){status->width=d.Width;status->height=d.Height;status->mips=d.MipLevels;status->samples=d.SampleDesc.Count;status->flags=UINT(d.Flags);}
    if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||
       d.DepthOrArraySize!=1||d.MipLevels!=1||d.SampleDesc.Count!=1||d.SampleDesc.Quality||
       !(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
@@ -103,14 +113,21 @@ public:
  }
  // Pass the value read from renderer+90E9F8 at GI6, not a later ShaderTexture.
  bool AcquireOutputAtShade(const void* container,ID3D12Device* device,
-                           Microsoft::WRL::ComPtr<ID3D12Resource>& output)const noexcept {
+                           Microsoft::WRL::ComPtr<ID3D12Resource>& output,OutputStatus* status=nullptr)const noexcept {
+  if(status){*status={};status->stage="owner_or_device";}
   if(!owner_||!device||output)return false;
-  Texture texture;if(!ReadContainer(container,&texture)||texture.state!=D3D12_RESOURCE_STATE_UNORDERED_ACCESS)return false;
+  if(status)status->stage="container";
+  Texture texture;if(!ReadContainer(container,&texture,status))return false;
+  if(status)status->stage="tracked_state";
+  if(texture.state!=D3D12_RESOURCE_STATE_UNORDERED_ACCESS)return false;
+  if(status)status->stage="aliases_hit";
   for(const auto& hit:hits_)if(texture.resource==hit.resource)return false;
   Microsoft::WRL::ComPtr<ID3D12Resource> retained;
-  if(!Retain(texture,device,width_,height_,retained.GetAddressOf()))return false;
+  if(status)status->stage="resource_description_or_device";
+  if(!Retain(texture,device,width_,height_,retained.GetAddressOf(),status))return false;
+  if(status)status->stage="changed_container";
   Texture again;if(!ReadContainer(container,&again)||!Same(texture,again)||again.state!=texture.state)return false;
-  output=std::move(retained);return true;
+  output=std::move(retained);if(status)status->stage="ready";return true;
  }
  // Only after the enclosing invocation is returned by retirement Take.
  void ResetAfterRetirement()noexcept {
