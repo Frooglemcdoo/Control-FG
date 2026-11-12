@@ -479,3 +479,32 @@ results, not hardware DXR/gameplay or image/performance measurements.
 Full DLL run43215782503/job131174609807 succeeded for9393454. Its packaged
 artifact remains the R427v2 diagnostic configuration, not an enabled R428 visual
 fix. The later lifetime wiring still requires its own full-DLL build.
+
+## Original producer/queue identity and native mesh writes
+
+Admission now also requires the prepared owner's exact original producer list,
+its retained native queue and the current scope's frame/owner, before ownership
+transfer or any replacement command. AcceptProducer repeats the original-list
+identity check. These checks prevent an unrelated list/queue from reaching a
+late submission quarantine after recording has already started.
+
+Added audit-gi-native-mesh-writes.py and native-mesh-writes-r428.json. The exact
+native buffer lock/unlock controls keep a NativeBuffer backpointer at+D8. Their
+unlock write paths call native copy26990, whose direct and copy-list branches
+load the existing destination resource from the NativeBuffer, then record
+CopyBufferRegion. Seven mutated route windows reject. Hence unchanged wrapper,
+resource and GPU address do not establish immutable source mesh bytes. This
+does not establish that such writes overlap the user's GI pair.
+
+Additional routes to inspect before designing a writer lease: native CPU-data
+copy26840, whole-resource copy27CC0, DeferredBuffer copy17C80, and explicit
+consume/copy transitions272D0/274A0. Blocking only the final Copy call can be
+too late if its caller already recorded a transition. A blanket map lock could
+also stall unrelated loading or deadlock a render dependency; no such lock has
+been enabled. Existing NativeSceneWindow is not being promoted to a complete
+source-mesh write lease on the strength of pointer identity.
+
+Core43217871020 passed for7ac27c1; full43217870962/job131181610081 was still
+running at this checkpoint. Live original-ray/GI6 command coordination and
+complete source-content ownership remain unfinished. No new gameplay ZIP or
+user test was delivered, and no image/FPS result is claimed.

@@ -58,7 +58,9 @@ inline bool Initialize(ID3D12CommandQueue* queue)noexcept {
 inline UINT64 Admit(const gi_native_render_scope::Scope& scope,ID3D12CommandList* list,
                     UINT64 generation,std::unique_ptr<Owner>& owner)noexcept {
  if(!initialized.load(std::memory_order_acquire)||!scope.token||!scope.frame||!scope.owner||
-    !owner||!owner->AllocationBytes()||gi_native_render_scope::current.token!=scope.token||
+    !owner||!owner->AllocationBytes()||owner->OriginalProducer()!=list||owner->NativeQueue()!=nativeQueue.Get()||
+    gi_native_render_scope::current.token!=scope.token||gi_native_render_scope::current.frame!=scope.frame||
+    gi_native_render_scope::current.owner!=scope.owner||
     gi_native_scene_window::window.Inspect().reader!=scope.token||
     !native_lighting::gi_compute_hooks::ObserveDestruction(list,generation))return 0;
  return router->AdmitScene(scope.frame,{reinterpret_cast<UINT64>(list),generation},owner->AllocationBytes(),owner,scope.token);

@@ -21,6 +21,7 @@ class D3D12FrozenInvocation {
  Ptr pipelines_;
  D3D12FrozenProducer::Inputs producer_;
  ComputeBindingSnapshot savedRay_,savedShade_;
+ ID3D12CommandList* originalProducer_=nullptr; // Identity only; router owns its recording seal.
  UINT64 bytes_=0;
  bool prepared_=false,producerAttempted_=false,producerRecorded_=false,consumerAttempted_=false,rearmed_=false;
  static UINT64 Allocation(ID3D12Device* device,ID3D12Resource* resource)noexcept {
@@ -74,7 +75,7 @@ public:
    if(!bytes||bytes_>p.budget||bytes>p.budget-bytes_)return E_OUTOFMEMORY;bytes_+=bytes;
   }
   if(!textures_.AcquireAtRay(p.nativeOwner,p.device,p.ray.width,p.ray.height))return E_INVALIDARG;
-  producer_=p.ray;prepared_=true;return S_OK;
+  originalProducer_=p.recording.list;producer_=p.ray;prepared_=true;return S_OK;
  }
  // Caller must first Take this WHOLE owner from the retirement pool. GPU
  // completion or the producer Reset alone is not sufficient. Changed extents,
@@ -82,12 +83,14 @@ public:
  bool RearmAfterRetirement()noexcept {
   if(!prepared_||!producerRecorded_||rearmed_)return false;
   if(!constants_.RearmAfterRetirement()||!tables_.RearmAfterRetirement()||!records_.RearmAfterRetirement())return false;
-  nativeHeaps_={};textures_.ResetAfterRetirement();output_.Reset();savedRay_={};savedShade_={};producer_={};bytes_=0;
+  originalProducer_=nullptr;nativeHeaps_={};textures_.ResetAfterRetirement();output_.Reset();savedRay_={};savedShade_={};producer_={};bytes_=0;
   prepared_=producerAttempted_=producerRecorded_=consumerAttempted_=false;rearmed_=true;return true;
  }
+ ID3D12CommandList* OriginalProducer()const noexcept{return originalProducer_;}
+ ID3D12CommandQueue* NativeQueue()const noexcept{return nativeHeaps_.Queue();}
  UINT64 AllocationBytes()const noexcept{return prepared_?bytes_:0;}
  bool AcceptProducer(ID3D12GraphicsCommandList4* list,D3D12FrozenProducer::Trace trace)const noexcept {
-  return prepared_&&!producerAttempted_&&nativeHeaps_.Validate(producer_.frame,nativeHeaps_.Queue())&&D3D12FrozenProducer::Accept(list,producer_,work_,constants_,tables_,records_,trace);
+  return prepared_&&!producerAttempted_&&list==originalProducer_&&nativeHeaps_.Validate(producer_.frame,nativeHeaps_.Queue())&&D3D12FrozenProducer::Accept(list,producer_,work_,constants_,tables_,records_,trace);
  }
  D3D12FrozenProducer::Result RecordProducer(ID3D12GraphicsCommandList4* list,D3D12FrozenProducer::Trace trace)noexcept {
   if(!AcceptProducer(list,trace))return D3D12FrozenProducer::Result::RejectedBeforeCommands;
