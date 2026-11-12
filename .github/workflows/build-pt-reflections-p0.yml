@@ -1480,7 +1480,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R428' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R429' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1524,11 +1524,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-Frozen-R428') {
-            Copy-Item docs/GI-Frozen-R428.txt "$out/ControlTOH/README.txt"
-            Copy-Item tools/diagnostics/Start-GI-Frozen-R428.cmd $diagnostics
+          if ($out -eq 'ControlTOH-GI-Frozen-R429') {
+            Copy-Item docs/GI-Frozen-R429.txt "$out/ControlTOH/README.txt"
+            Copy-Item tools/diagnostics/Start-GI-Frozen-R429.cmd $diagnostics
             python tools/test-gi-frozen-launch.py
-            if ($LASTEXITCODE -ne 0) { throw 'R428 launcher integration failed' }
+            if ($LASTEXITCODE -ne 0) { throw 'R429 launcher integration failed' }
           } elseif ($out -eq 'ControlTOH-GI-Compact-Preview') {
             Copy-Item docs/GI-Compact-Preview.txt "$out/ControlTOH/README.txt"
             Copy-Item tools/diagnostics/Start-GI-Compact-Preview.cmd $diagnostics
@@ -1547,11 +1547,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R428' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R429' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
-            ControlTOH-GI-Frozen-R428.zip
-            ControlTOH-GI-Frozen-R428.sha256
-            ControlTOH-GI-Frozen-R428/**
+            ControlTOH-GI-Frozen-R429.zip
+            ControlTOH-GI-Frozen-R429.sha256
+            ControlTOH-GI-Frozen-R429/**
             ControlTOH-R425.zip
             ControlTOH-R425.sha256
             ControlTOH-GI-Compact-Preview.zip

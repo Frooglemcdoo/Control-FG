@@ -3,6 +3,7 @@
 #include "gi_frozen_lifetime.h"
 #include "gi_frozen_dispatch_bridge.h"
 #include <climits>
+#include "gi_reuse/frozen_attempt_policy.h"
 #include <type_traits>
 // Included after the native lighting hooks and exact scope/window adapters.
 // The coordinator does not certify scene immutability itself. Its installer
@@ -20,8 +21,20 @@ struct Pending {
  bool consumed=false,producerReady=false;
 };
 inline thread_local Pending pending{};
+inline gi_reuse::FrozenAttemptPolicy attemptPolicy;
+inline void Stop(const char* reason)noexcept {
+ if(failed.exchange(true))return;
+ attemptPolicy.Stop();
+ GINativeSceneOwners::frozenSourceTrackingStopped.store(true);
+ gi_frozen_lifetime::halted.store(true,std::memory_order_release);
+ Log("GI_FROZEN_R429 stopped=1 reason=%s source_tracking=0 retirement_observers=1 producers=%llu consumers=%llu rejections=%llu restart_required=1",
+  reason,produced.load(),completed.load(),rejected.load());
+ // Never clear an active owner/scene lease or disconnect submission callbacks.
+}
+
 inline void Reject(const char* reason,HRESULT hr=E_INVALIDARG)noexcept {
  const auto n=++rejected;
+ if(attemptPolicy.Rejected())Stop("repeated_rejection");
  if(n<=8||n%600==0)Log("GI_FROZEN_R428 rejected=%llu reason=%s hr=0x%08lX",n,reason,static_cast<unsigned long>(hr));
 }
 inline bool SameScope(const Scope& a,const Scope& b)noexcept {
@@ -33,7 +46,10 @@ inline const void* Output()noexcept {
 }
 inline void Leave(const Scope& scope,bool)noexcept {
  if(!pending.id||!SameScope(pending.scope,scope))return;
- if(!pending.consumed)gi_frozen_lifetime::router->CancelUnattached(pending.id);
+ if(!pending.consumed){
+  if(pending.producerReady){Stop("consumer_missing_at_scope_exit");Reject("consumer_missing_at_scope_exit");}
+  gi_frozen_lifetime::router->CancelUnattached(pending.id);
+ }
  pending={};
 }
 inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc,ID3D12StateObject* pipeline)noexcept {
@@ -91,14 +107,15 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   if(result==gi_reuse::D3D12FrozenProducer::Result::RejectedBeforeCommands){
    gi_frozen_lifetime::router->CancelUnattached(id);pending={};Reject("producer_admitted_rejection");return false;
   }
-  if(result!=gi_reuse::D3D12FrozenProducer::Result::Recorded){failed=true;Reject("producer_partial_failure");return true;}
+  if(result!=gi_reuse::D3D12FrozenProducer::Result::Recorded){Stop("partial_failure");Reject("producer_partial_failure");return true;}
   pending.producerReady=true;
+  attemptPolicy.Succeeded();
   gi_reuse::singleRayApplied.store(true);++gi_reuse::singleRayDispatches;
   settings_check::Record(settings_check::OwnedRays);
   const auto n=++produced;if(n<=4||n%600==0)Log("GI_FROZEN_R428 producer=%llu width=%u height=%u held_bytes=%llu native_ray_suppressed=1",
    n,ray.width,ray.height,gi_frozen_lifetime::cache->HeldBytes());
   return true;
- }catch(...){if(suppressOnException)failed=true;Reject("producer_exception",E_OUTOFMEMORY);return suppressOnException;}
+ }catch(...){if(suppressOnException)Stop("partial_failure");Reject("producer_exception",E_OUTOFMEMORY);return suppressOnException;}
 }
 inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept {
  if(!pending.id||pending.consumed||!SameScope(pending.scope,gi_native_render_scope::current)||
@@ -109,13 +126,13 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
  // Once any producer commands exist, ordinary GI6 must not consume an
  // incomplete hit set. Fatal failure disables future replacements; this frame
  // is aborted rather than pretending native shading can repair missing rays.
- if(!pending.producerReady){failed=true;Reject("consumer_after_failed_producer");return true;}
+ if(!pending.producerReady){Stop("partial_failure");Reject("consumer_after_failed_producer");return true;}
  if(x!=(pending.width+7)/8||y!=(pending.height+15)/16||z!=1||!sceneProof(pending.scope,pending.original)){
-  failed=true;Reject("consumer_scope_or_contract");return true;}
+  Stop("partial_failure");Reject("consumer_scope_or_contract");return true;}
  Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> rays;
- if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays)))){failed=true;Reject("consumer_interface");return true;}
+ if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays)))){Stop("partial_failure");Reject("consumer_interface");return true;}
  const auto generation=native_lighting::gi_compute_hooks::RecordingGeneration(list);
- if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation)){failed=true;Reject("consumer_recording");return true;}
+ if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation)){Stop("partial_failure");Reject("consumer_recording");return true;}
  Owner::Consumption input;input.nativeOwner=pending.scope.owner;input.outputContainer=Output();
  UINT shadeMode=0,shadeModeBytes=sizeof(shadeMode);
  input.uniformShadeCompatible=SUCCEEDED(bindings.pipeline->GetPrivateData(native_lighting::gi_evaluator::kMode,&shadeModeBytes,&shadeMode))&&
@@ -141,7 +158,7 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
    unsigned(result==Result::Recorded),unsigned(result==Result::NativeShadeRequired));
   return gi_reuse::FrozenSuppressNativeShade(result);
  }
- failed=true;Reject(result==Result::FailedAfterCommands?"consumer_partial_failure":"consumer_rejected");
+ Stop("partial_or_consumer_failure");Reject(result==Result::FailedAfterCommands?"consumer_partial_failure":"consumer_rejected");
  return gi_reuse::FrozenSuppressNativeShade(result);
 }
 inline bool Install(Proof proof)noexcept {

@@ -102,7 +102,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   }else prepared=E_FAIL;
   if(FAILED(prepared)){static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 record_failed=1 native_fallback=1");return next(device,desc,iid,out);}
   const UINT variantTag=variant+1;state->SetPrivateData(gi_reuse::nativeGIVariantKey,sizeof(variantTag),&variantTag);
-  if(frozen)Log("GI_FROZEN_R426 pipeline_prepared=1 native_hit_miss_same_state=1 deferred_dispatch_enabled=0");
+  if(frozen)Log("GI_FROZEN_R426 pipeline_prepared=1 native_hit_miss_same_state=1");
   *out=candidate;ready.store(true);Log("GI_TOGGLE_R308 ready=1 variant=%u native_original=1 new_sampler=R307 same_state=1 compact_columns=%u",variant,compact?1u:0u);return hr;
  }catch(...){Log("GI_TOGGLE_R308 exception=1 native_fallback=1");return next(device,desc,iid,out);}
 }

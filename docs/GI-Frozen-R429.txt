@@ -1,0 +1,15 @@
+ControlTOH R429 - bounded fallback and runtime status correction
+
+Install with the game closed. Run ControlTOH\Diagnostics\Start-GI-Frozen-R429.cmd.
+This is a correction to R428 failure handling, not a confirmed noise fix.
+Normal game launch leaves the experimental guided path disabled.
+
+After eight consecutive rejected attempts, or a fatal partial failure, guided
+attempts stop for the session. New geometry source tracking also stops.
+Existing GPU owners retain their submission/reset/fence protections and are
+released only when proven retired. Restart is required to retry guided work.
+
+Startup, rejection, producer, consumer and stop messages survive reduced
+logging. Use ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd after the run.
+The GI OWNED button is a request, not proof that guided rendering succeeded.
+No extra rays, RELAX changes or new capture sequence are introduced.

@@ -12,6 +12,8 @@
 namespace GINativeSceneOwners {
 static gi_reuse::D3D12LiveSceneOwners owners;
 static std::atomic<bool> ready{false};
+// Stop new source inventory only; retirement remains live for retained owners.
+static std::atomic<bool> frozenSourceTrackingStopped{false};
 static std::atomic<UINT64> created{0},rejected{0};
 static bool Enabled() noexcept {if(gi_reuse::SingleProducerEnabled())return false;static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_OWNED",b,4)==1&&b[0]=='1';}();return value;}
 struct Wrapper {IUnknown* resource=nullptr;UINT64 bytes=0,address=0;UINT state=0;};
@@ -22,7 +24,7 @@ static bool Read(void* pointer,Wrapper& output) noexcept {
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static void Created(void* wrapper) noexcept {
- if(!ready.load())return;const DWORD error=GetLastError();Wrapper input;
+ if(!ready.load()||frozenSourceTrackingStopped.load())return;const DWORD error=GetLastError();Wrapper input;
  if(Read(wrapper,input)&&owners.Created(reinterpret_cast<UINT_PTR>(wrapper),input.resource,input.address,input.bytes))++created;
  else {owners.Retire(reinterpret_cast<UINT_PTR>(wrapper));++rejected;}
  SetLastError(error);

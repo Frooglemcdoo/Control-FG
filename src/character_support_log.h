@@ -12,6 +12,7 @@ inline bool IsLifecycleEvent(const char* format) noexcept {
         // Bounded pipeline creation / first-and-final binding results only.
         "GI_FROZEN_R426",
         "GI_FROZEN_R428",
+        "GI_FROZEN_R429",
         "PROBE",
         "GI_TOGGLE_R308"
     };

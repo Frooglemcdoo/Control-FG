@@ -18,6 +18,13 @@ inline std::mutex initializeMutex;
 inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> nativeQueue;
 inline gi_reuse::D3D12FrozenOwnerCache* cache=nullptr;
 inline std::atomic<bool> installed{false},initialized{false};
+inline std::atomic<bool> halted{false};
+inline void CollectHalted()noexcept {
+ if(halted.load(std::memory_order_acquire)&&initialized.load(std::memory_order_acquire)&&cache){
+  // CollectReady requires actual GPU retirement AND both recording seals.
+  cache->Collect(*router);cache->TrimIdle();
+ }
+}
 inline void ReleaseScene(UINT64 token)noexcept {
  if(!gi_native_scene_window::ReleaseAfterConsumerOrCancellation(token))
   Log("GI_FROZEN_R428 lifetime_fault=scene_release token=%llu",token);
@@ -27,9 +34,11 @@ inline UINT64 Before(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*cons
 }
 inline void After(ID3D12CommandQueue* queue,UINT64 token,bool submitted)noexcept {
  if(initialized.load(std::memory_order_acquire))router->After(queue,token,submitted);
+ CollectHalted();
 }
 inline void Seal(ID3D12CommandList* list,UINT64 generation)noexcept {
  if(initialized.load(std::memory_order_acquire))router->Reset(list,generation);
+ CollectHalted();
 }
 inline const gi_frozen_submission::Callbacks callbacks{&Before,&After};
 // Called once during startup, before render workers. Existing feature callbacks

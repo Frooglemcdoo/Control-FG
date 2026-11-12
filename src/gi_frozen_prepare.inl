@@ -30,7 +30,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   unsigned char bytes[16384]{};UINT size=sizeof(bytes);
   HRESULT hr=desc->pRootSignature->GetPrivateData(rt_spot_capture_audit::kRootBytes,&size,bytes);
   if(FAILED(hr)||!size||size>sizeof(bytes)){
-   Log("GI_FROZEN_R426 compute_prepared=0 stage=root_bytes hr=0x%08lX deferred_dispatch_enabled=0",static_cast<unsigned long>(hr));return;}
+   Log("GI_FROZEN_R426 compute_prepared=0 stage=root_bytes hr=0x%08lX",static_cast<unsigned long>(hr));return;}
   Microsoft::WRL::ComPtr<gi_reuse::D3D12FrozenPipelineBundle> bundle;
   bundle.Attach(new(std::nothrow) gi_reuse::D3D12FrozenPipelineBundle);
   if(!bundle)return;
@@ -44,8 +44,8 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   if(SUCCEEDED(hr))hr=native->QueryInterface(IID_PPV_ARGS(&owner));
   if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kBundle,bundle.Get());
   if(SUCCEEDED(hr)){std::lock_guard<std::mutex> lock(bundleMutex);latestBundle=bundle;}
-  Log("GI_FROZEN_R426 compute_prepared=%u hr=0x%08lX native_root_bytes=%u stages=6 deferred_dispatch_enabled=0",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),size);
- }catch(...){Log("GI_FROZEN_R426 compute_prepared=0 stage=exception deferred_dispatch_enabled=0");}
+  Log("GI_FROZEN_R426 compute_prepared=%u hr=0x%08lX native_root_bytes=%u stages=6",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),size);
+ }catch(...){Log("GI_FROZEN_R426 compute_prepared=0 stage=exception");}
 #else
  (void)device;(void)desc;(void)native;
 #endif
@@ -75,7 +75,7 @@ inline void CheckBinding(ID3D12GraphicsCommandList* list)noexcept {
  const bool attached=captured&&bindings.pipeline&&SUCCEEDED(bindings.pipeline->GetPrivateData(kBundle,&size,owner.GetAddressOf()))&&owner;
  const bool accepted=attached&&static_cast<gi_reuse::D3D12FrozenPipelineBundle*>(owner.Get())->evaluator.Accept(bindings);
  if(accepted)done=true;
- if(accepted||attempt==1||attempt==64)Log("GI_FROZEN_R426 binding_ready=%u captured=%u attached=%u attempt=%u generation=%llu deferred_dispatch_enabled=0",
+ if(accepted||attempt==1||attempt==64)Log("GI_FROZEN_R426 binding_ready=%u captured=%u attached=%u attempt=%u generation=%llu",
   unsigned(accepted),unsigned(captured),unsigned(attached),attempt,generation);
 #else
  (void)list;
