@@ -69,6 +69,25 @@ int main(){
   assert(early.Seal(b)&&!early.CanRecordConsumer(token,1,99,b));
   early.Complete(99,1);assert(early.Take(token,out));out.reset();
  }
+ // Failed live admission must remain cancellable; otherwise scope cleanup
+ // can leave the native preparation gate held indefinitely.
+ {
+  for(unsigned scenario=0;scenario<3;++scenario){
+   Pool atomic;auto o=std::make_unique<Owner>(deaths);auto token=atomic.Admit(1,a,50,o);
+   if(scenario){auto batch=atomic.Before(99,&a,1);assert(atomic.After(batch,99,1,true));}
+   assert(!atomic.AttachAndClaimConsumer(token,scenario==2?2:1,scenario==1?100:99,b));
+   assert(atomic.CancelUnattached(token)&&atomic.Seal(a)&&atomic.SceneReleaseReady(token));
+   if(scenario)atomic.Complete(99,1);
+   assert(atomic.Take(token,out));out.reset();
+  }
+  Pool atomic;auto o=std::make_unique<Owner>(deaths);auto token=atomic.Admit(1,a,50,o);
+  auto batch=atomic.Before(99,&a,1);assert(atomic.After(batch,99,1,true));
+  assert(atomic.AttachAndClaimConsumer(token,1,99,b));
+  assert(!atomic.AttachAndClaimConsumer(token,1,99,b)&&!atomic.CancelUnattached(token));
+  batch=atomic.Before(99,&b,1);assert(atomic.After(batch,99,2,true));
+  assert(atomic.SceneReleaseReady(token)&&atomic.Seal(a)&&atomic.Seal(b));
+  atomic.Complete(99,2);assert(atomic.Take(token,out));out.reset();
+ }
  // Same list pointer is reusable only AFTER the producer's successful Reset.
  Pool reuse;auto o=std::make_unique<Owner>(deaths);auto token=reuse.Admit(1,a,50,o);
  assert(!reuse.Attach(token,1,{10,2}));assert(reuse.Seal(a));assert(reuse.Attach(token,1,{10,2}));

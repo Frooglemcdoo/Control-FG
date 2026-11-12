@@ -690,3 +690,15 @@ The report does not claim to exclude computed indirect calls, other modules, or
 leaf functions without unwind records. Native frame retirement protects resource
 lifetime, not arbitrary in-place streaming texture contents. These distinctions
 remain explicit; no new activation or visual success is claimed.
+
+## Transactional consumer admission fix
+
+Review found that separate Attach then Claim could leave an attached consumer
+when the actual producer/queue check failed. Scope cleanup only cancels an
+unattached consumer, so this could keep the preparation reader held. The live
+coordinator now uses AttachAndClaimConsumer: it validates on a private lease
+copy and publishes the consumer identity only on complete success. Wrong queue,
+wrong frame and missing producer submission leave cancellation available.
+Successful admission is still single-use and retains normal fence/seal rules.
+Portable GCC C++17 -Wall -Wextra -Werror regression passed. The scene-contract
+Windows fixture passed in core run43242094898 for580df57. Full DLL still pending.

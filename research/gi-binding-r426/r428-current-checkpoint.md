@@ -1,6 +1,8 @@
 # R428 current checkpoint — 2026-11-12
 
-Latest committed rendering integration: 410adf16beb0c1ef791ad9acafd42e332f635a82.
+Latest scene adapter commit: 580df57bf3339b83e5bdddcad3c575118a131269.
+Scene-adapter Windows core run43242094898 SUCCESS.
+Next change fixes partial consumer admission; portable regression passed.
 Core run43240215460 SUCCESS. Full run43240215456 was still running at this
 checkpoint (live lighting WARP step). Prior full run43236701710 for04659f8
 SUCCESS. Do not report the current full integration as passed without checking.
@@ -42,7 +44,7 @@ ordering; do not ask for another duplicate phase/heap capture.
    410adf1. They remain dormant pending installation of the independent contract.
    Review consumer rejection after a submitted half-producer: returning native
    GI6 alone cannot restore the missing ray half when replay itself is rejected.
-3. Validate the new scene adapter in Windows CI. Its negative fixture checks
+3. Scene adapter Windows CI passed. Its negative fixture checks
    no-reader, changed frame/fence/epoch, wrong invocation and wrong scene.
 4. Confirm full DLL compilation, then enable/package the actual visual path.
    Current package is NOT that build. No new user capture is needed.

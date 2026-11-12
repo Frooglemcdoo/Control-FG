@@ -51,6 +51,16 @@ public:
   if(!e->lease.AttachConsumer(frame,consumer.list,consumer.generation))return false;
   e->recordings[1]=consumer;return true;
  }
+ // Atomic live admission: failed queue/submission checks must not leave an
+ // attached consumer that prevents cancellation of the scene reader.
+ bool AttachAndClaimConsumer(U64 id,U64 frame,U64 queue,Recording consumer)noexcept {
+  auto* e=Find(id);if(!e)return false;
+  if(consumer.list==e->recordings[0].list&&!e->sealed[0])return false;
+  auto candidate=e->lease;
+  if(!candidate.AttachConsumer(frame,consumer.list,consumer.generation)||
+     !candidate.ClaimConsumerRecording(frame,queue,consumer.list,consumer.generation))return false;
+  e->lease=candidate;e->recordings[1]=consumer;return true;
+ }
  bool CanRecordConsumer(U64 id,U64 frame,U64 queue,Recording consumer)noexcept {
   const auto* e=Find(id);
   return e&&e->lease.CanRecordConsumer(frame,queue,consumer.list,consumer.generation);

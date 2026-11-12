@@ -118,8 +118,7 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
   using Result=gi_reuse::D3D12FrozenCompletion::Result;
   const typename std::remove_reference_t<decltype(pool)>::Recording recording{reinterpret_cast<UINT64>(list),generation};
   auto* owner=pool.View(pending.id);
-  if(!owner||!pool.Attach(pending.id,pending.scope.frame,recording)||
-     !pool.ClaimConsumerRecording(pending.id,pending.scope.frame,pending.original.queue,recording))return Result::RejectedBeforeCommands;
+  if(!owner||!pool.AttachAndClaimConsumer(pending.id,pending.scope.frame,pending.original.queue,recording))return Result::RejectedBeforeCommands;
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;
   return owner->RecordConsumer(rays.Get(),input,trace);
  });
