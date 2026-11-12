@@ -1,4 +1,5 @@
 #define NOMINMAX
+#define CONTROL_GI_LONG_SEQUENCE
 #include <windows.h>
 #include <cassert>
 #include <cstring>
@@ -20,6 +21,9 @@ static bool Rel32Fits(const unsigned char* from,const void* to)noexcept{
  const auto d=reinterpret_cast<std::intptr_t>(to)-reinterpret_cast<std::intptr_t>(from);return d>=INT32_MIN&&d<=INT32_MAX;
 }
 #include "../src/gi_native_scene_window.h"
+namespace GINativeSceneOwners { inline std::atomic<bool> ready{false}; }
+#include "../src/gi_frozen_scene_contract.h"
+namespace contract=gi_frozen_scene_contract;
 namespace g=gi_native_scene_window;namespace rscope=gi_native_render_scope;namespace prep=gi_native_prepare_scope;
 static unsigned calls=0;static bool throws=false;static void* expected=nullptr;
 static void NativeJoin(void* scene){assert(scene==expected);++calls;if(throws)throw std::runtime_error("join failure");}
@@ -45,6 +49,42 @@ int main(){
  void* wrong=reinterpret_cast<void*>(300);std::memcpy(owner+0x220,&wrong,8);assert(!g::TryAcquire());std::memcpy(owner+0x220,&expected,8);
  throws=true;try{g::Join(expected);assert(false);}catch(const std::runtime_error&){}assert(!g::TryAcquire());throws=false;
  g::Join(expected);assert(g::TryAcquire()&&g::ReleaseAfterConsumerOrCancellation(9));
+ // Independently exercise the exact-build frame/scene adapter. Fake COM
+ // identities are never dereferenced: this fixture tests admission, not GPU use.
+ prep::original=reinterpret_cast<prep::Native>(r+0x13de60);
+ *reinterpret_cast<void**>(r+0x631da0)=reinterpret_cast<void*>(&rscope::Invoke);
+ *reinterpret_cast<void**>(r+0x632270)=reinterpret_cast<void*>(&prep::Invoke);
+ assert(!contract::Install(verifiedRenderer,verifiedD3d));
+ GINativeSceneOwners::ready=true;
+ assert(contract::Install(verifiedRenderer,verifiedD3d));
+ unsigned char device[0x90]{};UINT64 fence[2]={17,0x1234};
+ *reinterpret_cast<unsigned char**>(d+0x136d28)=device;
+ auto* deviceIdentity=reinterpret_cast<ID3D12Device*>(0x1000);
+ std::memcpy(device+0x78,&deviceIdentity,sizeof(deviceIdentity));
+ auto* fenceAddress=fence;std::memcpy(device+0x88,&fenceAddress,sizeof(fenceAddress));
+ gi_reuse::NativeGIRecording recording;
+ recording.device=deviceIdentity;
+ recording.list=reinterpret_cast<ID3D12CommandList*>(0x2000);
+ recording.queue=reinterpret_cast<ID3D12CommandQueue*>(0x3000);
+ recording.heaps.frame=11;recording.heaps.deviceEpoch=17;
+ recording.heaps.deviceFenceRecord=reinterpret_cast<UINT64>(fence);
+ recording.heaps.deviceFenceObject=fence[1];
+ const auto scope=rscope::current;
+ assert(!contract::Validate(scope,recording)); // No reader lease.
+ g::Join(expected);assert(g::TryAcquire());
+ assert(contract::Validate(scope,recording));
+ ++fence[0];assert(!contract::Validate(scope,recording));--fence[0];
+ ++fence[1];assert(!contract::Validate(scope,recording));--fence[1];
+ ++*reinterpret_cast<UINT64*>(d+0x136c68);assert(!contract::Validate(scope,recording));
+ --*reinterpret_cast<UINT64*>(d+0x136c68);
+ ++rscope::current.token;assert(!contract::Validate(scope,recording));--rscope::current.token;
+ ++g::joined.epoch;assert(!contract::Validate(scope,recording));--g::joined.epoch;
+ std::memcpy(owner+0x220,&wrong,8);assert(!contract::Validate(scope,recording));
+ std::memcpy(owner+0x220,&expected,8);
+ assert(contract::Validate(scope,recording));
+ assert(g::ReleaseAfterConsumerOrCancellation(scope.token));
+ assert(!contract::Validate(scope,recording));
+ contract::supported=false;contract::module=nullptr;
  assert(NativeCpuExchangeCall(&g::patch,false));g::ready=false;prep::entering=nullptr;prep::leaving=nullptr;
  VirtualFree(r,0,MEM_RELEASE);VirtualFree(d,0,MEM_RELEASE);
  std::puts("PASS native scene adapter: prepare boundary, real joined epoch, owner/invocation checks, exception invalidation and exact reader release.");

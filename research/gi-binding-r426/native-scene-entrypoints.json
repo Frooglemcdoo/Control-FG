@@ -1,0 +1,67 @@
+{
+  "sha256": "ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433",
+  "entries": {
+    "0xc7bc0": {
+      "name": "material_upload",
+      "direct": [
+        {
+          "site": "0x12491d",
+          "body": "0x123d60",
+          "operation": "call"
+        }
+      ],
+      "rip_address": [],
+      "data_pointers": []
+    },
+    "0xa89c0": {
+      "name": "scene_worker",
+      "direct": [
+        {
+          "site": "0xa8f74",
+          "body": "0xa8f70",
+          "operation": "jmp"
+        }
+      ],
+      "rip_address": [],
+      "data_pointers": []
+    },
+    "0xa67b0": {
+      "name": "deformed_update",
+      "direct": [],
+      "rip_address": [],
+      "data_pointers": [
+        "0x627e60"
+      ]
+    },
+    "0xa6c00": {
+      "name": "deformed_build",
+      "direct": [],
+      "rip_address": [],
+      "data_pointers": [
+        "0x627e68"
+      ]
+    },
+    "0x150fa0": {
+      "name": "static_build",
+      "direct": [],
+      "rip_address": [],
+      "data_pointers": [
+        "0x633320"
+      ]
+    },
+    "0x151040": {
+      "name": "static_finalize",
+      "direct": [],
+      "rip_address": [],
+      "data_pointers": [
+        "0x633328"
+      ]
+    }
+  },
+  "exported_entries": [],
+  "limitations": [
+    "Computed indirect calls, other leaf functions without unwind records, and writers in other modules are not excluded.",
+    "A native frame retirement epoch proves lifetime, not immutable texture contents.",
+    "Do not enable replacement solely from this inventory."
+  ]
+}

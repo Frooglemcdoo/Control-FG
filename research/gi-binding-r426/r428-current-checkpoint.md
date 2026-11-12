@@ -1,11 +1,14 @@
 # R428 current checkpoint — 2026-11-12
 
-Latest rendering-code commit: 04659f8acdac289e28f0ef1af727973473fafa9a.
-Core run43236701893/job131245857886 SUCCESS, including batched multi-source WARP
-copy, native-source mutation, private hit-table upload/reuse, shared budget and
-nine-buffer preflight. Full DLL run43236701710 pending at this checkpoint.
-Do not claim a full DLL pass until inspecting that run. Several earlier full
-runs were cancelled by subsequent pushes; they are not successful validations.
+Latest committed rendering integration: 410adf16beb0c1ef791ad9acafd42e332f635a82.
+Core run43240215460 SUCCESS. Full run43240215456 was still running at this
+checkpoint (live lighting WARP step). Prior full run43236701710 for04659f8
+SUCCESS. Do not report the current full integration as passed without checking.
+
+This continuation adds an uninstalled scene-contract adapter plus negative
+frame/epoch/owner/lease tests to the existing Windows scene fixture. It does not
+certify immutable texture contents. The new exact-build entrypoint inventory
+passed locally against the pinned renderer and explicitly records its limits.
 
 No enabled R428 visual build has been delivered. Automatic full workflow still
 packages R427v2 diagnostics. Do not relabel that artifact as a noise fix.
@@ -35,15 +38,14 @@ ordering; do not ask for another duplicate phase/heap capture.
    existing preparation gate and original native retirement/heap identities.
    Source copies solve mutable hit-root geometry, not every referenced resource.
    Do not set sceneAndDescriptorLease just because pointers/frame match.
-2. Implement the live original-ray/GI6 coordinator with original writer capture,
-   source leases and the whole-owner router. Preserve native fallback before
-   commands and existing failed-after-commands/partial-producer rules.
-3. Host shared budget and retired owner cache: Prepare now REQUIRES one shared
-   FrozenAllocationBudget in Preparation.memoryBudget. Use RequiredPeakBytes,
-   RetainedAllocationBytes and actual owner Take after final fence AND both seals.
-   The shared budget exists, but no host instance/cache/coordinator is connected.
-4. Confirm Windows full build, then enable/package the actual visual path.
-   Current package is NOT that build.
+2. The live original-ray/GI6 coordinator and retired owner cache now exist in
+   410adf1. They remain dormant pending installation of the independent contract.
+   Review consumer rejection after a submitted half-producer: returning native
+   GI6 alone cannot restore the missing ray half when replay itself is rejected.
+3. Validate the new scene adapter in Windows CI. Its negative fixture checks
+   no-reader, changed frame/fence/epoch, wrong invocation and wrong scene.
+4. Confirm full DLL compilation, then enable/package the actual visual path.
+   Current package is NOT that build. No new user capture is needed.
 
 ## Local evidence and source
 

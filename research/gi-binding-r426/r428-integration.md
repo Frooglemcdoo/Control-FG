@@ -673,3 +673,20 @@ observations to release the scene. Installer REQUIRES an independent native
 scene-proof callback. No callback is supplied/installed yet, so this code is
 compiled but dormant; sceneAndDescriptorLease is reached only after that proof
 accepts an acquired scene window. Scene contract closure remains outstanding.
+
+
+## Scene adapter and entrypoint inventory continuation
+
+Added a candidate exact-build scene contract, still uninstalled. It checks both
+native invocation adapters and the actual joined scene reader, then rechecks the
+original native device/frame/fence cut. It must be combined with private source,
+SBT and constant copies and retained native heap/fence ownership. Its fixture
+rejects changed frame, epoch, fence object, invocation, scene and released reader.
+
+`audit-gi-scene-entrypoints.py` passed on the pinned renderer. Material upload's
+observed direct call is inside the gated preparation body. The scene worker's
+job thunk and four provider method addresses agree with the earlier writer audit.
+The report does not claim to exclude computed indirect calls, other modules, or
+leaf functions without unwind records. Native frame retirement protects resource
+lifetime, not arbitrary in-place streaming texture contents. These distinctions
+remain explicit; no new activation or visual success is claimed.
