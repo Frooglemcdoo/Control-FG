@@ -622,3 +622,14 @@ available after rearm or partial failure for eventual active+idle accounting.
 Added WARP exact/insufficient budget and overflow checks with no private GPU
 allocations during preflight. Windows validation pending for these changes.
 This is per-owner preflight; host aggregate reservation/cache is still required.
+
+Core43234529975 passed at1d5c7d4, including nine-buffer preflight.
+Added a shared atomic allocation reservation owned by the whole invocation.
+Prepare now requires a host-supplied shared budget and reserves its complete
+peak before any GPU allocation. Success/partial failure settles to actual
+retained committed storage; the reservation remains across retirement/rearm and
+is released only after member GPU resources are destroyed. Thus active,
+preparing and idle owners share one ceiling. Unexpected underestimation closes
+future admission. Local GCC warnings-as-errors and eight-thread contention test
+passed. Windows validation pending; actual retired-owner cache/host coordinator
+still need wiring. This change makes a missing shared budget fail before work.

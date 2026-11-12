@@ -5,12 +5,15 @@
 #include "d3d12_native_gi_textures.h"
 #include "d3d12_native_gi_heap_lease.h"
 #include "d3d12_native_hit_snapshot.h"
+#include "frozen_allocation_budget.h"
 namespace gi_reuse {
 // The whole owner placed in D3D12SplitOwnerRetirement. The live host supplies
 // native scene ownership and actual queue/recording evidence. This object must
 // NOT be destroyed/rearmed merely because the producer or render scope ended.
 class D3D12FrozenInvocation {
  using Ptr=Microsoft::WRL::ComPtr<D3D12FrozenPipelineBundle>;
+ // Declared first so the reservation is released AFTER all GPU resources.
+ FrozenAllocationReservation allocationReservation_;
  D3D12FrozenWorkingSet work_;
  D3D12GIRayConstantSnapshot constants_;
  D3D12GISbtSnapshot tables_;
@@ -46,6 +49,7 @@ public:
   D3D12_DISPATCH_RAYS_DESC dispatch{};
   D3D12FrozenProducer::Inputs ray{};
   UINT64 budget=0;
+  std::shared_ptr<FrozenAllocationBudget> memoryBudget;
   float guideFraction=.5f;
  };
  // CPU-only committed allocation preflight, including retained allocations
@@ -111,7 +115,11 @@ public:
      p.recording.heaps.deviceEpoch!=p.ray.epoch||!p.ray.nativeSingleRayAbi||!p.ray.sceneAndDescriptorLease||
      !p.ray.ray.Ready()||!p.ray.ray.rays||p.ray.ray.root.Get()!=p.pipelines->constants.NativeRoot()||
      p.dispatch.Width!=p.ray.width||p.dispatch.Height!=p.ray.height||p.dispatch.Depth!=1)return E_INVALIDARG;
-  if(!RequiredPeakBytes(p))return E_OUTOFMEMORY;
+  const auto peak=RequiredPeakBytes(p);
+  if(!peak||!allocationReservation_.Peak(p.memoryBudget,peak))return E_OUTOFMEMORY;
+  struct Settle {D3D12FrozenInvocation* owner;~Settle(){
+   owner->allocationReservation_.Settle(owner->RetainedAllocationBytes());
+  }} settle{this};
   // Keep a failed partial allocation private. Its owner may be destroyed since
   // Prepare never records commands. It cannot be accidentally prepared again.
   if(device_&&(device_.Get()!=p.device||pipelines_.Get()!=p.pipelines||
@@ -160,6 +168,7 @@ public:
   if(tables_.HitUploadAllocationBytes()>p.budget-bytes_)return E_OUTOFMEMORY;
   bytes_+=tables_.HitUploadAllocationBytes();
   if(!textures_.AcquireAtRay(p.nativeOwner,p.device,p.ray.width,p.ray.height))return E_INVALIDARG;
+  if(!allocationReservation_.Settle(RetainedAllocationBytes()))return E_OUTOFMEMORY;
   originalProducer_=p.recording.list;producer_=p.ray;prepared_=true;return S_OK;
  }
  // Caller must first Take this WHOLE owner from the retirement pool. GPU
