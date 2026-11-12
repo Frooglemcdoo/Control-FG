@@ -98,4 +98,32 @@ the diagnostic package, or request another already-completed ordering capture.
 Recyclable snapshot/work owners are now noncopyable. Otherwise a copied ComPtr-
 backed wrapper could rearm and overwrite an allocation still owned by another
 invocation. Compile-time assertions cover this ownership rule. Shared immutable
-pipeline bundles remain shareable. Full DLL validation pending on final commit.
+pipeline bundles remain shareable. Windows core run43160430664 and full DLL
+run43160430673 both passed for commit3dd597e (all60 build steps successful).
+This establishes compilation/component validation, not in-game guided quality.
+
+
+## Native heap allocation and complementary recovery
+
+Expanded audit-gi-native-retirement.py against exact D3D SHA cceb99cb... .
+The current resource heap fast path appends only while generation matches and
+capacity remains. Generation changes select a new or fence-completed pool
+record; the material prefix refresh follows that gate. Output is checked into
+native-retirement-r428.json. This supports retaining the recorded heap, not
+re-resolving current TLS at submission. It does not establish ownership of its
+referenced resources or protection against geometry/AS writes.
+
+Added D3D12FrozenCompletion::RecordOrRecover. It chooses before any completion
+commands: ordinary guided completion when all admission checks pass, otherwise
+uniform missing-half rays only when the independent replay admission still
+passes. It restores the original hit states and shade bindings, returning
+NativeShadeRequired so the host can run full native GI6 shading exactly once.
+No full ray retry occurs. A failed/partial guided recording is not retried.
+Missing scene ownership, producer submission, exact heap pair, SBT/constant
+identity, or hit resources still rejects recovery. The host must claim the
+consumer once through the retirement owner before calling this entry point.
+
+WARP can check rejection and compile this path but cannot execute DXR recovery.
+It is not wired into the live game yet and does not make an enabled build ready.
+Native writer exclusion, complete host integration, and an actual DXR runtime
+validation remain outstanding. No repeat user ordering capture is warranted.

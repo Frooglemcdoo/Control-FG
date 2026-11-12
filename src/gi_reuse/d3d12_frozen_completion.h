@@ -18,7 +18,7 @@ class D3D12FrozenCompletion {
  }
 public:
  using Trace=void (*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*);
- enum class Result {RejectedBeforeCommands,Recorded,FailedAfterCommands};
+ enum class Result {RejectedBeforeCommands,Recorded,NativeShadeRequired,FailedAfterCommands};
  struct Inputs {
   UINT width=0,height=0,slots=0,frame=0,epoch=0,trainingParity=0;
   // Host checks actual queue order plus immutable scene/descriptor ownership.
@@ -32,12 +32,14 @@ public:
   std::array<D3D12_RESOURCE_STATES,3> hitStates{};
   ID3D12Resource* output=nullptr;
  };
- static bool Accept(const Inputs& p,const D3D12FrozenWorkingSet& work,
-                    const D3D12FrozenEvaluator& evaluator,const D3D12FrozenGuideBuild& builder,
-                    const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
+ // Shared admission for guided completion and uniform complement recovery.
+ // All referenced scene data must still be leased; recovery cannot repair a
+ // lost scene lease, missing submission, or a different active heap pair.
+ static bool AcceptReplay(const Inputs& p,const D3D12FrozenWorkingSet& work,
+                          const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
   if(!trace||!p.separateProducerSubmitted||!p.sceneAndDescriptorLease||!p.ray.Ready()||!p.ray.rays||
-     !evaluator.Accept(p.shade)||!builder.Ready()||!work.Matches(p.width,p.height,p.slots)||
-     !p.frame||!p.epoch||p.trainingParity>1||!FrozenRayConstants::Matches(p.ray.arguments,p.rayConstants)||!p.output||
+     !p.shade.Ready()||!p.shade.pipeline||p.shade.rays||!work.Matches(p.width,p.height,p.slots)||
+     !p.frame||!p.epoch||p.trainingParity>1||!FrozenRayConstants::Matches(p.ray.arguments,p.rayConstants)||
      !records.At(1).StartAddress||!records.NativeComplement().StartAddress)return false;
   if(!records.MatchesStateObject(p.ray.rays.Get()))return false;
   if(!records.Matches(p.width,p.height,p.frame,p.epoch,p.slots,p.trainingParity,
@@ -57,8 +59,39 @@ public:
       !(p.hitStates[i]&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)||
       (p.hitStates[i]&~(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)))return false;
   }
+  return true;
+ }
+ static bool Accept(const Inputs& p,const D3D12FrozenWorkingSet& work,
+                    const D3D12FrozenEvaluator& evaluator,const D3D12FrozenGuideBuild& builder,
+                    const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
+  if(!AcceptReplay(p,work,records,trace)||!evaluator.Accept(p.shade)||!builder.Ready()||!p.output)return false;
   const auto o=p.output->GetDesc();return o.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&o.Width==p.width&&
    o.Height==p.height&&o.DepthOrArraySize==1&&o.MipLevels==1&&(o.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+ }
+ // Call exactly once for an admitted consumer recording. This decides BEFORE
+ // any completion commands. It never retries a partially recorded completion.
+ // NativeShadeRequired means the uniform missing half is now traced and native
+ // FULL GI6 shading must run once using the restored current shade bindings.
+ // The native FULL ray pass must never run after either successful result.
+ static Result RecordOrRecover(ID3D12GraphicsCommandList4* list,const Inputs& p,D3D12FrozenWorkingSet& work,
+                      const D3D12FrozenEvaluator& evaluator,const D3D12FrozenGuideBuild& builder,
+                      const D3D12FrozenRaygenRecords& records,Trace trace)noexcept {
+  if(!list||(list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))
+   return Result::RejectedBeforeCommands;
+  if(Accept(p,work,evaluator,builder,records,trace))
+   return Record(list,p,work,evaluator,builder,records,trace);
+  if(!AcceptReplay(p,work,records,trace))return Result::RejectedBeforeCommands;
+  // The producer was submitted separately, so both private buffers are COMMON.
+  // The third immutable raygen record disables guiding before any guide read.
+  Transition(list,work.Get(D3D12FrozenWorkingSet::Weights),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  Transition(list,work.Get(D3D12FrozenWorkingSet::Guides),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+  for(unsigned i=0;i<3;++i)Transition(list,p.hits[i],p.hitStates[i],D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+  if(!p.ray.Restore(list))return Result::FailedAfterCommands;
+  auto dispatch=p.preservedTables;dispatch.Width=p.width/2;dispatch.RayGenerationShaderRecord=records.NativeComplement();
+  trace(list,&dispatch);
+  for(unsigned i=0;i<3;++i)Transition(list,p.hits[i],D3D12_RESOURCE_STATE_UNORDERED_ACCESS,p.hitStates[i]);
+  if(!p.shade.Restore(list))return Result::FailedAfterCommands;
+  return Result::NativeShadeRequired;
  }
  static Result Record(ID3D12GraphicsCommandList4* list,const Inputs& p,D3D12FrozenWorkingSet& work,
                       const D3D12FrozenEvaluator& evaluator,const D3D12FrozenGuideBuild& builder,

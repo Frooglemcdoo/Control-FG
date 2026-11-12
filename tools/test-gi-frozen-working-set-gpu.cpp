@@ -61,6 +61,17 @@ int main()try {
   unpreparedTables,unpreparedRecords,noTrace,saved)==D3D12FrozenProducer::Result::RejectedBeforeCommands,
   "unprepared producer admitted");
  Require(FrozenRayConstants::Matches(saved.arguments,65536),"rejected producer published partial bindings");
+ // Recovery is not an escape hatch for a missing producer or scene lease.
+ // No fallback trace may be emitted from incomplete admission state.
+ D3D12FrozenCompletion::Inputs completionInput;
+ D3D12FrozenEvaluator unpreparedEvaluator;D3D12FrozenGuideBuild unpreparedBuilder;
+ for(unsigned mode=0;mode<4;++mode){
+  completionInput.separateProducerSubmitted=(mode&1)!=0;
+  completionInput.sceneAndDescriptorLease=(mode&2)!=0;
+  Require(D3D12FrozenCompletion::RecordOrRecover(d.list.Get(),completionInput,scratch,
+   unpreparedEvaluator,unpreparedBuilder,unpreparedRecords,noTrace)==D3D12FrozenCompletion::Result::RejectedBeforeCommands,
+   "unprepared completion escaped into recovery");
+ }
  // Distinct command lists/submissions: producer writes sentinel data; consumer
  // reads it only after producer completes. CPU ownership waits for BOTH resets.
  const UINT count=layout.count;std::vector<float> values(count);for(UINT i=0;i<count;++i)values[i]=float(i)+.25f;

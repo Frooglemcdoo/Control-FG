@@ -10,6 +10,14 @@ EXPECTED = 'cceb99cbd9c019af907c24c44701a53c8d230965c1fb31c325233e4c80214aa5'
 # Independently disassembled instruction boundaries. Keep these narrow claims
 # distinct from proving every geometry suballocator and concurrent writer.
 CHECKS = {
+    # Native resource descriptor allocation: a changed material generation
+    # takes the new/retired-heap path, not an in-flight prefix refresh.
+    0x1AA73: '488b4e604885c97424488b460848394130751a8b41184903c6483d20b90700730c488b1525710f00e9a001000033c0',
+    0x1AAB1: '488b0570c21100488b8088000000488b4808488b01ff5040483b45200f83fd010000',
+    0x1ACD0: '488b0551c01100488b88880000000f1001660fd64520e9befeffffcccccccccc',
+    0x1ABA9: '48896e604533c944894d18488b466081401820b90300488b7e60',
+    0x1AC2E: '488b4608488947308b4610894738488b4e60',
+    0x1AC65: '488b466044017018488b05b4c01100488b88880000000f1001488b4e60660fd64120488b4660',
     0x239B0: '48890db1321100c3',  # setCurrentFrame -> 136C68
     0x239C0: '488b05a1321100c3',  # getCurrentFrame <- 136C68
     0x31DD5: '488b8188000000488b38488b7008',  # timeline value, fence
@@ -57,6 +65,15 @@ def audit(path):
         'd3d_sha256': digest,
         'verified_instruction_windows': {hex(k):v for k,v in CHECKS.items()},
         'native_device_global_rva': '0x136d28',
+        'native_resource_heap_allocator': {
+            'entry':'0x1aa00','current_record':'manager+0x60',
+            'fast_path':'same material generation and sufficient remaining capacity; append only',
+            'generation_change':'select a newly allocated or fence-completed pool record',
+            'reuse_gate':'native device fence GetCompletedValue >= saved record+0x20',
+            'material_prefix_refresh':'after new allocation or successful reuse gate',
+            'allocation_stamps':'current native device epoch at record+0x20',
+            'implication':'A later current provider or material generation is not the saved recording heap. Carry and validate its exact record.',
+            'limits':'Covers this native allocator. Does not retain referenced resources, exclude AS/geometry writes, or authorize deferred rays by itself.'},
         'frame_number_global_rva': '0x136c68',
         'timeline_offset': '0x88',
         'timeline_fields': {'value':'0x0', 'fence':'0x8'},
