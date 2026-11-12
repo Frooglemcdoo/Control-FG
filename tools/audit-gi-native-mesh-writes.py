@@ -21,6 +21,12 @@ WINDOWS={
  # Whole-resource DX12 copy does NOT enter 26990: command-list slot17.
  0x27cdd: '4c8bf24c8bf9',
  0x27d54: '488b4918488b014d8b06498b17ff9088000000',
+ # Control type zero maps/unmaps the original resource directly. A GPU copy
+ # observer alone cannot establish content versions for this CPU write route.
+ 0x2586b: '418d41ffa9fdffffff0f94c2885110418d41fe83f8020f96c0884111',
+ 0x25d04: '85c90f843a010000',
+ 0x25c29: '48897da048897da884d27408498d0438488945a8488b83d8000000488b08488b014c8d4b184c8d45a033d2ff5040',
+ 0x25e46: '488b43084889442448488944245040386b1174164885d27406482b5318eb03498bd04803c24889442450488b83d8000000488b08488b014c8d44244833d2ff5048',
 }
 def audit(data):
  p=pefile.PE(data=data)
@@ -44,6 +50,12 @@ def audit(data):
   'whole_resource_route':{'entry':'0x27cc0','call':'0x27d61','vtable_slot':17,
                           'operation':'CopyResource','destination_resource':'[entry RCX]',
                           'source_resource':'[entry RDX]','bypasses_ranged_copy_helper':True},
+  'direct_cpu_mapping':{'control_type':0,'map_call':'0x25c54','unmap_call':'0x25e84',
+                        'resource':'[control+D8] then [wrapper]',
+                        'write_flag':'control+11 is set for MapType numeric values 2, 3, 4',
+                        'range':'offset at control+8; full length at control+0 or optional end-pointer delta',
+                        'bypasses_gpu_copy_hooks':True,
+                        'requirement':'Version and protect the actual CPU-write interval; Unmap range is not a fence and post-write invalidation cannot protect an already executing reader.'},
   'observation_boundary':'Record both CopyBufferRegion and CopyResource at the existing command-list hooks, then consume in actual Execute/list order. Recording order alone is insufficient.',
   'implication':'The NativeBuffer API supports copying into existing resource storage. Same wrapper/resource/GPU address does not prove immutable mesh contents.',
   'not_proven':['Whether a referenced static mesh is actually updated between the GI ray and GI6 in the captured runs.',
