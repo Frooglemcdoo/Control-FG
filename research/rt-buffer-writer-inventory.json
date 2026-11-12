@@ -835,12 +835,70 @@
       "bytes": "ff1549a13900"
     }
   ],
+  "native_traversal_sites": [
+    {
+      "site": "0xa557e",
+      "function_begin": "0xa5390",
+      "function_end": "0xa5701",
+      "import": "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z",
+      "bytes": "ff15449f5300",
+      "consumer": "glass_reflections",
+      "classification_source": "src/pt_glass_runtime.h"
+    },
+    {
+      "site": "0x129652",
+      "function_begin": "0x128d20",
+      "function_end": "0x12da38",
+      "import": "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z",
+      "bytes": "ff15705e4b00",
+      "consumer": "opaque_reflections",
+      "classification_source": "src/opaque_reflection_runtime.h"
+    },
+    {
+      "site": "0x12c5eb",
+      "function_begin": "0x128d20",
+      "function_end": "0x12da38",
+      "import": "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z",
+      "bytes": "ff15d72e4b00",
+      "consumer": "indirect_lighting",
+      "classification_source": "tools/audit-gi-native-route.py"
+    },
+    {
+      "site": "0x12d342",
+      "function_begin": "0x128d20",
+      "function_end": "0x12da38",
+      "import": "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z",
+      "bytes": "ff1580214b00",
+      "consumer": "sun_shadow",
+      "classification_source": "tools/audit-gi-native-scene-window.py"
+    },
+    {
+      "site": "0x12d8ba",
+      "function_begin": "0x128d20",
+      "function_end": "0x12da38",
+      "import": "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z",
+      "bytes": "ff15081c4b00",
+      "consumer": "ambient_occlusion",
+      "classification_source": "tools/audit-gi-native-scene-window.py"
+    },
+    {
+      "site": "0x23f9c4",
+      "function_begin": "0x23ed10",
+      "function_end": "0x23fcd1",
+      "import": "?raytrace@DeviceUtilRaytracing@d3d@@SAXHH@Z",
+      "bytes": "ff15fefa3900",
+      "consumer": "spot_shadow",
+      "classification_source": "src/rt_spot_runtime.h"
+    }
+  ],
+  "consumer_routing_requirement": "Account for all six listed native traversal sites before retiring their shared scene; a passing GI-only route is insufficient.",
   "limits": [
     "Scans only decoded instructions in PE runtime-function ranges.",
     "Register-indirect calls, functions without unwind entries, other modules and GPU shader writes are not covered.",
     "A site does not identify its target allocation or prove execution between GI stages.",
     "Function location outside a preparation body is not proof it executes outside the preparation gate.",
-    "Resource identity alone cannot authorize persistent byte reuse."
+    "Resource identity alone cannot authorize persistent byte reuse.",
+    "Traversal classification uses existing source audits; static callsites do not prove runtime execution or exhaustive indirect consumers."
   ],
   "complete_writer_coverage": false,
   "persistent_reuse_authorized": false

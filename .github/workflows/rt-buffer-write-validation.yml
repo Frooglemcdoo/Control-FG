@@ -1,0 +1,42 @@
+name: Validate live RT buffer write observation
+on:
+  push:
+    branches: [work/gi-stage-diagnostic-r432]
+    paths:
+      - 'src/gi_reuse/d3d12_submission_metadata.h'
+      - 'src/rt_spot_copy_audit.h'
+      - 'tools/test-gi-live-only-metadata.cpp'
+      - 'tools/test-native-lighting-live-warp.cpp'
+      - '.github/workflows/rt-buffer-write-validation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate Visual Studio
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (!$vs) { throw 'Visual Studio not found' }
+          "VSROOT=$vs" >> $env:GITHUB_ENV
+      - name: Validate live callbacks and real copy hooks
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-live-only-metadata.cpp /Fe:live-metadata.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          live-metadata.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live-warp.cpp /Fe:copy-hooks.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          copy-hooks.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /DCONTROL_CAPTURE_DIAGNOSTIC tools\test-native-lighting-live-warp.cpp /Fe:copy-hooks-capture.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          copy-hooks-capture.exe
+          if not "%errorlevel%"=="0" exit /b 1

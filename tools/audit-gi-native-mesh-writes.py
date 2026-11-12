@@ -12,6 +12,15 @@ WINDOWS={
  0x25dd2: '488b530848897c24204c8bca4c8b8380000000488b8bd8000000e89f0b0000',
  0x26abe: '4d8b4d004c8b4548498b1424488bce41ff5278',
  0x26b84: '4d8b4d004c8b4548498b1424488bce41ff5278',
+ # CPU uploads stage in chunks, then enter the ranged GPU-copy helper.
+ 0x26871: '498be94d8bf0488bf24c8be141bd00004000',
+ 0x2693f: '448b8c249800000048897c24204c8d442440488bd6498bcce834000000',
+ # move writes the temporary buffer AND the final destination via 26990.
+ 0x255b7: '4c8bce4d8bc6490f42dc498bcf33d2488bc349f7f5482bda33d248895c2420e8b5130000',
+ 0x255db: '4533c948895c24204d8bc7488bd5498bcee89f130000',
+ # Whole-resource DX12 copy does NOT enter 26990: command-list slot17.
+ 0x27cdd: '4c8bf24c8bf9',
+ 0x27d54: '488b4918488b014d8b06498b17ff9088000000',
 }
 def audit(data):
  p=pefile.PE(data=data)
@@ -27,6 +36,15 @@ def audit(data):
   'write_paths':['25D48 ->26990','25DEC ->26990'],
   'copy_destination':'26990 preserves rcx in r12;26AC6/26B8C load destination resource from [r12]',
   'copy_calls':['26ACD CopyBufferRegion for copy-list route','26B93 CopyBufferRegion after transitions for other lists'],
+  'cpu_upload_route':{'entry':'0x26840','chunk_limit':4194304,'ranged_copy':'0x26957 -> 0x26990',
+                      'destination':'entry RCX','destination_offset':'entry RDX','bytes':'entry R9'},
+  'move_route':{'entry':'0x25570','temporary_write':'0x255d6 -> 0x26990',
+                'destination_write':'0x255ec -> 0x26990',
+                'implication':'Both writes must enter the ordered write journal; a move is not just allocation retirement.'},
+  'whole_resource_route':{'entry':'0x27cc0','call':'0x27d61','vtable_slot':17,
+                          'operation':'CopyResource','destination_resource':'[entry RCX]',
+                          'source_resource':'[entry RDX]','bypasses_ranged_copy_helper':True},
+  'observation_boundary':'Record both CopyBufferRegion and CopyResource at the existing command-list hooks, then consume in actual Execute/list order. Recording order alone is insufficient.',
   'implication':'The NativeBuffer API supports copying into existing resource storage. Same wrapper/resource/GPU address does not prove immutable mesh contents.',
   'not_proven':['Whether a referenced static mesh is actually updated between the GI ray and GI6 in the captured runs.',
                 'Whether all relevant callers are excluded by the RT preparation gate.'],

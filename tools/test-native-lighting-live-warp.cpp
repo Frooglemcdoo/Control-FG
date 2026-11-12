@@ -341,6 +341,13 @@ static void TestCapturePipelineDescription() {
     std::cout<<"PASS capture pipeline description: native alpha export, independent 32-byte payload, original local root, untouched native descriptor, driver failure returned\n";
 }
 
+static unsigned liveBufferCopyCount=0;
+static gi_reuse::runtime::BufferCopy liveBufferCopies[3];
+static ID3D12GraphicsCommandList* liveBufferCopyLists[3]{};
+static void ObserveLiveBufferCopy(ID3D12GraphicsCommandList* list,const gi_reuse::runtime::BufferCopy& copy) noexcept {
+    if(liveBufferCopyCount<3){liveBufferCopies[liveBufferCopyCount]=copy;liveBufferCopyLists[liveBufferCopyCount]=list;}
+    ++liveBufferCopyCount;
+}
 static void TestCopyAudit(ID3D12Device* device) {
     namespace audit=native_lighting::rt_spot_capture_audit;
     namespace copies=native_lighting::rt_spot_copy_audit;
@@ -382,12 +389,20 @@ static void TestCopyAudit(ID3D12Device* device) {
     // Record the consumer first: CPU recording order differs from submission.
     unsigned char captureIds[2][32]{};captureIds[0][0]=31;captureIds[1][0]=32;
     mirror::RecordDispatch(dispatchList.Get(),audit::targetAddress,384,ids,captureIds);Check(dispatchList->Close());
+    gi_reuse::runtime::liveBufferCopy=&ObserveLiveBufferCopy;
     list->CopyBufferRegion(destination.Get(),64,source.Get(),32,512);
     list->CopyResource(destination.Get(),source.Get());
     if(copies::samples.load()!=3)throw std::runtime_error("copy hooks did not sample both native copy forms");
     D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition={destination.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COPY_SOURCE};
     list->ResourceBarrier(1,&barrier);list->CopyResource(readback.Get(),destination.Get());Check(list->Close());
+    gi_reuse::runtime::liveBufferCopy=nullptr;
+    if(liveBufferCopyCount!=3||liveBufferCopyLists[0]!=list.Get()||liveBufferCopyLists[1]!=list.Get()||liveBufferCopyLists[2]!=list.Get()||
+       liveBufferCopies[0].wholeResource||liveBufferCopies[0].destination!=destination.Get()||liveBufferCopies[0].source!=source.Get()||
+       liveBufferCopies[0].destinationOffset!=64||liveBufferCopies[0].sourceOffset!=32||liveBufferCopies[0].bytes!=512||
+       !liveBufferCopies[1].wholeResource||liveBufferCopies[1].destination!=destination.Get()||liveBufferCopies[1].source!=source.Get()||
+       !liveBufferCopies[2].wholeResource||liveBufferCopies[2].destination!=readback.Get()||liveBufferCopies[2].source!=destination.Get())
+        throw std::runtime_error("live buffer write observer lost native copy arguments");
     D3D12_COMMAND_QUEUE_DESC queueDesc{};ComPtr<ID3D12CommandQueue> queue;Check(device->CreateCommandQueue(&queueDesc,IID_PPV_ARGS(&queue)));
     ComPtr<ID3D12Fence> fence;Check(device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&fence)));
     HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);if(!event)throw std::runtime_error("copy test event creation failed");

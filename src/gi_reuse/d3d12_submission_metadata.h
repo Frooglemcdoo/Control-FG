@@ -32,6 +32,23 @@ inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,const D3D12_BUILD_RAYTRAC
 inline std::atomic<void(*)(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE) noexcept> liveCopy{nullptr};
 inline std::atomic<void(*)(ID3D12GraphicsCommandList*) noexcept> liveReset{nullptr};
 inline std::atomic<void(*)(ID3D12GraphicsCommandList*,UINT,const D3D12_RESOURCE_BARRIER*) noexcept> liveBarriers{nullptr};
+// Ordinary buffer copies are separate from AS clone/compact operations. Preserve
+// the original call arguments, including whole-resource copies, for the live
+// observer even when the legacy inventory is disabled or faulted. These are
+// borrowed recording-time objects: a consumer must validate buffer dimensions,
+// retain storage and journal against the list generation, then apply writes in
+// actual Execute order. This notification is NOT a completed content version.
+struct BufferCopy {
+ ID3D12Resource* destination=nullptr;
+ ID3D12Resource* source=nullptr;
+ UINT64 destinationOffset=0,sourceOffset=0,bytes=0;
+ bool wholeResource=false; // bytes==0 here means unspecified, not an empty write.
+};
+inline std::atomic<void(*)(ID3D12GraphicsCommandList*,const BufferCopy&) noexcept> liveBufferCopy{nullptr};
+inline void RecordBufferCopy(ID3D12GraphicsCommandList* list,ID3D12Resource* destination,UINT64 destinationOffset,
+ ID3D12Resource* source,UINT64 sourceOffset,UINT64 bytes,bool wholeResource=false) noexcept {
+ if(const auto callback=liveBufferCopy.load())callback(list,{destination,source,destinationOffset,sourceOffset,bytes,wholeResource});
+}
 inline std::atomic<void(*)(ID3D12GraphicsCommandList*) noexcept> liveInitialize{nullptr};
 inline BufferOwners owners;
 inline ASResourceOwners<> asOwners;

@@ -7,6 +7,9 @@ static void Copy(ID3D12GraphicsCommandList4*,UINT64,UINT64,D3D12_RAYTRACING_ACCE
 static void Reset(ID3D12GraphicsCommandList*) noexcept {++resets;}
 static void Initialize(ID3D12GraphicsCommandList*) noexcept {++initializes;}
 static void Barriers(ID3D12GraphicsCommandList*,UINT,const D3D12_RESOURCE_BARRIER*) noexcept {++barriers;}
+static unsigned bufferCopies=0;
+static rt::BufferCopy lastCopy;
+static void BufferCopy(ID3D12GraphicsCommandList*,const rt::BufferCopy& copy) noexcept {++bufferCopies;lastCopy=copy;}
 int main()try {
  SetEnvironmentVariableA("CONTROLTOH_GI_METADATA","1");
  SetEnvironmentVariableA("CONTROLTOH_GI_LEGACY_AUDIT","0");
@@ -23,6 +26,17 @@ int main()try {
  rt::RecordBuild(nullptr,nullptr);rt::RecordCopy(nullptr,256,512,D3D12_RAYTRACING_ACCELERATION_STRUCTURE_COPY_MODE_CLONE);
  Require(builds==1&&copies==1&&resets==1&&initializes==1&&barriers==1,"Live callback lost or duplicated");
  Require(!rt::BeforeExecute(nullptr,0,nullptr)&&!rt::fault.load(),"Disabled ledger processed submission");
+ rt::liveBufferCopy=&BufferCopy;
+ rt::RecordBufferCopy(nullptr,buffer.Get(),4,buffer.Get(),8,4);
+ Require(bufferCopies==1&&lastCopy.destination==buffer.Get()&&lastCopy.source==buffer.Get()&&
+  lastCopy.destinationOffset==4&&lastCopy.sourceOffset==8&&lastCopy.bytes==4&&!lastCopy.wholeResource,"Ranged copy arguments lost");
+ // A legacy diagnostic fault cannot hide new writes from an independent owner.
+ rt::Fail("fixture_legacy_fault");
+ rt::RecordBufferCopy(nullptr,buffer.Get(),0,buffer.Get(),0,0,true);
+ Require(bufferCopies==2&&lastCopy.wholeResource&&lastCopy.bytes==0,"Whole resource write lost after inventory fault");
+ rt::liveBufferCopy=nullptr;
+ rt::RecordBufferCopy(nullptr,buffer.Get(),0,buffer.Get(),0,4);
+ Require(bufferCopies==2,"Detached observer still called");
  unsigned count=0;UINT64 bytes=0;bool limited=false;rt::owners.Stats(count,bytes,limited);
  Require(count==0&&bytes==0&&rt::buildCount==0&&rt::barrierObservations==0&&rt::creationObservations==0,"Legacy work still active");
  std::cout<<"PASS live-only mode: storage proof and callbacks preserved; duplicate inventory, barriers and ledger disabled\n";
