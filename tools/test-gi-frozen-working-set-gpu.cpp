@@ -63,6 +63,18 @@ int main()try {
  using Recording=decltype(owners)::Recording;
  const Recording producer{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())};
  const auto id=owners.Admit(1,producer,scratch.AllocationBytes(),invocation);Require(id&&!invocation,"owner admission failed");
+ // Global Execute callbacks also see unrelated queues/lists. Unknown generation
+ // on an unrelated list must not quarantine this producer before it submits.
+ ComPtr<ID3D12CommandQueue> foreign;D3D12_COMMAND_QUEUE_DESC qd{};qd.Type=D3D12_COMMAND_LIST_TYPE_DIRECT;
+ Check(d.device->CreateCommandQueue(&qd,IID_PPV_ARGS(&foreign)));
+ ComPtr<ID3D12CommandAllocator> unrelatedAllocator;ComPtr<ID3D12GraphicsCommandList> unrelated;
+ Check(d.device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT,IID_PPV_ARGS(&unrelatedAllocator)));
+ Check(d.device->CreateCommandList(0,D3D12_COMMAND_LIST_TYPE_DIRECT,unrelatedAllocator.Get(),nullptr,IID_PPV_ARGS(&unrelated)));
+ ID3D12CommandList* unrelatedLists[]={unrelated.Get()};
+ const auto unknown=+[](ID3D12CommandList*)noexcept -> UINT64{return 0;};
+ Require(!owners.Before(foreign.Get(),1,unrelatedLists,unknown).count,"unrelated foreign queue tagged as GI");
+ Require(!owners.Before(d.queue.Get(),1,unrelatedLists,unknown).count,"unrelated untracked list tagged as GI");
+ Require(!owners.Before(d.queue.Get(),0,nullptr,generation).count,"empty Execute tagged as GI");
  std::unique_ptr<Invocation> retired;
  d.Transition(weights,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
  d.list->CopyBufferRegion(weights,0,upload.Get(),0,count*sizeof(float));
@@ -107,6 +119,14 @@ int main()try {
  float* mapped=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  for(UINT i=0;i<count;++i)Require(mapped[i]==values[i],"split scratch data changed");D3D12_RANGE empty{};read->Unmap(0,&empty);
  fixture::gi_compute_hooks::onRecordingReset=nullptr;liveOwners=nullptr;
+ for(unsigned mode=0;mode<2;++mode){
+  D3D12SplitOwnerRetirement<Invocation,2,8*1024*1024> bad;Check(bad.Initialize(d.queue.Get()));
+  auto object=std::make_unique<Invocation>(deaths);const Recording r{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())};
+  const auto token=bad.Admit(2,r,64,object);Require(token!=0,"bad-path fixture admission failed");
+  auto batch=bad.Before(mode?d.queue.Get():foreign.Get(),1,producerLists,mode?unknown:generation);
+  Require(!batch.count&&!bad.Seal(r)&&!bad.Take(token,retired),"owned wrong-queue/unknown-generation execution escaped quarantine");
+  bad.DeviceStopped(); // Fixture recorded no GPU commands using this owner.
+ }
  // Model a recycled COM address by dropping the private State after all owners
  // retire, then attaching fresh State at the identical command-list address.
  const auto oldIdentity=generation(consumer.Get());

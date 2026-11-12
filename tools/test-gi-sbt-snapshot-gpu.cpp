@@ -30,6 +30,19 @@ int main()try {
  ID3D12Resource* rejected=nullptr;
  Require(!AcquireNativeGISbtSource(wrapper.data(),localBase+64,capacity,&rejected)&&!rejected,"wrong wrapper identity admitted");
  Require(!AcquireNativeGISbtSource(wrapper.data(),localBase,capacity+256,&rejected),"wrong native capacity admitted");
+ std::vector<unsigned char> context(0xb0);UINT64 nativeSerial=7;
+ const auto* timeline=&nativeSerial;
+ std::memcpy(context.data()+0x50,wrapper.data(),0x50);std::memcpy(context.data()+0xa8,&timeline,8);
+ UINT64 acquiredCapacity=0;ComPtr<ID3D12Resource> current;
+ Require(AcquireNativeGICurrentSbt(context.data(),localBase,current.GetAddressOf(),&acquiredCapacity)&&
+  current.Get()==local.Get()&&acquiredCapacity==capacity,"current native odd SBT slot not acquired");
+ current.Reset();nativeSerial=8;
+ Require(!AcquireNativeGICurrentSbt(context.data(),localBase,current.GetAddressOf(),&acquiredCapacity)&&
+  !current&&acquiredCapacity==0,"previous native SBT slot borrowed after parity change");
+ std::memcpy(context.data(),wrapper.data(),0x50);
+ Require(AcquireNativeGICurrentSbt(context.data(),localBase,current.GetAddressOf(),&acquiredCapacity),"current native even SBT slot not acquired");
+ current.Reset();nativeSerial=UINT64_MAX;
+ Require(!AcquireNativeGICurrentSbt(context.data(),localBase,current.GetAddressOf(),&acquiredCapacity),"invalid SBT counter accepted");
  D3D12GISbtSnapshot localCopy;
  Require(FAILED(localCopy.Initialize(d.device.Get(),local.Get(),localDesc)),"DEFAULT state guessed as GENERIC_READ");
  Check(localCopy.Initialize(d.device.Get(),local.Get(),localDesc,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));

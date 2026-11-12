@@ -42,15 +42,23 @@ public:
  bool Seal(Recording r)noexcept{return state_&&state_->owners.Seal(r);}
  bool CancelUnattached(UINT64 id)noexcept{return state_&&state_->owners.CancelUnattached(id);}
  Batch Before(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists,Generation generation)noexcept {
-  if(!state_)return {};
+  if(!state_||!count)return {};
   if(!queue||!lists||!generation||count>256){state_->owners.QuarantineAll();return {};}
   std::array<Recording,256> executed{};
   for(UINT i=0;i<count;++i){
-   if(!lists[i]||!(executed[i].generation=generation(lists[i]))){state_->owners.QuarantineAll();return {};}
+   if(!lists[i]){state_->owners.QuarantineAll();return {};}
    executed[i].list=reinterpret_cast<UINT64>(lists[i]);
+   executed[i].generation=generation(lists[i]);
+   if(!executed[i].generation)state_->owners.QuarantineList(executed[i].list);
   }
-  if(queue!=state_->queue.Get()){state_->owners.QuarantineAll();return {};}
-  return state_->owners.Before(reinterpret_cast<UINT64>(queue),executed.data(),count);
+  auto batch=state_->owners.Before(reinterpret_cast<UINT64>(queue),executed.data(),count);
+  if(queue!=state_->queue.Get()){
+   // Quarantine a real wrong-queue execution, not unrelated work. No signal
+   // on the foreign queue and no inference that its work belongs to GI.
+   if(batch.count)state_->owners.After(batch,reinterpret_cast<UINT64>(queue),0,false);
+   return {};
+  }
+  return batch;
  }
  bool After(ID3D12CommandQueue* queue,Batch& batch,Signal signal=&NativeSignal)noexcept {
   if(!state_)return false;

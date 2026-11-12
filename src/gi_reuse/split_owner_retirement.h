@@ -107,6 +107,12 @@ public:
   state_->bytes-=e->bytes;out=std::move(e->owner);*e=Entry{};return true;
  }
  bool Quarantined(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.Quarantined();}
+ // An untracked recording generation is relevant only if this list is ours.
+ // Global queue hooks also see unrelated native/copy/Streamline command lists.
+ void QuarantineList(U64 list)noexcept {
+  if(state_&&list)for(auto& e:state_->entries)if(e.owner)
+   for(const auto& recording:e.recordings)if(recording.list==list)e.lease.Quarantine();
+ }
  void QuarantineAll()noexcept {if(state_)for(auto& e:state_->entries)if(e.owner)e.lease.Quarantine();}
  U64 RetainedBytes()const noexcept{return state_?state_->bytes:0;}
  // Explicit application/device stop only; never invoked merely on Present.
