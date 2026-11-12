@@ -70,6 +70,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-private-hit-table.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-hit-source-leases.cpp /Fe:gi-hit-source-leases.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-hit-source-leases.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-recorded-heaps.cpp /Fe:gi-recorded-heaps.exe
           if not "%errorlevel%"=="0" exit /b 1
           gi-recorded-heaps.exe

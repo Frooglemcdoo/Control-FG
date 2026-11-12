@@ -304,8 +304,11 @@ static void WriterReady(const GINativeJobRoute::Ticket& ticket) noexcept {
  }catch(...){recording->Incomplete("observer_exception");report("exception");}
 }
 static bool Install(HMODULE d3d) noexcept {
- if(!Enabled()||!gi_reuse::runtime::Enabled()||!HashMatches(d3d,kD3dHash)||!HashMatches(verifiedRenderer,kRendererHash))return false;
- if(ready.load())return true;auto* b=reinterpret_cast<unsigned char*>(d3d);auto* r=reinterpret_cast<unsigned char*>(verifiedRenderer);
+ if((!Enabled()&&!gi_reuse::runtime::FrozenSourcesEnabled())||!gi_reuse::runtime::Enabled()||!HashMatches(d3d,kD3dHash)||!HashMatches(verifiedRenderer,kRendererHash))return false;
+ if(ready.load())return true;
+ const bool sourcesOnly=gi_reuse::runtime::FrozenSourcesEnabled();
+ if(!GINativeLifetimeRuntime::Install(d3d))return false;
+ auto* b=reinterpret_cast<unsigned char*>(d3d);auto* r=reinterpret_cast<unsigned char*>(verifiedRenderer);
  general=reinterpret_cast<General>(b+0x26030);ray=reinterpret_cast<Ray>(b+0x26360);
  lockInstances=reinterpret_cast<LockInstances>(*reinterpret_cast<void**>(r+0x5dfe70));copyInstances=reinterpret_cast<CopyInstances>(r+0x588e0e);
  unsigned n=0;bool ok=true;
@@ -313,12 +316,13 @@ static bool Install(HMODULE d3d) noexcept {
   if(!RRAlbedoPrepareCallPatch(b+offset,reinterpret_cast<void*>(general),reinterpret_cast<void*>(&GeneralHook),&creates[n++])){ok=false;break;}}
  if(ok)for(unsigned offset:{0x2824fu,0x2ae34u,0x35763u}){
   if(!RRAlbedoPrepareCallPatch(b+offset,reinterpret_cast<void*>(ray),reinterpret_cast<void*>(&RayHook),&creates[n++])){ok=false;break;}}
- ok=ok&&n==11&&lockPatch.Prepare(r+0xa8972,reinterpret_cast<void**>(r+0x5dfe70),reinterpret_cast<void*>(lockInstances),reinterpret_cast<void*>(&LockHook))&&
+ ok=ok&&n==11;
+ if(ok&&!sourcesOnly)ok=lockPatch.Prepare(r+0xa8972,reinterpret_cast<void**>(r+0x5dfe70),reinterpret_cast<void*>(lockInstances),reinterpret_cast<void*>(&LockHook))&&
   RRAlbedoPrepareCallPatch(r+0xa8987,reinterpret_cast<void*>(copyInstances),reinterpret_cast<void*>(&CopyHook),&copyPatch);
  if(ok)for(auto& p:creates)if(!RRAlbedoExchangeCall(&p,true)){ok=false;break;}
- if(ok)ok=lockPatch.Exchange(true)&&RRAlbedoExchangeCall(&copyPatch,true);
+ if(ok&&!sourcesOnly)ok=lockPatch.Exchange(true)&&RRAlbedoExchangeCall(&copyPatch,true);
  if(!ok){if(copyPatch.site)RRAlbedoExchangeCall(&copyPatch,false);if(lockPatch.changed)lockPatch.Exchange(false);for(auto& p:creates)if(p.site)RRAlbedoExchangeCall(&p,false);}
- if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);gi_reuse::runtime::liveBarriers.store(&Barriers);gi_reuse::runtime::liveInitialize.store(&Initialize);ready=true;}
- Log("GI_LIVE_OWNERS ready=%u native_creates=11 instance_source_copy=1 replacement_dispatch=0",unsigned(ok));return ok;
+ if(ok){GINativeLifetimeRuntime::liveRetire.store(&Retire);if(!sourcesOnly){gi_reuse::runtime::liveBuild.store(&Build);gi_reuse::runtime::liveCopy.store(&Copy);gi_reuse::runtime::liveReset.store(&Reset);gi_reuse::runtime::liveBarriers.store(&Barriers);gi_reuse::runtime::liveInitialize.store(&Initialize);}ready=true;}
+ Log("GI_LIVE_OWNERS ready=%u native_creates=11 instance_source_copy=%u replacement_dispatch=0",unsigned(ok),unsigned(!sourcesOnly));return ok;
 }
 }

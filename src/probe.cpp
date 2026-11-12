@@ -1541,6 +1541,8 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
            const bool windowReady=renderReady&&prepareReady&&gi_native_scene_window::Install(renderer,d3d);
 #ifdef CONTROL_GI_LONG_SEQUENCE
            const bool lifetimeReady=windowReady&&gi_frozen_lifetime::Install();
+           const bool sourcesReady=lifetimeReady&&GINativeSceneOwners::Install(d3d);
+           Log("GI_FROZEN_R428 source_registry=%u legacy_inventory=%u",unsigned(sourcesReady),unsigned(gi_reuse::runtime::InventoryEnabled()));
            Log("GI_FROZEN_R428 lifetime_observers=%u deferred_dispatch_enabled=0",unsigned(lifetimeReady));
 #endif
            Log("GI_RENDER_SCOPE_R428 ready=%u prepareReady=%u windowReady=%u",unsigned(renderReady),unsigned(prepareReady),unsigned(windowReady));

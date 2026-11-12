@@ -591,3 +591,15 @@ private-table test for unchanged native bytes, preserved raygen/miss, exact hit
 rows, identity/budget rejects and retired upload reuse. Validation pending for
 this integration delta. Live source acquisition and host dispatch coordination
 remain unfinished; do not enable a guessed sceneAndDescriptorLease.
+
+Core43231986207 passed private hit-table/source integration at05dc57f.
+Added original-use source lease acquisition under the wrapper retirement lock:
+complete native view bounds, retained backing, wrapper identity, read-state and
+alias agreement are required; no raw wrapper escapes. New Windows fixture covers
+partial/missing ranges, shorter native views, writable/disagreeing states, stale
+addresses and retirement. This is lifetime acquisition, not queue/content proof.
+Frozen-render startup now installs the creation/release registry without the
+legacy AS/instance/barrier capture observers. Device creation proof is enabled
+for this mode and legacy inventory is disabled. Release installation is
+idempotent; without inventory it forwards after live retirement without counters.
+Host coordinator and aggregate reservation/cache still remain unfinished.

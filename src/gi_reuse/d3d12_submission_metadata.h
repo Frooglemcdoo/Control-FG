@@ -16,10 +16,11 @@
 #include "index_snapshot_plan.h"
 namespace gi_reuse::runtime {
 using Microsoft::WRL::ComPtr;
-inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value;}
+inline bool FrozenSourcesEnabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_RENDER",b,4)==1&&b[0]=='1';}();return value;}
+inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_METADATA",b,4)==1&&b[0]=='1';}();return value||FrozenSourcesEnabled();}
 // The owned renderer needs creation/storage proof and live callbacks, but not
 // the independent R294 inventory, per-barrier cache or diagnostic ledger.
-inline bool InventoryEnabled() noexcept {static const bool value=[] {char b[4]{};return !(GetEnvironmentVariableA("CONTROLTOH_GI_LEGACY_AUDIT",b,4)==1&&b[0]=='0');}();return Enabled()&&value;}
+inline bool InventoryEnabled() noexcept {static const bool value=[] {char b[4]{};return !(GetEnvironmentVariableA("CONTROLTOH_GI_LEGACY_AUDIT",b,4)==1&&b[0]=='0');}();return Enabled()&&value&&!FrozenSourcesEnabled();}
 inline const GUID journalKey={0x28611345,0x28ab,0x4127,{0x93,0x44,0x12,0x10,0x16,0x85,0x42,0x31}};
 inline std::atomic<UINT64> generation{1};
 inline std::atomic<bool> fault{false};

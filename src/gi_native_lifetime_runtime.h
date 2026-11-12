@@ -4,11 +4,13 @@
 namespace GINativeLifetimeRuntime {
 using Release=void(*)(void*);
 static Release originalRelease=nullptr;
+static bool installed=false;
 static std::atomic<void(*)(void*) noexcept> liveRetire{nullptr};
 static RRAlbedoCallPatch calls[16]{};
 static std::atomic<UINT64> observed{0},retired{0},untracked{0},stale{0},invalid{0};
 static void ReleaseHook(void* wrapper) {
  const DWORD before=GetLastError();if(const auto retire=liveRetire.load())retire(wrapper);SetLastError(before);
+ if(!gi_reuse::runtime::InventoryEnabled()){originalRelease(wrapper);return;}
  const auto result=gi_reuse::ForwardNativeASRelease(gi_reuse::runtime::asOwners,wrapper,originalRelease);
  const DWORD error=GetLastError();
  switch(result){
@@ -25,6 +27,7 @@ static void ReleaseHook(void* wrapper) {
 }
 static bool Install(HMODULE d3d) noexcept {
  if(!gi_reuse::runtime::Enabled()||!HashMatches(d3d,kD3dHash))return false;
+ if(installed)return true;
  auto* b=reinterpret_cast<unsigned char*>(d3d);originalRelease=reinterpret_cast<Release>(b+0x25f00);
  unsigned i=0;bool ready=true;
  for(unsigned rva:{0x17c25u,0x17c67u,0x17d6eu,0x17f0bu,0x25200u,0x25268u,0x252d8u,0x25350u,0x253b8u,0x25430u,0x254a0u,0x25508u,0x2565du,0x28233u,0x2ae20u,0x35752u}){
@@ -32,6 +35,7 @@ static bool Install(HMODULE d3d) noexcept {
  }
  if(ready)for(auto& p:calls)if(!RRAlbedoExchangeCall(&p,true)){ready=false;break;}
  if(!ready)for(auto& p:calls)if(p.site)RRAlbedoExchangeCall(&p,false);
+ installed=ready;
  Log("GI_AS_RETIRE_INSTALL ready=%u sites=16 registry_only=1 native_forwarding=1 replacement_gi=0",unsigned(ready));return ready;
 }
 }

@@ -147,6 +147,63 @@ public:
         if(found->second->wrappers.empty())return false;
         wrapper=*found->second->wrappers.begin();output=found->second->storage;return true;
     }
+    struct HitSource {U64 token=0;BufferStorageLease storage;D3D12_RESOURCE_STATES state{};};
+private:
+    struct NativeBufferSample {IUnknown* resource=nullptr;U64 address=0,bytes=0;UINT state=0;};
+    static bool ReadNativeBuffer(U64 wrapper,NativeBufferSample* out)noexcept {
+        if(!wrapper||!out)return false;
+        __try {const auto* p=reinterpret_cast<const unsigned char*>(wrapper);
+            out->resource=*reinterpret_cast<IUnknown*const*>(p);out->state=*reinterpret_cast<const UINT*>(p+0x20);
+            out->bytes=*reinterpret_cast<const U64*>(p+0x30);out->address=*reinterpret_cast<const U64*>(p+0x48);
+            return out->resource&&out->bytes&&out->address;
+        }__except(EXCEPTION_EXECUTE_HANDLER){*out={};return false;}
+    }
+public:
+    // Original-ray-only acquisition, from the creation/release registry. Keep
+    // the registry lock while reading wrapper metadata: Retire runs BEFORE
+    // native wrapper destruction. No raw wrapper escapes this transaction.
+    // These leases retain backing storage, not content. Caller must immediately
+    // record private copies under the original native source-use ordering.
+    bool AcquireHitSources(const std::vector<PTNativeBinding::Binding>& bindings,
+                           std::vector<HitSource>& out,const char** failure=nullptr)noexcept {
+        out.clear();if(failure)*failure="input";
+        if(bindings.empty()||bindings.size()>65536)return false;
+        std::vector<HitSource> next;
+        try {
+            std::lock_guard<std::mutex> guard(mutex_);
+            if(!healthy_){if(failure)*failure="registry_unhealthy";return false;}
+            std::map<U64,U64> selected;
+            for(const auto& b:bindings){
+                if(b.type>1||(b.constants[1]!=2&&b.constants[1]!=4)||
+                   !b.constants[8]||!b.constants[9])return false;
+                const U64 addresses[]={b.indices,b.attributes};const U64 sizes[]={b.constants[8],b.constants[9]};
+                for(unsigned kind=0;kind<2;++kind){const auto token=index_.Find(addresses[kind],sizes[kind]);
+                    if(!token){if(failure)*failure="source_range_owner";return false;}
+                    const auto& allocation=*tokens_.at(token);
+                    selected[token]=(std::max)(selected[token],addresses[kind]-allocation.address+sizes[kind]);
+                }
+            }
+            next.reserve(selected.size());
+            for(const auto& selectedRange:selected){const auto token=selectedRange.first;const auto found=tokens_.find(token);
+                if(found==tokens_.end()||found->second->wrappers.empty()){if(failure)*failure="retired_source";return false;}
+                const auto& entry=*found->second;UINT state=0;bool sampled=false;
+                for(const auto wrapper:entry.wrappers){NativeBufferSample sample;
+                    if(!ReadNativeBuffer(wrapper,&sample)||sample.address!=entry.address||
+                       sample.bytes>entry.bytes||sample.bytes<selectedRange.second||
+                       (sample.resource!=static_cast<IUnknown*>(entry.storage.resource.Get())&&sample.resource!=entry.identity.Get())){
+                        if(failure)*failure="native_wrapper_identity";return false;
+                    }
+                    if((sample.state!=D3D12_RESOURCE_STATE_COMMON&&!(sample.state&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))||
+                       (sample.state&~unsigned(D3D12_RESOURCE_STATE_GENERIC_READ))||(sampled&&state!=sample.state)){
+                        if(failure)*failure="native_source_state";return false;
+                    }
+                    state=sample.state;sampled=true;
+                }
+                next.push_back({token,entry.storage,static_cast<D3D12_RESOURCE_STATES>(state)});
+            }
+        }catch(...){if(failure)*failure="allocation";return false;}
+        out=std::move(next);if(failure)*failure="none";return true;
+    }
     U64 RetainedBytes() {std::lock_guard<std::mutex> guard(mutex_);return bytes_;}
 };
 }
