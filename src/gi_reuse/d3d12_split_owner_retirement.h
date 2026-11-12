@@ -72,6 +72,13 @@ public:
   if(ok)state_->issued=value;
   return state_->owners.After(batch,reinterpret_cast<UINT64>(queue),value,ok);
  }
+ // The queue bridge must call this instead of After if native Execute did
+ // not return successfully. Signalling an empty fence would otherwise turn an
+ // unsubmitted producer into permission to record the consumer.
+ void FailedExecute(ID3D12CommandQueue* queue,Batch& batch)noexcept {
+  if(state_&&batch.count)state_->owners.After(batch,reinterpret_cast<UINT64>(queue),0,false);
+ }
+ bool SceneReleaseReady(UINT64 id)noexcept{return state_&&state_->owners.SceneReleaseReady(id);}
  void Poll()noexcept {
   if(state_)state_->owners.Complete(reinterpret_cast<UINT64>(state_->queue.Get()),state_->fence->GetCompletedValue());
  }

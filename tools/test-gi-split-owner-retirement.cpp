@@ -18,7 +18,7 @@ int main(){
  assert(!p.CanRecordConsumer(id,7,99,{20,2})&&!p.CanRecordConsumer(id+1,7,99,b));
  auto second=p.Before(99,&b,1);assert(second.count==1);
  assert(!p.CanRecordConsumer(id,7,99,b));
- assert(p.After(second,99,2,true));assert(p.Seal(b));assert(!p.Take(id,out));
+ assert(!p.SceneReleaseReady(id));assert(p.After(second,99,2,true));assert(p.SceneReleaseReady(id));assert(p.Seal(b));assert(!p.Take(id,out));
  p.Complete(99,2);assert(p.Take(id,out)&&p.RetainedBytes()==0&&deaths==0);out.reset();assert(deaths==1);
  // Budget admission is transactional; failure retains caller ownership.
  rejected.reset();assert(deaths==2);

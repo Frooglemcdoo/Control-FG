@@ -253,3 +253,33 @@ completion, failed Execute notification, coexistence of reset observers, failed
 Reset not sealing, and nested injected forwarding without native observation.
 Windows validation pending. These bridges do not yet connect a complete live
 split invocation owner or enable the guided rendering path.
+
+## Submission ownership connection
+
+Added a bounded opaque-token router connecting the Execute callback bridge to
+D3D12SplitOwnerRetirement. Actual native Execute occurs outside its bookkeeping
+lock; admission, consumer claim, Reset and retirement use the same lock. Tickets
+are retained independently of TLS. Failed Execute explicitly quarantines its
+batch without signalling an empty completion fence. No callbacks are installed
+by constructing this helper; the future live host must publish it after setup.
+
+Added SceneReleaseReady, separate from allocation retirement. Every recording
+that can still read the scene must have executed or been discarded by successful
+Reset; a missing consumer requires explicit cancellation. Pending submissions
+and quarantined owners never release the scene gate. Submitted consumers permit
+native preparation admission before the GPU finishes, relying on the audited
+same-queue native preparation signal/wait. GPU allocations still remain pinned
+through both recording seals and the final private fence.
+
+Portable lifetime and owner tests pass. Expanded WARP fixture connects the real
+opaque callbacks to the router, submits two lists, tests the release boundary,
+then requires both actual Reset hooks plus final completion to reclaim ownership.
+Windows validation pending. The live ray/scene-resource host remains unfinished;
+this is not yet an enabled visual build.
+
+Additional pinned-binary inspection: D3D28210 is exported allocRaytracingBuffer;
+it releases the previous wrapper, calls26360 (CreateCommittedResource at26488),
+then26600. The2AE34 allocation is inside device initialization and initializes
+the two8MiB native SBT slots at context+0/50, not a BLAS suballocation arena.
+These findings narrow the allocation audit but do not establish coverage of
+renderer-side in-place geometry updates or AS suballocation reuse.

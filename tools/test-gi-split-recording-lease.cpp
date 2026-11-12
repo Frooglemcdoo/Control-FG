@@ -38,5 +38,24 @@ int main(){
  assert(identity.Seal(10,1)&&!identity.Retirable());assert(identity.Seal(10,2)&&identity.Retirable());
  Lease removed;assert(removed.Begin(1,10,1)&&removed.BeforeExecute(1,100)&&removed.AfterExecute(100,1,true));
  assert(!removed.ObserveCompletion(100,UINT64_MAX)&&removed.Quarantined());
+ // Scene admission release is distinct from allocation retirement.
+ Lease scene;assert(scene.Begin(4,10,1)&&!scene.SceneReleaseReady());
+ assert(scene.BeforeExecute(1,100)&&!scene.SceneReleaseReady());
+ assert(scene.AfterExecute(100,1,true)&&!scene.SceneReleaseReady());
+ assert(scene.AttachConsumer(4,20,1)&&scene.ClaimConsumerRecording(4,100,20,1));
+ assert(!scene.SceneReleaseReady());
+ assert(scene.BeforeExecute(2,100)&&!scene.SceneReleaseReady());
+ assert(scene.AfterExecute(100,2,true)&&scene.SceneReleaseReady());
+ assert(!scene.Retirable()); // Neither Reset nor GPU completion yet.
+ assert(scene.Seal(10,1)&&scene.Seal(20,1)&&!scene.Retirable());
+ assert(scene.ObserveCompletion(100,2)&&scene.Retirable());
+ Lease noConsumer;assert(noConsumer.Begin(5,10,1)&&noConsumer.CancelUnattachedConsumer());
+ assert(!noConsumer.SceneReleaseReady()); // Producer can still be submitted.
+ assert(noConsumer.Seal(10,1)&&noConsumer.SceneReleaseReady());
+ Lease discardedConsumer;assert(discardedConsumer.Begin(6,10,1));
+ assert(discardedConsumer.BeforeExecute(1,100)&&discardedConsumer.AfterExecute(100,3,true));
+ assert(discardedConsumer.AttachConsumer(6,20,1)&&!discardedConsumer.SceneReleaseReady());
+ assert(discardedConsumer.Seal(20,1)&&discardedConsumer.SceneReleaseReady()&&!discardedConsumer.Retirable());
+ assert(!failure.SceneReleaseReady()&&!cross.SceneReleaseReady()&&!removed.SceneReleaseReady());
  std::cout<<"PASS split recording lifetime: last consumer, reset vs completion, batch order, cancellation, replay, cross-queue, failed signal\n";
 }

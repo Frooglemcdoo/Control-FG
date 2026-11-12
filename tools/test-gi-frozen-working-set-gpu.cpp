@@ -3,6 +3,8 @@
 #include <type_traits>
 #include "../src/gi_reuse/d3d12_frozen_working_set.h"
 #include "../src/gi_reuse/d3d12_split_owner_retirement.h"
+#include "../src/gi_reuse/d3d12_split_submission_router.h"
+#include "../src/gi_frozen_submission_bridge.h"
 #include "../src/gi_reuse/d3d12_frozen_completion.h"
 #include "../src/gi_reuse/d3d12_frozen_producer.h"
 #include "../src/gi_reuse/d3d12_frozen_pipeline_bundle.h"
@@ -125,7 +127,8 @@ int main()try {
  consumer->ResourceBarrier(1,&barrier);consumer->CopyBufferRegion(read.Get(),0,weights,0,count*sizeof(float));Check(consumer->Close());
  ID3D12CommandList* lists[]={consumer.Get()};auto second=owners.Before(d.queue.Get(),1,lists,generation);Require(second.count==1,"consumer submit refused");d.queue->ExecuteCommandLists(1,lists);
  auto fence=d.fence;
- Require(owners.After(d.queue.Get(),second),"consumer fence failed");Check(d.queue->Signal(fence.Get(),2));
+ Require(!owners.SceneReleaseReady(id),"pending consumer released scene");
+ Require(owners.After(d.queue.Get(),second)&&owners.SceneReleaseReady(id),"consumer fence/scene release failed");Check(d.queue->Signal(fence.Get(),2));
  HANDLE event=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(event!=nullptr,"event failed");
  Check(fence->SetEventOnCompletion(2,event));Require(WaitForSingleObject(event,30000)==WAIT_OBJECT_0,"consumer timed out");CloseHandle(event);
  owners.Poll();Require(!owners.Take(id,retired)&&deaths==0,"closed list retired before reset");
@@ -150,6 +153,61 @@ int main()try {
   auto batch=bad.Before(mode?d.queue.Get():foreign.Get(),1,producerLists,mode?unknown:generation);
   Require(!batch.count&&!bad.Seal(r)&&!bad.Take(token,retired),"owned wrong-queue/unknown-generation execution escaped quarantine");
   bad.DeviceStopped(); // Fixture recorded no GPU commands using this owner.
+ }
+ // A native Execute exception must not be converted into an empty successful
+ // fence signal. It pins the invocation and never admits its consumer.
+ {
+  D3D12SplitOwnerRetirement<Invocation,2,8*1024*1024> failed;Check(failed.Initialize(d.queue.Get()));
+  auto object=std::make_unique<Invocation>(deaths);
+  const Recording r{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())};
+  const auto token=failed.Admit(3,r,64,object);Require(token!=0,"failed Execute admission failed");
+  auto batch=failed.Before(d.queue.Get(),1,producerLists,generation);
+  Require(batch.count==1,"failed Execute ticket missing");
+  failed.FailedExecute(d.queue.Get(),batch);
+  Require(!batch.count&&!failed.SceneReleaseReady(token)&&!failed.Seal(r)&&!failed.Take(token,retired),
+   "failed Execute fabricated submission or scene release");
+  failed.DeviceStopped(); // No GPU commands referencing this fixture owner.
+ }
+ // Drive the real opaque-token bridge into the retirement router. These are
+ // empty valid GPU lists: the test checks actual submit/reset ownership only.
+ {
+  using Router=D3D12SplitSubmissionRouter<Invocation,2,8*1024*1024>;
+  Router router;Check(router.Initialize(d.queue.Get(),generation));
+  static Router* active=nullptr;active=&router;
+  static const gi_frozen_submission::Callbacks callbacks{
+   +[](ID3D12CommandQueue* q,UINT n,ID3D12CommandList*const* l)noexcept -> UINT64{return active->Before(q,n,l);},
+   +[](ID3D12CommandQueue* q,UINT64 t,bool submitted)noexcept{active->After(q,t,submitted);}
+  };
+  gi_frozen_submission::callbacks=&callbacks;
+  fixture::gi_compute_hooks::onFrozenRecordingReset=+[](ID3D12CommandList* l,UINT64 g)noexcept{active->Reset(l,g);};
+  auto object=std::make_unique<Invocation>(deaths);
+  const Recording a{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())};
+  const Recording b{reinterpret_cast<UINT64>(consumer.Get()),generation(consumer.Get())};
+  const auto token=router.Access([&](auto& pool){return pool.Admit(9,a,64,object);});
+  Require(token!=0,"router admission failed");Check(d.list->Close());
+  {
+   gi_frozen_submission::Call call(d.queue.Get(),1,producerLists);
+   d.queue->ExecuteCommandLists(1,producerLists);call.Submitted();call.Finish();
+  }
+  Require(router.Access([&](auto& pool){return pool.Attach(token,9,b)&&pool.ClaimConsumerRecording(token,9,d.queue.Get(),b);}),
+   "router did not publish actual producer submission");
+  Check(consumer->Close());
+  {
+   gi_frozen_submission::Call call(d.queue.Get(),1,lists);
+   Require(!router.Access([&](auto& pool){return pool.SceneReleaseReady(token);}),"before callback released scene");
+   d.queue->ExecuteCommandLists(1,lists);call.Submitted();
+  }
+  Require(router.Access([&](auto& pool){return pool.SceneReleaseReady(token)&&!pool.Take(token,retired);}),
+   "router confused scene release with allocation retirement");
+  Check(d.queue->Signal(fence.Get(),3));
+  HANDLE done=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(done!=nullptr,"router event failed");
+  Check(fence->SetEventOnCompletion(3,done));Require(WaitForSingleObject(done,30000)==WAIT_OBJECT_0,"router GPU timeout");CloseHandle(done);
+  Check(d.list->Reset(d.allocator.Get(),nullptr));
+  Require(!router.Access([&](auto& pool){pool.Poll();return pool.Take(token,retired);}),"single Reset released router owner");
+  Check(consumer->Reset(allocator.Get(),nullptr));
+  Require(router.Access([&](auto& pool){pool.Poll();return pool.Take(token,retired);}),"router did not retire sealed completed owner");
+  retired.reset();
+  gi_frozen_submission::callbacks=nullptr;fixture::gi_compute_hooks::onFrozenRecordingReset=nullptr;active=nullptr;
  }
  // Model a recycled COM address by dropping the private State after all owners
  // retire, then attaching fresh State at the identical command-list address.

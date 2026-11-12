@@ -106,6 +106,7 @@ public:
   auto* e=Find(id);if(!e||out||!e->lease.Retirable())return false;
   state_->bytes-=e->bytes;out=std::move(e->owner);*e=Entry{};return true;
  }
+ bool SceneReleaseReady(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.SceneReleaseReady();}
  bool Quarantined(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.Quarantined();}
  // An untracked recording generation is relevant only if this list is ours.
  // Global queue hooks also see unrelated native/copy/Streamline command lists.

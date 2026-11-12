@@ -75,6 +75,16 @@ public:
   if(!CanRecordConsumer(frame,queue,list,generation))return false;
   consumerRecordingClaimed_=true;return true;
  }
+ // CPU scene exclusion may end before GPU ownership does: the next native
+ // preparation signals/waits behind these submissions on the same queue.
+ // Every possible scene-reading recording must already have executed or been
+ // irrevocably discarded by successful Reset. Close/scope exit is insufficient.
+ bool SceneReleaseReady()const noexcept {
+  if(!frame_||quarantined_||pending_)return false;
+  const auto& producer=recordings_[0];const auto& consumer=recordings_[1];
+  return (producer.executed||producer.sealed)&&
+   (cancelled_||(consumer.list&&(consumer.executed||consumer.sealed)));
+ }
  bool SubmittedBoth()const noexcept {return !quarantined_&&recordings_[0].executed&&recordings_[1].executed;}
  bool Quarantine()noexcept {quarantined_=true;return false;}
  bool Quarantined()const noexcept{return quarantined_;}
