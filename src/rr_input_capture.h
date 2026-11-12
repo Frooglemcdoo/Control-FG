@@ -7,12 +7,19 @@
 #include "rr_input_capture_native.h"
 #include "rr_input_capture_gi.h"
 #include "gi_batch_capture.h"
+#include "gi_stage_timing_policy.h"
 // R10 diagnostics: two prepared slots capture successive evaluated frames.
 // Inputs and post-RR output are copied on the original list, with exact restoration.
 struct RRInputCaptureJob {
  unsigned exportStride=1,pathCondition=0;wchar_t exportRoot[260]{};
  control_rr::InputCapturePolicy policy{};
  GIBatchCapture giHits{};
+ bool timedSequence=false;unsigned sequencePhase=0;
+ gi_stage_timing::Ledger timing{};
+ gi_stage_timing::Stage timingStages[gi_stage_timing::capacity]{};
+ bool timingEnded[gi_stage_timing::capacity]{};
+ ID3D12QueryHeap* timingQueries=nullptr;ID3D12Resource* timingReadback=nullptr;
+ UINT64 timingFrequency=0;
  unsigned copySubresource[kRRInputCaptureMaxResources]{};
  D3D12_BOX copyBox[kRRInputCaptureMaxResources]{};
  bool copyHasBox=false;
@@ -51,12 +58,14 @@ static unsigned long long rrInputCaptureSettledFrame=0,rrInputCaptureRequestTick
 static void RRInputCaptureRelease(RRInputCaptureJob* c) noexcept {
  for(unsigned i=0;i<kRRInputCaptureMaxResources;++i){RRGuideRelease(c->sources[i]);RRGuideRelease(c->readback[i]);}
  GIBatchCaptureRelease(c->giHits);
+ RRGuideRelease(c->timingQueries);RRGuideRelease(c->timingReadback);
  RRGuideRelease(c->fence);RRGuideRelease(c->queue);RRGuideRelease(c->device);
 }
 static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
  auto* c=static_cast<RRInputCaptureJob*>(context);
  AcquireSRWLockExclusive(&rrInputCaptureLock);
  if(c->policy.phase!=control_rr::InputCapturePolicy::Preparing){ReleaseSRWLockExclusive(&rrInputCaptureLock);return 0;}
+ c->timing={};
  HRESULT hr=c->device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&c->fence));
  for(unsigned i=0;i<c->count&&SUCCEEDED(hr);++i){
   c->device->GetCopyableFootprints(&c->descriptions[i],0,1,0,&c->footprint[i],nullptr,nullptr,&c->bytes[i]);
@@ -64,6 +73,17 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
   D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=c->bytes[i];desc.Height=1;
   desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   hr=c->bytes[i]?c->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&c->readback[i])):E_INVALIDARG;
+ }
+ if(SUCCEEDED(hr)&&c->timedSequence){
+  c->timing={};c->timingFrequency=0;memset(c->timingEnded,0,sizeof(c->timingEnded));
+  hr=c->queue->GetTimestampFrequency(&c->timingFrequency);
+  if(SUCCEEDED(hr)&&!c->timingFrequency)hr=E_FAIL;
+  D3D12_QUERY_HEAP_DESC q{};q.Type=D3D12_QUERY_HEAP_TYPE_TIMESTAMP;q.Count=gi_stage_timing::capacity*2;
+  if(SUCCEEDED(hr))hr=c->device->CreateQueryHeap(&q,IID_PPV_ARGS(&c->timingQueries));
+  D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_READBACK;heap.CreationNodeMask=heap.VisibleNodeMask=1;
+  D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;d.Width=gi_stage_timing::capacity*16;
+  d.Height=1;d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  if(SUCCEEDED(hr))hr=c->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&c->timingReadback));
  }
  if(SUCCEEDED(hr)&&!c->pathCondition)hr=GIBatchCapturePrepare(c->giHits,c->device);
  c->policy.Prepared(SUCCEEDED(hr));
@@ -83,6 +103,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  const auto exportStarted=GetTickCount64();
  Log("RR_INPUT_CAPTURE_EXPORT_BEGIN frame=%llu buffers=%u",c->frame,c->count);
  bool okay=true;void* mapped[kRRInputCaptureMaxResources]{};
+ std::string timingJSON;bool timingValid=!c->timedSequence;
  try {
   wchar_t env[32768]{};const DWORD length=GetEnvironmentVariableW(L"LOCALAPPDATA",env,32768);
   if(!length||length>=32768)okay=false;
@@ -142,11 +163,34 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    (verified?gi_path_capture::validFrames[c->pathCondition]:gi_path_capture::invalidFrames[c->pathCondition]).fetch_add(1);
   }
 #endif
+  if(okay&&c->timedSequence){
+   // Export only after the existing same-queue completion fence retires this job.
+   UINT64* ticks=nullptr;D3D12_RANGE range{0,gi_stage_timing::capacity*16};
+   timingValid=c->timing.Complete(c->frame);
+#ifdef CONTROL_GI_BOUNDARY_CAPTURE
+   timingValid=timingValid&&c->giBoundary.spatialObserved==c->timing.seen[2];
+#endif
+   const bool mappedTiming=SUCCEEDED(c->timingReadback->Map(0,&range,reinterpret_cast<void**>(&ticks)))&&ticks;
+   timingValid=timingValid&&mappedTiming;
+   std::ostringstream times;times.imbue(std::locale::classic());times<<std::setprecision(9);
+   times<<"[";
+   for(unsigned i=0;i<c->timing.count;++i){
+    double ms=0;const bool valid=mappedTiming&&c->timingEnded[i]&&gi_stage_timing::Milliseconds(ticks[i*2],ticks[i*2+1],c->timingFrequency,ms);
+    timingValid=timingValid&&valid;
+    if(i)times<<',';
+    times<<"{\"stage\":\""<<gi_stage_timing::Name(c->timingStages[i])<<"\",\"ordinal\":"<<i<<",\"valid\":"<<(valid?"true":"false")<<",\"gpu_ms\":";
+    if(valid)times<<ms;else times<<"null";times<<'}';
+   }
+   times<<"]";timingJSON=times.str();
+   if(mappedTiming){D3D12_RANGE written{0,0};c->timingReadback->Unmap(0,&written);}
+   if(!timingValid)gi_path_capture::invalidFrames[c->pathCondition].fetch_add(1);
+  }
   if(okay)okay=GIBatchCaptureExport(c->giHits,directory);
   if(okay){
    std::ostringstream out;out.imbue(std::locale::classic());out<<std::setprecision(9);
    out<<"{\"full_resolution_gi_rgb_pixels_compared\":"<<giCompared<<",\"full_resolution_gi_rgb_pixels_different\":"<<giDifferent<<",";
    out<<"\"path_capture_condition\":"<<c->pathCondition<<",\"export_stride\":"<<c->exportStride<<",\"point_samples_not_filtered\":true,";
+   if(c->timedSequence)out<<"\"stage_capture_build\":\"R432\",\"sequence_phase\":\""<<(c->sequencePhase?"moving":"stationary")<<"\",\"gpu_timings_valid\":"<<(timingValid?"true":"false")<<",\"timestamp_frequency\":"<<c->timingFrequency<<",\"timing_frame\":"<<c->timing.frame<<",\"gi_evaluator_expected_batches\":"<<c->timing.expectedBatches<<",\"gi_evaluator_observed_batches\":"<<c->timing.observedBatches<<",\"timing_overflow\":"<<(c->timing.overflow?"true":"false")<<",\"gpu_stage_timings\":"<<timingJSON<<",\"timing_scope\":\"captured_frame_dispatches_not_steady_state_fps\",\"intermediate_temporal_image_captured\":false,";
    out<<"\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
 #ifdef CONTROL_RR_GI_SEQUENCE
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -194,6 +238,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
  ReleaseSRWLockExclusive(&rrInputCaptureExportLock);return 0;
 }
+#include "rr_input_capture_stage_timing.h"
 #include "rr_input_capture_record.h"
 #include "rr_input_capture_guard.h"
 #ifdef CONTROL_RR_GI_SEQUENCE
@@ -310,6 +355,8 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #endif
    c->exportStride=gi_path_capture::enabled.load()?gi_path_capture::ExportStride(gi_path_capture::condition.load()):1;
    c->pathCondition=gi_path_capture::enabled.load()?gi_path_capture::condition.load():0;
+   c->timedSequence=c->pathCondition==3&&gi_path_capture::timedSequence.load();
+   c->sequencePhase=gi_path_capture::sequencePhase.load();
    c->exportRoot[0]=0;if(c->pathCondition)wcscpy_s(c->exportRoot,gi_path_capture::directory);
    c->policy.BeginPrepare();
    if(!QueueUserWorkItem(&RRInputCapturePrepare,c,WT_EXECUTEDEFAULT)){RRInputCaptureRelease(c);c->policy.phase=Policy::Failed;}
@@ -317,7 +364,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   }
   if(c->queue!=native.queue||c->count!=count||c->rawIndex!=rawIndex||c->distanceBound!=distanceBound||c->width!=width||c->height!=height||c->preset!=preset||c->nativeLighting!=nativeLighting){
 #ifdef CONTROL_RR_GI_SEQUENCE
-   if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
+   if(c->timing.count||c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave; // No commands yet; reprepare safely.
   }
@@ -325,7 +372,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   for(unsigned i=0;i<count;++i)if(c->descriptions[i].Format!=descriptions[i].Format||c->descriptions[i].Width!=descriptions[i].Width||c->descriptions[i].Height!=descriptions[i].Height)formatsMatch=false;
   if(!formatsMatch){
 #ifdef CONTROL_RR_GI_SEQUENCE
-   if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
+   if(c->timing.count||c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
    RRInputCaptureRelease(c);c->policy.phase=Policy::Requested;__leave;}
 #ifdef CONTROL_RR_GI_SEQUENCE
@@ -345,7 +392,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #ifdef CONTROL_RR_F9_SUITE
   if(rr_suite::requested.load()&&!rr_suite::Verified(frame)){
 #ifdef CONTROL_RR_GI_SEQUENCE
-   if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
+   if(c->timing.count||c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
    for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
    control_rr_capture_ui::detail.store(L"Waiting for verified diagnostic shader dispatch.");__leave;
@@ -381,7 +428,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    if(commandsStarted){c->policy.phase=Policy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=record fault=0x%08lX resources_retained=1",fault);}
    else {
 #ifdef CONTROL_RR_GI_SEQUENCE
-    if(c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
+    if(c->timing.count||c->preGICaptured||c->giHits.commandsStarted){c->policy.phase=Policy::Failed;__leave;}
 #endif
     for(unsigned i=0;i<count;++i)RRGuideRelease(c->sources[i]);
     static unsigned rejects=0;if(++rejects<=4||(rejects%240)==0)Log("RR_INPUT_CAPTURE_C1_REJECT reason=guard_revalidation_or_lock frame=%llu fault=0x%08lX",frame,fault);
@@ -485,7 +532,7 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
   for(auto& job:rrInputCaptures){auto* c=&job;
 #ifdef CONTROL_RR_GI_SEQUENCE
    // An early copy without matching RR must never be overwritten or freed in flight.
-   if(c->policy.phase==P::Ready&&((c->preGICaptured&&present>c->preGIPresent)||(c->giHits.commandsStarted&&present>c->giHits.present))){
+   if(c->policy.phase==P::Ready&&((c->timing.count&&present>c->timing.present)||(c->preGICaptured&&present>c->preGIPresent)||(c->giHits.commandsStarted&&present>c->giHits.present))){
     c->policy.phase=P::Failed;
     Log("RR_INPUT_CAPTURE_R263_FAILED reason=early_gi_without_matching_rr frame=%llu resources_retained=1",c->preGIFrame);
    }

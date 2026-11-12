@@ -5,6 +5,8 @@
 namespace gi_path_capture {
 // Written by the UI before enabled is published. Jobs snapshot all settings.
 inline std::atomic<bool> enabled{false};
+inline std::atomic<bool> timedSequence{false};
+inline std::atomic<unsigned> sequencePhase{0}; // 0 stationary, 1 moving
 inline wchar_t directory[260]{};
 inline std::atomic<unsigned> condition{0}; // 1 raw, 2 Stable, 3 unchanged raw motion pair
 inline std::atomic<unsigned> validFrames[4]{},invalidFrames[4]{};

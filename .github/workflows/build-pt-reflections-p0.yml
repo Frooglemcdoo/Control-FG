@@ -5,6 +5,7 @@ on:
     branches:
       - work/rt-replacement-r392
       - work/gi-replacement-core-r425
+      - work/gi-stage-diagnostic-r432
       - work/gi-replacement-binding-r426
       - work/gi-modernization
       - work/r285-gi-stack-capture
@@ -1462,6 +1463,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-performance-compare.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-gi-stage-timing.cpp /Febuild\test-gi-stage-timing.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-stage-timing.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-relax-quality.cpp /Febuild\test-relax-quality.exe
           if errorlevel 1 exit /b 1
           build\test-relax-quality.exe
@@ -1480,7 +1485,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1524,7 +1529,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-Frozen-R431') {
+          if ($out -eq 'ControlTOH-GI-Stages-R432') {
+            Copy-Item docs/GI-Stages-R432.txt "$out/ControlTOH/README.txt"
+            Copy-Item tools/diagnostics/Start-GI-Stages-R432.cmd $diagnostics
+          } elseif ($out -eq 'ControlTOH-GI-Frozen-R431') {
             Copy-Item docs/GI-Frozen-R431.txt "$out/ControlTOH/README.txt"
             Copy-Item tools/diagnostics/Start-GI-Frozen-R431.cmd $diagnostics
             python tools/test-gi-frozen-launch.py
@@ -1547,8 +1555,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
+            ControlTOH-GI-Stages-R432.zip
+            ControlTOH-GI-Stages-R432.sha256
             ControlTOH-GI-Frozen-R431.zip
             ControlTOH-GI-Frozen-R431.sha256
             ControlTOH-GI-Frozen-R431/**

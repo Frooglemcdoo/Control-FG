@@ -43,7 +43,7 @@ inline constexpr unsigned kButtonCount = kModeCount + 16;
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+29)return L"PERF COMPARE";
     if(index==kModeCount+28)return settings_report::Busy()?L"CHECK: RUNNING":L"CHECK SETTINGS";
-    if(index==kModeCount+27)return path_capture::active?L"MOTION: RECORDING":L"CAPTURE MOTION";
+    if(index==kModeCount+27)return path_capture::active?L"CAPTURE: RECORDING":path_capture::TimedRequested()?L"CAPTURE STAGES":L"CAPTURE MOTION";
     if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
 #ifdef CONTROL_GI_LONG_SEQUENCE
     if(index==kModeCount+21)return rt_surface_source::manualGI.load()==1?L"GI REMOVE: ON":L"GI REMOVE: OFF";

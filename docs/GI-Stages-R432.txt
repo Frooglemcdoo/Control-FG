@@ -1,0 +1,32 @@
+ControlTOH R432 - synchronized GI/RR stage timings
+
+Install with Control closed, then run:
+ControlTOH\Diagnostics\Start-GI-Stages-R432.cmd
+
+At the affected hair/jaw scene: RR ON, FG OFF, Native Blend, GI OWNED,
+RELAX OFF, no lighting diagnostic override. Open F10 and click CAPTURE STAGES.
+One beep: hold still until three beeps. Three beeps: pan slowly until completion.
+Two beeps: the ZIP is ready and Explorer selects it. Send that ZIP.
+The sequence keeps the chosen lighting settings throughout.
+
+This disables the rejected frozen-guided preparation/rendering for this process.
+It retains the existing native ray budget. It does not claim a speckle fix.
+
+New evidence: two full-resolution consecutive frames stationary, then two moving.
+Each carries pre-filter GI, GI at RR input, input HDR, RR output, material/motion
+inputs and scoped GPU timings for GI evaluator dispatches, temporal/raw-copy
+and RR evaluation. Any spatial dispatches are timed if present. The admitted
+baseline is RAW BYPASS: temporal/spatial denoising is inactive, and both GI
+images must match. There is no separate temporal-output image in this build.
+
+The existing R423/R424 source evidence already located bright values before RR.
+This build does not repeat per-ray source decomposition or alter sampling.
+Timestamp scopes exclude diagnostic image copies, but capture perturbs GPU
+scheduling. Four captured frames are not steady-state FPS evidence. Ray tracing,
+scene/AS preparation, composition, RR guide generation and CPU costs are not
+measured by these new scopes. Do not sum this partial set into total frame cost.
+
+Missing required timing, stale frames, overflow or incomplete GPU work produces
+an incomplete capture with files retained; missing durations are never zero.
+Maximum 128 scopes per captured frame; no query allocation on the render thread.
+Normal launch keeps this sequence disabled and preserves existing behavior.

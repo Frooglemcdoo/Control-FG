@@ -36,7 +36,9 @@ static void RRNativeHookGISpatialDispatch(void* state,const void* groups){
  const bool previous=control_rr_gi::spatialDispatch;
  __try {
   control_rr_gi::spatialDispatch=true;
+  const auto stageTicket=RRStageTimingBegin(reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),gi_stage_timing::Stage::SpatialDispatch);
   if(control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list))){++rrNativeGISpatialApplied;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GISpatial);}
+  RRStageTimingEnd(stageTicket,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
  }__finally {control_rr_gi::spatialDispatch=previous;}
 }
 static void RRNativeHookGITemporalBind(void* record){
@@ -57,7 +59,9 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
   context.list&&context.frame==rrNativeFrame.Key().frame;
  SetLastError(saved);
  if(!eligible){rrNativeDispatchOriginal(state,groups);return;}
+ const auto stageTicket=RRStageTimingBegin(reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),gi_stage_timing::Stage::TemporalDispatch);
  const bool used=control_rr_clamp::InvokeGI(rrNativeDispatchOriginal,state,groups,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
+ RRStageTimingEnd(stageTicket,reinterpret_cast<ID3D12GraphicsCommandList*>(context.list));
 #ifdef CONTROL_RR_GI_SEQUENCE
  if(used&&(control_rr_gi::rawBypass||gi_path_capture::enabled.load())){
   const DWORD captureSaved=GetLastError();
@@ -173,7 +177,20 @@ static bool RRNativeGIProducerProviders() noexcept {
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
+ const DWORD incomingTimingError=GetLastError();
+ RRGuideInputSnapshot timingContext{};const char* timingReason=nullptr;
+ const bool time=gi_path_capture::timedSequence.load()&&control_rr_gi::boundaryRequested.load()&&RRGuideReadRendererContext(&timingContext,&timingReason);
+ const auto stageTicket=time?RRStageTimingBegin(timingContext.commandList,gi_stage_timing::Stage::Evaluator):RRStageTimingTicket{};
+ SetLastError(incomingTimingError);
  rrNativeDispatchOriginal(state,groups);
+ const DWORD outgoingTimingError=GetLastError();
+ RRStageTimingEnd(stageTicket,timingContext.commandList);
+ if(stageTicket.slot<2){
+  unsigned values[3]{};bool valid=RRNativeGIProducerProviders();
+  for(unsigned i=0;i<3;++i)valid=rrNativeClampApi.ReadCurrent(rrGIProducerProviderIds[i],values[i])&&valid;
+  RRStageTimingBatch(stageTicket,values[0],values[1],valid);
+ }
+ SetLastError(outgoingTimingError);
 #ifdef CONTROL_NRD_GI
  if(const auto cb=control_nrd_bridge::producer.load())cb->dispatch();
 #endif
