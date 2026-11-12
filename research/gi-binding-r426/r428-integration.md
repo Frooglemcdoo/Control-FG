@@ -197,3 +197,37 @@ identity, native join forwarding, epoch changes and exception invalidation.
 Windows core run43163751958 passed the heap switch + real graphics draw for
 commit77ba98f. Earlier scope correction passed core43163400558. Gate Windows
 validation pending; no gameplay ray dispatch or visual fix is enabled yet.
+
+
+## Validated checkpoint 2026-11-12
+
+Code commit43b1f7da9efcc8d27adae806098c449e3bb1196c passed Windows core
+run43164260362 (job131002322761) and full DLL run43164260393
+(job131002389574). Job logs explicitly report passing native render/prepare
+thunks, multithreaded preparation admission, native scene-join adapter, and two
+heap compute dispatches followed by a graphics draw. The full DLL also passed
+its existing build/package validations. No new visual package was delivered.
+
+Remaining concrete integration work:
+- Whole-invocation owner connects this gate to original-ray admission, saved
+  native heap records/SBT/constants/hit resources, and exact GI6 consumption.
+- Independent queue observer and successful Reset observer connect the bounded
+  retirement owner. Release the scene gate at actual consumer submission or a
+  proven cancelled/reset consumer; preserve GPU ownership through final fence
+  and both recording seals. Do not overwrite the existing NRD observer set.
+- Suppress original work only according to the full transaction outcome; no
+  full-ray retry after a partial split. Complement recovery must shade once.
+- Explicitly mute all injected dispatch/binding observers, including native
+  lighting PSO selection/timing (gi_compute_hooks::Mute alone covers only its
+  own tracker, not every native_lighting hook).
+- Native frame fence/deferred release and the preparation gate must cover all
+  referenced geometry/AS/descriptor resource contents; the gate alone is not
+  permission to set sceneAndDescriptorLease=true.
+- Only then enable the live path in a deliberately named visual package.
+
+Existing R427 v2 captures show2560x1440 GI, same root/heap pair at all24 phase
+pairs, but22 distinct producer lists and22 distinct consumer lists in the window.
+That does NOT prove how soon both lists reset. Keep bounded allocation/reuse
+accounting and report pool starvation; do not assume a fixed two-list ring or
+silently raise the memory budget. Existing captures remain sufficient for the
+previous ordering questions; do not ask the user to repeat them.
