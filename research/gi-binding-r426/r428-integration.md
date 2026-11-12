@@ -508,3 +508,27 @@ Core43217871020 passed for7ac27c1; full43217870962/job131181610081 was still
 running at this checkpoint. Live original-ray/GI6 command coordination and
 complete source-content ownership remain unfinished. No new gameplay ZIP or
 user test was delivered, and no image/FPS result is claimed.
+
+## Model mesh source provenance and full DLL result
+
+Full run43219696717/job131187822140 succeeded for145f5a3, including the new
+lifetime observer wiring in the DLL. Core43219696698 also succeeded. The
+packaging configuration remains R427v2 diagnostic; no enabled R428 gameplay
+build, image result or FPS measurement follows from these passes.
+
+Added audit-gi-native-mesh-sources.py and native-mesh-sources-r428.json, with13
+instruction windows and two vtable windows; all15 mutated sites reject. Exact
+vertex/index wrapper vtables are63B7B8/63B800 (not6337B8/633800). Both virtual+38
+getters return the embedded NativeBuffer at wrapper+18. Mesh construction1BB010
+calls those getters and stores the resulting pointers in mesh+150 (attributes)
+and mesh+160 (indices), the fields read by the static RT provider. The wrappers
+also expose upload, map and unmap operations at virtual+10/+18/+20.
+
+Model loader1B9320 allocates and maps replacement wrappers at1BA573..1BA5DB,
+rewrites mesh attribute references at1BA71E/1BA856, unmaps/releases the old
+model+a8/+b0 wrappers at1BA9EB..1BAA39 and publishes replacement wrappers. This
+connects the generic buffer APIs to real RT mesh source storage; it does not
+establish that loading overlaps the user's GI calls, nor that every write caller
+is covered by the existing RT preparation gate. Further work must cover this
+loader's publication/lifetime contract. No global map lock or guessed source
+lease has been enabled.

@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Exact-renderer mesh source provenance. Does not grant a source-content lease."""
+import argparse, hashlib, json, struct
+from pathlib import Path
+import pefile
+EXPECTED = 'ebfb5b47cebc2d4482e912b8090bd343f717bab8a178b5a6385dec9105e7c433'
+WINDOWS = {
+ 0x22af10: "488d4118c3",
+ 0x22b15b: "4533c94d8bc6488bd6488d4b18ff1582443b00",
+ 0x22b25b: "4533c94d8bc6488bd6488d4b18ff158a433b00",
+ 0x22ae1a: "488d7918",
+ 0x22ae40: "4889442420448d4a04ff1521503b00",
+ 0x22ae8f: "488d5918",
+ 0x22aeb5: "4c8bc033d2488d442450488bcb4889442420ff15a34f3b00",
+ 0x22aee0: "4883c11833d248ff25934f3b00",
+ 0x1bb0f6: "488b8c24c8000000488b01ff50384889842420010000488b8c24c00000004c8b31488b16488bceff5238",
+ 0x1bb211: "4889b7500100004c89b758010000488b84242001000048898760010000",
+ 0x1ba6f9: "488b07488bcfff50384a8b0c3348898158010000498b1c24498b07498bcfff5038498b0c1e48898150010000",
+ 0x1ba573: "488b8fa0000000488b0141b801000000488bd3ff5008488bd848894424404883fe10b810000000480f42f0488b8fa00000004c8b09448d40f1488bd641ff51084c8bf0488945984c8b03ba02000000488bcb41ff5018488bf04d8b06ba02000000498bce41ff5018",
+ 0x1ba9eb: "488b8fa8000000488b01ff5020488b8fa0000000488b01488b97a8000000ff50184533ff4c89bfa8000000488b8fb00000004885c9741a488b01ff5020488b8fa0000000488b01488b97b0000000ff50184c89b7a8000000",
+}
+VTABLES = {
+ 0x63b7b8: [0x22af20,0x19810,0x22ae10,0x22ae80,0x22aee0,0x22aef0,0x22af00,0x22af10],
+ 0x63b800: [0x22b010,0x19810,0x22af80,0x22ae80,0x22aee0,0x22aef0,0x22af00,0x22af10],
+}
+def audit(data):
+ p=pefile.PE(data=data)
+ for rva,expected in WINDOWS.items():
+  if p.get_data(rva,len(bytes.fromhex(expected))) != bytes.fromhex(expected):
+   raise ValueError(f'Mesh source route changed at {rva:x}')
+ for rva,expected in VTABLES.items():
+  actual=[struct.unpack('<Q',p.get_data(rva+8*i,8))[0]-p.OPTIONAL_HEADER.ImageBase for i in range(len(expected))]
+  if actual!=expected: raise ValueError(f'Mesh source vtable changed at {rva:x}')
+ return {
+  'renderer_sha256': EXPECTED,
+  'verified_instruction_windows': {hex(k):v for k,v in WINDOWS.items()},
+  'verified_vtables': {hex(k):[hex(x) for x in v] for k,v in VTABLES.items()},
+  'native_buffer_getter': 'Both wrappers virtual+38 resolve to22AF10, returning wrapper+18.',
+  'allocation': '22B0E0/22B1E0 construct vertex/index wrappers with native allocation argument zero.',
+  'writes': 'Virtual+10 uploads; virtual+18 maps; virtual+20 unmaps. These are callable operations, not evidence of overlap with GI.',
+  'mesh_constructor': '1BB010 calls virtual+38 on incoming attribute/index wrappers; stores resulting NativeBuffer pointers in mesh+150/+160.',
+  'model_load_repack': '1B9320 allocates/maps new wrappers at1BA573..1BA5DB, replaces matching mesh+150 at1BA71E, unmaps/releases old model+a8/+b0 wrappers at1BA9EB..1BAA39, and publishes new wrappers at1BAA3C onward.',
+  'not_proven': ['All callers of wrapper writes and all model-loading concurrency boundaries.',
+                 'A source-content exclusion contract covering original ray through deferred consumer.'],
+  'scene_lease_proven': False,
+ }
+def main():
+ ap=argparse.ArgumentParser(description=__doc__)
+ ap.add_argument('renderer',type=Path);ap.add_argument('--output',type=Path,required=True);args=ap.parse_args()
+ data=args.renderer.read_bytes()
+ if hashlib.sha256(data).hexdigest()!=EXPECTED:raise ValueError('Unsupported renderer binary')
+ report=audit(data);p=pefile.PE(data=data);sites=list(WINDOWS)+list(VTABLES)
+ for rva in sites:
+  changed=bytearray(data);changed[p.get_offset_from_rva(rva)]^=1
+  try:audit(changed)
+  except ValueError:continue
+  raise ValueError(f'Mutated source route accepted {rva:x}')
+ report['mutated_route_rejections']=len(sites)
+ args.output.write_text(json.dumps(report,indent=2)+'\n')
+ print(f'PASS mesh source provenance and {len(sites)} mutation rejections; scene lease remains unproven')
+if __name__=='__main__':main()
