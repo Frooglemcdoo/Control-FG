@@ -432,3 +432,27 @@ Additional static inspection found direct pool-release callers at A6030,150AA0
 and150CC0; provider update/build/finalize entry pointers appear in the audited
 provider vtables. This inspection is not a complete indirect-call/source-write
 closure and does not change scene_lease_proven=false.
+
+## Hit-record geometry provenance
+
+Core43215782524 passed for9393454, including the real native-fence/heap lease
+and complete invocation compilation. Full DLL validation continues separately.
+
+Extended the exact-renderer writer audit with eleven mutation-checked instruction
+windows. Static-provider binding records keep index GPU addresses from the
+original mesh NativeBuffer at mesh+160h, and attribute addresses from mesh+150h
+plus mesh+178h. They are not owned solely by the RT BLAS allocation pool. The
+static constructor stores parallel mesh pointers at provider+30h and64-byte
+local binding rows at provider+20h. The skinned provider instead redirects
+attribute addresses into its deformation allocation: provider+88h, allocation
++18h chunk, chunk GPU VA+10h plus allocation offset and per-mesh attribute span.
+The same chunk NativeBuffer+8 feeds g_rwbVertexBuffer0/1 in rt_skinning.rfx before
+A6BA6. Scene preparation copies provider virtual+50h rows into scene+80h, while
+virtual+40h supplies the BLAS address for the separate scene+70h instance array.
+
+The script passed original input and all15 writer/provenance mutations. This is
+an ownership distinction, not a newly established explanation of the observed
+noise. Enabling delayed traversal still needs the original static mesh lifetime
+and write ordering covered alongside deformed/AS allocations and materials;
+scene_lease_proven remains false. No user capture is requested for this static
+reverse-engineering work.

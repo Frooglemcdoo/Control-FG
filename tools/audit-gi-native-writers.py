@@ -24,6 +24,20 @@ PROVIDERS = {
     'compactable_geometry': {'vtable': 0x6332f0, 'update': 0x10d40, 'build': 0x150fa0, 'finalize': 0x151040},
 }
 
+BINDING_WINDOWS = {
+    0x150700: '488b8e60010000eb0a48c7459f0000000033c98b8688010000410fafc74898488945a7c745af00000000ff15a0ed4800',
+    0x15073a: '488bbe78010000488b8e50010000ff1582ed48004803c7488945c7',
+    0x150864: '488d55b7498d4e20e8af64f5ff48',
+    0x151070: '4863c248c1e00648034120c3',
+    0xa62cd: '498b8188000000c1e302488b50184c6350204863c34c8b5a104d03da4c03d84863c74c03d84c895e20',
+    0xa66a5: '488b37488b83880000008b5f08488b48184c8d1cde4d8bc34c2bc64c8b5108',
+    0xa6882: '488b5908',
+    0xa694f: '488b5908',
+    0xa6cd0: '4863c2488d1480488b41184803d2488d44d010c3',
+    0xa8d82: '498b078bd6498bcfff5050488bd0498bcde888dfffff',
+    0xa8ee3: 'ff5040488b4c2430488d5424604883c1704889842498000000e81fdeffff',
+}
+
 def require(ok, message):
     if not ok:
         raise ValueError(message)
@@ -45,6 +59,10 @@ def audit(data):
         require(imported.startswith('?'+name+'@'), f'call import {site:x}')
         return {'site': hex(site), 'body': hex(begin), 'import': imported, 'bytes': i.bytes.hex()}
     writes = [call(site, begin, name) for site, (name, begin) in WRITES.items()]
+    for site, expected in BINDING_WINDOWS.items():
+        require(p.get_data(site, len(bytes.fromhex(expected))) == bytes.fromhex(expected), f'binding provenance {site:x}')
+    static_sources = [call(0x15072a, 0x150700, 'getGPUVirtualAddress'),
+                      call(0x150748, 0x15073a, 'getGPUVirtualAddress')]
     # Exhaustive byte candidates in executable sections, then exact instruction
     # boundary validation above. This does NOT cover register-indirect calls or
     # other modules. A raw byte scan alone cannot establish a callsite.
@@ -84,6 +102,19 @@ def audit(data):
             'provider_tables': {n: {k: hex(v) for k, v in d.items()} for n, d in PROVIDERS.items()},
             'worker_virtual_calls': [{'site': hex(s), 'slot': hex(o)} for _, s, o in loops],
             'deformed_geometry_compute_dispatch': update_dispatch,
+            'binding_provenance': {
+                'static_index_source': 'mesh+0x160 NativeBuffer GPU VA; local binding row+8',
+                'static_attribute_source': 'mesh+0x150 NativeBuffer GPU VA plus mesh+0x178; local binding row+16',
+                'static_source_calls': static_sources,
+                'static_binding_storage': 'provider+0x20, rows of 64 bytes, getter151070',
+                'deformed_attribute_source': 'provider+0x88 -> allocation+0x18 -> chunk GPU VA+0x10; allocation offset+0x20 plus position span and attribute offset',
+                'deformed_binding_storage': 'provider+0x18, rows of80 bytes; getterA6CD0 returns row+0x10',
+                'deformed_uav': 'provider+0x88 -> allocation+0x18 -> chunk NativeBuffer+8, bound before A6BA6 dispatch',
+                'scene_binding_copy': 'A8D8A virtual+0x50 then A8D93 append64 to scene+0x80',
+                'scene_instance_copy': 'A8EE3 virtual+0x40 then A8EFC append64 to scene+0x70',
+                'implication': 'AS-pool ownership alone does not retain static hit-shader index/attribute buffers.',
+                'verified_instruction_windows': {hex(k): v for k, v in BINDING_WINDOWS.items()},
+            },
             'scene_lease_proven': False,
             'scope': 'Pinned renderer IAT-relative AS writes and listed provider tables/worker loops only.',
             'remaining': ['All callers of provider methods and pool reuse, including deferred jobs.',
@@ -99,7 +130,7 @@ def main():
     require(hashlib.sha256(data).hexdigest() == EXPECTED, 'unsupported renderer hash')
     report = audit(data)
     pe = pefile.PE(data=data)
-    for site in WRITES:
+    for site in list(WRITES)+list(BINDING_WINDOWS):
         modified = bytearray(data)
         modified[pe.get_offset_from_rva(site)] ^= 1
         try:
@@ -108,9 +139,10 @@ def main():
             continue
         raise ValueError(f'modified writer accepted {site:x}')
     report['mutated_writer_rejections'] = len(WRITES)
+    report['mutated_binding_provenance_rejections'] = len(BINDING_WINDOWS)
     if args.output:
         args.output.write_text(json.dumps(report, indent=2)+'\n')
-    print('PASS four native AS write sites, two provider families and worker routes; no scene lease inferred')
+    print('PASS four native AS write sites, static/deformed binding provenance and worker routes; no scene lease inferred')
 
 if __name__ == '__main__':
     main()

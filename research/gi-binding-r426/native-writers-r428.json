@@ -64,6 +64,44 @@
     "import": "?dispatch@DeviceUtil@d3d@@SAXAEAVDeviceState@2@V?$Vector3Template@H@m@@@Z",
     "bytes": "ff1514915300"
   },
+  "binding_provenance": {
+    "static_index_source": "mesh+0x160 NativeBuffer GPU VA; local binding row+8",
+    "static_attribute_source": "mesh+0x150 NativeBuffer GPU VA plus mesh+0x178; local binding row+16",
+    "static_source_calls": [
+      {
+        "site": "0x15072a",
+        "body": "0x150700",
+        "import": "?getGPUVirtualAddress@NativeBufferUtilDX12@d3d@@SA_KPEBVNativeBuffer@2@@Z",
+        "bytes": "ff15a0ed4800"
+      },
+      {
+        "site": "0x150748",
+        "body": "0x15073a",
+        "import": "?getGPUVirtualAddress@NativeBufferUtilDX12@d3d@@SA_KPEBVNativeBuffer@2@@Z",
+        "bytes": "ff1582ed4800"
+      }
+    ],
+    "static_binding_storage": "provider+0x20, rows of 64 bytes, getter151070",
+    "deformed_attribute_source": "provider+0x88 -> allocation+0x18 -> chunk GPU VA+0x10; allocation offset+0x20 plus position span and attribute offset",
+    "deformed_binding_storage": "provider+0x18, rows of80 bytes; getterA6CD0 returns row+0x10",
+    "deformed_uav": "provider+0x88 -> allocation+0x18 -> chunk NativeBuffer+8, bound before A6BA6 dispatch",
+    "scene_binding_copy": "A8D8A virtual+0x50 then A8D93 append64 to scene+0x80",
+    "scene_instance_copy": "A8EE3 virtual+0x40 then A8EFC append64 to scene+0x70",
+    "implication": "AS-pool ownership alone does not retain static hit-shader index/attribute buffers.",
+    "verified_instruction_windows": {
+      "0x150700": "488b8e60010000eb0a48c7459f0000000033c98b8688010000410fafc74898488945a7c745af00000000ff15a0ed4800",
+      "0x15073a": "488bbe78010000488b8e50010000ff1582ed48004803c7488945c7",
+      "0x150864": "488d55b7498d4e20e8af64f5ff48",
+      "0x151070": "4863c248c1e00648034120c3",
+      "0xa62cd": "498b8188000000c1e302488b50184c6350204863c34c8b5a104d03da4c03d84863c74c03d84c895e20",
+      "0xa66a5": "488b37488b83880000008b5f08488b48184c8d1cde4d8bc34c2bc64c8b5108",
+      "0xa6882": "488b5908",
+      "0xa694f": "488b5908",
+      "0xa6cd0": "4863c2488d1480488b41184803d2488d44d010c3",
+      "0xa8d82": "498b078bd6498bcfff5050488bd0498bcde888dfffff",
+      "0xa8ee3": "ff5040488b4c2430488d5424604883c1704889842498000000e81fdeffff"
+    }
+  },
   "scene_lease_proven": false,
   "scope": "Pinned renderer IAT-relative AS writes and listed provider tables/worker loops only.",
   "remaining": [
@@ -71,5 +109,6 @@
     "Writers of source geometry/material resources outside these AS routines.",
     "Live retained resource acquisition and transaction integration."
   ],
-  "mutated_writer_rejections": 4
+  "mutated_writer_rejections": 4,
+  "mutated_binding_provenance_rejections": 11
 }
