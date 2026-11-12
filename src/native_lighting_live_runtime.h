@@ -38,6 +38,7 @@
 #include "rt_spot_capture_policy.h"
 #include "rt_lights/descriptor_overlap.h"
 #include <algorithm>
+#include <mutex>
 #include "spot_shadow_resolution_policy.h"
 #include "rt_spot_culling_policy.h"
 #include <intrin.h>

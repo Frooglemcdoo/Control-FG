@@ -311,3 +311,30 @@ This establishes these routes, not exclusivity of their callers. Register-
 indirect call coverage, deferred allocation jobs and pool slot reuse/source
 geometry writes still need closure. No sceneAndDescriptorLease was fabricated,
 no guided dispatch enabled and no new user capture requested.
+
+
+## Native texture acquisition and shared pipeline access
+
+Full DLL43208251572/job131148841904 passed for code2bd74b5. Both core
+and full Windows builds now validate the submission ownership checkpoint.
+
+Added D3D12NativeGITextures. The producer reads the actual owner+240 bundle's
+first three NativeTextureContainer pointers, retains their actual GPU resources,
+and requires native UAV tracking, one layer/sample/mip, matching dimensions and
+device, and no alias/manual-state/simultaneous-access special case. GI6 rechecks
+the same containers/native wrappers/trackers/resources and returns the exact
+native read states; raw output is acquired at GI6 from its container, not a later
+ShaderTexture global. Partial acquisition publishes nothing. No broad descriptor
+or resource registry is introduced. This retains texture objects only; the host
+still needs its independent scene/content lease and recording lifetime.
+
+The immutable prepared GI6 pipeline bundle is now available to producer code
+only with the same actual native root, and to consumer code through the actual
+GI6 PSO attachment. The bounded latest-bundle cache holds one shared reference;
+existing invocation references remain valid when a new native PSO is prepared.
+No per-frame pipeline compilation or root/PSO ownership cycle is introduced.
+
+Added WARP checks with real textures and native-layout wrappers for correct
+source/output selection, state transitions, wrapper/resource changes, aliasing,
+manual state, extent mismatch and transactional rejection. Windows validation
+pending. Live transaction activation still not enabled.

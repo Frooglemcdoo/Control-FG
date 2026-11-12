@@ -24,10 +24,11 @@ inline bool PatchSlot(void** slot,void* expected,void* replacement)noexcept {
 }
 #include "../src/gi_compute_hooks.inl"
 }
+#include "test-gi-native-textures.inl"
 HRESULT STDMETHODCALLTYPE RefusedSplitReset(ID3D12GraphicsCommandList*,ID3D12CommandAllocator*,ID3D12PipelineState*){return E_FAIL;}
 struct Invocation {gi_reuse::D3D12FrozenWorkingSet scratch;int* deaths;explicit Invocation(int& n):deaths(&n){}~Invocation(){++*deaths;}};
 int main()try {
- using namespace gi_reuse;Device d(false);
+ using namespace gi_reuse;Device d(false);TestNativeGITextures(d);
  auto layout=D3D12FrozenWorkingSet::Describe(18,3,16);Require(bool(layout)&&layout.count==27,"bad compact count");
  Require(!D3D12FrozenWorkingSet::Describe(17,3,16),"odd width admitted");
  Require(!D3D12FrozenWorkingSet::Describe(16384,16384,16),"oversized training admitted");

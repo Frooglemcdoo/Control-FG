@@ -1,6 +1,24 @@
 // Included inside native_lighting, after the native root-byte private-data key.
 namespace gi_frozen_prepare {
 inline const GUID kBundle={0x426f0011,0x7519,0x4451,{0xa1,0x55,0x71,0x60,0x42,0x60,0x00,0x01}};
+#ifdef CONTROL_GI_LONG_SEQUENCE
+// One immutable latest bundle. Existing invocations retain their own reference;
+// replacement does not mutate their pipelines or require a per-frame PSO build.
+// The ray scope may use it only when its actual native root is identical.
+inline std::mutex bundleMutex;
+inline Microsoft::WRL::ComPtr<gi_reuse::D3D12FrozenPipelineBundle> latestBundle;
+inline Microsoft::WRL::ComPtr<gi_reuse::D3D12FrozenPipelineBundle> AcquireForRay(ID3D12RootSignature* root)noexcept {
+ std::lock_guard<std::mutex> lock(bundleMutex);
+ if(!root||!latestBundle||latestBundle->constants.NativeRoot()!=root)return {};
+ return latestBundle;
+}
+inline Microsoft::WRL::ComPtr<gi_reuse::D3D12FrozenPipelineBundle> AcquireForShade(ID3D12PipelineState* pipeline)noexcept {
+ Microsoft::WRL::ComPtr<IUnknown> value;UINT size=sizeof(IUnknown*);
+ if(!pipeline||FAILED(pipeline->GetPrivateData(kBundle,&size,value.GetAddressOf()))||size!=sizeof(IUnknown*)||!value)return {};
+ Microsoft::WRL::ComPtr<gi_reuse::D3D12FrozenPipelineBundle> bundle;
+ bundle.Attach(static_cast<gi_reuse::D3D12FrozenPipelineBundle*>(value.Detach()));return bundle;
+}
+#endif
 inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* native)noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
  char enabled[4]{};
@@ -25,6 +43,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   Microsoft::WRL::ComPtr<ID3D12PipelineState> owner;
   if(SUCCEEDED(hr))hr=native->QueryInterface(IID_PPV_ARGS(&owner));
   if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kBundle,bundle.Get());
+  if(SUCCEEDED(hr)){std::lock_guard<std::mutex> lock(bundleMutex);latestBundle=bundle;}
   Log("GI_FROZEN_R426 compute_prepared=%u hr=0x%08lX native_root_bytes=%u stages=6 deferred_dispatch_enabled=0",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),size);
  }catch(...){Log("GI_FROZEN_R426 compute_prepared=0 stage=exception deferred_dispatch_enabled=0");}
 #else
