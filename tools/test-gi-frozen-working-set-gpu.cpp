@@ -41,6 +41,30 @@ int main()try {
  Require(!incomplete.AcceptProducer(d.list.Get(),nullptr),"unprepared invocation admitted producer");
  Require(incomplete.RecordConsumer(d.list.Get(),{},nullptr)==D3D12FrozenCompletion::Result::RejectedBeforeCommands,
   "unprepared invocation admitted completion");
+ // Whole-invocation preflight includes nine real committed buffers, before
+ // allocating any private GPU storage. A tiny logical budget must not pass.
+ auto nativeTable=d.Buffer(512,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COMMON);
+ auto nativeVertices=d.Buffer(256,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COMMON);
+ BufferStorageLease vertexLease;vertexLease.resource=nativeVertices;vertexLease.address=nativeVertices->GetGPUVirtualAddress();
+ vertexLease.bytes=256;vertexLease.kind=BufferStorageKind::Committed;
+ PTNativeBinding::Binding binding{};binding.indices=vertexLease.address;binding.attributes=vertexLease.address+64;
+ binding.constants[1]=2;binding.constants[8]=10;binding.constants[9]=64;
+ std::vector<PTNativeBinding::Binding> cpuBindings{binding};
+ std::vector<D3D12NativeHitSnapshot::Source> sourceLeases{{1,vertexLease,D3D12_RESOURCE_STATE_COMMON}};
+ NativeGITable cpuTable;cpuTable.bytes.resize(192);
+ D3D12FrozenInvocation::Preparation estimate;estimate.device=d.device.Get();estimate.nativeSbt=nativeTable.Get();
+ estimate.nativeBindings=&cpuBindings;estimate.hitSources=&sourceLeases;estimate.nativeHitTable=&cpuTable;
+ estimate.budget=4*1024*1024;estimate.ray.width=18;estimate.ray.height=3;estimate.ray.slots=16;
+ const auto tableAddress=nativeTable->GetGPUVirtualAddress();
+ estimate.dispatch.RayGenerationShaderRecord={tableAddress,32};estimate.dispatch.MissShaderTable={tableAddress+64,32,32};
+ estimate.dispatch.HitGroupTable={tableAddress+128,192,96};
+ const auto peak=incomplete.RequiredPeakBytes(estimate);
+ Require(peak==9*65536&&!incomplete.RetainedAllocationBytes(),"whole owner preflight omitted committed storage or allocated GPU memory");
+ estimate.budget=peak-1;Require(!incomplete.RequiredPeakBytes(estimate),"whole owner preflight admitted over budget");
+ estimate.budget=peak;Require(incomplete.RequiredPeakBytes(estimate)==peak,"exact committed budget rejected");
+ estimate.dispatch.HitGroupTable.SizeInBytes=UINT64_MAX;
+ Require(!incomplete.RequiredPeakBytes(estimate)&&!incomplete.RetainedAllocationBytes(),"overflow preflight allocated or admitted storage");
+ std::cout<<"PASS whole invocation allocation preflight: nine committed buffers, exact budget, no private allocations and overflow rejection.\n";
  int deaths=0;auto invocation=std::make_unique<Invocation>(deaths);auto& scratch=invocation->scratch;
  D3D12SplitOwnerRetirement<Invocation,2,8*1024*1024> owners;Check(owners.Initialize(d.queue.Get()));
  fixture::gi_compute_hooks::EnableForDenoiser();fixture::gi_compute_hooks::InstallList(d.list.Get());

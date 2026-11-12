@@ -603,3 +603,22 @@ legacy AS/instance/barrier capture observers. Device creation proof is enabled
 for this mode and legacy inventory is disabled. Release installation is
 idempotent; without inventory it forwards after live retirement without counters.
 Host coordinator and aggregate reservation/cache still remain unfinished.
+
+Core43233212809 passed source acquisition and registry delta at4e64bb7.
+Recovered pinned D3D cceb99cb again from existing file (no user re-upload).
+Original-ray snapshot now has a distinct accessor that validates native frame,
+counter, pipeline, complete layout and writer arguments on both sides of the
+CPU copy and rechecks native identifiers. It does not replace the legacy job
+consumer. Host still must acquire the joined scene window before invoking it.
+New exact-binary audit confirms358E4 DispatchRays precedes35944 job arguments
+and359D9 runJob: the pre-schedule writerReady callback is too late for phase A.
+Five instruction windows and five mutations passed. No GPU-completion or
+scene-content proof is inferred from this sequencing.
+
+Added whole-invocation CPU allocation preflight before private GPU allocation.
+It accounts all nine committed buffers, retained oversized storage and old+new
+storage when growing a retired allocation. RetainedAllocationBytes remains
+available after rearm or partial failure for eventual active+idle accounting.
+Added WARP exact/insufficient budget and overflow checks with no private GPU
+allocations during preflight. Windows validation pending for these changes.
+This is per-owner preflight; host aggregate reservation/cache is still required.

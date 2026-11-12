@@ -103,6 +103,7 @@ public:
  D3D12_GPU_VIRTUAL_ADDRESS_RANGE NativeComplement()const noexcept {
   return ready_?D3D12_GPU_VIRTUAL_ADDRESS_RANGE{records_->GetGPUVirtualAddress()+2*Stride,RecordSize}:D3D12_GPU_VIRTUAL_ADDRESS_RANGE{};
  }
+ ID3D12Resource* Storage()const noexcept{return records_.Get();}
  ID3D12Resource* Resource()const noexcept{return ready_?records_.Get():nullptr;}
  // UPLOAD records may be rewritten only after the whole invocation retires.
  // The host must obtain this owner through Take after both resets/final fence.

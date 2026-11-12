@@ -3,8 +3,9 @@
 #include "native_gi_table.h"
 #ifdef _WIN32
 namespace gi_reuse {
-// Only call from the matched pre-schedule writerReady callback. These are CPU
-// inputs; neither this copy nor worker completion proves GPU completion/ownership.
+// CPU writer inputs, copied either at matched pre-schedule writerReady or at
+// the exact original dispatch under the acquired native scene window. Neither
+// route proves GPU completion, source contents, or descriptor ownership.
 struct NativeGIWriterInputs {std::vector<PTNativeBinding::Binding> bindings;NativeGITable table;};
 namespace native_gi_detail {
 struct Header {std::uint64_t buffer=0,bytes=0,pipeline=0;PTShaderTableAdapter::Identifier opaque{},alpha{};};

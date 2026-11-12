@@ -48,6 +48,58 @@ public:
   UINT64 budget=0;
   float guideFraction=.5f;
  };
+ // CPU-only committed allocation preflight, including retained allocations
+ // while growing retired buffers. Zero means invalid/unrepresentable. The host
+ // must reserve this peak against active+idle owners BEFORE calling Prepare.
+ UINT64 RequiredPeakBytes(const Preparation& p)const noexcept {
+  if(!p.device||!p.nativeSbt||!p.nativeBindings||!p.hitSources||!p.nativeHitTable||!p.budget)return 0;
+  try {
+   const auto layout=D3D12FrozenWorkingSet::Describe(p.ray.width,p.ray.height,p.ray.slots);
+   if(!layout||(device_&&(device_.Get()!=p.device||!work_.Matches(p.ray.width,p.ray.height,p.ray.slots))))return 0;
+   std::vector<NativeHitSnapshotPlan::Allocation> allocations;allocations.reserve(p.hitSources->size());
+   for(const auto& source:*p.hitSources)allocations.push_back({source.token,source.storage.address,source.storage.bytes});
+   NativeHitSnapshotPlan plan;if(!plan.Build(*p.nativeBindings,std::move(allocations),p.budget))return 0;
+   const auto base=p.nativeSbt->GetGPUVirtualAddress();const auto sourceDesc=p.nativeSbt->GetDesc();
+   if(sourceDesc.Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||!base||
+      p.dispatch.RayGenerationShaderRecord.StartAddress!=base)return 0;
+   UINT64 end=32;
+   for(const auto table:{p.dispatch.MissShaderTable,p.dispatch.HitGroupTable}){
+    if(table.StartAddress<base)return 0;const auto offset=table.StartAddress-base;
+    if(offset>sourceDesc.Width||table.SizeInBytes>sourceDesc.Width-offset)return 0;
+    end=(std::max)(end,offset+table.SizeInBytes);
+   }
+   if(end>16ull*1024*1024||p.nativeHitTable->bytes.empty())return 0;
+   UINT64 peak=0;
+   const auto add=[&](UINT64 width,D3D12_RESOURCE_FLAGS flags,ID3D12Resource* retained){
+    if(!width)return false;
+    D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Width=width;desc.Height=1;
+    desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;desc.Flags=flags;
+    if(retained){const auto old=retained->GetDesc();
+     if(old.Dimension!=desc.Dimension||old.Flags!=flags)return false;
+     if(old.Width>=width)desc=old;
+     else {const auto bytes=Allocation(p.device,retained);if(!bytes||bytes>p.budget-peak)return false;peak+=bytes;}
+    }
+    const auto bytes=p.device->GetResourceAllocationInfo(0,1,&desc).SizeInBytes;
+    if(!bytes||bytes==UINT64_MAX||bytes>p.budget-peak)return false;peak+=bytes;return true;
+   };
+   for(unsigned n=0;n<4;++n)if(!add(layout.bytes[n],D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+      work_.Get(static_cast<D3D12FrozenWorkingSet::Buffer>(n))))return 0;
+   if(!add(D3D12GIRayConstantSnapshot::Bytes,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,constants_.Storage())||
+      !add((end+63)&~UINT64(63),D3D12_RESOURCE_FLAG_NONE,tables_.Storage())||
+      !add(D3D12FrozenRaygenRecords::Bytes,D3D12_RESOURCE_FLAG_NONE,records_.Storage())||
+      !add(plan.Bytes(),D3D12_RESOURCE_FLAG_NONE,hitSources_.Storage())||
+      !add(p.nativeHitTable->bytes.size(),D3D12_RESOURCE_FLAG_NONE,tables_.HitUploadStorage()))return 0;
+   return peak;
+  }catch(...){return 0;}
+ }
+ UINT64 RetainedAllocationBytes()const noexcept {
+  UINT64 bytes=work_.AllocationBytes();
+  for(auto* resource:{constants_.Storage(),tables_.Storage(),records_.Storage(),hitSources_.Storage(),tables_.HitUploadStorage()}){
+   if(!resource)continue;const auto allocation=Allocation(device_.Get(),resource);
+   if(!allocation||allocation>UINT64_MAX-bytes)return UINT64_MAX;bytes+=allocation;
+  }
+  return bytes;
+ }
  D3D12FrozenInvocation()=default;
  D3D12FrozenInvocation(const D3D12FrozenInvocation&)=delete;
  D3D12FrozenInvocation& operator=(const D3D12FrozenInvocation&)=delete;
@@ -59,6 +111,7 @@ public:
      p.recording.heaps.deviceEpoch!=p.ray.epoch||!p.ray.nativeSingleRayAbi||!p.ray.sceneAndDescriptorLease||
      !p.ray.ray.Ready()||!p.ray.ray.rays||p.ray.ray.root.Get()!=p.pipelines->constants.NativeRoot()||
      p.dispatch.Width!=p.ray.width||p.dispatch.Height!=p.ray.height||p.dispatch.Depth!=1)return E_INVALIDARG;
+  if(!RequiredPeakBytes(p))return E_OUTOFMEMORY;
   // Keep a failed partial allocation private. Its owner may be destroyed since
   // Prepare never records commands. It cannot be accidentally prepared again.
   if(device_&&(device_.Get()!=p.device||pipelines_.Get()!=p.pipelines||

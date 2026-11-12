@@ -73,6 +73,40 @@ static bool ReadDispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_R
         out.writer={reinterpret_cast<UINT_PTR>(buffer),reinterpret_cast<UINT_PTR>(shader),bindings,bytes,1,count};failure=RouteFailure::none;return true;
     }__except(EXCEPTION_EXECUTE_HANDLER){out={};failure=RouteFailure::exception;return false;}
 }
+// The original DispatchRays at358E4 precedes job argument construction at35944
+// and runJob359D9. Frozen GI cannot wait for writerReady to obtain its CPU copy.
+// Host must already hold the joined scene window and remain inside this exact
+// original ray call. Do not use this accessor at GI6 or with later thread state.
+// This copies CPU inputs only; it does not authorize replacing native dispatch.
+[[maybe_unused]] static bool SnapshotOriginalDispatch(ID3D12GraphicsCommandList4* list,
+ const D3D12_DISPATCH_RAYS_DESC* desc,ID3D12StateObject* pipeline,
+ Ticket& ticket,gi_reuse::NativeGIWriterInputs& inputs,const char** reason=nullptr)noexcept {
+ ticket={};inputs={};if(reason)*reason="original_dispatch";
+ Ticket before,after;RouteFailure failure{};
+ if(!ReadDispatch(list,desc,pipeline,before,failure))return false;
+ before.serial=serial.fetch_add(1);if(!before.serial)return false;
+ gi_reuse::NativeGIWriterInputs next;
+ if(!gi_reuse::SnapshotNativeGIWriter(before,next,reason))return false;
+ if(reason)*reason="original_dispatch_changed";
+ if(!ReadDispatch(list,desc,pipeline,after,failure)||before.list!=after.list||
+    before.engineFrame!=after.engineFrame||before.pipeline!=after.pipeline||
+    before.counter!=after.counter||before.hitTable!=after.hitTable||before.hitBytes!=after.hitBytes||
+    before.width!=after.width||before.height!=after.height||!(before.writer==after.writer)||
+    before.layout.buffer!=after.layout.buffer||before.layout.bytes!=after.layout.bytes||
+    before.layout.raygenBytes!=after.layout.raygenBytes||before.layout.missOffset!=after.layout.missOffset||
+    before.layout.missStride!=after.layout.missStride||before.layout.hitRelative!=after.layout.hitRelative||
+    before.layout.hitStride!=after.layout.hitStride||before.layout.hitRecords!=after.layout.hitRecords)return false;
+ gi_reuse::native_gi_detail::Header header;
+ if(!gi_reuse::native_gi_detail::ReadHeader(after.writer,header)||header.pipeline!=before.pipeline||
+    header.buffer!=before.layout.buffer||header.bytes!=before.layout.bytes)return false;
+ // Revalidate identifiers against the complete private CPU table. A state-object
+ // pointer match alone is insufficient if its native wrapper was recycled.
+ for(std::size_t i=0;i<next.bindings.size();++i){
+  const auto& identifier=next.bindings[i].type?header.alpha:header.opaque;
+  if(std::memcmp(next.table.bytes.data()+i*192,identifier.data(),32))return false;
+ }
+ ticket=before;inputs=std::move(next);if(reason)*reason="none";return true;
+}
 static void Recorded(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc,ID3D12StateObject* pipeline)noexcept {
     const auto callback=consumer.load(std::memory_order_acquire);if(!callback)return;
     const DWORD error=GetLastError();
