@@ -26,7 +26,7 @@ int main(){
   std::memcpy(snapshot.data()+c.destinationOffset,input.data()+c.offset,static_cast<std::size_t>(c.bytes));
  }
  const auto originalIndex=index,originalAttributes=attributes;
- std::fill(index.begin(),index.end(),0);std::fill(attributes.begin(),attributes.end(),0);
+ std::fill(index.begin(),index.end(),static_cast<unsigned char>(0));std::fill(attributes.begin(),attributes.end(),static_cast<unsigned char>(0));
  for(std::size_t i=0;i<bindings.size();++i){
   assert(!std::memcmp(snapshot.data()+remapped[i].indices-0x10000,originalIndex.data(),bindings[i].constants[8]));
   assert(!std::memcmp(snapshot.data()+remapped[i].attributes-0x10000,originalAttributes.data()+bindings[i].attributes-0x2000,bindings[i].constants[9]));
