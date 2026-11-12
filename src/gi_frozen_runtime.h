@@ -37,7 +37,7 @@ inline void Leave(const Scope& scope,bool)noexcept {
  pending={};
 }
 inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc,ID3D12StateObject* pipeline)noexcept {
- if(failed.load()||!sceneProof||!gi_reuse::ownedRequested.load()||!list||!desc||!pipeline||
+ if(failed.load()||!sceneProof||!gi_reuse::ownedRequested.load()||!gi_reuse::singleEvaluatorReady.load()||!list||!desc||!pipeline||
     native_lighting::gi_compute_hooks::Muted()||!gi_reuse::SingleProducerEnabled())return false;
  const auto scope=gi_native_render_scope::current;
  if(!scope.token||!scope.frame||scope.frame>UINT_MAX||pending.id||desc->Depth!=1||desc->Width<2||(desc->Width&1))return false;
@@ -93,6 +93,8 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   }
   if(result!=gi_reuse::D3D12FrozenProducer::Result::Recorded){failed=true;Reject("producer_partial_failure");return true;}
   pending.producerReady=true;
+  gi_reuse::singleRayApplied.store(true);++gi_reuse::singleRayDispatches;
+  settings_check::Record(settings_check::OwnedRays);
   const auto n=++produced;if(n<=4||n%600==0)Log("GI_FROZEN_R428 producer=%llu width=%u height=%u held_bytes=%llu native_ray_suppressed=1",
    n,ray.width,ray.height,gi_frozen_lifetime::cache->HeldBytes());
   return true;
