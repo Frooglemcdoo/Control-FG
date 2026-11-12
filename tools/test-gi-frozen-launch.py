@@ -2,6 +2,7 @@
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
@@ -30,8 +31,19 @@ with tempfile.TemporaryDirectory(prefix='R428 launch with spaces ') as temporary
     launcher = diagnostics/'Start-GI-Frozen-R428.cmd'
     launcher.write_bytes((root/'tools/diagnostics'/launcher.name).read_bytes())
     (game/'fake.cpp').write_text(source)
-    subprocess.run(['cl','/nologo','/std:c++17','/EHsc','/W4','/WX','/D_CRT_SECURE_NO_WARNINGS',
-                    'fake.cpp','/Fe:Control_DX12.exe'],cwd=game,check=True,timeout=60)
+    compile_args=['cl','/nologo','/std:c++17','/EHsc','/W4','/WX','/D_CRT_SECURE_NO_WARNINGS',
+                  'fake.cpp','/Fe:Control_DX12.exe']
+    if shutil.which('cl'):
+        subprocess.run(compile_args,cwd=game,check=True,timeout=60)
+    else:
+        # The package PowerShell step inherits VSROOT, not vcvars' PATH/LIB.
+        vcvars=Path(os.environ['VSROOT'])/'VC/Auxiliary/Build/vcvars64.bat'
+        assert vcvars.is_file(),vcvars
+        compile_script=game/'compile.cmd'
+        compile_script.write_text('@echo off\ncall "'+str(vcvars)+'"\n'
+                                  'if errorlevel 1 exit /b 1\n'+
+                                  subprocess.list2cmdline(compile_args)+'\nexit /b %errorlevel%\n')
+        subprocess.run(['cmd.exe','/d','/c',str(compile_script)],cwd=game,check=True,timeout=60)
     inherited = os.environ.copy()
     inherited.update(CONTROLTOH_GI_METADATA='1',CONTROLTOH_GI_SCENE_CHECK='1',
                      CONTROLTOH_GI_EVALUATOR='1',CONTROLTOH_GI_FROZEN_RENDER='0',

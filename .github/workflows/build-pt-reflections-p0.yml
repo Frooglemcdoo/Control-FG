@@ -1551,6 +1551,7 @@ jobs:
           path: |
             ControlTOH-GI-Frozen-R428.zip
             ControlTOH-GI-Frozen-R428.sha256
+            ControlTOH-GI-Frozen-R428/**
             ControlTOH-R425.zip
             ControlTOH-R425.sha256
             ControlTOH-GI-Compact-Preview.zip

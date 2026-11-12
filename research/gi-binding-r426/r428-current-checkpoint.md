@@ -1,5 +1,13 @@
 # R428 current checkpoint — 2026-11-12
 
+Enabled candidate b0616f18c86af663871357738cb61b71b8747ff1 passed core
+43246772693 and all rendering/full-DLL checks in full43246772683.
+Packaging failed solely because test-gi-frozen-launch.py called cl outside
+vcvars environment (job131281529318). That run's artifact has reports ONLY;
+DO NOT deliver it as a build. The fixture now initializes VSROOT/vcvars when
+needed and also runs early in core CI. Full packaging rerun required.
+
+
 Latest validated integration: 4fc555cb9d9911650e29dc14ded4a2fecd303372.
 Windows core run43242659085 and FULL DLL run43242658970/job131267084977
 both SUCCESS. Its artifact remains R427v2 diagnostics, NOT an enabled R428.
