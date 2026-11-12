@@ -633,3 +633,20 @@ preparing and idle owners share one ceiling. Unexpected underestimation closes
 future admission. Local GCC warnings-as-errors and eight-thread contention test
 passed. Windows validation pending; actual retired-owner cache/host coordinator
 still need wiring. This change makes a missing shared budget fail before work.
+
+Core43235990233 passed shared budget at45caf693. The preceding core failure was
+CMD/Powershell syntax mixed in the generated test batch, corrected without a
+rendering-code change. Full DLL validation remains pending.
+
+Existing R306 writer captures (four snapshots, 5,690–13,293 bindings) imply a
+59.62–180.47 MiB union LOWER BOUND for copied views per invocation. Reproducible
+estimate-gi-hit-copy-bytes.py and hit-copy-lower-bound-r428.json retain exact input
+hashes. This is not a measured GPU duration, actual packed size or copy command
+count: those captures lack allocation identities and packing can include gaps.
+Avoid inferring current-scene FPS cost from this older data.
+
+Private-source barriers are now prebuilt during Prepare and batched into at
+most two ResourceBarrier calls per recording, instead of separate transitions
+around every source copy. Individual CopyBufferRegion operations remain. WARP
+fixture expanded to distinct source allocations and both initial/read-state and
+retired COMMON-state batch paths. Windows validation pending for this delta.

@@ -1,0 +1,41 @@
+{
+  "schema": "gi-hit-copy-lower-bound-r428",
+  "samples": [
+    {
+      "file": "GI-Writer-R305-47912-1-bindings.bin",
+      "sha256": "0c27debcf4fc2fbf199dcf02fc40c4c5e35b4df419293ec4aa1c4cb2af987908",
+      "bindings": 7620,
+      "referenced_sum_bytes": 588377212,
+      "source_union_lower_bound_bytes": 62510872,
+      "union_ranges": 1021
+    },
+    {
+      "file": "GI-Writer-R305-47912-1311-bindings.bin",
+      "sha256": "4cecee8e6bd7251441b7ee40177793ad06bb2f99c2451feffc99861271e3c6ae",
+      "bindings": 5690,
+      "referenced_sum_bytes": 1672207968,
+      "source_union_lower_bound_bytes": 138819990,
+      "union_ranges": 870
+    },
+    {
+      "file": "GI-Writer-R305-47912-1987-bindings.bin",
+      "sha256": "372c7984af380bf3453015c30303bf48681e33d1f6188995b9fdd41c1a3ceea6",
+      "bindings": 13293,
+      "referenced_sum_bytes": 1912464956,
+      "source_union_lower_bound_bytes": 189237402,
+      "union_ranges": 1530
+    },
+    {
+      "file": "GI-Writer-R305-47912-548-bindings.bin",
+      "sha256": "0959fdbf894e4452ef35f4cb45e73ec779168a4740988668eba0297e064dec01",
+      "bindings": 9041,
+      "referenced_sum_bytes": 1497860798,
+      "source_union_lower_bound_bytes": 144807344,
+      "union_ranges": 1400
+    }
+  ],
+  "actual_copy_count_known": false,
+  "actual_packed_bytes_known": false,
+  "gpu_time_measured": false,
+  "limits": "Original allocation identities are absent. Packing may include gaps and alignment. Union range count is not resource/copy command count. Old captures do not establish current scene cost."
+}

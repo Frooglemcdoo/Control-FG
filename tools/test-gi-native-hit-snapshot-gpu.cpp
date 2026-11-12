@@ -13,36 +13,46 @@ int main()try {
  gpu.Transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
  PTNativeBinding::Binding binding{};binding.indices=lease.address;binding.attributes=lease.address+16;
  binding.constants[1]=2;binding.constants[8]=10;binding.constants[9]=16;
+ auto source2=gpu.Buffer(32,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_COPY_DEST);
+ Require(gi_reuse::RetainCreatedStorage(source2.Get()),"second source backing");
+ gi_reuse::BufferStorageLease lease2;Require(gi_reuse::AcquireStorageLease(source2.Get(),lease2),"second source lease");
+ gpu.list->CopyBufferRegion(source2.Get(),0,replacement.Get(),0,32);
+ gpu.Transition(source2.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+ auto binding2=binding;binding2.indices=lease2.address;binding2.attributes=lease2.address+16;
+ const std::vector<PTNativeBinding::Binding> bindings{binding,binding2};
  using Snapshot=gi_reuse::D3D12NativeHitSnapshot;
- Snapshot snapshot;std::vector<Snapshot::Source> sources{{1,lease,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE}};
- Require(FAILED(snapshot.Prepare(gpu.device.Get(),{binding},sources,256)),"logical bytes bypassed committed budget");
+ Snapshot snapshot;std::vector<Snapshot::Source> sources{{1,lease,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE},{2,lease2,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE}};
+ Require(FAILED(snapshot.Prepare(gpu.device.Get(),bindings,sources,256)),"logical bytes bypassed committed budget");
  Require(!snapshot.Storage()&&!snapshot.AllocationBytes(),"failed preparation published allocation");
- Check(snapshot.Prepare(gpu.device.Get(),{binding},sources,65536));
+ Check(snapshot.Prepare(gpu.device.Get(),bindings,sources,65536));
  Require(snapshot.AllocationBytes()==65536&&!snapshot.Resource(),"allocation/accounting before commands");
  auto* first=snapshot.Storage();Require(snapshot.Record(gpu.list.Get())&&!snapshot.Record(gpu.list.Get()),"duplicate recording");
  const auto rebased=snapshot.Bindings()[0];const auto privateBase=snapshot.Resource()->GetGPUVirtualAddress();
- Require(rebased.indices==privateBase&&rebased.attributes==privateBase+16,"shared source translation");
+ const auto firstOffset=rebased.indices-privateBase,secondOffset=snapshot.Bindings()[1].indices-privateBase;
+ Require(firstOffset!=secondOffset&&rebased.attributes==rebased.indices+16,"distinct and shared source translation");
  gpu.Transition(source.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
  gpu.list->CopyBufferRegion(source.Get(),0,replacement.Get(),0,32);
  gpu.Transition(source.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COPY_SOURCE);
  gpu.Transition(snapshot.Resource(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
- auto readback=gpu.Buffer(64,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
- gpu.list->CopyBufferRegion(readback.Get(),0,snapshot.Resource(),0,32);
- gpu.list->CopyBufferRegion(readback.Get(),32,source.Get(),0,32);gpu.Submit();
- void* mapped=nullptr;const D3D12_RANGE read{0,64};Check(readback->Map(0,&read,&mapped));
+ auto readback=gpu.Buffer(96,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ gpu.list->CopyBufferRegion(readback.Get(),0,snapshot.Resource(),firstOffset,32);
+ gpu.list->CopyBufferRegion(readback.Get(),32,source.Get(),0,32);
+ gpu.list->CopyBufferRegion(readback.Get(),64,snapshot.Resource(),secondOffset,32);gpu.Submit();
+ void* mapped=nullptr;const D3D12_RANGE read{0,96};Check(readback->Map(0,&read,&mapped));
  Require(!std::memcmp(mapped,initial.data(),32),"native mutation corrupted private hit bytes");
  Require(!std::memcmp(static_cast<unsigned char*>(mapped)+32,changed.data(),32),"native mutation missing");
+ Require(!std::memcmp(static_cast<unsigned char*>(mapped)+64,changed.data(),32),"second batched source lost");
  const D3D12_RANGE none{};readback->Unmap(0,&none);
  // Submit has waited for GPU completion. Seal/reset the sole fixture recording
  // before rearming; live owners require their producer AND consumer seals.
  Check(gpu.allocator->Reset());Check(gpu.list->Reset(gpu.allocator.Get(),nullptr));
  Require(snapshot.RearmAfterRetirement()&&!snapshot.RearmAfterRetirement()&&!snapshot.Resource()&&snapshot.Bindings().empty(),"rearm state");
  Require(snapshot.AllocationBytes()==65536,"idle storage disappeared from budget");
- sources[0].state=D3D12_RESOURCE_STATE_COMMON;
- Check(snapshot.Prepare(gpu.device.Get(),{binding},sources,65536));
+ sources[0].state=sources[1].state=D3D12_RESOURCE_STATE_COMMON;
+ Check(snapshot.Prepare(gpu.device.Get(),bindings,sources,65536));
  Require(snapshot.Storage()==first,"unchanged size allocated again");Require(snapshot.Record(gpu.list.Get()),"second recording");
  gpu.Transition(snapshot.Resource(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
- gpu.list->CopyBufferRegion(readback.Get(),0,snapshot.Resource(),0,32);
+ gpu.list->CopyBufferRegion(readback.Get(),0,snapshot.Resource(),firstOffset,32);
  Check(gpu.list->Close());ID3D12CommandList* submitted[]={gpu.list.Get()};gpu.queue->ExecuteCommandLists(1,submitted);
  Check(gpu.queue->Signal(gpu.fence.Get(),2));HANDLE done=CreateEventW(nullptr,FALSE,FALSE,nullptr);
  Require(done!=nullptr,"second fence event");Check(gpu.fence->SetEventOnCompletion(2,done));
@@ -53,5 +63,5 @@ int main()try {
   auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());Check(info->GetMessage(i,message,&size));
   if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)throw std::runtime_error(message->pDescription);
  }
- std::cout<<"PASS private native hit buffers: actual source mutation, packed views, committed budget, fresh retired reuse and debug clean. No DXR/image claim.\n";return 0;
+ std::cout<<"PASS private native hit buffers: actual source mutation, batched multiple source transitions, packed views, committed budget, fresh retired reuse and debug clean. No DXR/image claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<'\n';return 1;}

@@ -13,6 +13,7 @@ public:
 private:
  NativeHitSnapshotPlan plan_;
  std::vector<Source> sources_; // Ordered exactly like plan.Copies().
+ std::vector<D3D12_RESOURCE_BARRIER> beforeCopies_,afterCopies_;
  std::vector<PTNativeBinding::Binding> bindings_;
  Microsoft::WRL::ComPtr<ID3D12Device> device_;
  Ptr packed_;
@@ -65,7 +66,21 @@ public:
    }
    std::vector<PTNativeBinding::Binding> rebased;
    if(!plan.Rebase(packed->GetGPUVirtualAddress(),packed->GetDesc().Width,rebased))return E_INVALIDARG;
-   plan_=std::move(plan);sources_=std::move(retained);bindings_=std::move(rebased);packed_=std::move(packed);
+   // Build the barriers during CPU preparation. Hundreds of source views must
+   // not turn into thousands of separate ResourceBarrier calls at recording.
+   std::vector<D3D12_RESOURCE_BARRIER> before,after;before.reserve(retained.size()+1);after.reserve(retained.size()+1);
+   D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+   if(common){barrier.Transition={packed.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+      D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST};before.push_back(barrier);}
+   for(const auto& source:retained)if(!(source.state&D3D12_RESOURCE_STATE_COPY_SOURCE)){
+    barrier.Transition={source.storage.resource.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+     source.state,D3D12_RESOURCE_STATE_COPY_SOURCE};before.push_back(barrier);
+    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);after.push_back(barrier);
+   }
+   barrier.Transition={packed.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+    D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};after.push_back(barrier);
+   plan_=std::move(plan);sources_=std::move(retained);beforeCopies_=std::move(before);afterCopies_=std::move(after);
+   bindings_=std::move(rebased);packed_=std::move(packed);
    device_=device;allocationBytes_=size;common_=common;prepared_=true;return S_OK;
   }catch(...){return E_OUTOFMEMORY;}
  }
@@ -76,17 +91,12 @@ public:
  }
  bool Record(ID3D12GraphicsCommandList* list)noexcept {
   if(!CanRecord(list))return false;
-  D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-  if(common_){b.Transition={packed_.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST};list->ResourceBarrier(1,&b);}
+  if(!beforeCopies_.empty())list->ResourceBarrier(static_cast<UINT>(beforeCopies_.size()),beforeCopies_.data());
   for(std::size_t i=0;i<sources_.size();++i){const auto& source=sources_[i];const auto& copy=plan_.Copies()[i];
-   const bool transition=!(source.state&D3D12_RESOURCE_STATE_COPY_SOURCE);
-   b.Transition={source.storage.resource.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,source.state,D3D12_RESOURCE_STATE_COPY_SOURCE};
-   if(transition)list->ResourceBarrier(1,&b);
    list->CopyBufferRegion(packed_.Get(),copy.destinationOffset,source.storage.resource.Get(),copy.offset,copy.bytes);
-   if(transition){std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);}
   }
-  b.Transition={packed_.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
-  list->ResourceBarrier(1,&b);recorded_=true;common_=false;return true;
+  list->ResourceBarrier(static_cast<UINT>(afterCopies_.size()),afterCopies_.data());
+  recorded_=true;common_=false;return true;
  }
  const std::vector<PTNativeBinding::Binding>& Bindings()const noexcept{return bindings_;}
  ID3D12Resource* Storage()const noexcept{return packed_.Get();}
@@ -96,7 +106,7 @@ public:
  // Retained allocation bytes remain visible for active+idle budget accounting.
  bool RearmAfterRetirement()noexcept {
   if(!recorded_)return false;
-  plan_={};sources_.clear();bindings_.clear();prepared_=recorded_=false;common_=true;return true;
+  plan_={};sources_.clear();beforeCopies_.clear();afterCopies_.clear();bindings_.clear();prepared_=recorded_=false;common_=true;return true;
  }
 };
 }
