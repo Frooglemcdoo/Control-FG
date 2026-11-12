@@ -1,0 +1,19 @@
+{
+  "source": "b6a73ff3c30f7955addf404c98ee0c6e8d48ef53",
+  "run": 43288895526,
+  "job": 131429549447,
+  "artifact": 13975278065,
+  "sha256": "cbf31e96417f8e89efdaff155783be0059fac23888bb93be65557b32a7a3bd49",
+  "size": 57798,
+  "windows_tests_passed": 19,
+  "nvidia_queued_execution": "pending user hardware",
+  "members": {
+    "NVIDIA-NVAPI-License.txt": "52f7f5b6b1dc4a4dfb075ca150d5d9f5e6334cbcaf45a08873fd8b78bfa79874",
+    "Control-PTLAS-Validate.exe": "afc2fded4fef62e3695dab41191702e818535cca7f8bd9e6a733a333410d9d16",
+    "probe.dxil": "12e209e6d12bcee4000ab72940148b53094c1d3d4abcd75dc4ada88cdaabac56",
+    "README-R433.txt": "017e418aaf6d7a2d5db03b5c0e89c866e71245b4ddf5959957d6929ddb68242c",
+    "Run-RT-Ownership-R433.cmd": "6a9943d69450c7207ee199a482756e2de06276caf0e304127ca5b0adc730dcb1",
+    "SHA256.json": "258929e09d760b1ee64adc9588f44470283b2dd837e75eaca1a89a0f4019808b",
+    "source-commit.txt": "495a443ac49a2bff4b0711fe4b03b6f408a857ac59f9d41be09291d4af465dfb"
+  }
+}
