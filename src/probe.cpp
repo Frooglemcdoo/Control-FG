@@ -1109,6 +1109,7 @@ static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[
 #include "gi_scene_audit.h"
 #include "gi_native_render_scope.h"
 #include "gi_native_prepare_scope.h"
+#include "gi_native_scene_window.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
 #include "rr_world_albedo_runtime.h"
@@ -1536,7 +1537,8 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
           {
            const bool renderReady=gi_native_render_scope::Install(renderer,d3d);
            const bool prepareReady=gi_native_prepare_scope::Install(renderer,d3d);
-           Log("GI_RENDER_SCOPE_R428 ready=%u prepareReady=%u",unsigned(renderReady),unsigned(prepareReady));
+           const bool windowReady=renderReady&&prepareReady&&gi_native_scene_window::Install(renderer,d3d);
+           Log("GI_RENDER_SCOPE_R428 ready=%u prepareReady=%u windowReady=%u",unsigned(renderReady),unsigned(prepareReady),unsigned(windowReady));
           }
         }
         Log("NATIVE_CPU_R218_INSTALL ready=%u",unsigned(native_cpu::Install(renderer)));

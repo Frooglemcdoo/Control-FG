@@ -169,3 +169,31 @@ and then a real graphics draw without rebinding its table. It reads back both
 compute values and the graphics pixel to verify restoration. Validation pending.
 The earlier prepare hook compile error was an ADL ambiguity caused by the shared
 Scope type; commit48afa3b qualifies its Read helper. No live dispatch is enabled.
+
+
+## Preparation gate and joined-scene admission
+
+Added NativeSceneWindow and gi_native_scene_window.h. The native adapter hooks
+only the exact scene join inside the full render invocation and installs entry/
+exit callbacks on the earlier full preparation wrapper. It is still under the
+disabled FROZEN_RENDER startup option. Preparation admission waits while a
+reader is held. Native preparations remain concurrent with each other. A reader
+must match the invocation, owner scene and epoch sampled BEFORE the actual native
+join; any intervening preparation rejects admission even if it already returned
+and its asynchronous jobs are still running. No lease is inferred from pointer
+comparison alone. A conflicting diagnostic join hook makes installation fail.
+
+The native host still must acquire/release this gate around the actual split
+transaction and retain its GPU objects. Release is legal only after actual
+consumer Execute or a proven cancellation/reset that cannot execute delayed
+rays. Do not release blindly on render-scope exit. The pinned invocation must
+not recursively enter preparation while holding its reader on the same thread.
+This gate does not certify other unhooked scene writers/resource suballocators.
+
+Portable multithreaded tests passed with -Wall -Wextra -Werror, including a
+preparation actually waiting at the gate, wrong release token, stale join epochs
+and concurrent native writers. Windows adapter tests check invocation/scene
+identity, native join forwarding, epoch changes and exception invalidation.
+Windows core run43163751958 passed the heap switch + real graphics draw for
+commit77ba98f. Earlier scope correction passed core43163400558. Gate Windows
+validation pending; no gameplay ray dispatch or visual fix is enabled yet.

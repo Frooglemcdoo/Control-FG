@@ -66,6 +66,14 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-native-render-scope.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-native-scene-window.cpp /Fe:gi-native-scene-window.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-native-scene-window.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-native-scene-lease.cpp /Fe:gi-native-scene-lease.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-native-scene-lease.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-scene-audit.cpp /Fe:gi-scene.exe /link d3d12.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-scene.exe
