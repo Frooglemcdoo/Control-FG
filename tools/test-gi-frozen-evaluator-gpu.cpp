@@ -10,7 +10,7 @@ int main()try{
  auto texture=[&](UINT slot,DXGI_FORMAT format,bool array,bool write,const std::vector<unsigned char>& data){
   D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
   D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;desc.Width=width;desc.Height=height;
-  desc.DepthOrArraySize=desc.MipLevels=1;desc.SampleDesc.Count=1;desc.Format=format;if(write)desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  desc.DepthOrArraySize=1;desc.MipLevels=slot==27?5:1;desc.SampleDesc.Count=1;desc.Format=format;if(write)desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
   ComPtr<ID3D12Resource> out;Check(d.device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,write?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&out)));
   if(write){D3D12_UNORDERED_ACCESS_VIEW_DESC view{};view.Format=format;view.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;d.device->CreateUnorderedAccessView(out.Get(),nullptr,&view,cpu(slot));}
   else{
@@ -64,15 +64,20 @@ int main()try{
  auto missing=bindings;missing.arguments.Root(1);Require(!evaluator.Accept(missing),"missing native bindings admitted");
  Require(!evaluator.Record(d.list.Get(),bindings,width+1,height,100,7,0,0,sys->GetGPUVirtualAddress(),training->GetGPUVirtualAddress(),weights->GetGPUVirtualAddress(),true),"odd width admitted");
  Require(!evaluator.Record(d.list.Get(),bindings,width,height,100,7,0,0,sys->GetGPUVirtualAddress()+4,training->GetGPUVirtualAddress(),weights->GetGPUVirtualAddress(),true),"unaligned constants admitted");
+ D3D12_UNORDERED_ACCESS_VIEW_DESC lowerView{};lowerView.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;
+ lowerView.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;lowerView.Texture2D.MipSlice=1;
+ d.device->CreateUnorderedAccessView(color.Get(),nullptr,&lowerView,cpu(29));
+ d.list->SetDescriptorHeaps(1,heaps);const float lowerSentinel[4]={101,102,103,104};
+ d.list->ClearUnorderedAccessViewFloat(gpu(29),cpu(29),color.Get(),lowerSentinel,0,nullptr);d.Uav(color.Get());
  for(UINT phase=0;phase<2;++phase){
   Require(evaluator.Record(d.list.Get(),bindings,width,height,100,7,phase,phase,sys->GetGPUVirtualAddress(),training->GetGPUVirtualAddress(),weights->GetGPUVirtualAddress(),true),"production evaluator recording failed");
   d.Uav(color.Get());d.Uav(distance.Get());d.Uav(training.Get());
  }
  struct ReadTexture{ComPtr<ID3D12Resource> data;D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint;};
- auto readTexture=[&](ID3D12Resource* source){ReadTexture r{};const auto desc=source->GetDesc();UINT64 bytes=0;d.device->GetCopyableFootprints(&desc,0,1,0,&r.footprint,nullptr,nullptr,&bytes);r.data=d.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
-  d.Transition(source,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=source;from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+ auto readTexture=[&](ID3D12Resource* source,UINT mip=0,bool transition=true){ReadTexture r{};const auto desc=source->GetDesc();UINT64 bytes=0;d.device->GetCopyableFootprints(&desc,mip,1,0,&r.footprint,nullptr,nullptr,&bytes);r.data=d.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+  if(transition)d.Transition(source,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=source;from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;from.SubresourceIndex=mip;
   to.pResource=r.data.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;to.PlacedFootprint=r.footprint;d.list->CopyTextureRegion(&to,0,0,0,&from,nullptr);return r;};
- auto colorRead=readTexture(color.Get()),distanceRead=readTexture(distance.Get());auto trainingRead=d.Buffer(sentinel.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto colorRead=readTexture(color.Get()),distanceRead=readTexture(distance.Get());auto lowerRead=readTexture(color.Get(),1,false);auto trainingRead=d.Buffer(sentinel.size(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  d.Transition(training.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyResource(trainingRead.Get(),training.Get());d.Submit();
  unsigned char* colors=nullptr;unsigned char* distances=nullptr;GITrainingRecord* records=nullptr;
  Check(colorRead.data->Map(0,nullptr,reinterpret_cast<void**>(&colors)));Check(distanceRead.data->Map(0,nullptr,reinterpret_cast<void**>(&distances)));Check(trainingRead->Map(0,nullptr,reinterpret_cast<void**>(&records)));
@@ -88,7 +93,11 @@ int main()try{
    if(valid){Require(std::abs(GIDot(r.direction,r.direction)-1)<1e-5f,"training direction nonunit");const float energy=values[0]*.2126f+values[1]*.7152f+values[2]*.0722f;Require(std::abs(r.energy-energy)<1e-5f,"training omitted hit/miss energy");}
   }
  }
+ unsigned char* lower=nullptr;Check(lowerRead.data->Map(0,nullptr,reinterpret_cast<void**>(&lower)));
+ for(UINT x=0;x<width/2;++x)for(UINT channel=0;channel<4;++channel)
+  Require(reinterpret_cast<float*>(lower)[x*4+channel]==lowerSentinel[channel],"GI wrote a lower output mip");
+ lowerRead.data->Unmap(0,nullptr);
  Require(!memcmp(records+count,sentinel.data()+count*sizeof(GITrainingRecord),sizeof(GITrainingRecord)),"padded dispatch overwrote training guard");
  colorRead.data->Unmap(0,nullptr);distanceRead.data->Unmap(0,nullptr);trainingRead->Unmap(0,nullptr);
- std::cout<<"PASS generated evaluator GPU fixture: disjoint/padded coverage, training writes, all hit/miss radiance weighted, zero contribution retained, native distance/alpha. Lighting helper is stubbed; no gameplay parity claim.\n";return 0;
+ std::cout<<"PASS generated evaluator GPU fixture: mip0 writes preserve mip1 sentinel, disjoint/padded coverage, training writes, all hit/miss radiance weighted, zero contribution retained, native distance/alpha. Lighting helper is stubbed; no gameplay parity claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

@@ -16,6 +16,7 @@ static void TestNativeGITextures(Device& d){
  desc.DepthOrArraySize=desc.MipLevels=1;desc.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;desc.SampleDesc.Count=1;
  desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
  for(auto& t:textures){
+  desc.MipLevels=(&t==&textures[3])?5:1;
   Check(d.device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,nullptr,IID_PPV_ARGS(&t.resource)));
   auto* resource=t.resource.Get();std::memcpy(t.native.data()+0x88,&resource,8);
   void* native=t.native.data();std::memcpy(t.container.data()+8,&native,8);t.State(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -44,8 +45,17 @@ static void TestNativeGITextures(Device& d){
    !output&&diagnostic.state==0x40&&std::strcmp(diagnostic.stage,"tracked_state")==0,"output state rejection lost");
  textures[3].State(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  Require(!acquired.AcquireOutputAtShade(bundle[0],d.device.Get(),output)&&!output,"hit admitted as raw output");
- Require(acquired.AcquireOutputAtShade(textures[3].container.data(),d.device.Get(),output,&diagnostic)&&diagnostic.width==18&&diagnostic.height==3&&std::strcmp(diagnostic.stage,"ready")==0&&output==textures[3].resource,
+ Require(acquired.AcquireOutputAtShade(textures[3].container.data(),d.device.Get(),output,&diagnostic)&&diagnostic.width==18&&diagnostic.height==3&&diagnostic.mips==5&&std::strcmp(diagnostic.stage,"ready")==0&&output==textures[3].resource,
   "raw output acquisition failed");
+ output.Reset();
+ auto* multi=textures[3].resource.Get();
+ std::memcpy(textures[0].native.data()+0x88,&multi,8);
+ for(unsigned i=0;i<3;++i)textures[i].State(D3D12_RESOURCE_STATE_UNORDERED_ACCESS,i==2);
+ D3D12NativeGITextures multiHit;
+ Require(!multiHit.AcquireAtRay(owner.data(),d.device.Get(),18,3),"multi-mip hit admitted");
+ auto* original=textures[0].resource.Get();std::memcpy(textures[0].native.data()+0x88,&original,8);
+ for(unsigned i=0;i<3;++i)textures[i].State(i?D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE:
+  D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE,i==2);
  auto* changed=textures[3].resource.Get();std::memcpy(textures[1].native.data()+0x88,&changed,8);
  Require(!acquired.ReadAtShade(owner.data(),states)&&states[0]==0,"changed resource published partial shade states");
  changed=textures[1].resource.Get();std::memcpy(textures[1].native.data()+0x88,&changed,8);

@@ -60,13 +60,13 @@ private:
  }
  // Keep SEH and COM-only POD locals separate from C++ owning objects.
  static bool Retain(const Texture& texture,ID3D12Device* device,UINT width,UINT height,
-                    ID3D12Resource** out,OutputStatus* status=nullptr)noexcept {
+                    ID3D12Resource** out,OutputStatus* status=nullptr,bool outputMipChain=false)noexcept {
   if(!out)return false;*out=nullptr;
   __try {
    const auto d=texture.resource->GetDesc();
    if(status){status->width=d.Width;status->height=d.Height;status->mips=d.MipLevels;status->samples=d.SampleDesc.Count;status->flags=UINT(d.Flags);}
    if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||
-      d.DepthOrArraySize!=1||d.MipLevels!=1||d.SampleDesc.Count!=1||d.SampleDesc.Quality||
+      d.DepthOrArraySize!=1||!d.MipLevels||(!outputMipChain&&d.MipLevels!=1)||d.SampleDesc.Count!=1||d.SampleDesc.Quality||
       !(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
       (d.Flags&D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS))return false;
    ID3D12Device* actual=nullptr;
@@ -111,6 +111,9 @@ public:
   }
   states=next;return true;
  }
+ // Exact native GI6 binds the base/default UAV from NativeTexture+0xA8.
+ // Its descriptor factory receives mip=0; retain the resource's full mip chain
+ // without changing that native binding. Hit textures remain single-mip.
  // Pass the value read from renderer+90E9F8 at GI6, not a later ShaderTexture.
  bool AcquireOutputAtShade(const void* container,ID3D12Device* device,
                            Microsoft::WRL::ComPtr<ID3D12Resource>& output,OutputStatus* status=nullptr)const noexcept {
@@ -124,7 +127,7 @@ public:
   for(const auto& hit:hits_)if(texture.resource==hit.resource)return false;
   Microsoft::WRL::ComPtr<ID3D12Resource> retained;
   if(status)status->stage="resource_description_or_device";
-  if(!Retain(texture,device,width_,height_,retained.GetAddressOf(),status))return false;
+  if(!Retain(texture,device,width_,height_,retained.GetAddressOf(),status,true))return false;
   if(status)status->stage="changed_container";
   Texture again;if(!ReadContainer(container,&again)||!Same(texture,again)||again.state!=texture.state)return false;
   output=std::move(retained);if(status)status->stage="ready";return true;

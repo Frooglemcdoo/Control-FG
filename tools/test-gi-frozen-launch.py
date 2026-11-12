@@ -24,11 +24,11 @@ int main() {
  std::ofstream("launch-result.txt")<<(ok?"PASS":"FAIL");return ok?0:1;
 }
 '''
-with tempfile.TemporaryDirectory(prefix='R430 launch with spaces ') as temporary:
+with tempfile.TemporaryDirectory(prefix='R431 launch with spaces ') as temporary:
     game = Path(temporary)
     diagnostics = game/'ControlTOH/Diagnostics'
     diagnostics.mkdir(parents=True)
-    launcher = diagnostics/'Start-GI-Frozen-R430.cmd'
+    launcher = diagnostics/'Start-GI-Frozen-R431.cmd'
     launcher.write_bytes((root/'tools/diagnostics'/launcher.name).read_bytes())
     (game/'fake.cpp').write_text(source)
     compile_args=['cl','/nologo','/std:c++17','/EHsc','/W4','/WX','/D_CRT_SECURE_NO_WARNINGS',
@@ -55,4 +55,4 @@ with tempfile.TemporaryDirectory(prefix='R430 launch with spaces ') as temporary
                        'exit /b 0\n')
     subprocess.run(['cmd.exe','/d','/c',str(wrapper)],cwd=game,env=inherited,check=True,timeout=45)
     assert (game/'launch-result.txt').read_text()=='PASS'
-print('PASS R430 actual CMD: spaces, guided flags, stale diagnostics cleared, unrelated and parent env preserved')
+print('PASS R431 actual CMD: spaces, guided flags, stale diagnostics cleared, unrelated and parent env preserved')

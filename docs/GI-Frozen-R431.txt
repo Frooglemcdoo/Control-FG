@@ -1,0 +1,15 @@
+ControlTOH R431 - native mipmapped GI output support
+
+Install with the game closed. Run ControlTOH\Diagnostics\Start-GI-Frozen-R431.cmd.
+R430 identified the native GI output as a 12-mip texture. Our single-mip-only
+output checks rejected it. R431 accepts its mip chain while preserving the
+native base-mip UAV binding. The three ray-hit textures remain single-mip.
+
+The eight-failure stop remains enabled. Only completed guided GI resets it.
+Startup, producer/consumer, fallback reason and output diagnostics remain in
+compact logs. No sampling count, RR or RELAX setting changes are introduced.
+Normal launch leaves guided rendering disabled.
+
+This fixes the observed output-admission mismatch, not a confirmed visual or
+performance result. Check motion at the existing GI-lit jaw/hair locations and
+render FPS, then send the compact log ZIP. No PIX capture is required.

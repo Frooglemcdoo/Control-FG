@@ -82,7 +82,7 @@ public:
   const auto o=p.output->GetDesc();
   if(o.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D)return "output_dimension";
   if(o.Width!=p.width||o.Height!=p.height)return "output_extent";
-  if(o.DepthOrArraySize!=1||o.MipLevels!=1)return "output_subresources";
+  if(o.DepthOrArraySize!=1||!o.MipLevels)return "output_subresources";
   if(!(o.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return "output_uav";
   return nullptr;
  }
