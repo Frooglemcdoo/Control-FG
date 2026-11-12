@@ -2,8 +2,9 @@
 
 The existing R392/R394 GPU tests called `Flush` for every update, then advanced
 the backend/planner. Their passing results do not exercise several ordered AS
-updates awaiting execution. This is a new prerequisite for live integration,
-not a repeat of the old instance replay or a claim of native scene ownership.
+updates awaiting execution. This leaves a narrow queued-NVAPI execution gap, not a missing generic ownership
+foundation. The broader history audit below supersedes the initial request to
+run this fixture before continuing source work.
 
 `rt_ptlas_submission.h` now serializes planning against the last successfully
 submitted revision. Prepare/record/close cannot advance that revision. Execute
@@ -36,9 +37,13 @@ b6a73ff3c30f7955addf404c98ee0c6e8d48ef53. Artifact 13975278065 was downloaded
 and checked against its digest, ZIP CRCs, source commit and every CI file hash.
 Package verification is in `rt-queued-r433-package-verification.json`.
 Delivered file: libfile_3449d998b28c8191b65729adcdde1532.
-NVIDIA driver execution cannot be substituted by CI WARP tests; the new queued
-fixture now needs the user's RTX GPU. The exact request is to run
-`Run-RT-Ownership-R433.cmd` and return `RT-Ownership-R433.txt`, with no game capture.
+NVIDIA driver execution cannot be substituted by CI WARP tests. No R433 RTX
+result has been reviewed. The request to run this standalone fixture is ON HOLD:
+existing queue ownership and submission tests support continued implementation
+without another user run. See `rt-project-history-coverage.md` for the distinction
+between already tested contracts and the remaining integration gaps. Keep this
+fixture available for the eventual queued-NVAPI integration validation; do not
+treat its CI compilation as hardware execution or request it as a source-work gate.
 
 Remaining game gates are unchanged: producer retirement for replaced work,
 all native AS consumers, geometry/material mutation and lifetime ownership,
