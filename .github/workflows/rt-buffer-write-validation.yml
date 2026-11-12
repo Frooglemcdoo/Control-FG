@@ -23,7 +23,7 @@ jobs:
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
           if (!$vs) { throw 'Visual Studio not found' }
           "VSROOT=$vs" >> $env:GITHUB_ENV
-      - name: Validate live callbacks and real copy hooks
+      - name: Validate independent live callbacks
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -32,11 +32,4 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           live-metadata.exe
           if not "%errorlevel%"=="0" exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 tools\test-native-lighting-live-warp.cpp /Fe:copy-hooks.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if not "%errorlevel%"=="0" exit /b 1
-          copy-hooks.exe
-          if not "%errorlevel%"=="0" exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /DCONTROL_CAPTURE_DIAGNOSTIC tools\test-native-lighting-live-warp.cpp /Fe:copy-hooks-capture.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
-          if not "%errorlevel%"=="0" exit /b 1
-          copy-hooks-capture.exe
-          if not "%errorlevel%"=="0" exit /b 1
+          rem Actual copy-hook fixtures run in build-pt-reflections-p0 after shader generation.
