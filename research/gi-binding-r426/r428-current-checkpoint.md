@@ -11,10 +11,11 @@ Fatal rejection suppresses the failed invocation's GI6 and latches replacement
 off; it does not guarantee a clean failed frame. Do not describe it as full
 recovery. Only an actually recorded complement permits normal GI6 afterward.
 
-No enabled R428 visual build has been delivered. Automatic full workflow still
-packages R427v2 diagnostics. Do not relabel that artifact as a noise fix.
-No measured FPS or hair/jaw improvement. Existing R425–427 captures suffice for
-ordering; do not ask for another duplicate phase/heap capture.
+An opt-in R428 candidate is now wired and packaging is renamed to
+ControlTOH-GI-Frozen-R428. It is NOT ready for delivery until its own full build
+and launcher test pass. Earlier artifacts remain R427v2 diagnostics.
+No measured FPS or hair/jaw improvement. Existing R425–427 captures suffice;
+do not request another duplicate phase/heap capture.
 
 ## Completed this continuation
 
@@ -35,18 +36,16 @@ ordering; do not ask for another duplicate phase/heap capture.
 
 ## Still required
 
-1. Complete the native scene/material/AS/descriptor borrowing contract with the
-   existing preparation gate and original native retirement/heap identities.
-   Source copies solve mutable hit-root geometry, not every referenced resource.
-   Do not set sceneAndDescriptorLease just because pointers/frame match.
-2. The live original-ray/GI6 coordinator and retired owner cache now exist in
-   410adf1. They remain dormant pending installation of the independent contract.
-   Rejection no longer runs GI6 on half-complete hits. Fatal failure still
-   cannot reconstruct a valid current-frame image; it disables future replacement.
-3. Scene adapter Windows CI passed. Its negative fixture checks
-   no-reader, changed frame/fence/epoch, wrong invocation and wrong scene.
-4. Confirm full DLL compilation, then enable/package the actual visual path.
-   Current package is NOT that build. No new user capture is needed.
+1. Validate the enabled candidate's Windows full DLL and actual CMD launcher.
+2. Inspect the resulting ZIP: R428 README/launcher, expected root DLLs/shaders,
+   exact commit/build identity and no mislabeled R427 capture instructions.
+3. Deliver as the first experimental visual build, not a confirmed noise fix.
+   Only in-game producer/consumer logs establish actual guided dispatch. Fatal
+   partial failure may produce one incorrect frame then disables replacement.
+
+The native contract and coordinator are connected only under FROZEN_RENDER=1.
+See the opt-in activation boundary in r428-integration.md for the combined
+prepare/join/heap/fence/private-copy contract and supported-engine limitations.
 
 ## Local evidence and source
 

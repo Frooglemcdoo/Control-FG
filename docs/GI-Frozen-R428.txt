@@ -1,0 +1,26 @@
+ControlTOH R428 - experimental current-frame guided GI
+
+Install over the existing ControlTOH mod with the game closed.
+Run ControlTOH\Diagnostics\Start-GI-Frozen-R428.cmd.
+Keep RT indirect lighting enabled. Use the existing GI: OWNED / GI: NATIVE
+button to compare. OWNED requests the new current-frame guided path; NATIVE
+uses native rays. Normal game launch does not enable guided rendering.
+
+This is the first enabled visual test of this method, not a confirmed fix.
+Check Jesse's moving jaw/neck and GI-lit hair at the existing two locations.
+Standing still is not a useful test of the reported motion-only artifacts.
+Also check that the projector, desk and plants have not regressed.
+Compare render FPS, not generated-frame FPS. No new capture sequence is required.
+
+The total configured ray count is unchanged. The first half trains a guide for
+the remaining half in the same frame. RELAX and existing RR settings are not
+changed by this launcher. Extra guide processing and private geometry copies
+have a cost; no measured FPS improvement or cost estimate is claimed.
+
+Preparation failure before replacement commands keeps the existing path.
+A fatal failure after partial replacement disables guided work for the rest
+of that session; the failed frame itself may be incorrect. Restart to retry.
+The log's GI_FROZEN_R428 producer/consumer entries confirm actual activation;
+a menu label or successful startup alone does not confirm guided dispatch.
+Use the existing compact log collector if the image breaks or no change is
+visible; existing scene-ordering captures do not need repeating.

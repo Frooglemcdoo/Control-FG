@@ -720,3 +720,30 @@ compatible reconstruction basis for owned Duff rays. The guided evaluator has
 its own matching reconstruction; this guard only restricts uniform-complement
 recovery. Portable disposition assertions and retirement regressions pass.
 The live scene installer remains disconnected pending final integration review.
+
+
+## Opt-in activation boundary
+
+The R428 package now installs the candidate exact-build contract and coordinator
+ONLY for FROZEN_RENDER=1. This is the first enabled experimental integration,
+not a claim that the earlier static inventories alone establish exclusivity.
+Admission combines the full native prepare gate/join with the same invocation,
+original saved native heap/fence lease, private geometry/SBT/constants, actual
+same-queue producer execution, and actual consumer submission before gate release.
+Native resource retirement remains the supported engine's lifetime contract;
+external writers/modifications outside that contract are not supported by this
+experimental path. No cross-frame scene reuse is introduced.
+
+The pinned writer audit locates material upload in preparation, AS build/update
+in its joined worker, and native retirement after frame submission. Earlier R427
+captures independently verify the two ordered submissions and unchanged native
+scene/heap generations. Private hit-source copies close the mutable mesh-byte
+gap identified later. Runtime rejection and owner retention still apply; a lost
+contract after phase A aborts that invocation instead of unsafe replay.
+
+A separate launcher clears inherited GI diagnostics in its local environment,
+enables pipeline preparation and guarded rendering, and keeps normal launch
+unchanged. Existing GI NATIVE/OWNED selection controls requests. The package is
+renamed R428 and has motion-specific instructions; it no longer asks for the
+obsolete R427 scene capture. Actual CMD integration is tested using a fake game
+in a path with spaces, including child flags and restoration of the parent env.
