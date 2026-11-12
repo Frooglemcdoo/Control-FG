@@ -47,6 +47,7 @@ class D3D12GIRayConstantSnapshot {
  Microsoft::WRL::ComPtr<ID3D12PipelineState> copyPipeline_;
  Microsoft::WRL::ComPtr<ID3D12Resource> data_;
  bool recorded_=false;
+ bool dataCommon_=false;
 public:
  static constexpr UINT Bytes=FrozenRayConstants::Bytes,GIConstantOffset=FrozenRayConstants::GIConstantOffset;
  HRESULT Initialize(ID3D12Device* device,const D3D12GIRayConstantPipeline& pipeline)noexcept {
@@ -87,6 +88,9 @@ public:
     if(index>=2&&index<=3&&kind==RootArgumentKind::CBV)source[index-2]=address;
    }
   } input;native.arguments.Replay(input);
+  if(dataCommon_){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+   b.Transition={data_.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
+   list->ResourceBarrier(1,&b);dataCommon_=false;}
   list->SetComputeRootSignature(copyRoot_.Get());list->SetPipelineState(copyPipeline_.Get());
   list->SetComputeRootConstantBufferView(0,input.source[0]);list->SetComputeRootConstantBufferView(1,input.source[1]);
   list->SetComputeRootUnorderedAccessView(2,data_->GetGPUVirtualAddress());list->Dispatch(6,1,1);
@@ -103,5 +107,10 @@ public:
   if(!updated.Ready())return false;ray=std::move(updated);return true;
  }
  ID3D12Resource* Resource()const noexcept{return recorded_?data_.Get():nullptr;}
+ // Host calls only after whole-invocation Take, never on producer Reset alone.
+ bool RearmAfterRetirement()noexcept {
+  if(!recorded_)return false;
+  recorded_=false;dataCommon_=true;return true;
+ }
 };
 }

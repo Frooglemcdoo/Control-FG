@@ -67,14 +67,14 @@ int main()try {
  void* mapped=nullptr;D3D12_RANGE empty{0,0};Check(source->Map(0,&empty,&mapped));std::memset(mapped,0xee,1024);source->Unmap(0,nullptr);
  Check(d.allocator->Reset());Check(d.list->Reset(d.allocator.Get(),nullptr));Check(d.device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(d.fence.ReleaseAndGetAddressOf())));
  // Reuse native DEFAULT table too, after its original submission completed.
- d.Transition(local.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST);
+ d.Transition(local.Get(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
  d.list->CopyResource(local.Get(),source.Get());
  d.Transition(local.Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
  auto localBack=d.Buffer(localCopy.Bytes(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
- d.Transition(localCopy.Resource(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ d.Transition(localCopy.Resource(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
  d.list->CopyBufferRegion(localBack.Get(),0,localCopy.Resource(),0,localCopy.Bytes());
  auto back=d.Buffer(copy.Bytes(),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
- d.Transition(copy.Resource(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ d.Transition(copy.Resource(),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
  d.list->CopyBufferRegion(back.Get(),0,copy.Resource(),0,copy.Bytes());d.Submit();
  D3D12_RANGE range{0,static_cast<SIZE_T>(copy.Bytes())};Check(back->Map(0,&range,&mapped));
  Require(!std::memcmp(mapped,bytes.data(),static_cast<size_t>(copy.Bytes())),"SBT changed when native upload reused");back->Unmap(0,&empty);
@@ -85,6 +85,27 @@ int main()try {
   UINT control[8]{};std::memcpy(control,record+48,32);float fraction=0;std::memcpy(&fraction,record+76,4);
   Require(control[0]==2560&&control[1]==1440&&control[2]==100&&control[3]==7&&control[4]==65536&&control[5]==(phase?1u:0u)&&control[6]==(phase==1?1u:0u)&&fraction==.125f,"frozen phase constants wrong");
   for(UINT i=80;i<128;++i)Require(record[i]==0,"frozen record padding nonzero");
+ }recordBack->Unmap(0,&empty);
+ // All consumer commands completed; seal their recording before reusing.
+ const auto oldTableAddress=copy.Resource()->GetGPUVirtualAddress();const auto oldRecordsAddress=records.At(0).StartAddress;
+ Check(d.allocator->Reset());Check(d.list->Reset(d.allocator.Get(),nullptr));
+ Check(d.device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(d.fence.ReleaseAndGetAddressOf())));
+ Require(copy.RearmAfterRetirement()&&!copy.RearmAfterRetirement()&&!copy.Dispatch()&&!copy.Resource(),"SBT rearm exposed stale invocation");
+ Check(copy.Initialize(d.device.Get(),source.Get(),native));Require(copy.Record(d.list.Get()),"recycled SBT failed");
+ Require(copy.Resource()->GetGPUVirtualAddress()==oldTableAddress,"same-size SBT unnecessarily reallocated");
+ d.Transition(copy.Resource(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ d.list->CopyBufferRegion(back.Get(),0,copy.Resource(),0,copy.Bytes());
+ Require(records.RearmAfterRetirement()&&!records.RearmAfterRetirement()&&!records.At(0).StartAddress&&!records.Resource(),"raygen rearm exposed stale records");
+ Check(records.Initialize(d.device.Get(),bytes.data(),base,localBase,2560,1440,101,8,65536,1,.25f));
+ Require(records.At(0).StartAddress==oldRecordsAddress&&records.Matches(2560,1440,101,8,65536,1,base,localBase)&&
+  !records.Matches(2560,1440,100,7,65536,0,base,localBase),"recycled records retained prior identity or reallocated");
+ d.list->CopyResource(recordBack.Get(),records.Resource());d.Submit();
+ Check(back->Map(0,&range,&mapped));for(UINT64 i=0;i<copy.Bytes();++i)
+  Require(static_cast<unsigned char*>(mapped)[i]==0xee,"recycled SBT retained native bytes from prior frame");back->Unmap(0,&empty);
+ Check(recordBack->Map(0,nullptr,&mapped));recordBytes=static_cast<const unsigned char*>(mapped);
+ for(UINT phase=0;phase<3;++phase){UINT control[8]{};float fraction=0;
+  std::memcpy(control,recordBytes+phase*128+48,32);std::memcpy(&fraction,recordBytes+phase*128+76,4);
+  Require(control[2]==101&&control[3]==8&&control[5]==(phase?0u:1u)&&control[6]==(phase==1?1u:0u)&&fraction==.25f,"recycled raygen constants stale");
  }recordBack->Unmap(0,&empty);
  std::cout<<"PASS GPU SBT snapshot: native DEFAULT/UPLOAD reuse and explicit source-state restoration, ABI/range rejection, preserved offsets/bytes, one-shot recording. Referenced geometry lifetime remains external.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

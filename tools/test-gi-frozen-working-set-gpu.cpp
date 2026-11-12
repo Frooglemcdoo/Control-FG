@@ -75,6 +75,9 @@ int main()try {
  Require(!owners.Before(foreign.Get(),1,unrelatedLists,unknown).count,"unrelated foreign queue tagged as GI");
  Require(!owners.Before(d.queue.Get(),1,unrelatedLists,unknown).count,"unrelated untracked list tagged as GI");
  Require(!owners.Before(d.queue.Get(),0,nullptr,generation).count,"empty Execute tagged as GI");
+ std::array<ID3D12CommandList*,257> unrelatedLarge{};unrelatedLarge.fill(unrelated.Get());
+ Require(!owners.Before(foreign.Get(),static_cast<UINT>(unrelatedLarge.size()),unrelatedLarge.data(),unknown).count,"large unrelated batch tagged as GI");
+ Require(!owners.Before(foreign.Get(),1,unrelatedLists,nullptr).count,"unrelated absent observer tagged as GI");
  std::unique_ptr<Invocation> retired;
  d.Transition(weights,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST);
  d.list->CopyBufferRegion(weights,0,upload.Get(),0,count*sizeof(float));

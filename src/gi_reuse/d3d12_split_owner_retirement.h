@@ -43,7 +43,11 @@ public:
  bool CancelUnattached(UINT64 id)noexcept{return state_&&state_->owners.CancelUnattached(id);}
  Batch Before(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists,Generation generation)noexcept {
   if(!state_||!count)return {};
-  if(!queue||!lists||!generation||count>256){state_->owners.QuarantineAll();return {};}
+  if(!queue||!lists){state_->owners.QuarantineAll();return {};}
+  if(!generation||count>256){
+   for(UINT i=0;i<count;++i)state_->owners.QuarantineList(reinterpret_cast<UINT64>(lists[i]));
+   return {};
+  }
   std::array<Recording,256> executed{};
   for(UINT i=0;i<count;++i){
    if(!lists[i]){state_->owners.QuarantineAll();return {};}

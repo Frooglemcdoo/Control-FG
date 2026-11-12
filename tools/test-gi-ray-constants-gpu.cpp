@@ -51,5 +51,17 @@ int main()try {
  for(UINT base:{0u,3u})Require(actual[base]==a[0]&&actual[base+1]==a[281]&&actual[base+2]==b[4],"native restore or immutable replay wrong");values->Unmap(0,&empty);
  D3D12_RANGE byteRange{0,copy.Bytes};Check(bytes->Map(0,&byteRange,&mapped));actual=static_cast<UINT*>(mapped);
  for(UINT i=0;i<384;++i){const UINT expected=i<282?a[i]:(i>=320&&i<325?b[i-320]:0);Require(actual[i]==expected,"snapshot bytes/padding changed");}bytes->Unmap(0,&empty);
+ // Final consumer has completed; Reset seals the last recording. Reuse the
+ // same allocation for a fresh invocation, never the earlier native bytes.
+ Check(d.allocator->Reset());Check(d.list->Reset(d.allocator.Get(),nullptr));
+ Check(d.device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(d.fence.ReleaseAndGetAddressOf())));
+ Require(copy.RearmAfterRetirement()&&!copy.RearmAfterRetirement()&&!copy.Resource(),"constant rearm exposed stale contents");
+ Require(copy.RecordAndRestore(d.list.Get(),native),"retired constant storage could not record again");
+ Require(copy.Resource()->GetGPUVirtualAddress()==savedAddress,"constant storage unnecessarily reallocated");
+ d.Transition(copy.Resource(),D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER,D3D12_RESOURCE_STATE_COPY_SOURCE);
+ d.list->CopyBufferRegion(bytes.Get(),0,copy.Resource(),0,copy.Bytes);d.Submit();
+ Check(bytes->Map(0,&byteRange,&mapped));actual=static_cast<UINT*>(mapped);
+ for(UINT i=0;i<384;++i){const UINT expected=i<282||(i>=320&&i<325)?0xeeeeeeee:0;
+  Require(actual[i]==expected,"recycled constants retained old data or nonzero padding");}bytes->Unmap(0,&empty);
  std::cout<<"PASS GPU ray constants: original binding restore, native overwrite, deferred CBV replay, full byte range and zero padding, ABI/alignment rejection. No scene lifetime claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

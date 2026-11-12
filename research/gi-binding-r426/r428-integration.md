@@ -45,8 +45,28 @@ only invocations actually referenced by its Execute list; an unknown recording
 generation quarantines owners referencing that list, not unrelated owners.
 An empty submission is a no-op. Actual owned wrong-queue or missing-generation
 execution still fails closed. Expanded WARP test checks both normal unrelated
-traffic and these owned failure paths. Windows validation pending for this delta.
+traffic and these owned failure paths. Windows core run43158329850 passed for this delta.
 
 These corrections do not enable the frozen GI dispatch. The previous diagnostic
 package remains a diagnostic, even if the full packaging workflow succeeds.
 Do not label its automatically generated artifact as an R428 visual fix.
+
+## Allocation reuse
+
+Added explicit RearmAfterRetirement to the SBT, ray constants and frozen raygen
+record owners. These operations are only legal on an invocation returned by the
+retirement pool after both recording seals and its final consumer fence. They
+are not independent fence checks. Before reinitialization no stale dispatch,
+resource handle or raygen identity is exposed. SBT storage grows transactionally
+only if required; constants and raygen records retain their allocations. Shared
+pipelines remain immutable. Recycled DEFAULT storage transitions from COMMON at
+its next recording; UPLOAD raygen records are rewritten only after retirement.
+
+Expanded GPU fixtures execute another invocation with different native data,
+frame/epoch and parity, require identical GPU allocation addresses, and read back
+the fresh bytes/zero padding. They also reject duplicate rearm and stale metadata.
+The SBT test now uses COMMON at separate Execute boundaries, matching Microsoft's
+buffer decay contract:
+https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12
+
+This remains integration work, not a live gameplay fix. No user capture needed.
