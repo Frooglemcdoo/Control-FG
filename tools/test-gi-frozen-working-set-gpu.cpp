@@ -180,7 +180,9 @@ int main()try {
  // empty valid GPU lists: the test checks actual submit/reset ownership only.
  {
   using Router=D3D12SplitSubmissionRouter<Invocation,2,8*1024*1024>;
-  Router router;Check(router.Initialize(d.queue.Get(),generation));
+  static UINT64 releasedScene=0;static unsigned sceneReleases=0;releasedScene=0;sceneReleases=0;
+  Router router;Check(router.Initialize(d.queue.Get(),generation,&Router::Pool::NativeSignal,
+   +[](UINT64 token)noexcept{releasedScene=token;++sceneReleases;}));
   static Router* active=nullptr;active=&router;
   static const gi_frozen_submission::Callbacks callbacks{
    +[](ID3D12CommandQueue* q,UINT n,ID3D12CommandList*const* l)noexcept -> UINT64{return active->Before(q,n,l);},
@@ -191,7 +193,7 @@ int main()try {
   auto object=std::make_unique<Invocation>(deaths);
   const Recording a{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())};
   const Recording b{reinterpret_cast<UINT64>(consumer.Get()),generation(consumer.Get())};
-  const auto token=router.Access([&](auto& pool){return pool.Admit(9,a,64,object);});
+  const auto token=router.AdmitScene(9,a,64,object,901);
   Require(token!=0,"router admission failed");Check(d.list->Close());
   {
    gi_frozen_submission::Call call(d.queue.Get(),1,producerLists);
@@ -199,6 +201,7 @@ int main()try {
   }
   Require(router.Access([&](auto& pool){return pool.Attach(token,9,b)&&pool.ClaimConsumerRecording(token,9,d.queue.Get(),b);}),
    "router did not publish actual producer submission");
+  Require(sceneReleases==0,"producer submission released native scene");
   Check(consumer->Close());
   {
    gi_frozen_submission::Call call(d.queue.Get(),1,lists);
@@ -207,6 +210,7 @@ int main()try {
   }
   Require(router.Access([&](auto& pool){return pool.SceneReleaseReady(token)&&!pool.Take(token,retired);}),
    "router confused scene release with allocation retirement");
+  Require(releasedScene==901&&sceneReleases==1,"actual consumer submission did not release scene once");
   Check(d.queue->Signal(fence.Get(),3));
   HANDLE done=CreateEventW(nullptr,FALSE,FALSE,nullptr);Require(done!=nullptr,"router event failed");
   Check(fence->SetEventOnCompletion(3,done));Require(WaitForSingleObject(done,30000)==WAIT_OBJECT_0,"router GPU timeout");CloseHandle(done);
@@ -215,6 +219,14 @@ int main()try {
   Check(consumer->Reset(allocator.Get(),nullptr));
   Require(router.Access([&](auto& pool){pool.Poll();return pool.Take(token,retired);}),"router did not retire sealed completed owner");
   retired.reset();
+  Require(sceneReleases==1,"Reset released scene twice");
+  // No producer Execute: cancellation must wait for its successful Reset.
+  object=std::make_unique<Invocation>(deaths);
+  const auto cancelled=router.AdmitScene(10,{reinterpret_cast<UINT64>(d.list.Get()),generation(d.list.Get())},64,object,902);
+  Require(cancelled&&router.CancelUnattached(cancelled)&&sceneReleases==1,"unsubmitted producer released scene on scope exit");
+  Check(d.list->Close());Check(d.list->Reset(d.allocator.Get(),nullptr));
+  Require(releasedScene==902&&sceneReleases==2,"sealed cancelled producer did not release scene");
+  Require(router.Access([&](auto& pool){return pool.Take(cancelled,retired);}),"cancelled unsubmitted owner did not retire");retired.reset();
   gi_frozen_submission::callbacks=nullptr;fixture::gi_compute_hooks::onFrozenRecordingReset=nullptr;active=nullptr;
  }
  // Model a recycled COM address by dropping the private State after all owners

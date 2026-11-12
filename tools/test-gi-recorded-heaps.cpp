@@ -3,6 +3,8 @@
 #include <cstdio>
 #ifdef _WIN32
 #include "../src/gi_reuse/d3d12_native_recorded_heaps.h"
+#include "../src/gi_reuse/d3d12_native_gi_recording.h"
+#include <vector>
 #endif
 int main(){
  using I=gi_reuse::GIRecordedHeapIdentity;
@@ -47,6 +49,28 @@ int main(){
  I pinned;assert(pinned.Capture(saved,bound));I::Sample read{};
  assert(gi_reuse::ReadNativeGIRecordedHeaps(saved,saved.frame,saved.completed,&read));
  assert(pinned.ValidateSaved(read,bound));
+ // Original-thread native context, with both direct TLS and audited fallback.
+ std::vector<unsigned char> module(0x136d30);
+ alignas(8) unsigned char tls[0x28]{},state[0x60]{},context[0x28]{},queue[0x18]{},device[0x228]{};
+ auto pointer=[](unsigned char* dst,const void* value){std::memcpy(dst,&value,8);};
+ auto value=[](unsigned char* dst,I::U64 v){std::memcpy(dst,&v,8);};
+ value(module.data()+0x136c68,saved.frame);pointer(module.data()+0x136d28,device);
+ pointer(tls+0x20,state);pointer(tls+8,context);pointer(tls+0x18,queue);
+ pointer(state+0x50,records[0]);pointer(state+0x58,records[1]);
+ auto* list=reinterpret_cast<ID3D12CommandList*>(0x1000);
+ pointer(context+0x18,list);pointer(context+0x20,list);value(queue+0x10,0x2000);
+ value(device+0x78,0x3000);pointer(device+0x88,fence);value(device+0x220,0x4000);
+ gi_reuse::NativeGIRecording recording;
+ assert(gi_reuse::ReadNativeGIRecording(module.data(),tls,list,saved.frame,&recording));
+ assert(recording.heaps.heaps[0].object==bound[0]&&recording.heaps.heaps[1].cursor==sample.heaps[1].cursor);
+ assert(recording.heaps.deviceFenceObject==sample.deviceFenceObject&&recording.list==list);
+ assert(!gi_reuse::ReadNativeGIRecording(module.data(),tls,reinterpret_cast<ID3D12CommandList*>(0x1008),saved.frame,&recording));
+ assert(!recording.list&&!recording.heaps.frame);
+ assert(!gi_reuse::ReadNativeGIRecording(module.data(),tls,list,saved.frame+1,&recording));
+ pointer(module.data()+0x111c10,state);pointer(module.data()+0x111c18,context);pointer(module.data()+0x111c38,queue);
+ std::memset(tls,0,sizeof(tls));assert(gi_reuse::ReadNativeGIRecording(module.data(),tls,list,saved.frame,&recording));
+ pointer(module.data()+0x111c38,nullptr);assert(!gi_reuse::ReadNativeGIRecording(module.data(),tls,list,saved.frame,&recording));
+ assert(!gi_reuse::ReadNativeGIRecording(module.data(),reinterpret_cast<unsigned char*>(1),list,saved.frame,&recording));
  saved.heaps[0].record=1;assert(!gi_reuse::ReadNativeGIRecordedHeaps(saved,saved.frame,0,&read));
  assert(!read.frame&&!read.heaps[0].object); // No partial sample escapes a fault.
 #endif

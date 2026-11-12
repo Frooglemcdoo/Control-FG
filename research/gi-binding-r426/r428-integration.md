@@ -393,3 +393,21 @@ Sources:
 Added real WARP list destruction tests: private-data removal versus actual
 object destruction, no notifier retention cycle, latest Reset identity, and
 GPU-fence retirement remaining independent. Windows validation pending.
+
+## Recording context and scene-release integration
+
+Core43213581805 passed for18f288e, including actual WARP command-list destruction.
+The native recording accessor now reads the exact original-thread context, queue,
+device, SBT context, native fence and heap records independently of optional
+reflection initialization. It rejects the wrong list/frame and faults without
+publishing partial state. This accessor supplies borrowed identities; its caller
+must retain COM objects, read real fence completion and validate actual bound
+heaps. It never substitutes submission-thread TLS or certifies scene contents.
+
+The submission router now atomically admits the whole owner with an acquired
+scene token. It releases that token exactly once after actual consumer Execute
+or proved recording cancellation/sealing. Scope cancellation alone cannot release
+an unsubmitted producer. The release callback only opens the scene gate and
+must not reenter the router. GPU owner retirement remains independent. Added
+real-submit and successful-Reset coverage for both boundaries. Windows validation
+pending for this checkpoint; live dispatch activation is still incomplete.
