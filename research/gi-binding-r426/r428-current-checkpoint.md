@@ -1,4 +1,19 @@
-# R428 enabled experimental build ready — 2026-11-12
+# R428 visual/performance test rejected — 2026-11-12
+
+User result: "made no difference other than killing fps". Treat R428 as a
+failed visual/performance test, not successful progress toward the noise fix.
+No numeric FPS delta or current-session activation log has been supplied.
+Latest Library listing (project folder, modified after build delivery) contains
+only the delivered package; no R428 run logs are available yet.
+
+Next required input is the EXISTING run's compact logs, not another gameplay
+run/video/PIX capture. Collector is ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd.
+Before any tuning/new build distinguish successful guided consumers from
+repeated preflight/admission rejection, allocation retries or latched failure.
+CPU preparation can be paid before native fallback; successful guided rendering
+adds real source copies, guide passes, resource transitions and synchronization.
+The source alone cannot attribute the measured FPS loss to any one of these.
+Normal restart without Start-GI-Frozen-R428.cmd disables this opt-in path.
 
 Source/build commit: 0e82c15d5f7574867f51f1b01f4d2e8e05e36f85.
 Windows core run43249366979/job131290639156 SUCCESS.
@@ -40,7 +55,7 @@ current-frame image may be stale/incorrect. Native/owned toggles cannot make a
 native reconstruction basis compatible with owned rays. No recovery guarantee
 is made after loss of scene/resource validity.
 
-No in-game visual or FPS improvement has been measured. Copies/guide computation
+User reports no visual improvement and a substantial FPS regression; no numeric measurement is available. Copies/guide computation
 have real cost. Existing four R306 captures imply 59.62–180.47 MiB union copy
 lower bounds; actual packed size can be greater. Do not promise FPS gains.
 
