@@ -112,6 +112,10 @@ public:
   Texture again;if(!ReadContainer(container,&again)||!Same(texture,again)||again.state!=texture.state)return false;
   output=std::move(retained);return true;
  }
+ // Only after the enclosing invocation is returned by retirement Take.
+ void ResetAfterRetirement()noexcept {
+  retained_={};hits_={};owner_=bundle_=nullptr;width_=height_=0;
+ }
  std::array<ID3D12Resource*,3> Hits()const noexcept{return {retained_[0].Get(),retained_[1].Get(),retained_[2].Get()};}
 };
 }

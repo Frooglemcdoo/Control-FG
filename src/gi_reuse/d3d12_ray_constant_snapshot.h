@@ -109,6 +109,8 @@ public:
   updated.arguments.Descriptor(3,RootArgumentKind::CBV,data_->GetGPUVirtualAddress()+GIConstantOffset);
   if(!updated.Ready())return false;ray=std::move(updated);return true;
  }
+ // Allocation accounting only; this accessor does not imply recorded data.
+ ID3D12Resource* Storage()const noexcept{return data_.Get();}
  ID3D12Resource* Resource()const noexcept{return recorded_?data_.Get():nullptr;}
  // Host calls only after whole-invocation Take, never on producer Reset alone.
  bool RearmAfterRetirement()noexcept {

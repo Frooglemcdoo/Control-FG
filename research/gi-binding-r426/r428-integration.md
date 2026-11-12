@@ -338,3 +338,27 @@ Added WARP checks with real textures and native-layout wrappers for correct
 source/output selection, state transitions, wrapper/resource changes, aliasing,
 manual state, extent mismatch and transactional rejection. Windows validation
 pending. Live transaction activation still not enabled.
+
+## Whole invocation owner
+
+D3D12FrozenInvocation now assembles scratch, copied SBT/constants, immutable
+raygen records, retained hit/output textures, original ray/shade bindings and
+shared pipelines into the single object retained by the submission owner pool.
+Preparation records no commands. Producer and consumer are one-shot operations;
+consumer admission requires the independently supplied actual producer-submit
+and native scene-lease evidence, same frame/epoch, and original textures. A
+missing raw output can select the existing uniform-complement/native-shade
+recovery, never a whole native ray retry. Recorded partial failures remain the
+host's quarantine responsibility. The owner does not create a scene lease.
+
+Storage accounting includes actual committed constant, shader-table and raygen
+allocations. Rearm is exposed only for whole owners returned by retirement Take;
+unchanged device/pipeline/extent can retain their allocations. Source wrappers
+and output references are refreshed for each invocation. Live hook calls into
+this owner still need connecting after scene/content ownership is established.
+
+The new texture test initially failed because the fixture changed from the
+inline tracker to an external tracker BETWEEN ray and shade. That rejection was
+correct: tracker identity changes invalidate the captured source. The fixture
+now establishes the external tracker before producer acquisition and retains it
+through consumption; no production admission was loosened to pass the test.

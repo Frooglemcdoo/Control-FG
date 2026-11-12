@@ -22,6 +22,7 @@ static void TestNativeGITextures(Device& d){
  }
  std::array<const void*,3> bundle{};for(unsigned i=0;i<3;++i)bundle[i]=textures[i].container.data();
  alignas(8) std::array<unsigned char,0x248> owner{};const void* address=bundle.data();std::memcpy(owner.data()+0x240,&address,8);
+ textures[2].State(D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  D3D12NativeGITextures acquired;
  Require(acquired.AcquireAtRay(owner.data(),d.device.Get(),18,3),"native hit acquisition failed");
  Require(!acquired.AcquireAtRay(owner.data(),d.device.Get(),18,3),"live native hit owner overwritten");

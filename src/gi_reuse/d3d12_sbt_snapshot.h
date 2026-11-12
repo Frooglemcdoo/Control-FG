@@ -80,6 +80,8 @@ public:
   b.Transition={copy_.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
   list->ResourceBarrier(1,&b);recorded_=true;return true;
  }
+ // Allocation accounting only; this accessor does not imply recorded data.
+ ID3D12Resource* Storage()const noexcept{return copy_.Get();}
  ID3D12Resource* Resource()const noexcept{return recorded_?copy_.Get():nullptr;}
  bool MatchesExtent(UINT width,UINT height)const noexcept {
   return copy_&&dispatch_.Width==width&&dispatch_.Height==height&&dispatch_.Depth==1;

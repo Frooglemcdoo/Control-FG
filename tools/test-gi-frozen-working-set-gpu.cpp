@@ -2,6 +2,7 @@
 #include <atomic>
 #include <type_traits>
 #include "../src/gi_reuse/d3d12_frozen_working_set.h"
+#include "../src/gi_reuse/d3d12_frozen_invocation.h"
 #include "../src/gi_reuse/d3d12_split_owner_retirement.h"
 #include "../src/gi_reuse/d3d12_split_submission_router.h"
 #include "../src/gi_frozen_submission_bridge.h"
@@ -34,6 +35,11 @@ int main()try {
  Require(!D3D12FrozenWorkingSet::Describe(16384,16384,16),"oversized training admitted");
  auto fourK=D3D12FrozenWorkingSet::Describe(3840,2160,65536);
  Require(fourK.bytes[0]==149299200&&fourK.bytes[1]==16588800,"4K working allocation changed");
+ D3D12FrozenInvocation incomplete;
+ Require(FAILED(incomplete.Prepare({}))&&!incomplete.AllocationBytes(),"incomplete live invocation prepared");
+ Require(!incomplete.AcceptProducer(d.list.Get(),nullptr),"unprepared invocation admitted producer");
+ Require(incomplete.RecordConsumer(d.list.Get(),{},nullptr)==D3D12FrozenCompletion::Result::RejectedBeforeCommands,
+  "unprepared invocation admitted completion");
  int deaths=0;auto invocation=std::make_unique<Invocation>(deaths);auto& scratch=invocation->scratch;
  D3D12SplitOwnerRetirement<Invocation,2,8*1024*1024> owners;Check(owners.Initialize(d.queue.Get()));
  fixture::gi_compute_hooks::EnableForDenoiser();fixture::gi_compute_hooks::InstallList(d.list.Get());
