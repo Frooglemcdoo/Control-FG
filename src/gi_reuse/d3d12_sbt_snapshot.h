@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include <cstdint>
 #include <utility>
+#include "native_gi_table.h"
 namespace gi_reuse {
 // One immutable GPU copy of the pinned native one-ray GI SBT. Record the copy
 // in the original ray recording, before its native dispatch. The engine must
@@ -11,11 +12,12 @@ namespace gi_reuse {
 // Retain this object through the LAST consumer's fence, not merely ray-list Reset.
 // This owns table bytes only, not TLAS/BLAS/local-root referenced resources.
 class D3D12GISbtSnapshot {
- Microsoft::WRL::ComPtr<ID3D12Resource> source_,copy_;
+ Microsoft::WRL::ComPtr<ID3D12Resource> source_,copy_,hitUpload_;
  D3D12_DISPATCH_RAYS_DESC dispatch_{};
  UINT64 bytes_=0;bool recorded_=false;
  bool transitionSource_=false;
  bool copyCommon_=false;
+ bool overrideHits_=false;UINT64 hitBytes_=0,hitAllocationBytes_=0;
 public:
  D3D12GISbtSnapshot()=default;
  D3D12GISbtSnapshot(const D3D12GISbtSnapshot&)=delete;
@@ -60,6 +62,44 @@ public:
   dispatch_.HitGroupTable.StartAddress=address+(native.HitGroupTable.StartAddress-base);
   return S_OK;
  }
+ // A matched original writer snapshot supplies these IDs/constants; only its
+ // source addresses have been rebased into privately copied hit-source bytes.
+ // Native TraceRay retains two rows per geometry. Reconstruct active even rows
+ // using the already validated native ABI; reserved odd rows remain zero.
+ // This operation never writes the native table and records no GPU commands.
+ HRESULT ReplaceHitTable(ID3D12Device* device,const NativeGITable& table,
+                         UINT64 expectedPipeline,UINT64 expectedVersion,UINT64 budget)noexcept {
+  if(!device||!source_||recorded_||overrideHits_||!expectedPipeline||!expectedVersion||
+     table.pipeline!=expectedPipeline||table.version!=expectedVersion||
+     table.bytes.size()!=dispatch_.HitGroupTable.SizeInBytes||table.bytes.size()%192||
+     table.active.size()!=table.bytes.size()/96)return E_INVALIDARG;
+  Microsoft::WRL::ComPtr<ID3D12Device> owner;
+  if(FAILED(copy_->GetDevice(IID_PPV_ARGS(&owner)))||owner.Get()!=device)return E_INVALIDARG;
+  const std::array<unsigned char,96> zero{};
+  for(std::size_t row=0;row<table.active.size();row+=2){const auto* bytes=table.bytes.data()+row*96;
+   if(table.active[row]!=1||table.active[row+1]!=0||!std::memcmp(bytes,zero.data(),32)||
+      std::memcmp(bytes+88,zero.data(),8)||std::memcmp(bytes+96,zero.data(),96))return E_INVALIDARG;
+  }
+  D3D12_RESOURCE_DESC desc{};desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+  desc.Width=table.bytes.size();desc.Height=1;desc.DepthOrArraySize=desc.MipLevels=1;
+  desc.SampleDesc.Count=1;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+  const bool reuse=hitUpload_&&hitUpload_->GetDesc().Width>=desc.Width;
+  if(reuse)desc=hitUpload_->GetDesc();
+  const auto allocation=device->GetResourceAllocationInfo(0,1,&desc).SizeInBytes;
+  if(!allocation||allocation==UINT64_MAX||allocation>budget||
+     (!reuse&&hitUpload_&&hitAllocationBytes_>budget-allocation))return E_OUTOFMEMORY;
+  auto upload=hitUpload_;
+  if(!reuse){D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
+   auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&upload));
+   if(FAILED(hr))return hr;
+  }
+  void* mapped=nullptr;const D3D12_RANGE empty{0,0};auto hr=upload->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
+  std::memcpy(mapped,table.bytes.data(),table.bytes.size());
+  const D3D12_RANGE written{0,table.bytes.size()};upload->Unmap(0,&written);
+  hitUpload_=std::move(upload);hitBytes_=table.bytes.size();hitAllocationBytes_=allocation;overrideHits_=true;return S_OK;
+ }
+ ID3D12Resource* HitUploadStorage()const noexcept{return hitUpload_.Get();}
+ UINT64 HitUploadAllocationBytes()const noexcept{return hitAllocationBytes_;}
  bool CanRecord(ID3D12GraphicsCommandList* list)const noexcept {
   return list&&copy_&&source_&&!recorded_&&
    (list->GetType()==D3D12_COMMAND_LIST_TYPE_DIRECT||list->GetType()==D3D12_COMMAND_LIST_TYPE_COMPUTE);
@@ -74,6 +114,8 @@ public:
    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};
   if(transitionSource_)list->ResourceBarrier(1,&sourceBarrier);
   list->CopyBufferRegion(copy_.Get(),0,source_.Get(),0,bytes_);
+  if(overrideHits_)list->CopyBufferRegion(copy_.Get(),
+    dispatch_.HitGroupTable.StartAddress-copy_->GetGPUVirtualAddress(),hitUpload_.Get(),0,hitBytes_);
   if(transitionSource_){sourceBarrier.Transition.StateBefore=D3D12_RESOURCE_STATE_COPY_SOURCE;
    sourceBarrier.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;list->ResourceBarrier(1,&sourceBarrier);}
   D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
@@ -93,7 +135,7 @@ public:
  // check itself. Buffers decay to COMMON at the completed Execute boundary.
  bool RearmAfterRetirement()noexcept {
   if(!recorded_)return false;
-  source_.Reset();dispatch_={};bytes_=0;recorded_=false;copyCommon_=true;return true;
+  source_.Reset();dispatch_={};bytes_=hitBytes_=0;overrideHits_=recorded_=false;copyCommon_=true;return true;
  }
 };
 }

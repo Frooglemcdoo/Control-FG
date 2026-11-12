@@ -567,3 +567,27 @@ private-SBT rebasing/upload, invocation ownership and live producer/consumer
 coordination. No source-content proof boolean is set merely by constructing a
 plan. No FPS/image claim or new gameplay ZIP is made. The copy cost must be
 measured; copied bytes and actual committed bytes need bounded reporting.
+
+Core43231100293 passed for8e29d15, including the actual WARP private-source
+mutation/reuse fixture. The preceding run failed at a warnings-as-errors test
+compile (integer zero supplied to std::fill<byte>); explicitly byte-typed values
+resolved it. There is no live DXR, image or performance result.
+
+Private hit-table integration now reconstructs only the validated native hit
+section in a private upload. It preserves the copied native raygen/miss region,
+active even rows, shader identifiers and all material constants; the two local
+GPU addresses are rebased. Native source SBT bytes are never overwritten. An
+original writer pipeline/version mismatch or malformed reserved row rejects
+before commands. Upload committed storage and replacement peaks are budgeted,
+and old upload storage stays reserved during private-source growth.
+
+The complete invocation now owns these source copies and the hit upload through
+its normal retirement. Prepare requires the matching original writer table,
+bindings and backing leases; both ray groups use the same private hit data.
+Producer preflight includes the private-copy preflight. Once its first copy is
+recorded, any later rejection is FailedAfterCommands and cannot cause a full
+native-ray retry. Whole-owner rearm includes the private sources. Added a WARP
+private-table test for unchanged native bytes, preserved raygen/miss, exact hit
+rows, identity/budget rejects and retired upload reuse. Validation pending for
+this integration delta. Live source acquisition and host dispatch coordination
+remain unfinished; do not enable a guessed sceneAndDescriptorLease.

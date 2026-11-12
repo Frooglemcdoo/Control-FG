@@ -4,6 +4,7 @@
 #include "d3d12_frozen_pipeline_bundle.h"
 #include "d3d12_native_gi_textures.h"
 #include "d3d12_native_gi_heap_lease.h"
+#include "d3d12_native_hit_snapshot.h"
 namespace gi_reuse {
 // The whole owner placed in D3D12SplitOwnerRetirement. The live host supplies
 // native scene ownership and actual queue/recording evidence. This object must
@@ -16,6 +17,7 @@ class D3D12FrozenInvocation {
  D3D12FrozenRaygenRecords records_;
  D3D12NativeGITextures textures_;
  D3D12NativeGIHeapLease nativeHeaps_;
+ D3D12NativeHitSnapshot hitSources_;
  Microsoft::WRL::ComPtr<ID3D12Resource> output_;
  Microsoft::WRL::ComPtr<ID3D12Device> device_;
  Ptr pipelines_;
@@ -36,6 +38,11 @@ public:
   ID3D12Resource* nativeSbt=nullptr;
   const void* nativeOwner=nullptr;
   NativeGIRecording recording{};
+  // Captured from the matching original native writer, before scheduling/reuse.
+  const NativeGITable* nativeHitTable=nullptr;
+  const std::vector<PTNativeBinding::Binding>* nativeBindings=nullptr;
+  const std::vector<D3D12NativeHitSnapshot::Source>* hitSources=nullptr;
+  UINT64 writerVersion=0;
   D3D12_DISPATCH_RAYS_DESC dispatch{};
   D3D12FrozenProducer::Inputs ray{};
   UINT64 budget=0;
@@ -46,7 +53,9 @@ public:
  D3D12FrozenInvocation& operator=(const D3D12FrozenInvocation&)=delete;
  HRESULT Prepare(const Preparation& p)noexcept {
   if(prepared_||producerAttempted_||(device_&&!rearmed_)||!p.device||!p.pipelines||!p.nativeOwner||!p.nativeSbt||
-     !p.budget||p.recording.device!=p.device||p.recording.heaps.frame!=p.ray.frame||
+     !p.budget||!p.nativeHitTable||!p.nativeBindings||!p.hitSources||!p.writerVersion||
+     p.nativeHitTable->pipeline!=reinterpret_cast<UINT64>(p.ray.ray.rays.Get())||
+     p.nativeHitTable->version!=p.writerVersion||p.recording.device!=p.device||p.recording.heaps.frame!=p.ray.frame||
      p.recording.heaps.deviceEpoch!=p.ray.epoch||!p.ray.nativeSingleRayAbi||!p.ray.sceneAndDescriptorLease||
      !p.ray.ray.Ready()||!p.ray.ray.rays||p.ray.ray.root.Get()!=p.pipelines->constants.NativeRoot()||
      p.dispatch.Width!=p.ray.width||p.dispatch.Height!=p.ray.height||p.dispatch.Depth!=1)return E_INVALIDARG;
@@ -74,6 +83,29 @@ public:
    const auto bytes=Allocation(p.device,resource);
    if(!bytes||bytes_>p.budget||bytes>p.budget-bytes_)return E_OUTOFMEMORY;bytes_+=bytes;
   }
+  // Preserve source bytes before either half of the split estimator. Building
+  // the private table changes ONLY local source addresses in validated even rows.
+  // Allocation/CPU failures still happen before the first GPU command.
+  const auto retainedUpload=tables_.HitUploadAllocationBytes();
+  if(retainedUpload>p.budget-bytes_)return E_OUTOFMEMORY;
+  hr=hitSources_.Prepare(p.device,*p.nativeBindings,*p.hitSources,p.budget-bytes_-retainedUpload);if(FAILED(hr))return hr;
+  if(hitSources_.AllocationBytes()>p.budget-bytes_)return E_OUTOFMEMORY;
+  bytes_+=hitSources_.AllocationBytes();
+  try {
+   const auto& original=*p.nativeHitTable;const auto& bindings=*p.nativeBindings;
+   if(bindings.empty()||bindings.size()>65536||original.bytes.size()!=bindings.size()*192||
+      original.active.size()!=bindings.size()*2||hitSources_.Bindings().size()!=bindings.size())return E_INVALIDARG;
+   auto rebased=original;
+   for(std::size_t i=0;i<bindings.size();++i){auto* row=rebased.bytes.data()+i*192;
+    if(original.active[i*2]!=1||original.active[i*2+1]!=0||
+       std::memcmp(row+32,reinterpret_cast<const unsigned char*>(&bindings[i])+8,56))return E_INVALIDARG;
+    const auto& b=hitSources_.Bindings()[i];std::memcpy(row+32,&b.indices,8);std::memcpy(row+40,&b.attributes,8);
+   }
+   hr=tables_.ReplaceHitTable(p.device,rebased,reinterpret_cast<UINT64>(p.ray.ray.rays.Get()),p.writerVersion,p.budget-bytes_);
+   if(FAILED(hr))return hr;
+  }catch(...){return E_OUTOFMEMORY;}
+  if(tables_.HitUploadAllocationBytes()>p.budget-bytes_)return E_OUTOFMEMORY;
+  bytes_+=tables_.HitUploadAllocationBytes();
   if(!textures_.AcquireAtRay(p.nativeOwner,p.device,p.ray.width,p.ray.height))return E_INVALIDARG;
   originalProducer_=p.recording.list;producer_=p.ray;prepared_=true;return S_OK;
  }
@@ -82,7 +114,7 @@ public:
  // native root/pipelines or device require a fresh owner after retirement.
  bool RearmAfterRetirement()noexcept {
   if(!prepared_||!producerRecorded_||rearmed_)return false;
-  if(!constants_.RearmAfterRetirement()||!tables_.RearmAfterRetirement()||!records_.RearmAfterRetirement())return false;
+  if(!hitSources_.RearmAfterRetirement()||!constants_.RearmAfterRetirement()||!tables_.RearmAfterRetirement()||!records_.RearmAfterRetirement())return false;
   originalProducer_=nullptr;nativeHeaps_={};textures_.ResetAfterRetirement();output_.Reset();savedRay_={};savedShade_={};producer_={};bytes_=0;
   prepared_=producerAttempted_=producerRecorded_=consumerAttempted_=false;rearmed_=true;return true;
  }
@@ -90,13 +122,16 @@ public:
  ID3D12CommandQueue* NativeQueue()const noexcept{return nativeHeaps_.Queue();}
  UINT64 AllocationBytes()const noexcept{return prepared_?bytes_:0;}
  bool AcceptProducer(ID3D12GraphicsCommandList4* list,D3D12FrozenProducer::Trace trace)const noexcept {
-  return prepared_&&!producerAttempted_&&list==originalProducer_&&nativeHeaps_.Validate(producer_.frame,nativeHeaps_.Queue())&&D3D12FrozenProducer::Accept(list,producer_,work_,constants_,tables_,records_,trace);
+  return prepared_&&!producerAttempted_&&list==originalProducer_&&hitSources_.CanRecord(list)&&nativeHeaps_.Validate(producer_.frame,nativeHeaps_.Queue())&&D3D12FrozenProducer::Accept(list,producer_,work_,constants_,tables_,records_,trace);
  }
  D3D12FrozenProducer::Result RecordProducer(ID3D12GraphicsCommandList4* list,D3D12FrozenProducer::Trace trace)noexcept {
   if(!AcceptProducer(list,trace))return D3D12FrozenProducer::Result::RejectedBeforeCommands;
   producerAttempted_=true;
+  if(!hitSources_.Record(list))return D3D12FrozenProducer::Result::FailedAfterCommands;
   const auto result=D3D12FrozenProducer::Record(list,producer_,work_,constants_,tables_,records_,trace,savedRay_);
-  producerRecorded_=result==D3D12FrozenProducer::Result::Recorded;return result;
+  producerRecorded_=result==D3D12FrozenProducer::Result::Recorded;
+  return result==D3D12FrozenProducer::Result::RejectedBeforeCommands?
+   D3D12FrozenProducer::Result::FailedAfterCommands:result;
  }
  struct Consumption {
   const void* nativeOwner=nullptr;
