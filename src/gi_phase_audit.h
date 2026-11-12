@@ -23,6 +23,9 @@ inline void Observe(U64 id,U64 frame,unsigned point) noexcept {
 }
 inline std::atomic<unsigned> next{0},dropped{0};
 inline std::atomic<U64> firstFrame{0},startedAt{0};
+// Count observed GI frames, not every engine frame consumed by loading screens.
+// Low 5 bits hold 1..24; the remaining bits hold the last observed frame.
+inline std::atomic<U64> phaseWindowState{0};
 inline std::atomic<bool> stopped{false};
 inline const GUID markerKey={0xa574c93e,0x3d21,0x46df,{0x95,0x42,0xb7,0x69,0x3e,0x2a,0x04,0x25}};
 struct Marker {unsigned count=0,overflow=0;U64 ids[16]{};};
@@ -44,9 +47,14 @@ inline bool PhaseWindow(U64 frame) noexcept {
  if(!Enabled()||stopped.load()||!frame)return false;
  U64 tick=0;startedAt.compare_exchange_strong(tick,GetTickCount64());
  U64 empty=0;firstFrame.compare_exchange_strong(empty,frame);
- const U64 first=firstFrame.load();
- if(frame<first||frame-first>=24)return false;
- return Window();
+ if(frame>(~U64(0)>>5))return false;
+ U64 state=phaseWindowState.load();
+ for(;;){const U64 last=state>>5,count=state&31;
+  if(state&&frame==last)return Window();
+  if(state&&(frame<last||count>=24))return false;
+  const U64 nextState=(frame<<5)|(count+1);
+  if(phaseWindowState.compare_exchange_weak(state,nextState))return Window();
+ }
 }
 inline void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled())return;
@@ -66,13 +74,14 @@ inline U64 Phase(ID3D12GraphicsCommandList* list,unsigned kind,U64 frame,U64 gen
 }
 inline U64 Submit(ID3D12CommandQueue* queue,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!Window()||!lists)return 0;
- // Each marker was reset at successful command-list Reset, not ClearState.
- // IDs refer to recording events, not to recyclable COM pointer identity alone.
- const U64 call=Emit(3,{Frame(),reinterpret_cast<U64>(queue),count,GetCurrentThreadId(),unsigned(queue->GetDesc().Type)});
+ // Scan without logging unrelated Execute calls. Loading-screen submissions
+ // must not exhaust the bounded buffer before enough GI frames are observed.
+ U64 call=0;
  for(UINT i=0;i<count;++i){if(!lists[i])continue;Marker m{};UINT bytes=sizeof(m);
   if(FAILED(lists[i]->GetPrivateData(markerKey,&bytes,&m))||bytes!=sizeof(m)||!m.count)continue;
+  if(!call){call=Emit(3,{Frame(),reinterpret_cast<U64>(queue),count,GetCurrentThreadId(),unsigned(queue->GetDesc().Type)});
+   if(call&&call<=capacity)relevantSubmit[call-1]=true;}
   if(m.count>16){Emit(9,{call,2});continue;}
-  if(call&&call<=capacity)relevantSubmit[call-1]=true;
   for(unsigned j=0;j<m.count;++j)Emit(4,{call,i,reinterpret_cast<U64>(lists[i]),m.ids[j],j,m.overflow});
  }
  Observe(call,Frame(),3);
@@ -109,3 +118,4 @@ inline void Poll() noexcept {
  previousWritten=written;previousDropped=dropped.load();previousStopped=stopped.load();
 }
 }
+

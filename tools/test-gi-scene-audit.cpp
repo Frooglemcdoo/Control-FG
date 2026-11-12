@@ -23,8 +23,8 @@ static bool Rel32Fits(const unsigned char* from,const void* to) noexcept {
 }
 #include "../src/gi_scene_audit.h"
 static void Require(bool b){if(!b)throw std::runtime_error("scene audit contract failed");}
-static unsigned forwarded=0;
-static void Native(void*){++forwarded;}
+static unsigned forwarded=0;static void* forwardedArgument=nullptr;
+static void Native(void* p){++forwarded;forwardedArgument=p;}
 static void Throw(void*){throw std::runtime_error("native exception");}
 int main(){try{
  namespace s=gi_scene_audit;namespace a=gi_phase_audit;
@@ -59,6 +59,23 @@ int main(){try{
   Require(NativeCpuExchangeCall(&patch,true)&&patch.writeHealthy);reinterpret_cast<s::Native>(page)(nullptr);
   Require(NativeCpuExchangeCall(&patch,false)&&patch.writeHealthy);Require(site[0]==opcode);
  }
- Require(forwarded==5);VirtualFree(page,0,MEM_RELEASE);
+ Require(forwarded==5);
+ // The job slot wraps the ORIGINAL thunk. A later owned-recorder E9 patch
+ // must still install and be reached through the observer's original target.
+ const unsigned char adjust[]={0x48,0x83,0xc1,0x18};memcpy(page,adjust,4);
+ page[4]=0xe9;const int tailDelta=119;memcpy(page+5,&tailDelta,4);page[128]=0xc3;
+ auto** slot=reinterpret_cast<void**>(page+512);*slot=page;
+ s::RecordSlotPatch slotPatch;Require(!slotPatch.Prepare(slot,page+128,reinterpret_cast<void*>(&s::Record)));
+ Require(slotPatch.Prepare(slot,page,reinterpret_cast<void*>(&s::Record)));
+ s::original[2]=reinterpret_cast<s::Native>(page);Require(slotPatch.Exchange(true)&&slotPatch.writeHealthy);
+ Require(page[4]==0xe9&&memcmp(page,adjust,4)==0);
+ NativeCpuCallPatch owned{};Require(NativeCpuPrepareCallPatch(page+4,page+128,reinterpret_cast<void*>(&Native),&owned,0xe9));
+ Require(NativeCpuExchangeCall(&owned,true)&&owned.writeHealthy);
+ reinterpret_cast<s::Native>(*slot)(nullptr);Require(forwarded==6&&forwardedArgument==reinterpret_cast<void*>(24));
+ Require(slotPatch.Exchange(false)&&*slot==page);
+ reinterpret_cast<s::Native>(*slot)(nullptr);Require(forwarded==7);
+ Require(NativeCpuExchangeCall(&owned,false)&&owned.writeHealthy);
+ VirtualFree(page,0,MEM_RELEASE);
  puts("PASS scene audit: identity rejection, in-flight writer, exception unwind, concurrent publication, SEH fault, bounded stop, E8/E9 relay forwarding");return 0;
 }catch(const std::exception& e){puts(e.what());return 1;}}
+

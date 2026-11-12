@@ -26,11 +26,15 @@ int main(){try {
  // ClearState must preserve already-recorded events, Reset must discard them.
  list->ClearState(nullptr);a::Marker m{};UINT size=sizeof(m);Check(list->GetPrivateData(a::markerKey,&size,&m));Require(m.count==2);
  a::Reset(list.Get());size=sizeof(m);Check(list->GetPrivateData(a::markerKey,&size,&m));Require(m.count==0);
- auto empty=a::Submit(queue.Get(),1,lists);Require(a::next.load()==empty);
- Require(!a::PhaseWindow(99)&&!a::PhaseWindow(124)&&a::PhaseWindow(123));
+ const auto previous=a::next.load();auto empty=a::Submit(queue.Get(),1,lists);Require(empty==0&&a::next.load()==previous);
+ Require(!a::PhaseWindow(99)&&a::PhaseWindow(101)&&a::PhaseWindow(1000));
+ // A loading-screen jump counts as one observed GI frame, not 899 frames.
+ for(unsigned i=1;i<=21;++i)Require(a::PhaseWindow(1000+i));
+ Require(a::PhaseWindow(1021)&&!a::PhaseWindow(1022)&&!a::PhaseWindow(1020));
  std::vector<std::thread> workers;for(unsigned i=0;i<8;++i)workers.emplace_back([] {for(unsigned j=0;j<200;++j)a::Emit(10,{j});});
  for(auto& worker:workers)worker.join();for(unsigned i=0;i<a::next.load();++i)Require(a::events[i].ready.load());
  while(a::next.load()<a::capacity)a::Emit(10,{});
  Require(a::Emit(10,{})==0&&a::dropped.load()==1&&a::stopped.load());
  Check(list->Close());puts("PASS phase audit: recording IDs, ClearState/Reset, frame bounds, concurrent publication, bounded overflow; no GPU submission");return 0;
  }catch(const std::exception& e){puts(e.what());return 1;}}
+

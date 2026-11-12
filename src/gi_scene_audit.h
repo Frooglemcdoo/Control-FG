@@ -9,6 +9,25 @@ using U64=gi_phase_audit::U64;
 using Native=void(*)(void*);
 inline Native original[4]{};
 inline NativeCpuCallPatch patches[4]{};
+// Wrap the job vtable entry, leaving A8F74 available for the owned recorder.
+// The original thunk still performs RCX += 0x18 and reaches whichever recorder
+// was successfully installed. Do not chain an unverified arbitrary jump target.
+struct RecordSlotPatch {
+ void** slot=nullptr;void* original=nullptr;void* replacement=nullptr;bool writeHealthy=false;
+ bool Prepare(void** s,void* expected,void* hook) noexcept {
+  if(!s||!expected||!hook||reinterpret_cast<std::uintptr_t>(s)%sizeof(void*)||*s!=expected)return false;
+  slot=s;original=expected;replacement=hook;return true;
+ }
+ bool Exchange(bool enable) noexcept {
+  if(!slot)return false;
+  DWORD old=0;if(!VirtualProtect(slot,sizeof(void*),PAGE_READWRITE,&old))return false;
+  void* expected=enable?original:replacement;
+  void* before=InterlockedCompareExchangePointer(slot,enable?replacement:original,expected);
+  DWORD ignored=0;writeHealthy=VirtualProtect(slot,sizeof(void*),old,&ignored)!=FALSE;
+  return before==expected;
+ }
+};
+inline RecordSlotPatch recordSlot{};
 inline unsigned char *renderer=nullptr,*d3d=nullptr;
 inline std::atomic<bool> installed{false};
 inline std::atomic<U64> serial{0},active[3]{};
@@ -84,17 +103,26 @@ inline bool Install(HMODULE r,HMODULE d) noexcept {
   gi_phase_audit::Emit(25,{427,0,1});return false;}
  renderer=reinterpret_cast<unsigned char*>(r);d3d=reinterpret_cast<unsigned char*>(d);
  constexpr unsigned sites[]={0x12491d,0xa8f84,0xa8f74,0x128f3b};
- constexpr unsigned targets[]={0xc7bc0,0xa81b0,0xa89c0,0xa8bf0};
+ constexpr unsigned targets[]={0xc7bc0,0xa81b0,0xa8f70,0xa8bf0};
  void* hooks[]={reinterpret_cast<void*>(&Material),reinterpret_cast<void*>(&Prepare),reinterpret_cast<void*>(&Record),reinterpret_cast<void*>(&Join)};
  for(unsigned i=0;i<4;++i){original[i]=reinterpret_cast<Native>(renderer+targets[i]);
-  if(!NativeCpuPrepareCallPatch(renderer+sites[i],renderer+targets[i],hooks[i],&patches[i],i==1||i==2?0xe9:0xe8)){
+  const bool ready=i==2?recordSlot.Prepare(reinterpret_cast<void**>(renderer+0x6281d8),renderer+targets[i],hooks[i]):
+   NativeCpuPrepareCallPatch(renderer+sites[i],renderer+targets[i],hooks[i],&patches[i],i==1?0xe9:0xe8);
+  if(!ready){
    gi_phase_audit::Emit(25,{427,0,2,i});return false;}}
- unsigned changed=0;
- for(;changed<4;){auto& p=patches[changed];if(!NativeCpuExchangeCall(&p,true))break;++changed;if(!p.writeHealthy)break;}
- if(changed!=4||!patches[3].writeHealthy){bool rollback=true;
-  while(changed){--changed;if(!NativeCpuExchangeCall(&patches[changed],false)||!patches[changed].writeHealthy)rollback=false;}
+ unsigned changed=0;bool healthy=true;
+ for(;changed<4;){const unsigned i=changed;
+  const bool applied=i==2?recordSlot.Exchange(true):NativeCpuExchangeCall(&patches[i],true);
+  if(!applied)break;++changed;healthy=i==2?recordSlot.writeHealthy:patches[i].writeHealthy;if(!healthy)break;
+ }
+ if(changed!=4||!healthy){bool rollback=true;
+  while(changed){--changed;const unsigned i=changed;
+   const bool restored=i==2?recordSlot.Exchange(false):NativeCpuExchangeCall(&patches[i],false);
+   if(!restored||(i==2?!recordSlot.writeHealthy:!patches[i].writeHealthy))rollback=false;
+  }
   gi_phase_audit::Emit(25,{427,0,3,U64(rollback)});return false;}
  installed=true;gi_phase_audit::observer.store(Observe);
- gi_phase_audit::Emit(25,{427,1,0,4});return true;
+ gi_phase_audit::Emit(25,{427,1,0,4,2});return true;
 }
 }
+

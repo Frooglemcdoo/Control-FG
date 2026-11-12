@@ -1,0 +1,51 @@
+{
+  "capture_sha256": "7f05b3f6785ab60113de8dae362cd1bb0e09b60238bf70a8f94ce662b7974808",
+  "jsonl_sha256": "bad07f3ae4791afdd17f54e7bdc2716f04a1f15bfc730c142a96b0ff12a26aef",
+  "events": 8192,
+  "event_kinds": {
+    "25": 1,
+    "1": 2,
+    "22": 12,
+    "23": 12,
+    "24": 24,
+    "6": 32,
+    "5": 3039,
+    "3": 2272,
+    "4": 4,
+    "8": 2272,
+    "2": 2,
+    "20": 390,
+    "21": 130
+  },
+  "complete_observed_gi_frames": [
+    1863,
+    1864
+  ],
+  "sample_count": 12,
+  "all_samples_fault_free": true,
+  "tracked_writer_boundary_between_phases": false,
+  "active_writer_at_samples": false,
+  "stable_scene_and_epoch_within_pairs": true,
+  "owned_recorder_installed": false,
+  "hook_conflict_confirmed": "Scene audit patches renderer+A8F74 before RTOwnedRecord.Install, whose exact original-byte guard rejects it. Native recording body ran instead.",
+  "capture_window_issue": "Absolute engine-frame delta rejected GI after frame1864; native counter progressed to2044 before writers resumed. Subsequent unrelated queue traffic exhausted8192 slots.",
+  "scene_lease_authorized": false,
+  "noise_fix_claimed": false,
+  "request_repeat_old_capture": false,
+  "native_graphics_compute_handshake": {
+    "complete_cycles": 65,
+    "all_queue_calls_succeeded": true,
+    "pattern": "graphics Signal(odd), compute Wait(odd), compute Signal(even), graphics Wait(even)",
+    "value_range": [
+      3,
+      132
+    ],
+    "gpu_completion_proven": false
+  },
+  "writer_cycles": {
+    "preparation": 65,
+    "material": 65,
+    "recording": 65,
+    "unmatched_boundaries": 0
+  }
+}

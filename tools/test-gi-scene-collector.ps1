@@ -3,7 +3,7 @@ $temp=Join-Path ([IO.Path]::GetTempPath()) ('Control scene check '+[guid]::NewGu
 $script=Join-Path $PSScriptRoot 'diagnostics/GI-Scene-Check.ps1'
 try {
  $logs=Join-Path $temp 'logs';New-Item -ItemType Directory -Path $logs | Out-Null
- $rows=@('{"seq":1,"kind":25,"data":[427,1,0,4]}')
+ $rows=@('{"seq":1,"kind":25,"data":[427,1,0,4,2]}')
  foreach($point in @(1,2,3,8)){$rows+=('{"kind":22,"data":[1,100,'+$point+',2,2,0,0,0,63,0,1,1]}')}
  $rows+='{"status":true,"stopped":1,"written":5,"reserved":5,"dropped":0}'
  $file=Join-Path $logs 'GI-Phase-R425-1234.jsonl';$rows|Set-Content $file -Encoding ASCII
@@ -25,3 +25,4 @@ try {
  }
  Write-Host 'PASS scene collector: process/session identity, missing/faulted/overflowed/malformed evidence, no false ownership, ZIP'
 }finally{if(Test-Path $temp){Remove-Item $temp -Recurse -Force}}
+

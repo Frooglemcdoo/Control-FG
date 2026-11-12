@@ -1,9 +1,9 @@
-ControlTOH R427 - bounded native scene metadata check
+ControlTOH R427 v2 - bounded native scene metadata check
 
 Install over the existing ControlTOH mod, with Control closed.
 Run ControlTOH\Diagnostics\Start-GI-Scene-Check.cmd.
 Load a level with RT indirect lighting enabled. Wait about 15 seconds,
-then exit normally. Send the GI-Scene-R427-*.zip made beside the launcher.
+then exit normally. Send the GI-Scene-R427-v2-*.zip made beside the launcher.
 No video, camera route, hotkey, stationary pose or comparison is needed.
 If the collector reports a warning, send that ZIP; do not repeat the run.
 
@@ -19,3 +19,9 @@ After the window the native hooks only forward their original calls.
 Live deferred guided rendering and native-work suppression remain disabled.
 Native single-ray rendering is retained. No RELAX tuning changes.
 Normal game launch does not enable the scene check.
+
+
+Revision 2 preserves the owned scene recorder while observing it. The first
+revision's hook conflicted with that recorder. This revision also counts
+actual GI frames across loading-screen gaps and excludes unrelated Execute
+events from the bounded log. It still does not enable guided rendering.

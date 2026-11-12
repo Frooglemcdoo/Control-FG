@@ -1480,7 +1480,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Scene-Check-R427' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Scene-Check-R427-v2' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1524,7 +1524,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-Scene-Check-R427') {
+          if ($out -eq 'ControlTOH-GI-Scene-Check-R427-v2') {
             Copy-Item docs/GI-Scene-Check-R427.txt "$out/ControlTOH/README.txt"
             Copy-Item tools/diagnostics/Start-GI-Scene-Check.cmd,tools/diagnostics/GI-Scene-Check.ps1 $diagnostics
           } elseif ($out -eq 'ControlTOH-GI-Compact-Preview') {
@@ -1545,10 +1545,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Scene-Check-R427' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Scene-Check-R427-v2' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
-            ControlTOH-GI-Scene-Check-R427.zip
-            ControlTOH-GI-Scene-Check-R427.sha256
+            ControlTOH-GI-Scene-Check-R427-v2.zip
+            ControlTOH-GI-Scene-Check-R427-v2.sha256
             ControlTOH-R425.zip
             ControlTOH-R425.sha256
             ControlTOH-GI-Compact-Preview.zip
@@ -1611,4 +1611,5 @@ jobs:
             build/pt_glass_composite.dxbc
           if-no-files-found: warn
           retention-days: 7
+
 

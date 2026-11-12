@@ -99,3 +99,37 @@ startup rejection/fault metadata before asking for anything else. Global late
 overflow need not invalidate an already complete first24-frame prefix.
 Live guided producer/consumer integration is still disabled. Do not call this
 a visual fix, a proven immutable scene lease or a performance improvement.
+
+
+## User capture reviewed: diagnostic interference confirmed
+
+Input GI-Scene-R427-20261111-221809-74416-f3c3b4ad.zip. All three files read;
+JSONL checksum verified and all8192 sequence IDs contiguous. Only two complete
+GI pairs (1863,1864), twelve snapshots, no read faults, active writers or serial
+changes between phases. Scene/device fence values and material generation stay
+constant within each pair. Descriptor cursors append; the saved prefix does not
+change identity.65 complete native graphics/compute scene-fence handshakes have
+successful API returns, along with65 balanced cycles of each tracked writer.
+This is CPU submission evidence, not GPU completion or lease authorization.
+
+CRITICAL: startup RT_RECORD_R411_INSTALL ready=0. R427 installed an E9 observer
+atA8F74 before RTOwnedRecord.Install, which validates the original bytes at the
+same site. The observer caused owned recording to fail admission and use the
+native body. Prior claims that R427 left the recording selection unchanged were
+incorrect. Do not extrapolate these two pairs to the normal owned recorder.
+
+The frame window also counted absolute engine-frame deltas rather than actual
+GI frames. After1864, logging continued through a GI gap until2044; subsequent
+GI phases were excluded by the24-frame delta rule. Unrelated Execute/Fence
+events later filled the buffer. This is our instrumentation defect, not a user
+capture mistake. Do not ask to rerun the original R427.
+
+Revision2 wraps the exact job vtable slot6281D8 instead, forwarding to the
+original A8F70 thunk, which still addsRCX+18 and reaches the owned E9 recorder.
+A regression fixture installs both patches, calls through the job slot and
+checks owned dispatch plus the argument adjustment. Uninstalling the observer
+leaves the owned tail patch active. The capture now counts24 observed GI frames
+across gaps and emits Execute metadata only for lists carrying GI markers.
+Install event25 adds revision2 in data[4]; the collector requires it.
+Windows validation and the R427-v2 package are pending after these corrections.
+No live guided rendering, noise fix or FPS gain is claimed.
