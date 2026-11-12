@@ -23,7 +23,7 @@ inline bool Read(void* closure,void* argument,Scope* out)noexcept {
  }__except(EXCEPTION_EXECUTE_HANDLER){*out={};return false;}
 }
 inline void Invoke(void* closure,void* argument){
- Scope scope{};if(Read(closure,argument,&scope))scope.token=gi_native_render_scope::Next();
+ Scope scope{};if(gi_native_prepare_scope::Read(closure,argument,&scope))scope.token=gi_native_render_scope::Next();
  // Notify even if metadata is unavailable. A future global scene gate must
  // never permit a writer merely because its frame/owner pointer was unreadable.
  if(const auto callback=entering.load(std::memory_order_acquire))callback(scope);
