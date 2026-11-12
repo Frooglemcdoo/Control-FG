@@ -13,6 +13,11 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate compact log collection
+        shell: powershell
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File tools/test-compact-log-collector.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Compact collector regression failed" }
       - name: Compile and execute shared sampler
         shell: powershell
         run: |

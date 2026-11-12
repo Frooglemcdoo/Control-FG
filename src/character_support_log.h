@@ -11,6 +11,8 @@ inline bool IsLifecycleEvent(const char* format) noexcept {
         "RR_HAIR_OPACITY_READY",
         // Bounded pipeline creation / first-and-final binding results only.
         "GI_FROZEN_R426",
+        "GI_FROZEN_R428",
+        "PROBE",
         "GI_TOGGLE_R308"
     };
     for (const char* marker : markers) {

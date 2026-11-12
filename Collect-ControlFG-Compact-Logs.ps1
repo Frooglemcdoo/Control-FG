@@ -94,12 +94,23 @@ try {
     $logs=@(); $runPids=@{}; $version=''
     foreach ($file in $candidates) {
         if ($logs.Count -ge 3) { break }
+        if ($file.Name -notmatch '^probe-\d{8}-\d{6}-\d{3}-(\d+)\.log$') { continue }
+        $runPid=$Matches[1]
         try { $header=Read-LogHeader $file.FullName } catch { continue }
-        if ($header -notmatch ' PROBE v([^\s]+) ') { continue }
-        $foundVersion=$Matches[1]
+        $recognition='PROBE header'
+        if ($header -match '(?:^|\s)PROBE v([^\s]+) ') {
+            $foundVersion=$Matches[1]
+        } elseif ($header -match '(?:^|\s)RR_CHARACTER_SUPPORT_R418 build=([^\s]+) ') {
+            $foundVersion='lifecycle-build-'+$Matches[1]
+            $recognition='character lifecycle; executable version unavailable'
+        } elseif ($header -match '(?:^|\s)GI_FROZEN_R426 startup=1(?:\s|$)') {
+            $foundVersion='lifecycle-version-unknown'
+            $recognition='GI startup lifecycle; executable version unavailable'
+        } else { continue }
         if (-not $version) { $version=$foundVersion }
-        if ($foundVersion -cne $version -or $file.Name -notmatch '^probe-\d{8}-\d{6}-\d{3}-(\d+)\.log$') { continue }
-        $runPids[$Matches[1]]=$true; $logs+= $file
+        if ($foundVersion -cne $version) { continue }
+        $runPids[$runPid]=$true; $logs+= $file
+        $script:notes.Add(($file.Name+': recognized by '+$recognition+'. Lifecycle build labels may predate the installed package.'))
     }
     if (-not $logs.Count) { throw 'No recognizable Control FG probe log was found.' }
     $suffix=[guid]::NewGuid().ToString('N').Substring(0,8)
