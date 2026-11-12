@@ -456,3 +456,26 @@ noise. Enabling delayed traversal still needs the original static mesh lifetime
 and write ordering covered alongside deformed/AS allocations and materials;
 scene_lease_proven remains false. No user capture is requested for this static
 reverse-engineering work.
+
+## Game-DLL lifetime observer wiring
+
+Added gi_frozen_lifetime.h after the native render/prepare/window adapters. The
+existing opt-in frozen-render setup now installs the independent Execute,
+successful Reset and actual destruction observers without replacing NRD or
+legacy diagnostics. Before queue initialization the Execute observer returns
+immediately; initialized queue ownership is published only after private fence
+creation. It never waits, flushes or records extra GPU work at initialization.
+Admission requires an already prepared complete owner, the current exact render
+scope and an acquired scene token. Actual command recording and suppression
+remain separate and are not enabled by this startup wiring. The callback router
+is process-lifetime storage so D3D destruction callbacks cannot target a router
+mutex already destroyed by C++ static teardown. Windows full-DLL compilation
+pending for this wiring change.
+
+Core job131174539253 explicitly logs PASS original native heap lease, PASS actual
+D3D list destruction and PASS recorded GI heaps for9393454. These are component
+results, not hardware DXR/gameplay or image/performance measurements.
+
+Full DLL run43215782503/job131174609807 succeeded for9393454. Its packaged
+artifact remains the R427v2 diagnostic configuration, not an enabled R428 visual
+fix. The later lifetime wiring still requires its own full-DLL build.

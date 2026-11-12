@@ -1110,6 +1110,7 @@ static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[
 #include "gi_native_render_scope.h"
 #include "gi_native_prepare_scope.h"
 #include "gi_native_scene_window.h"
+#include "gi_frozen_lifetime.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
 #include "rr_world_albedo_runtime.h"
@@ -1538,6 +1539,10 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
            const bool renderReady=gi_native_render_scope::Install(renderer,d3d);
            const bool prepareReady=gi_native_prepare_scope::Install(renderer,d3d);
            const bool windowReady=renderReady&&prepareReady&&gi_native_scene_window::Install(renderer,d3d);
+#ifdef CONTROL_GI_LONG_SEQUENCE
+           const bool lifetimeReady=windowReady&&gi_frozen_lifetime::Install();
+           Log("GI_FROZEN_R428 lifetime_observers=%u deferred_dispatch_enabled=0",unsigned(lifetimeReady));
+#endif
            Log("GI_RENDER_SCOPE_R428 ready=%u prepareReady=%u windowReady=%u",unsigned(renderReady),unsigned(prepareReady),unsigned(windowReady));
           }
         }
