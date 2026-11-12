@@ -202,7 +202,7 @@ public:
  struct Consumption {
   const void* nativeOwner=nullptr;
   const void* outputContainer=nullptr;
-  bool producerSubmitted=false,sceneAndDescriptorLease=false;
+  bool producerSubmitted=false,sceneAndDescriptorLease=false,uniformShadeCompatible=false;
   ID3D12CommandQueue* queue=nullptr;
   UINT frame=0,epoch=0;
   ComputeBindingSnapshot shade;
@@ -220,6 +220,7 @@ public:
   input.width=producer_.width;input.height=producer_.height;input.slots=producer_.slots;
   input.frame=p.frame;input.epoch=p.epoch;input.trainingParity=producer_.trainingParity;
   input.separateProducerSubmitted=p.producerSubmitted;input.sceneAndDescriptorLease=p.sceneAndDescriptorLease;
+  input.uniformShadeCompatible=p.uniformShadeCompatible;
   savedShade_=p.shade;input.ray=savedRay_;input.shade=savedShade_;input.graphics=p.graphics;
   input.preservedTables=*tables_.Dispatch();input.rayConstants=constants_.Resource()->GetGPUVirtualAddress();
   input.hits=textures_.Hits();

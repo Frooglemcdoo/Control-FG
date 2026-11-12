@@ -17,7 +17,7 @@ inline std::atomic<UINT64> rejected{0},produced{0},completed{0};
 struct Pending {
  Scope scope{};UINT64 id=0;UINT width=0,height=0,epoch=0;
  gi_reuse::NativeGIRecording original{};
- bool consumed=false;
+ bool consumed=false,producerReady=false;
 };
 inline thread_local Pending pending{};
 inline void Reject(const char* reason,HRESULT hr=E_INVALIDARG)noexcept {
@@ -92,6 +92,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
    gi_frozen_lifetime::router->CancelUnattached(id);pending={};Reject("producer_admitted_rejection");return false;
   }
   if(result!=gi_reuse::D3D12FrozenProducer::Result::Recorded){failed=true;Reject("producer_partial_failure");return true;}
+  pending.producerReady=true;
   const auto n=++produced;if(n<=4||n%600==0)Log("GI_FROZEN_R428 producer=%llu width=%u height=%u held_bytes=%llu native_ray_suppressed=1",
    n,ray.width,ray.height,gi_frozen_lifetime::cache->HeldBytes());
   return true;
@@ -103,13 +104,23 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
  gi_reuse::ComputeBindingSnapshot bindings;UINT64 bindingGeneration=0;
  if(!native_lighting::gi_compute_hooks::Capture(list,bindings,bindingGeneration)||!bindings.pipeline)return false;
  if(!native_lighting::gi_frozen_prepare::AcquireForShade(bindings.pipeline.Get()))return false; // Not native GI6.
+ // Once any producer commands exist, ordinary GI6 must not consume an
+ // incomplete hit set. Fatal failure disables future replacements; this frame
+ // is aborted rather than pretending native shading can repair missing rays.
+ if(!pending.producerReady){failed=true;Reject("consumer_after_failed_producer");return true;}
  if(x!=(pending.width+7)/8||y!=(pending.height+15)/16||z!=1||!sceneProof(pending.scope,pending.original)){
-  failed=true;Reject("consumer_scope_or_contract");return false;}
+  failed=true;Reject("consumer_scope_or_contract");return true;}
  Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> rays;
- if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays)))){failed=true;Reject("consumer_interface");return false;}
+ if(FAILED(list->QueryInterface(IID_PPV_ARGS(&rays)))){failed=true;Reject("consumer_interface");return true;}
  const auto generation=native_lighting::gi_compute_hooks::RecordingGeneration(list);
- if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation)){failed=true;Reject("consumer_recording");return false;}
+ if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation)){failed=true;Reject("consumer_recording");return true;}
  Owner::Consumption input;input.nativeOwner=pending.scope.owner;input.outputContainer=Output();
+ UINT shadeMode=0,shadeModeBytes=sizeof(shadeMode);
+ input.uniformShadeCompatible=SUCCEEDED(bindings.pipeline->GetPrivateData(native_lighting::gi_evaluator::kMode,&shadeModeBytes,&shadeMode))&&
+  shadeModeBytes==sizeof(shadeMode)&&shadeMode==2;
+ // A mid-invocation toggle may bind native GI6. Its reconstruction basis is
+ // not the owned ray basis, so it cannot shade a recovered uniform complement.
+
  input.producerSubmitted=true;input.sceneAndDescriptorLease=true;input.queue=pending.original.queue;
  input.frame=static_cast<UINT>(pending.scope.frame);input.epoch=pending.epoch;input.shade=std::move(bindings);
  native_lighting::gi_compute_hooks::CaptureGraphics(list,input.graphics);
@@ -126,10 +137,10 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
  if(result==Result::Recorded||result==Result::NativeShadeRequired){
   const auto n=++completed;if(n<=4||n%600==0)Log("GI_FROZEN_R428 consumer=%llu guided=%u native_complement=%u",n,
    unsigned(result==Result::Recorded),unsigned(result==Result::NativeShadeRequired));
-  return result==Result::Recorded;
+  return gi_reuse::FrozenSuppressNativeShade(result);
  }
  failed=true;Reject(result==Result::FailedAfterCommands?"consumer_partial_failure":"consumer_rejected");
- return result==Result::FailedAfterCommands;
+ return gi_reuse::FrozenSuppressNativeShade(result);
 }
 inline bool Install(Proof proof)noexcept {
  if(installed.load())return proof&&proof==sceneProof;

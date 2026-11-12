@@ -1,16 +1,15 @@
 # R428 current checkpoint — 2026-11-12
 
-Latest scene adapter commit: 580df57bf3339b83e5bdddcad3c575118a131269.
-Scene-adapter Windows core run43242094898 SUCCESS.
-Next change fixes partial consumer admission; portable regression passed.
-Core run43240215460 SUCCESS. Full run43240215456 was still running at this
-checkpoint (live lighting WARP step). Prior full run43236701710 for04659f8
-SUCCESS. Do not report the current full integration as passed without checking.
+Latest validated integration: 4fc555cb9d9911650e29dc14ded4a2fecd303372.
+Windows core run43242659085 and FULL DLL run43242658970/job131267084977
+both SUCCESS. Its artifact remains R427v2 diagnostics, NOT an enabled R428.
 
-This continuation adds an uninstalled scene-contract adapter plus negative
-frame/epoch/owner/lease tests to the existing Windows scene fixture. It does not
-certify immutable texture contents. The new exact-build entrypoint inventory
-passed locally against the pinned renderer and explicitly records its limits.
+This continuation fixes incomplete-hit shading on phase-B rejection, carries
+producer readiness, and requires owned full-shader mode for uniform-complement
+recovery. Portable policy/retirement tests pass. New Windows validation pending.
+Fatal rejection suppresses the failed invocation's GI6 and latches replacement
+off; it does not guarantee a clean failed frame. Do not describe it as full
+recovery. Only an actually recorded complement permits normal GI6 afterward.
 
 No enabled R428 visual build has been delivered. Automatic full workflow still
 packages R427v2 diagnostics. Do not relabel that artifact as a noise fix.
@@ -42,8 +41,8 @@ ordering; do not ask for another duplicate phase/heap capture.
    Do not set sceneAndDescriptorLease just because pointers/frame match.
 2. The live original-ray/GI6 coordinator and retired owner cache now exist in
    410adf1. They remain dormant pending installation of the independent contract.
-   Review consumer rejection after a submitted half-producer: returning native
-   GI6 alone cannot restore the missing ray half when replay itself is rejected.
+   Rejection no longer runs GI6 on half-complete hits. Fatal failure still
+   cannot reconstruct a valid current-frame image; it disables future replacement.
 3. Scene adapter Windows CI passed. Its negative fixture checks
    no-reader, changed frame/fence/epoch, wrong invocation and wrong scene.
 4. Confirm full DLL compilation, then enable/package the actual visual path.

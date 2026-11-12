@@ -1,4 +1,5 @@
 #pragma once
+#include "frozen_completion_result.h"
 #include "d3d12_frozen_evaluator.h"
 #include "d3d12_frozen_guide_build.h"
 #include "d3d12_frozen_raygen.h"
@@ -19,13 +20,15 @@ class D3D12FrozenCompletion {
  }
 public:
  using Trace=void (*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*);
- enum class Result {RejectedBeforeCommands,Recorded,NativeShadeRequired,FailedAfterCommands};
+ using Result=FrozenCompletionResult;
  struct Inputs {
   UINT width=0,height=0,slots=0,frame=0,epoch=0,trainingParity=0;
   // Host checks actual queue order plus immutable scene/descriptor ownership.
   // This explicit admission is required; existing pointer snapshots alone do
   // not qualify. No current game hook supplies this proof yet.
   bool separateProducerSubmitted=false,sceneAndDescriptorLease=false;
+  // The restored full shader must reconstruct the same sampling basis.
+  bool uniformShadeCompatible=false;
   ComputeBindingSnapshot ray,shade;
   GraphicsTableState graphics; // Current consumer graphics tables, not producer state.
   D3D12_DISPATCH_RAYS_DESC preservedTables{};
@@ -83,7 +86,7 @@ public:
    return Result::RejectedBeforeCommands;
   if(Accept(p,work,evaluator,builder,records,trace))
    return Record(list,p,work,evaluator,builder,records,trace);
-  if(!AcceptReplay(p,work,records,trace))return Result::RejectedBeforeCommands;
+  if(!p.uniformShadeCompatible||!AcceptReplay(p,work,records,trace))return Result::RejectedBeforeCommands;
   // The producer was submitted separately, so both private buffers are COMMON.
   // The third immutable raygen record disables guiding before any guide read.
   Transition(list,work.Get(D3D12FrozenWorkingSet::Weights),D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

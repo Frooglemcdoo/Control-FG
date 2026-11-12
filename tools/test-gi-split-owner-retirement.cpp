@@ -1,9 +1,17 @@
 #include "../src/gi_reuse/split_owner_retirement.h"
+#include "../src/gi_reuse/frozen_completion_result.h"
 #include <cassert>
 #include <iostream>
 struct Owner {int* deaths;explicit Owner(int& n):deaths(&n){}~Owner(){++*deaths;}};
 using Pool=gi_reuse::GISplitOwnerRetirement<Owner,2,100>;
 int main(){
+ // Once phase A has replaced native rays, only a completed complement may
+ // feed native GI6. An early phase-B rejection is still a partial invocation.
+ using Completion=gi_reuse::FrozenCompletionResult;
+ static_assert(gi_reuse::FrozenSuppressNativeShade(Completion::RejectedBeforeCommands));
+ static_assert(gi_reuse::FrozenSuppressNativeShade(Completion::FailedAfterCommands));
+ static_assert(gi_reuse::FrozenSuppressNativeShade(Completion::Recorded));
+ static_assert(!gi_reuse::FrozenSuppressNativeShade(Completion::NativeShadeRequired));
  int deaths=0;Pool p;auto owner=std::make_unique<Owner>(deaths);
  const auto id=p.Admit(7,{10,1},60,owner);assert(id&&!owner&&p.RetainedBytes()==60);
  auto rejected=std::make_unique<Owner>(deaths);assert(!p.Admit(7,{11,1},41,rejected)&&rejected);

@@ -702,3 +702,21 @@ wrong frame and missing producer submission leave cancellation available.
 Successful admission is still single-use and retains normal fence/seal rules.
 Portable GCC C++17 -Wall -Wextra -Werror regression passed. The scene-contract
 Windows fixture passed in core run43242094898 for580df57. Full DLL still pending.
+
+## Partial-invocation recovery review
+
+The live coordinator previously returned false on phase-B rejection, which let
+full GI6 shade an incomplete hit set after a half producer. It now suppresses
+that shading on rejection/partial failure and latches replacement off for later
+invocations. Producer readiness is carried explicitly so a failed phase A cannot
+enter phase B. Only NativeShadeRequired, meaning the uniform missing half was
+actually recorded, permits the restored full GI6 dispatch. This is failure
+containment, not a promise of a valid image on the failed invocation: its output
+may be stale/unwritten. No full native ray retry is introduced.
+
+Recovery additionally requires the restored full shading PSO's exact owned
+mode tag (2). Native mode (1), including a toggle between stages, is not a
+compatible reconstruction basis for owned Duff rays. The guided evaluator has
+its own matching reconstruction; this guard only restricts uniform-complement
+recovery. Portable disposition assertions and retirement regressions pass.
+The live scene installer remains disconnected pending final integration review.
