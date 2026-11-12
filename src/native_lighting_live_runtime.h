@@ -1,5 +1,6 @@
 #pragma once
 #include "visual_settings_policy.h"
+#include "gi_frozen_dispatch_bridge.h"
 #include "gi_phase_audit.h"
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "gi_reuse/d3d12_frozen_raygen.h"
@@ -525,7 +526,8 @@ inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* lis
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
     // R171: preserve native serial shading and dispatch dimensions.
-    if(!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
+    const auto frozen=gi_frozen_dispatch::shade.load();
+    if(!(frozen&&frozen(list,x,y,z))&&!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
     gi_owned_dispatch::After(list,x,y,z);

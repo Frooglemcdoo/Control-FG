@@ -650,3 +650,26 @@ most two ResourceBarrier calls per recording, instead of separate transitions
 around every source copy. Individual CopyBufferRegion operations remain. WARP
 fixture expanded to distinct source allocations and both initial/read-state and
 retired COMMON-state batch paths. Windows validation pending for this delta.
+
+Full DLL43236701710/job131245978387 PASSED for04659f8. Automatic packaged
+artifact is still R427v2 diagnostics, not an enabled visual fix.
+
+Live cache integration: router collects only fully retired owners after releasing
+ready scene tokens. GPU object release happens outside router/cache locks.
+Exact device/pipeline/extent matches reuse storage; allocation pressure trims
+only retired idle/unrecorded owners and retries one fresh preparation. One
+shared budget is created with the native queue. Portable retirement collection
+checks passed. Windows cache compilation remains pending.
+
+Added the original-ray/GI6 coordinator and independent dispatch bridges. It
+captures original writer/recording/source data, prepares via the shared cache,
+admits the whole owner, records producer under muted observers, then claims
+GI6 only after actual producer submission. RecordingGeneration (not mutable
+binding generation) supplies lifetime identity. GI6 obtains its actual output
+container and current graphics tables. NativeShadeRequired runs the ordinary
+full GI6 once; partial command failures never trigger a full ray retry.
+Scope cleanup cancels only an unattached consumer, leaving actual submit/reset
+observations to release the scene. Installer REQUIRES an independent native
+scene-proof callback. No callback is supplied/installed yet, so this code is
+compiled but dormant; sceneAndDescriptorLease is reached only after that proof
+accepts an acquired scene window. Scene contract closure remains outstanding.

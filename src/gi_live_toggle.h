@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_reuse/native_gi_identity.h"
+#include "gi_frozen_dispatch_bridge.h"
 #include "gi_reuse/owned_request.h"
 // Main runtime preincludes these globally; standalone fixtures include here.
 #include "gi_reuse/d3d12_frozen_raygen.h"
@@ -112,6 +113,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
   if(SUCCEEDED(list->GetPrivateData(kState,&size,state.GetAddressOf()))&&state){
    Microsoft::WRL::ComPtr<ID3D12Resource> record;size=sizeof(ID3D12Resource*);
    if(SUCCEEDED(state->GetPrivateData(kRecord,&size,record.GetAddressOf()))&&record){
+    if(const auto frozen=gi_frozen_dispatch::ray.load())if(frozen(list,desc,state.Get()))return true;
     gi_phase_bindings::Record(list,1,desc->Width,desc->Height,desc->Depth);
     const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();
     const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();

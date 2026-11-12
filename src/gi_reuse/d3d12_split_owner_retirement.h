@@ -84,6 +84,7 @@ public:
  }
  Owner* View(UINT64 id)noexcept{return state_?state_->owners.View(id):nullptr;}
  bool Take(UINT64 id,std::unique_ptr<Owner>& owner)noexcept{return state_&&state_->owners.Take(id,owner);}
+ bool TakeReady(std::unique_ptr<Owner>& owner)noexcept{return state_&&state_->owners.TakeReady(owner);}
  UINT64 RetainedBytes()const noexcept{return state_?state_->owners.RetainedBytes():0;}
  void DeviceStopped()noexcept{if(state_){state_->owners.DeviceStopped();state_.reset();}}
 };

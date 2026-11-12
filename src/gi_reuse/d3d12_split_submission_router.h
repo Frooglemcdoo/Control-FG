@@ -85,6 +85,12 @@ public:
   }
   // A repeated/stale callback has no live ticket and cannot affect a new one.
  }
+ // Collect only after GPU completion AND both recording seals. Release scene
+ // tokens before removing their entries. Returned owners die outside our lock.
+ void CollectReady(std::array<std::unique_ptr<Owner>,Capacity>& output)noexcept {
+  std::lock_guard<std::mutex> lock(mutex_);pool_.Poll();ReleaseReadyScenes();
+  for(auto& owner:output)if(!owner&&!pool_.TakeReady(owner))break;
+ }
  void Reset(ID3D12CommandList* list,UINT64 previous)noexcept {
   if(!list||!previous)return;
   std::lock_guard<std::mutex> lock(mutex_);

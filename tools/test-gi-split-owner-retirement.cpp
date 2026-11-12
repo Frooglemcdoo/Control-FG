@@ -20,6 +20,21 @@ int main(){
  assert(!p.CanRecordConsumer(id,7,99,b));
  assert(!p.SceneReleaseReady(id));assert(p.After(second,99,2,true));assert(p.SceneReleaseReady(id));assert(p.Seal(b));assert(!p.Take(id,out));
  p.Complete(99,2);assert(p.Take(id,out)&&p.RetainedBytes()==0&&deaths==0);out.reset();assert(deaths==1);
+ // Collection is independent of remembering a frame/id and must enforce the
+ // same actual submission/fence/seal rules as explicit Take.
+ {
+  int collectedDeaths=0;Pool collect;auto firstOwner=std::make_unique<Owner>(collectedDeaths),secondOwner=std::make_unique<Owner>(collectedDeaths);
+  auto firstID=collect.Admit(8,a,40,firstOwner),secondID=collect.Admit(8,{30,1},40,secondOwner);
+  assert(firstID&&secondID&&collect.CancelUnattached(firstID)&&collect.CancelUnattached(secondID));
+  auto submitted=collect.Before(99,&a,1);assert(collect.After(submitted,99,3,true));
+  assert(collect.Seal(a));std::unique_ptr<Owner> ready;
+  assert(!collect.TakeReady(ready)); // GPU cut remains incomplete.
+  collect.Complete(99,3);assert(collect.TakeReady(ready)&&collect.RetainedBytes()==40);
+  assert(!collect.TakeReady(ready)); // Never overwrite caller-owned storage.
+  ready.reset();assert(!collect.TakeReady(ready)); // Other recording not sealed.
+  assert(collect.Seal({30,1})&&collect.TakeReady(ready)&&collect.RetainedBytes()==0);
+  ready.reset();assert(collectedDeaths==2);
+ }
  // Budget admission is transactional; failure retains caller ownership.
  rejected.reset();assert(deaths==2);
  for(unsigned scenario=0;scenario<6;++scenario){

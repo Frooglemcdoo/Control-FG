@@ -180,6 +180,10 @@ public:
   originalProducer_=nullptr;nativeHeaps_={};textures_.ResetAfterRetirement();output_.Reset();savedRay_={};savedShade_={};producer_={};bytes_=0;
   prepared_=producerAttempted_=producerRecorded_=consumerAttempted_=false;rearmed_=true;return true;
  }
+ bool ReusableFor(const Preparation& p)const noexcept {
+  return rearmed_&&device_.Get()==p.device&&pipelines_.Get()==p.pipelines&&
+   work_.Matches(p.ray.width,p.ray.height,p.ray.slots);
+ }
  ID3D12CommandList* OriginalProducer()const noexcept{return originalProducer_;}
  ID3D12CommandQueue* NativeQueue()const noexcept{return nativeHeaps_.Queue();}
  UINT64 AllocationBytes()const noexcept{return prepared_?bytes_:0;}

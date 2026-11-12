@@ -2,6 +2,7 @@
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "gi_reuse/d3d12_frozen_invocation.h"
 #include "gi_reuse/d3d12_split_submission_router.h"
+#include "gi_reuse/d3d12_frozen_owner_cache.h"
 #include "gi_frozen_submission_bridge.h"
 // Included after native_lighting and the exact native scope/window adapters.
 // Process-lifetime observer wiring. Installation alone records no replacement
@@ -15,6 +16,7 @@ using Router=gi_reuse::D3D12SplitSubmissionRouter<Owner>;
 inline Router* const router=new(std::nothrow) Router;
 inline std::mutex initializeMutex;
 inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> nativeQueue;
+inline gi_reuse::D3D12FrozenOwnerCache* cache=nullptr;
 inline std::atomic<bool> installed{false},initialized{false};
 inline void ReleaseScene(UINT64 token)noexcept {
  if(!gi_native_scene_window::ReleaseAfterConsumerOrCancellation(token))
@@ -49,9 +51,17 @@ inline bool Initialize(ID3D12CommandQueue* queue)noexcept {
  if(!installed.load(std::memory_order_acquire)||!queue)return false;
  std::lock_guard<std::mutex> lock(initializeMutex);
  if(initialized.load(std::memory_order_acquire))return queue==nativeQueue.Get();
+ std::unique_ptr<gi_reuse::D3D12FrozenOwnerCache> next;
+ try {next=std::make_unique<gi_reuse::D3D12FrozenOwnerCache>(768ull*1024*1024);}catch(...){return false;}
  if(FAILED(router->Initialize(queue,&native_lighting::gi_compute_hooks::RecordingGeneration,
      &Router::Pool::NativeSignal,&ReleaseScene)))return false;
- nativeQueue=queue;initialized.store(true,std::memory_order_release);return true;
+ cache=next.release();nativeQueue=queue;initialized.store(true,std::memory_order_release);return true;
+}
+// The coordinator uses this before admission/commands. All allocation remains
+// outside the queue/router lock and all owners use one active+idle budget.
+inline HRESULT PrepareOwner(Owner::Preparation input,std::unique_ptr<Owner>& output)noexcept {
+ if(!initialized.load(std::memory_order_acquire)||!cache)return E_UNEXPECTED;
+ return cache->Prepare(*router,std::move(input),output);
 }
 // No ownership transfer on failure. The caller must release its acquired but
 // unrecorded scene token. Actual command recording/suppression is separate.

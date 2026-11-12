@@ -1111,6 +1111,7 @@ static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[
 #include "gi_native_prepare_scope.h"
 #include "gi_native_scene_window.h"
 #include "gi_frozen_lifetime.h"
+#include "gi_frozen_runtime.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
 #include "rr_world_albedo_runtime.h"

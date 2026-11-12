@@ -106,6 +106,13 @@ public:
   auto* e=Find(id);if(!e||out||!e->lease.Retirable())return false;
   state_->bytes-=e->bytes;out=std::move(e->owner);*e=Entry{};return true;
  }
+ // Transfer one fully retired owner for host reuse. Never destroy resources
+ // while the submission router lock is held; caller owns the returned object.
+ bool TakeReady(std::unique_ptr<Owner>& out)noexcept {
+  if(!state_||out)return false;
+  for(auto& entry:state_->entries)if(entry.owner&&entry.lease.Retirable())return Take(entry.id,out);
+  return false;
+ }
  bool SceneReleaseReady(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.SceneReleaseReady();}
  bool Quarantined(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.Quarantined();}
  // An untracked recording generation is relevant only if this list is ours.

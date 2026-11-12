@@ -3,6 +3,7 @@
 #include <type_traits>
 #include "../src/gi_reuse/d3d12_frozen_working_set.h"
 #include "../src/gi_reuse/d3d12_frozen_invocation.h"
+#include "../src/gi_reuse/d3d12_frozen_owner_cache.h"
 #include "../src/gi_reuse/d3d12_split_owner_retirement.h"
 #include "../src/gi_reuse/d3d12_split_submission_router.h"
 #include "../src/gi_frozen_submission_bridge.h"
@@ -36,6 +37,10 @@ int main()try {
  Require(!D3D12FrozenWorkingSet::Describe(16384,16384,16),"oversized training admitted");
  auto fourK=D3D12FrozenWorkingSet::Describe(3840,2160,65536);
  Require(fourK.bytes[0]==149299200&&fourK.bytes[1]==16588800,"4K working allocation changed");
+ D3D12FrozenOwnerCache cache(4*1024*1024);
+ D3D12SplitSubmissionRouter<D3D12FrozenInvocation> uninitializedRouter;
+ std::unique_ptr<D3D12FrozenInvocation> rejectedOwner;
+ Require(FAILED(cache.Prepare(uninitializedRouter,{},rejectedOwner))&&!rejectedOwner&&!cache.HeldBytes(),"incomplete cache preparation allocated or retained storage");
  D3D12FrozenInvocation incomplete;
  Require(FAILED(incomplete.Prepare({}))&&!incomplete.AllocationBytes(),"incomplete live invocation prepared");
  Require(!incomplete.AcceptProducer(d.list.Get(),nullptr),"unprepared invocation admitted producer");
