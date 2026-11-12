@@ -62,6 +62,10 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           gi-recorded-heaps.exe
           if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-native-render-scope.cpp /Fe:gi-native-render-scope.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          gi-native-render-scope.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 tools\test-gi-scene-audit.cpp /Fe:gi-scene.exe /link d3d12.lib
           if not "%errorlevel%"=="0" exit /b 1
           gi-scene.exe

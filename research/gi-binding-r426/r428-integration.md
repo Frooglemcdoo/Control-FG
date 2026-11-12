@@ -70,3 +70,27 @@ buffer decay contract:
 https://learn.microsoft.com/en-us/windows/win32/direct3d12/using-resource-barriers-to-synchronize-resource-states-in-direct3d-12
 
 This remains integration work, not a live gameplay fix. No user capture needed.
+
+Allocation-reuse validation passed Windows core run43159004821. No build has
+exercised guided rays in the game yet; WARP validates compute/storage, not DXR.
+
+## Full native render scope
+
+Recovered the native callback slot631DA0 -> thunk13E860 -> body128D20. Exact
+thunk bytes and the adjacent MSVC RTTI identify a std::function<void(
+OrderSolverPassData*)> invoker. It adds8 to the closure pointer and dereferences
+the pass-argument pointer before entering the full render body. The existing
+scene-window audit now reproduces these assertions against the exact renderer.
+
+Added a full-invocation wrapper, compiled in probe.cpp and installed only with
+CONTROLTOH_GI_FROZEN_RENDER=1. That flag currently installs the scope ONLY; it
+still does not enable guided dispatch. It preserves the original thunk, records
+an exact token/frame/owner/pass in TLS, restores the previous scope, and invokes
+host cleanup in __finally on normal return or native exception. It establishes
+an invocation identity and cleanup boundary, NOT writer exclusion. Regression
+fixture invokes the real instruction thunk with two arguments and checks both
+normal and exception unwinding. Windows validation pending for this delta.
+
+Outstanding remains the native writer/descriptor ownership gate and live host
+transaction wiring. Do not replace that gate with a true boolean, silently ship
+the diagnostic package, or request another already-completed ordering capture.

@@ -38,6 +38,16 @@ def audit(path):
     # Material upload precedes creation/submission of the exact job joined by
     # the GI render invocation. Do not infer that later frames cannot overlap.
     direct_call(0x12491D,0xC7BC0)
+    # Full invocation wrapper: the std::function invoker adjusts its closure
+    # and dereferences the pass argument, then tail-calls the audited body.
+    assert pe.get_data(0x13E860,12)==bytes.fromhex('488b124883c108e9b4a4feff')
+    assert struct.unpack('<Q',pe.get_data(0x631DA0,8))[0]-pe.OPTIONAL_HEADER.ImageBase==0x13E860
+    locator=struct.unpack('<Q',pe.get_data(0x631D88,8))[0]-pe.OPTIONAL_HEADER.ImageBase
+    assert locator==0x6D2188
+    signature,offset,constructor,type_rva,hierarchy,self_rva=struct.unpack('<6I',pe.get_data(locator,24))
+    assert signature==1 and offset==0 and constructor==0 and self_rva==locator
+    type_name=pe.get_data(type_rva+16,256).split(b'\0')[0].decode('ascii')
+    assert type_name=='.?AV?$_Func_impl_no_alloc@V<lambda_3fcbfcc8218bc8a321cc2ff11664c281>@@XPEAVOrderSolverPassData@rend@@@std@@'
     direct_call(0xC7C59,0xC51D0)
     job=relative_memory(0x1249F0)
     assert job==relative_memory(0xA8C02)==0x90E9E8
@@ -128,6 +138,10 @@ def audit(path):
     interval = [{'rva': hex(a), **value} for a,value in calls.items()
                 if 0x12C5F1 <= a <= 0x12CC16]
     return {'renderer_sha256': digest, 'function': [hex(lo),hex(hi)],
+            'native_render_invocation':{'slot':'0x631da0','thunk':'0x13e860',
+                'body':'0x128d20','closure_adjustment':8,'pass_argument_indirection':1,
+                'rtti':type_name,'return_type':'void','invoker_arguments':2,
+                'scene_writer_exclusion_proven':False},
             'function_sha256': hashlib.sha256(pe.get_data(lo,hi-lo)).hexdigest(),
             'gi_ray_call': '0x12c5eb', 'gi_shade_call': '0x12cc16',
             'later_conditional_ray_calls': {'sun_shadow':'0x12d342','ao':'0x12d8ba'},

@@ -4,6 +4,17 @@
     "0x128d20",
     "0x12da38"
   ],
+  "native_render_invocation": {
+    "slot": "0x631da0",
+    "thunk": "0x13e860",
+    "body": "0x128d20",
+    "closure_adjustment": 8,
+    "pass_argument_indirection": 1,
+    "rtti": ".?AV?$_Func_impl_no_alloc@V<lambda_3fcbfcc8218bc8a321cc2ff11664c281>@@XPEAVOrderSolverPassData@rend@@@std@@",
+    "return_type": "void",
+    "invoker_arguments": 2,
+    "scene_writer_exclusion_proven": false
+  },
   "function_sha256": "c494bb19c0010003efeff3ebf028b99d458e81cd87a43e2c16e24e6298223da0",
   "gi_ray_call": "0x12c5eb",
   "gi_shade_call": "0x12cc16",
