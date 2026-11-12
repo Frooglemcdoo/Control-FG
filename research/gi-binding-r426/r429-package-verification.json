@@ -1,0 +1,14 @@
+{
+  "file": "/workspace/scratch/bb222ddfca4b/deliverables/ControlTOH-GI-Frozen-R429.zip",
+  "bytes": 6991503,
+  "sha256": "3445ad3fd5c6524b99cbe642e4e63ea3d117096f36d310652e95fa605e1e89cd",
+  "dll_sha256": "690d53c8ba0ba31d6b83679fdaa28a8ec1604b0b44c4b3113bc98ace0b4424d1",
+  "source_commit": "a71b0ada05cc141153ecbc7750c2da9e880ebffa",
+  "run": 43258597915,
+  "artifact_id": 13962224871,
+  "members": 88,
+  "zip_verified": true,
+  "enabled_launcher_verified": true,
+  "runtime_markers_verified": true,
+  "scope": "Fallback/status correction; no in-game FPS recovery or noise fix measured."
+}

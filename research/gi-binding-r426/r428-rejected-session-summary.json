@@ -1,0 +1,58 @@
+{
+  "archive_sha256": "8fe1941905cef51b07d20f3460243b4e5a429d5938a44643c03a06dd8b78dd62",
+  "logs": [
+    {
+      "name": "probe\\probe-20261112-155811-085-74244.log",
+      "bytes": 408,
+      "lines": 2,
+      "requested": false,
+      "guided_producer_observed": false,
+      "guided_consumer_observed": false,
+      "compute_prepared": false,
+      "ray_pipeline_prepared": false,
+      "binding_ready": false,
+      "fallback_events": []
+    },
+    {
+      "name": "probe\\probe-20261112-155813-543-28868.log",
+      "bytes": 4635,
+      "lines": 29,
+      "requested": false,
+      "guided_producer_observed": false,
+      "guided_consumer_observed": false,
+      "compute_prepared": false,
+      "ray_pipeline_prepared": false,
+      "binding_ready": false,
+      "fallback_events": [
+        "qpc=4331652012988 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=new revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4332402618375 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=native revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4332561909816 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=new revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4332667260566 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=native revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4332756733405 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=new revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4333572299919 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=native revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4333671033297 tid=54420 GI_TOGGLE_R308 dispatch_recorded=1 mode=new revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0"
+      ]
+    },
+    {
+      "name": "probe\\probe-20261112-160310-627-77704.log",
+      "bytes": 4311,
+      "lines": 27,
+      "requested": true,
+      "guided_producer_observed": false,
+      "guided_consumer_observed": false,
+      "compute_prepared": true,
+      "ray_pipeline_prepared": true,
+      "binding_ready": true,
+      "fallback_events": [
+        "qpc=4334939935664 tid=78000 GI_TOGGLE_R308 dispatch_recorded=1 mode=new revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0",
+        "qpc=4335084330138 tid=78000 GI_TOGGLE_R308 dispatch_recorded=1 mode=native revision=0 compact_columns=0 width=2560 height=1440 gpu_completion=0"
+      ]
+    }
+  ],
+  "limits": [
+    "R428 lifecycle markers suppressed by installed logger; absence does not prove no guided execution.",
+    "Fallback events prove ordinary dispatch at those points only; no timing data or duration is present.",
+    "R426 deferred_dispatch_enabled=0 and R425 build labels are hardcoded stale fields.",
+    "No logs were trimmed."
+  ]
+}

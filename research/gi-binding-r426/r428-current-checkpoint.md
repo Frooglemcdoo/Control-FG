@@ -1,3 +1,7 @@
+# Superseded by R429 fallback/status correction
+
+See r429-current-checkpoint.md for current build, user evidence and next step.
+
 # R428 visual/performance test rejected — 2026-11-12
 
 User result: "made no difference other than killing fps". Treat R428 as a
