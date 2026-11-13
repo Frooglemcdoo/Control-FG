@@ -1535,8 +1535,13 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         gi_scene_audit::Install(renderer,d3d);
+        if(gi_reuse::GuidedLiveEnabled()){
+            const bool installed=gi_native_render_scope::Install(renderer,d3d);
+            gi_reuse::guidedScopeReady.store(installed);
+            Log("GI_GUIDED_R434 scope_ready=%u same_invocation_pair=1 fixed_scene=1",unsigned(installed));
+        }
         {char enabled[4]{};
-         if(GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_RENDER",enabled,4)==1&&enabled[0]=='1')
+         if(!gi_reuse::GuidedLiveEnabled()&&GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_RENDER",enabled,4)==1&&enabled[0]=='1')
           {
            const bool renderReady=gi_native_render_scope::Install(renderer,d3d);
            const bool prepareReady=gi_native_prepare_scope::Install(renderer,d3d);

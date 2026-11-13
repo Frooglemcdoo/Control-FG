@@ -87,6 +87,8 @@ def main():
         sampled=transform(source,v)
         programs=[('GISharedHit',shared_hits(source)),('GIOwnedRay',owned_raygen(sampled,v))]
         if v==0:
+            from gi_guided_live import transform as guided_transform
+            programs += [('GIGuidedRay',guided_transform(owned_raygen(sampled,v)))]
             programs += [('GICompactShared',compact_shared_hits(source)),
                          ('GICompactPhaseA',compact_raygen(source,0,0)),
                          ('GICompactPhaseB',compact_raygen(source,0,1))]

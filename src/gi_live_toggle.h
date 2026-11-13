@@ -11,6 +11,7 @@ inline const GUID kRecord={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x
 inline const GUID kState={0x30730801,0x6611,0x4788,{0x81,0x22,0x33,0x44,0x55,0x66,0x77,0x02}};
 inline std::atomic<bool> requested{gi_sequence::LiveRequested()},ready{false};
 inline std::atomic<unsigned long long> revision{0},applied{~0ull};
+inline constexpr LPCWSTR kGuideExport=L"controlGuidedLiveRayGen";
 inline constexpr LPCWSTR kExport=L"controlNewGIRayGen";
 inline constexpr LPCWSTR kCompactExports[2]={L"controlCompactGIRayGenA",L"controlCompactGIRayGenB"};
 inline bool CompactRequested() noexcept {
@@ -38,11 +39,12 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
  }
  if(match==desc->NumSubobjects)return next(device,desc,iid,out);
  try {
-  const bool frozen=variant==0&&gi_reuse::SingleProducerEnabled()&&FrozenPipelineRequested();
-  const bool compact=variant==0&&gi_reuse::SingleProducerEnabled()&&(CompactRequested()||frozen);
+  const bool guided=variant==0&&gi_reuse::GuidedLiveEnabled();
+  const bool frozen=!guided&&variant==0&&gi_reuse::SingleProducerEnabled()&&FrozenPipelineRequested();
+  const bool compact=!guided&&variant==0&&gi_reuse::SingleProducerEnabled()&&(CompactRequested()||frozen);
   gi_reuse::D3D12FrozenRaygenAugment frozenAugment;
   if(frozen&&FAILED(frozenAugment.Initialize(device,{gi_frozen_shader::kRaygen,sizeof(gi_frozen_shader::kRaygen)})))return next(device,desc,iid,out);
-  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+(frozen?6:3));
+  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+(frozen?6:3)+1);
   std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
   std::vector<std::vector<LPCWSTR>> names(desc->NumSubobjects);
   for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -55,6 +57,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
     // No replacement record may silently discard native local-root arguments.
     if(objects[target].Type==D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)return next(device,desc,iid,out);
     names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);names[i].push_back(kExport);
+    if(guided)names[i].push_back(kGuideExport);
     if(compact){names[i].push_back(kCompactExports[0]);names[i].push_back(kCompactExports[1]);}
     if(frozen)names[i].push_back(gi_reuse::D3D12FrozenRaygenAugment::Export);
     associations[i].NumExports=static_cast<UINT>(names[i].size());associations[i].pExports=names[i].data();break;
@@ -78,6 +81,11 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
    objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&compactLibs[0]});
    objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&compactLibs[1]});
   }
+#ifdef CONTROL_GI_GUIDED_LIVE
+  D3D12_EXPORT_DESC guideAlias{kGuideExport,L"rayGenMain",D3D12_EXPORT_FLAG_NONE};
+  D3D12_DXIL_LIBRARY_DESC guideLib{{gi_sequence::kGIGuidedRay0,sizeof(gi_sequence::kGIGuidedRay0)},1,&guideAlias};
+  if(guided)objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&guideLib});
+#endif
   objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&lib});
   if(frozen&&!frozenAugment.Append(objects))return next(device,desc,iid,out);
   auto augmented=*desc;augmented.NumSubobjects=static_cast<UINT>(objects.size());augmented.pSubobjects=objects.data();
@@ -90,13 +98,16 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   if(compact&&identifier){for(unsigned p=0;p<2;++p)phaseIdentifiers[p]=props->GetShaderIdentifier(kCompactExports[p]);
    if(!phaseIdentifiers[0]||!phaseIdentifiers[1])identifier=nullptr;}
   if(frozen&&identifier&&!props->GetShaderIdentifier(gi_reuse::D3D12FrozenRaygenAugment::Export))identifier=nullptr;
+  const void* guidedIdentifier=guided&&props?props->GetShaderIdentifier(kGuideExport):nullptr;
+  if(guided&&!guidedIdentifier)identifier=nullptr;
   Microsoft::WRL::ComPtr<ID3D12Resource> record;
   if(identifier){
    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
-   D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=compact?192:64;buffer.Height=1;buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+   D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=guided?128:(compact?192:64);buffer.Height=1;buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
    prepared=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&record));
    void* mapped=nullptr;D3D12_RANGE empty{0,0};if(SUCCEEDED(prepared))prepared=record->Map(0,&empty,&mapped);
    if(SUCCEEDED(prepared)){memset(mapped,0,static_cast<size_t>(buffer.Width));memcpy(mapped,identifier,32);
+    if(guided)memcpy(static_cast<unsigned char*>(mapped)+64,guidedIdentifier,32);
     if(compact)for(unsigned p=0;p<2;++p)memcpy(static_cast<unsigned char*>(mapped)+64*(p+1),phaseIdentifiers[p],32);
     record->Unmap(0,nullptr);prepared=state->SetPrivateDataInterface(kRecord,record.Get());}
   }else prepared=E_FAIL;
@@ -113,16 +124,18 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
   if(SUCCEEDED(list->GetPrivateData(kState,&size,state.GetAddressOf()))&&state){
    Microsoft::WRL::ComPtr<ID3D12Resource> record;size=sizeof(ID3D12Resource*);
    if(SUCCEEDED(state->GetPrivateData(kRecord,&size,record.GetAddressOf()))&&record){
-    if(const auto frozen=gi_frozen_dispatch::ray.load())if(frozen(list,desc,state.Get()))return true;
+    if(!gi_reuse::GuidedLiveEnabled())if(const auto frozen=gi_frozen_dispatch::ray.load())if(frozen(list,desc,state.Get()))return true;
     gi_phase_bindings::Record(list,1,desc->Width,desc->Height,desc->Depth);
     const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();
-    const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
+    const bool useNew=gi_reuse::GuidedLiveEnabled()?gi_reuse::singleEvaluatorReady.load():single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
+    const bool useGuide=gi_reuse::guidedScopeActive&&useNew&&gi_reuse::GuidedLiveEnabled()&&gi_reuse::guidedEvaluatorReady.load()&&gi_reuse::guidedRequested.load()&&record->GetDesc().Width==128;
+    gi_reuse::guidedScopeDraw=useGuide;gi_reuse::guidedRayApplied.store(useGuide);
     const bool useCompact=CompactRequested()&&useNew&&record->GetDesc().Width==192&&desc->Width>=2&&(desc->Width&1)==0&&desc->Height>0&&
         desc->MissShaderTable.StrideInBytes==32&&desc->HitGroupTable.StrideInBytes==96;
     if(single){gi_reuse::singleRayApplied.store(useNew);if(useNew)++gi_reuse::singleRayDispatches;}
     // Include mode/route in the key: the GI menu owns a separate revision.
-    const auto routeVersion=version*4+(useNew?1ull:0ull)+(useCompact?2ull:0ull);
-    if(applied.exchange(routeVersion)!=routeVersion)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu compact_columns=%u width=%u height=%u gpu_completion=0",useNew?"new":"native",version,useCompact?1u:0u,desc->Width,desc->Height);
+    const auto routeVersion=version*8+(useNew?1ull:0ull)+(useCompact?2ull:0ull)+(useGuide?4ull:0ull);
+    if(applied.exchange(routeVersion)!=routeVersion)Log("GI_TOGGLE_R308 dispatch_recorded=1 mode=%s revision=%llu compact_columns=%u width=%u height=%u gpu_completion=0",useGuide?"guided-fixed":useNew?"new":"native",version,useCompact?1u:0u,desc->Width,desc->Height);
     settings_check::Record(useNew?settings_check::OwnedRays:settings_check::NativeRays);
     if(useNew){auto custom=*desc;
      if(useCompact){
@@ -133,7 +146,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
       for(unsigned p=0;p<2;++p){custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress()+64*(p+1),32};dispatch(list,&custom);}
       return true;
      }
-     custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress(),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);
+     custom.RayGenerationShaderRecord={record->GetGPUVirtualAddress()+(useGuide?64:0),32};rt_shadow_capture::Lookup(list).dispatch(list,&custom);
      return true;}
     return false;
    }

@@ -1,6 +1,9 @@
 // Owned's current-frame evaluator uses the engine's GI6 bindings directly.
 #define GI_SECONDARY_LIBRARY_ONLY
 #include "gi_evaluator_secondary.generated.hlsl"
+#ifdef GI_GUIDED_LIVE
+#include "gi_guided_live.hlsl"
+#endif
 
 [numthreads(8,16,1)]
 void main(uint3 id : SV_DispatchThreadID) {
@@ -27,6 +30,15 @@ void main(uint3 id : SV_DispatchThreadID) {
         radiance = mad(throughput, asfloat(receiver.r15.xyz), radiance);
     }
 
+#ifdef GI_GUIDED_LIVE
+    // The native one-ray route alone uses the guided direction. All radiance,
+    // including miss/volume lighting, receives its matching mixture weight.
+    // Hit distance and alpha keep the native convention.
+    if(rays==1) {
+        float weight=GILiveGuideWeight(id.xy);
+        radiance=weight==0?float3(0,0,0):radiance*weight;
+    }
+#endif
     float4 fade = asfloat(giCB1[17]);
     float nearEdge = fade.x - fade.y;
     float width = (fade.y + fade.x) - nearEdge;

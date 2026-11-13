@@ -5,6 +5,7 @@ on:
     branches:
       - work/rt-replacement-r392
       - work/gi-replacement-core-r425
+      - work/gi-guided-live-r434
       - work/gi-stage-diagnostic-r432
       - work/gi-replacement-binding-r426
       - work/gi-modernization
@@ -851,6 +852,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator compile failed' }
           python tools/embed-gi-evaluator.py build/gi_evaluator.dxil build/gi_evaluator.generated.h
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator embedding failed' }
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX -D GI_GUIDED_LIVE=1 src/shaders/gi_owned_lighting.hlsl -Fo build/gi-guided-evaluator.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Guided live evaluator compile failed' }
+          python -c "from pathlib import Path;p=Path('build/gi_guided.generated.h');p.write_text('static const unsigned char kGuidedEvaluator[]={'+','.join(str(x) for x in Path('build/gi-guided-evaluator.dxil').read_bytes())+'};')"
+          if ($LASTEXITCODE -ne 0) { throw 'Guided live evaluator embedding failed' }
           foreach($stage in 'proposals','shading','resolve','trace') {
             $source=@{proposals='gi_producer_proposals';shading='gi_producer_shading';resolve='gi_output_resolve';trace='gi_producer_trace'}[$stage]
             $arguments=@('-T','cs_6_0','-E','main','-WX','-HV','2018')
@@ -1309,7 +1314,7 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools\rt-scene-probe\analyze-instances.py RT-instances-fixture.bin > build\rt-instance-fixture.json
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -1485,12 +1490,13 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
           New-Item -ItemType Directory -Force -Path $out,$shader,$tools,$diagnostics | Out-Null
           Copy-Item build/dxgi.dll "$out/dxgi.dll"
+          Copy-Item docs/GI-Guided-Live-R434.md "$out/ControlTOH/GI-GUIDED-R434.md"
           New-Item -ItemType Directory -Force -Path "$out/ControlTOH/Licenses" | Out-Null
           Copy-Item nrd-build/_deps/nrd-src/LICENSE.txt "$out/ControlTOH/Licenses/NVIDIA-NRD.txt"
           Copy-Item build/gi_index_snapshot.dxil $shader
@@ -1555,8 +1561,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
+            ControlTOH-GI-Guided-Live-R434.zip
+            ControlTOH-GI-Guided-Live-R434.sha256
             ControlTOH-GI-Stages-R432.zip
             ControlTOH-GI-Stages-R432.sha256
             ControlTOH-GI-Frozen-R431.zip
