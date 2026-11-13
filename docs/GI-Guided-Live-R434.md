@@ -7,7 +7,7 @@ This branch ports the fixed guide from the successful saved-frame experiment int
 - F10's GI control selects `GI GUIDE: ON (FIXED)` or `GI GUIDE: OFF`.
 - ON guides 10% of the existing one-ray draws. OFF keeps the existing owned sampler/evaluator, so both comparison modes use the same lighting implementation.
 - The native ray origin, range, traversal, hit/miss shader table, and configured ray count remain intact. Multiple-ray configurations retain the existing owned directions and do not receive mixture weighting.
-- The evaluator weights complete radiance, including miss/volume contributions. It does not weight hit distance or alpha. Below-hemisphere proposals receive zero radiance weight; this live version still traces them within the existing budget.
+- The evaluator weights complete radiance, including miss/volume contributions. It does not weight hit distance or alpha. Below-hemisphere proposals receive zero radiance weight and use a zero instance mask to invoke native miss handling, preserving miss-distance metadata.
 - The verified native render callback pairs ray/evaluator selection in thread-local invocation state. A UI change cannot change the weighting of rays already selected in that invocation. Unsupported callback identity leaves guiding inactive.
 - No automatic guide generation, deferred scene reuse, second GI pass, history allocation, or GPU readback is introduced.
 

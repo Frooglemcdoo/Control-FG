@@ -32,7 +32,7 @@ for name,expr in lines:
         opcode,a=re.search(r'i32 (\d+), float ([^)]+)',expr).groups();a=arg(a)
         result={12:np.cos,13:np.sin,24:np.sqrt,25:lambda v:1/np.sqrt(v)}[int(opcode)](a)
     elif expr.startswith('select'):
-        c,a,b=re.fullmatch(r'select i1 ([^,]+), float ([^,]+), float (.+)',expr).groups();result=np.where(arg(c),arg(a),arg(b))
+        c,a,b=re.fullmatch(r'select i1 ([^,]+), (?:float|i32) ([^,]+), (?:float|i32) (.+)',expr).groups();result=np.where(arg(c),arg(a),arg(b))
     elif expr.startswith('fcmp'):
         op,a,b=re.fullmatch(r'fcmp (\w+) float ([^,]+), (.+)',expr).groups();a,b=arg(a),arg(b);result={'oge':np.greater_equal,'ogt':np.greater,'olt':np.less,'ole':np.less_equal}[op](a,b)
     elif expr.startswith('icmp'):
@@ -43,7 +43,13 @@ for name,expr in lines:
         op,typ,a,b=re.fullmatch(r'(\w+) (float|i32) ([^,]+), (.+)',expr).groups();a,b=arg(a),arg(b)
         result={'fadd':np.add,'fsub':np.subtract,'fmul':np.multiply,'fdiv':np.divide,'xor':np.bitwise_xor,'lshr':np.right_shift,'mul':np.multiply}[op](a,b)
     values[name]=result
-actual=np.stack([values[k] for k,_ in lines[-3:]],axis=1)
+trace=re.search(r'^  call void @dx.op.traceRay.struct.HitData\((.+)\)',guided,re.M).group(1)
+dirs=re.findall(r'float (%G434_\d+)',trace)
+assert len(dirs)==3
+actual=np.stack([values[k] for k in dirs],axis=1)
+mask=values[lines[-1][0]]
+assert np.all(mask[count!=1]==1)
+assert np.array_equal(mask[count==1],(np.sum(normal[count==1]*actual[count==1],axis=1)>0).astype('uint32'))
 seed=values['%GI307SeedA']^values['%GI307FrameSeed']
 def unit(salt):
     v=seed^np.uint32(salt);v=(v^(v>>16))*np.uint32(2146121005);v=(v^(v>>15))*np.uint32(2221713035);v^=v>>16

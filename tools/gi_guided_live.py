@@ -1,7 +1,7 @@
 """R434 fixed-scene guide: replace direction only in audited owned variant 0.
 Original origin, range, count, traversal, hit tables and loop stay intact.
 The one-ray route is the only guided route; all others preserve
-owned directions. Below-hemisphere proposals are traced but weighted zero.
+owned directions. Below-hemisphere proposals use mask zero for native miss data.
 """
 import struct
 from gi_single_producer import edit_export, replace_once
@@ -66,8 +66,13 @@ def transform(source):
         enabled=ir.op('icmp eq i32 %226, 1')
         original=['%GISingleDir0','%GISingleDir1','%GISingleDir2']
         selected=[ir.select(enabled,x,y) for x,y in zip(direction,original)]
+        above=ir.compare('ogt',ir.dot(normal,selected),f(0))
+        masked=ir.op('select i1 '+above+', i32 1, i32 0')
+        mask=ir.op('select i1 '+enabled+', i32 '+masked+', i32 1')
         needle='  call void @dx.op.traceRay.struct.HitData('
         if body.count(needle)!=1:raise ValueError('Trace count changed')
         body=body.replace(needle,'\n'.join(ir.lines)+'\n'+needle)
-        return replace_once(body,', '.join('float '+d for d in original),', '.join('float '+d for d in selected))
+        body=replace_once(body,', '.join('float '+d for d in original),', '.join('float '+d for d in selected))
+        return replace_once(body,'i32 157, %dx.types.Handle %247, i32 0, i32 1,',
+                            'i32 157, %dx.types.Handle %247, i32 0, i32 '+mask+',')
     return edit_export(source,'rayGenMain',patch)

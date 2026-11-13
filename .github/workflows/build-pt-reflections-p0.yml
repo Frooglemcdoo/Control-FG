@@ -887,6 +887,9 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Frozen GI runtime embedding failed'}
           python tools/gi_live_sampling.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
           if($LASTEXITCODE -ne 0){throw 'Live GI producer DXIL validation failed'}
+          & $dxc -dumpbin build/gi-live-native-0.dxbc | Set-Content -Encoding ascii build/gi-guided-native.ll
+          python tools/test-gi-guided-live.py build/gi-guided-native.ll
+          if($LASTEXITCODE -ne 0){throw 'Guided direction and miss-mask validation failed'}
           python tools/test-spec-phase-precision.py
           if($LASTEXITCODE -ne 0){throw 'SPEC phase precision oracle audit failed'}
           python tools/spec_phase_precision.py --dxc $dxc --assembler build/assemble-validated-dxil.exe
