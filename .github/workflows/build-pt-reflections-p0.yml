@@ -1534,8 +1534,7 @@ jobs:
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
           if ($out -eq 'ControlTOH-GI-Balanced-R437') {
             Copy-Item docs/GI-Balanced-R437.txt "$out/ControlTOH/README.txt"
-          }
-          if ($out -eq 'ControlTOH-GI-Capture-R436') {
+          } elseif ($out -eq 'ControlTOH-GI-Capture-R436') {
             Copy-Item docs/GI-Capture-R436.txt "$out/ControlTOH/README.txt"
           } elseif ($out -eq 'ControlTOH-GI-Filter-R435') {
             Copy-Item docs/GI-Filter-R435.txt "$out/ControlTOH/README.txt"
