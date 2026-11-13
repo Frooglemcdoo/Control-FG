@@ -21,7 +21,7 @@ This branch ports the fixed guide from the successful saved-frame experiment int
 
 ## Build status
 
-The source is committed locally on `work/gi-guided-live-r434`, based on `a7961968ec10fc1bb09c6ad5a56b330797cd494f`. The existing Windows workflow is configured to produce `ControlTOH-GI-Guided-Live-R434.zip` after its validation suite. The push to the public repository was blocked by automatic approval review; no branch or build has been published.
+The source is committed locally on `work/gi-guided-live-r434`, based on `a7961968ec10fc1bb09c6ad5a56b330797cd494f`. The existing Windows workflow is configured to produce `ControlTOH-GI-Guided-Live-R434.zip` after its validation suite. Publication was approved and the branch is published. Windows validation is running; this document does not assert its result.
 
 ## Planned in-game test after a successful Windows build
 
