@@ -1,0 +1,20 @@
+ControlTOH R435 - restore GI BOTH before Ray Reconstruction
+
+Close Control and extract beside Control_DX12.exe, replacing dxgi.dll and
+merging ControlTOH. Launch normally, not with a previous diagnostic launcher.
+Keep RR, RT indirect lighting and Enhanced Lighting enabled.
+
+F10 now shows GI: BOTH by default. This restores the retained R213 BOTH path:
+current-frame GI clamp, the existing adaptive temporal history (70% maximum),
+and the native configured spatial passes before RR. This is the historical
+clean-but-ghosting reference, not a new ghosting fix or an exact R100 binary.
+The same button switches to GI: RAW BYPASS and back. No comparison is required:
+test BOTH first at the lamp/plant/hair location, standing still and moving.
+Report speckles, motion trails, GI spotlight shadows and performance.
+
+The guided R434 ray/evaluator integration is removed. This build keeps the
+pre-R434 GI ray/evaluator selection and spotlight shaders. No saved sample
+count, reflection clamp, lighting, or RR setting is overwritten.
+No RELAX filter is added on top of BOTH. Native spatial pass count is preserved.
+Compact logs retain filter-stage application records for verification.
+Use ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd after testing.

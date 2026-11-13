@@ -2,7 +2,7 @@
 #include <atomic>
 namespace control_rr_gi {
 enum class StageMode : unsigned {Both,TemporalOnly,SpatialOnly,ClampOnly,BothSingleHistory,BothBoundedHistory,BothSteadySpatial,RawBypass};
-inline std::atomic<StageMode> stageMode{StageMode::RawBypass};
+inline std::atomic<StageMode> stageMode{StageMode::Both};
 // Render-thread scoped, never re-read the UI request during a filter invocation.
 inline thread_local bool historyDisabled=false;
 inline thread_local bool spatialDispatch=false;

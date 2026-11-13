@@ -78,10 +78,8 @@ inline const wchar_t* ButtonLabel(unsigned index) noexcept {
     if(index==kModeCount+14)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly?L"GI VIEW: N/A":control_rr_gi::ViewLabel(control_rr_gi::viewRequested.load());
     if(index==kModeCount+13)return control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::ClampOnly||control_rr_gi::viewRequested.load()!=control_rr_gi::DiagnosticView::Normal?L"SMOOTH: N/A":control_rr_gi::outlierRequested.load()?L"SMOOTH: ON":L"SMOOTH: OFF";
     if(index==kModeCount+12){
-        if(!control_rr::RRUserRequested())return L"RELAX: RR OFF";
-        if(rt_surface_source::manualGI.load()==4)return L"RELAX: OFF";
-        if(rt_surface_source::manualGI.load()==1)return L"RELAX: GI REMOVED";
-        return control_relax::requested.load()==control_relax::Profile::Balanced?L"RELAX: BALANCED":L"RELAX: ORIGINAL";
+        if(!control_rr::RRUserRequested())return L"GI FILTER: RR OFF";
+        return rt_surface_source::FilterLabel(rt_surface_source::EffectiveRequest(),control_rr_gi::stageMode.load());
     }
     if (index < kModeCount) return kModeChoices[index].label;
     if (index == kModeCount + 11) {
@@ -486,9 +484,12 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
                 savedNotice=0;
             }
             else if(index==kModeCount+12 && !capture_suite::active && !control_gi_button::Active() && control_rr::RRUserRequested()) {
-                rt_surface_source::manualGI.store(control_relax::Cycle(rt_surface_source::manualGI.load()));
-                control_rr_gi::stageMode=control_rr_gi::StageMode::RawBypass;
-                Trace("RELAX_R424 requested=%s bypass=%u",control_relax::Name(control_relax::requested.load()),unsigned(rt_surface_source::manualGI.load()==4));
+                const auto current=rt_surface_source::Stage(rt_surface_source::EffectiveRequest(),control_rr_gi::stageMode.load());
+                const auto next=current==control_rr_gi::StageMode::Both?control_rr_gi::StageMode::RawBypass:control_rr_gi::StageMode::Both;
+                // Manual value four bypasses the RELAX override and uses the selected GI stage.
+                control_rr_gi::stageMode.store(next,std::memory_order_release);
+                rt_surface_source::manualGI.store(4);
+                Log("GI_FILTER_R435 requested=%s rr_history_reset=on_next_frame",control_rr_gi::StageName(next));
                 savedNotice=0;
             }
             else if(index==kModeCount+9) RequestCamera(window,1);
