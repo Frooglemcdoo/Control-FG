@@ -19,10 +19,6 @@ static void Prepare(void* root,void* argument){
 static void Native(void* root,void* pass){
  assert(root==expectedRoot&&pass==expectedPass);
  assert(s::current.token&&s::current.owner==*static_cast<void**>(root)&&s::current.pass==pass&&s::current.frame==11);
- assert(gi_reuse::guidedScopeActive&&!gi_reuse::guidedScopeDraw);
- gi_reuse::guidedScopeDraw=true;
- gi_reuse::guidedRequested.store(false);
- assert(gi_reuse::guidedScopeDraw); // UI request does not change this invocation.
  ++calls;if(throwNative)throw std::runtime_error("native failure");
 }
 int main(){
@@ -42,15 +38,12 @@ int main(){
  s::leaving=+[](const s::Scope& scope,bool returned)noexcept{
   assert(scope.token==s::current.token&&scope.owner==reinterpret_cast<void*>(100));++exits;if(!returned)++aborts;
  };
- gi_reuse::guidedScopeActive=false;gi_reuse::guidedScopeDraw=true;
  s::current={77,8,reinterpret_cast<void*>(300),reinterpret_cast<void*>(400)};
  reinterpret_cast<s::Native>(*slot)(closure,&pass);
  assert(calls==1&&exits==1&&!aborts&&s::current.token==77&&s::current.frame==8);
- assert(!gi_reuse::guidedScopeActive&&gi_reuse::guidedScopeDraw);
  throwNative=true;
  try{reinterpret_cast<s::Native>(*slot)(closure,&pass);assert(false);}catch(const std::runtime_error&){}
  assert(calls==2&&exits==2&&aborts==1&&s::current.token==77&&s::current.owner==reinterpret_cast<void*>(300));
- assert(!gi_reuse::guidedScopeActive&&gi_reuse::guidedScopeDraw);
  namespace prep=gi_native_prepare_scope;
  const unsigned char prepareThunk[]={0x48,0x83,0xc1,0x08,0xe9,0xf7,0x5e,0xfe,0xff};
  std::memcpy(r+0x13de60,prepareThunk,sizeof(prepareThunk));

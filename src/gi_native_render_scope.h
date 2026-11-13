@@ -1,6 +1,5 @@
 #pragma once
 #include <windows.h>
-#include "gi_reuse/owned_request.h"
 #include <atomic>
 #include <cstdint>
 #include <cstring>
@@ -34,14 +33,10 @@ inline void Invoke(void* closure,void* argument){
  const Scope previous=current;Scope next{};
  if(Read(closure,argument,&next))next.token=Next();
  current=next;
- const bool previousActive=gi_reuse::guidedScopeActive,previousDraw=gi_reuse::guidedScopeDraw;
- gi_reuse::guidedScopeActive=next.token!=0;
- gi_reuse::guidedScopeDraw=false;
  bool returned=false;
  __try {original(closure,argument);returned=true;}
  __finally {
   if(next.token)if(const auto callback=leaving.load(std::memory_order_acquire))callback(next,returned);
-  gi_reuse::guidedScopeActive=previousActive;gi_reuse::guidedScopeDraw=previousDraw;
   current=previous;
  }
 }

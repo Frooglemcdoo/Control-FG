@@ -1,7 +1,6 @@
 // Included inside native_lighting. Native PSOs own alternates through COM private data.
 namespace gi_evaluator {
 inline const GUID kVariant={0x309e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
-inline const GUID kGuided={0x434e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline const GUID kMode={0x309e0002,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline bool Enabled() noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -15,9 +14,6 @@ inline auto& requested=gi_reuse::ownedRequested;
 inline std::atomic<unsigned long long> revision{0},lastReported{~0ull};
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "../build/gi_evaluator.generated.h"
-#ifdef CONTROL_GI_GUIDED_LIVE
-#include "../build/gi_guided.generated.h"
-#endif
 #endif
 inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* native,CreateCompute create) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -39,19 +35,6 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
    if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kVariant,alternate);owner->Release();}
  }
  if(SUCCEEDED(hr)&&alternate){GIOwnedPipeline::Share(native,alternate);gi_frozen_prepare::Share(native,alternate);}
-#ifdef CONTROL_GI_GUIDED_LIVE
- if(SUCCEEDED(hr)){
-  auto guidedDesc=*desc;guidedDesc.CS={kGuidedEvaluator,sizeof(kGuidedEvaluator)};guidedDesc.CachedPSO={};
-  Microsoft::WRL::ComPtr<ID3D12PipelineState> guided,owner;
-  auto guideHR=create(device,&guidedDesc,IID_PPV_ARGS(&guided));
-  if(SUCCEEDED(guideHR))guideHR=native->QueryInterface(IID_PPV_ARGS(&owner));
-  const UINT mode=2;
-  if(SUCCEEDED(guideHR))guideHR=guided->SetPrivateData(kMode,sizeof(mode),&mode);
-  if(SUCCEEDED(guideHR))guideHR=owner->SetPrivateDataInterface(kGuided,guided.Get());
-  gi_reuse::guidedEvaluatorReady.store(SUCCEEDED(guideHR));
-  Trace("GI_GUIDED_R434 evaluator_ready=%u hr=0x%08lX fixed_scene=1 fraction=0.1",unsigned(SUCCEEDED(guideHR)),static_cast<unsigned long>(guideHR));
- }
-#endif
  if(alternate)alternate->Release();
  if(SUCCEEDED(hr)){ready.store(true);if(gi_reuse::SingleProducerEnabled())gi_reuse::singleEvaluatorReady=true;}
  Trace("GI_EVALUATOR_R309 ready=%u hr=0x%08lX shader=gi6 native_fallback=%u",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr),unsigned(FAILED(hr)));
@@ -60,9 +43,9 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 #endif
 }
 inline ID3D12PipelineState* Select(ID3D12PipelineState* native) noexcept {
- if(!Enabled()||(!requested.load()&&!gi_reuse::GuidedLiveEnabled())||!native)return nullptr;
+ if(!Enabled()||!requested.load()||!native)return nullptr;
  ID3D12PipelineState* result=nullptr;UINT size=sizeof(result);
- if(FAILED(native->GetPrivateData(gi_reuse::GuidedLiveEnabled()&&gi_reuse::guidedScopeActive&&gi_reuse::guidedScopeDraw?kGuided:kVariant,&size,&result)))return nullptr;
+ if(FAILED(native->GetPrivateData(kVariant,&size,&result)))return nullptr;
  if(size!=sizeof(result)){if(result)result->Release();return nullptr;}return result;
 }
 inline void Bind(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexcept {
@@ -78,12 +61,8 @@ inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  const auto rev=revision.load();const auto key=rev*4+mode;
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);
 }
-inline void Toggle() noexcept {
- if(gi_reuse::GuidedLiveEnabled()) {gi_reuse::guidedRequested.store(!gi_reuse::guidedRequested.load());++revision;Trace("GI_GUIDED_R434 requested=%u fixed_scene=1",unsigned(gi_reuse::guidedRequested.load()));return;}
-if(!ready.load()&&!gi_reuse::SingleProducerEnabled())return;GIOwnedPipeline::active=false;const bool value=!requested.load();gi_reuse::singleRayApplied=false;requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
+inline void Toggle() noexcept {if(!ready.load()&&!gi_reuse::SingleProducerEnabled())return;GIOwnedPipeline::active=false;const bool value=!requested.load();gi_reuse::singleRayApplied=false;requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
 inline const wchar_t* Label() noexcept {
- if(gi_reuse::GuidedLiveEnabled())return (!gi_reuse::guidedEvaluatorReady.load()||!gi_reuse::guidedScopeReady.load())?L"GI GUIDE: WAIT":gi_reuse::guidedRequested.load()?L"GI GUIDE: ON (FIXED)":L"GI GUIDE: OFF";
-
  if(gi_reuse::SingleProducerEnabled()){
   if(!requested.load())return L"GI: NATIVE";
   return gi_reuse::singleRayApplied.load()&&gi_reuse::singleEvaluatorDispatches.load()?L"GI: OWNED":L"GI: OWNED WAIT";
