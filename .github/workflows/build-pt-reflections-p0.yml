@@ -224,7 +224,7 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-diagnostic-activity.exe
           if not "%errorlevel%"=="0" exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-signal-history.cpp /Febuild\test-gi-signal-history.exe
+          cl /nologo /std:c++17 /EHsc /W4 /DCONTROL_NRD_GI tools\test-gi-signal-history.cpp /Febuild\test-gi-signal-history.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-signal-history.exe
           if not "%errorlevel%"=="0" exit /b 1
