@@ -15,7 +15,7 @@ inline bool IsLifecycleEvent(const char* format) noexcept {
         "GI_FROZEN_R429",
         "PROBE",
         "GI_TOGGLE_R308",
-        "GI_FILTER_R435",
+        "GI_FILTER_R437","GI_FILTER_R435",
         "gi_temporal_adaptive"
     };
     for (const char* marker : markers) {

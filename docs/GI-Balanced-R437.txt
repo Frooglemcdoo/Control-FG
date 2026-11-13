@@ -1,0 +1,41 @@
+R437 - GI brightness and motion filtering test
+
+Close Control. Extract beside Control_DX12.exe, replacing files.
+Keep GI RAYS: NATIVE, GI: BOTH, RR ON, RT indirect lighting ON,
+Enhanced Lighting ON, and FG OFF for this comparison.
+Wait ten seconds after loading. Check the projector light, then pan slowly
+across the floor/walls. Check speckles, boiling, trails behind Jesse, and FPS.
+No capture is needed initially. The R436 CAPTURE BOTH button remains available.
+
+Changes
+The initial BOTH temporal filter uses the existing audited depth-checked 3x3
+current-color gather instead of min(raw luminance, blurred luminance).
+Compact lights are averaged, not deleted as outliers. History is bounded by
+accepted current surface samples. The reprojection depth check, camera-cut
+handling, and explicit offscreen rejection remain. Motion falloff returns to
+native scale 40 rather than the R212 scale 400. History is still capped at 70%.
+All six native spatial passes, including their final history blend, remain.
+The same initial adaptive shader is used by the other temporal-enabled legacy
+filter modes; RAW BYPASS and the separate stable/owned paths are unchanged.
+
+This reuses the established current gather with native motion attenuation;
+it does not restore guided GI. No ray count, spotlight shadow shader, lighting
+producer, RR input binding, history resource, or extra rendering pass changes.
+The gather adds texture reads to the initial temporal dispatch, so in-game
+performance must be checked. Smoothing can soften light edges, and remaining
+native spatial history can still ghost. This is a live correction candidate,
+not a verified in-game solution or a guarantee that speckles cannot return.
+
+Evidence
+R436 has two consecutive stationary frames and two consecutive moving frames,
+with BOTH and six spatial passes active, Native rays requested. Average GI
+luminance drops about 35-36% before RR. The moving frame exceeds the R212
+initial motion cutoff on about 91% of pixels. Those observations locate a
+filtering loss and an aggressive history cutoff; they do not independently
+attribute all light loss or boiling to the initial temporal pass.
+
+Validation
+Source tests preserve the native descriptor ABI and historical shader variants.
+Windows WARP dispatch tests cover compact lights, dark mips, checker averaging,
+depth boundaries, moving history, camera cuts, offscreen history, and removed
+lights. These synthetic tests do not reproduce the full game or establish FPS.

@@ -82,7 +82,7 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
   bundles[index].store(b,std::memory_order_release);++ready;
   Log("GI_SPATIAL_R259 ready=1 variant=%d second_history_weight=0 spatial_math_unchanged=1",spatial);return;
  }
- auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)};
+ auto replacement=*desc;replacement.CachedPSO={};replacement.CS={kGIBalancedHistoryShader,sizeof(kGIBalancedHistoryShader)};
  const HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&b->adaptive));
  if(FAILED(hr)||!b->adaptive){if(b->adaptive)b->adaptive->Release();native->Release();delete b;++failed;
   Log("GI_PIPELINE_R217 ready=0 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return;}
@@ -125,6 +125,7 @@ template<class Create> void Capture(ID3D12Device* device,const D3D12_COMPUTE_PIP
  Log("GI_SMOOTH_R217 ready=%u",unsigned(b->smooth!=nullptr));
  Log("GI_DIAGNOSTIC_R217 mask_ready=%u zero_ready=%u",unsigned(b->mask!=nullptr),unsigned(b->zero!=nullptr));
  bundles[index].store(b,std::memory_order_release);++ready;
+ Log("GI_FILTER_R437 balanced_ready=1 current_depth_gather=9 motion_scale=40 native_spatial=1");
  Log("GI_PIPELINE_R217 ready=1 native=%p adaptive=%p native_root_preserved=1 engine_record_copy=0",native,b->adaptive);
 #endif
 }

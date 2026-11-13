@@ -230,6 +230,19 @@ def generate(data,history=True,outliers=False,view=0,smooth=False,preserve_curre
   w[204:204]=energy_filter+pad
   if not preserve_current:w[144:144]=bounds
  return transform_shex(data,patch)
+def generate_balanced(data):
+ # R437: use the audited same-surface 3x3 gather and RGB history bounds,
+ # with native reprojection/depth rejection and explicit offscreen rejection.
+ # Restore native motion falloff (40) rather than R212's tenfold cutoff.
+ # Keep historical variants byte-identical for regression comparisons.
+ result=generate(data,preserve_current=True,validated_history=False)
+ def patch(w):
+  pattern=[0x0a000032,0x00100012,1,0x8010000a,0x41,1,0x4001,0,0x4001,0x3f800000]
+  matches=[i for i in range(len(w)-len(pattern)+1) if w[i:i+len(pattern)]==pattern]
+  if len(matches)!=1:raise ValueError('Unexpected balanced motion instruction')
+  w[matches[0]+7]=struct.unpack('<I',struct.pack('<f',40.))[0]
+ return transform_shex(result,patch)
+
 def generate_bypass(data):
  # R262: preserve native dispatch coordinates and output ABI, copy only t3 mip0.
  # No samplers, history, luminance clamp, spatial neighbors or camera constants.
@@ -273,3 +286,6 @@ if __name__=='__main__':
 
  with (out/"gi_stable_r381.generated.h").open("w") as f:
   f.write("#pragma once\ninline constexpr unsigned char kGIStableR381[]={\n"+",".join(map(str,generate(source,preserve_current=True,surface_plane=False)))+"\n};\n")
+
+ with (out/"gi_motion_history.generated.h").open("a") as f:
+  f.write("inline constexpr unsigned char kGIBalancedHistoryShader[]={\n"+",".join(map(str,generate_balanced(source)))+"\n};\n")

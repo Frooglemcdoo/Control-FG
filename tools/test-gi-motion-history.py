@@ -167,3 +167,15 @@ print("PASS four independently depth-tested history footprint samples")
 
 assert sum(i["name"]=="resinfo" for i in ej["instructions"])==2
 print("PASS queried history/depth SRV dimensions and receiver-depth gradients")
+
+# R437 retains the existing gather/guards and changes only motion attenuation.
+from gi_motion_history import generate_balanced
+balanced=generate_balanced(source)
+old_gather=generate(source,preserve_current=True,validated_history=False)
+bc,gc=chunks(balanced),chunks(old_gather)
+assert balanced[4:20]==checksum(balanced)
+assert all(bc[k]==gc[k] for k in bc if k!=b'SHEX')
+x=struct.unpack('<'+'I'*(len(bc[b'SHEX'])//4),bc[b'SHEX'])
+y=struct.unpack('<'+'I'*(len(gc[b'SHEX'])//4),gc[b'SHEX'])
+assert [(a,b) for a,b in zip(x,y) if a!=b]==[(0x42200000,0)]
+print('PASS R437 bounded same-surface gather with native motion falloff, unchanged bindings')

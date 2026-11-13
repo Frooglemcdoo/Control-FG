@@ -33,9 +33,18 @@ static HistoryTexture HistoryInput(Device& gpu,float base,float filtered,UINT in
  auto cpu=gpu.views->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=static_cast<SIZE_T>(index)*gpu.descriptorSize;
  gpu.device->CreateShaderResourceView(t.resource.Get(),&view,cpu);gpu.retained.push_back(t.resource);return t;
 }
-static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned,ID3D12PipelineState* stableEnergy) {
- struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;UINT depthChannels=0;};
+static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12PipelineState* adaptive,ID3D12PipelineState* native,ID3D12PipelineState* noHistory,ID3D12PipelineState* outlier,ID3D12PipelineState* mask,ID3D12PipelineState* zero,ID3D12PipelineState* smooth,ID3D12PipelineState* bypass,ID3D12PipelineState* owned,ID3D12PipelineState* stableEnergy,ID3D12PipelineState* balanced) {
+ struct Case {const char* name;float current,filtered,history,depth;bool cut,native;float expected;bool noHistory=false;bool outlier=false;UINT pattern=0;UINT view=0;bool smooth=false;bool depthEdge=false;bool bypass=false;bool owned=false;float motion=0;bool stable=false;UINT depthChannels=0;bool balanced=false;};
  const Case cases[]={
+  []{Case c{"R437 retains history during captured pan",.2f,.01f,.22f,.5f,false,false,.210498f};c.balanced=true;c.motion=.00442203f;return c;}(),
+  []{Case c{"R437 stationary light survives dark mip",10.f,.01f,10.f,.5f,false,false,10.f};c.balanced=true;return c;}(),
+  []{Case c{"R437 camera cut rejects history",.2f,.01f,2.f,.5f,true,false,.2f};c.balanced=true;c.motion=.006f;return c;}(),
+  []{Case c{"R437 revealed surface rejects old light",.2f,.01f,2.f,.7f,false,false,.2f};c.balanced=true;c.motion=.006f;return c;}(),
+  []{Case c{"R437 offscreen history rejected",.2f,.01f,2.f,.5f,false,false,.2f};c.balanced=true;c.motion=2.f;return c;}(),
+  []{Case c{"R437 preserves compact light energy",10.f,.01f,0.f,.5f,true,false,0.f};c.balanced=true;c.pattern=1;return c;}(),
+  []{Case c{"R437 checker averaging preserves mean",.4f,.01f,0.f,.5f,true,false,0.f};c.balanced=true;c.pattern=5;return c;}(),
+  []{Case c{"R437 current gather rejects depth edge",10.f,.01f,0.f,.5f,true,false,0.f};c.balanced=true;c.pattern=4;c.depthEdge=true;c.depthChannels=1;return c;}(),
+  []{Case c{"R437 removed light bounds stale history",0.f,.01f,10.f,.5f,false,false,.000462412f};c.balanced=true;c.motion=.006f;return c;}(),
   []{Case c{"R380 X-depth edge with constant Y rejects cross-surface light",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthEdge=true;c.depthChannels=1;return c;}(),
   []{Case c{"R380 Y edge with flat X retains same-surface gather",10.f,.01f,0.f,.5f,true,false,0.f};c.stable=true;c.pattern=4;c.depthChannels=2;return c;}(),
   []{Case c{"R375 valid moving history retained",.2f,.2f,.22f,.5f,false,false,.214f};c.stable=true;c.motion=.02f;return c;}(),
@@ -114,7 +123,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
   auto srv=gpu.views->GetGPUDescriptorHandleForHeapStart();srv.ptr+=static_cast<UINT64>(first)*gpu.descriptorSize;auto target=srv;target.ptr+=5*gpu.descriptorSize;
   gpu.list->SetComputeRootSignature(root);gpu.list->SetComputeRootConstantBufferView(0,cb0->GetGPUVirtualAddress());gpu.list->SetComputeRootConstantBufferView(1,cb1->GetGPUVirtualAddress());
   gpu.list->SetComputeRootDescriptorTable(2,srv);gpu.list->SetComputeRootDescriptorTable(3,target);
-  gpu.list->SetPipelineState(c.stable?stableEnergy:c.owned?owned:c.bypass?bypass:c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
+  gpu.list->SetPipelineState(c.balanced?balanced:c.stable?stableEnergy:c.owned?owned:c.bypass?bypass:c.smooth?smooth:c.view==1?mask:c.view==2?zero:c.outlier?outlier:c.noHistory?noHistory:c.native?native:adaptive);gpu.list->Dispatch(2,1,1);
   gpu.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
   D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
   auto readback=gpu.Buffer(bytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -141,7 +150,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
    }
    if(cases[i].view==1)expected=std::min(PatternValue(cases[i].current,cases[i].pattern,x,y),cases[i].filtered)-expected>1e-6f?8.f:0.f;
    if(cases[i].view==2)expected=0;
-   if(cases[i].stable && cases[i].pattern){
+   if((cases[i].stable||cases[i].balanced) && cases[i].pattern){
     float sum=0,weights=0;for(int dy=-1;dy<=1;++dy)for(int dx=-1;dx<=1;++dx){
      if(cases[i].depthEdge && ((std::max(0,std::min(15,int(x)+dx))>=8)!=(x>=8)))continue;
      const float weight=float((dx==0?2:1)*(dy==0?2:1));
@@ -155,7 +164,7 @@ static void RunHistoryPixels(Device& gpu,ID3D12RootSignature* root,ID3D12Pipelin
     Require(pixel[0]>.28f && pixel[0]<.32f,"owned checker noise reduction");
     Require(std::abs(pixel[0]-pixel[3])<1e-5f,"owned alpha ABI");continue;
    }
-   for(UINT ch=0;ch<((cases[i].smooth||cases[i].bypass||cases[i].owned)?4u:3u);++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
+   for(UINT ch=0;ch<((cases[i].balanced||cases[i].smooth||cases[i].bypass||cases[i].owned)?4u:3u);++ch){const float channelExpected=cases[i].view==1&&ch==1?0.f:expected;
     Require(std::isfinite(pixel[ch])&&std::abs(pixel[ch]-channelExpected)<.0001f,cases[i].name);
    }
   }

@@ -5,6 +5,7 @@ on:
     branches:
       - work/rt-replacement-r392
       - work/gi-replacement-core-r425
+      - work/gi-balanced-filter-r437
       - work/gi-filter-capture-r436
       - work/gi-filter-restore-r435
       - work/gi-stage-diagnostic-r432
@@ -1487,7 +1488,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-filter-capture-r436') { 'ControlTOH-GI-Capture-R436' } elseif ('${{ github.ref_name }}' -eq 'work/gi-filter-restore-r435') { 'ControlTOH-GI-Filter-R435' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-balanced-filter-r437') { 'ControlTOH-GI-Balanced-R437' } elseif ('${{ github.ref_name }}' -eq 'work/gi-filter-capture-r436') { 'ControlTOH-GI-Capture-R436' } elseif ('${{ github.ref_name }}' -eq 'work/gi-filter-restore-r435') { 'ControlTOH-GI-Filter-R435' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1531,6 +1532,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
+          if ($out -eq 'ControlTOH-GI-Balanced-R437') {
+            Copy-Item docs/GI-Balanced-R437.txt "$out/ControlTOH/README.txt"
+          }
           if ($out -eq 'ControlTOH-GI-Capture-R436') {
             Copy-Item docs/GI-Capture-R436.txt "$out/ControlTOH/README.txt"
           } elseif ($out -eq 'ControlTOH-GI-Filter-R435') {
@@ -1561,8 +1565,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-filter-capture-r436' && 'ControlTOH-GI-Capture-R436' || github.ref_name == 'work/gi-filter-restore-r435' && 'ControlTOH-GI-Filter-R435' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-balanced-filter-r437' && 'ControlTOH-GI-Balanced-R437' || github.ref_name == 'work/gi-filter-capture-r436' && 'ControlTOH-GI-Capture-R436' || github.ref_name == 'work/gi-filter-restore-r435' && 'ControlTOH-GI-Filter-R435' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
+            ControlTOH-GI-Balanced-R437.zip
+            ControlTOH-GI-Balanced-R437.sha256
             ControlTOH-GI-Capture-R436.zip
             ControlTOH-GI-Capture-R436.sha256
             ControlTOH-GI-Filter-R435.zip

@@ -92,6 +92,6 @@ int main(){try{
  Require(observed==native.Get(),"stable energy native restore");
  control_rr_gi::spatialSteady=false;
  control_rr_clamp::dispatchOriginal=realDispatch;control_rr_clamp::setOriginal=realSet;
- RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth,bundle->bypass,bundle->owned,bundle->stableEnergy);
+ RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth,bundle->bypass,bundle->owned,bundle->stableEnergy,bundle->adaptive);
  std::cout<<"PASS R217 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
