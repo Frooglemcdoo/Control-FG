@@ -1,0 +1,17 @@
+R436 - BOTH filter image capture (R435 rendering unchanged)
+
+Close Control and extract beside Control_DX12.exe, replacing files.
+Launch normally. RR, RT indirect lighting and Enhanced Lighting ON; FG OFF.
+Use 4 GI rays and GI: BOTH. Keep these settings throughout the capture.
+Frame the weak projector light and a surface that boils while moving.
+Open F10, click CAPTURE BOTH and return to gameplay before the five-second delay.
+One beep: hold still. Three beeps: pan slowly. Two beeps: the ZIP is ready.
+Explorer selects the completed ZIP. Send it.
+
+Records two consecutive full-resolution frames stationary and two moving,
+with pre-filter GI, filtered GI at RR input, HDR RR input, RR output, guides,
+motion data and filter-stage validation. No GPU timings are claimed. The filtered
+image is allowed to differ from the raw image. RAW capture checks remain strict.
+There is no separate image immediately after the first temporal pass.
+Readbacks can pause the game; these frames are not steady-state FPS measurements.
+No guided sampling, ray-count change, new filter or quality fix is enabled.

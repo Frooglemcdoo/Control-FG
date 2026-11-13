@@ -196,7 +196,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
    out<<"\"gi_sampling_experiment\":\"R264_current_frame_256_creation\",";
 #endif
-   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":"<<(c->pathCondition==3?1:c->pathCondition?2:4)<<",\"gi_signal_boundary\":\"after_filter_at_rr_input\","
+   out<<"\"gi_sequence_build\":\"R263\",\"sequence_pairs\":"<<((c->pathCondition==3||c->pathCondition==4)?1:c->pathCondition?2:4)<<",\"gi_signal_boundary\":\"after_filter_at_rr_input\","
       <<"\"pre_gi_frame\":"<<c->preGIFrame<<",\"pre_gi_captured\":"<<(c->preGICaptured?"true":"false")
       <<",\"pre_gi_tick_ms\":"<<c->preGITick<<",\"evaluation_tick_ms\":"<<c->evaluationTick<<",";
 #endif
