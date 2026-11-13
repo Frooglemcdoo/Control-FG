@@ -863,7 +863,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator compile failed' }
           python tools/embed-gi-evaluator.py build/gi_evaluator.dxil build/gi_evaluator.generated.h
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator embedding failed' }
-          & $dxc -T cs_6_0 -E main -HV 2018 -WX -D GI_GUIDED_LIVE=1 src/shaders/gi_owned_lighting.hlsl -Fo build/gi-guided-evaluator.dxil
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_guided_lighting.hlsl -Fo build/gi-guided-evaluator.dxil
           if ($LASTEXITCODE -ne 0) { throw 'Guided live evaluator compile failed' }
           python -c "from pathlib import Path;p=Path('build/gi_guided.generated.h');p.write_text('static const unsigned char kGuidedEvaluator[]={'+','.join(str(x) for x in Path('build/gi-guided-evaluator.dxil').read_bytes())+'};')"
           if ($LASTEXITCODE -ne 0) { throw 'Guided live evaluator embedding failed' }
