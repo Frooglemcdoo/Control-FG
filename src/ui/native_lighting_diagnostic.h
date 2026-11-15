@@ -1,5 +1,7 @@
 #pragma once
 #include "theme.h"
+#include <commctrl.h>
+#pragma comment(lib,"comctl32.lib")
 #include "../relax_quality.h"
 #include "render_fps.h"
 #include "lighting_panel_window.h"
@@ -16,6 +18,18 @@
 namespace native_lighting::ui {
 inline constexpr wchar_t kClass[] = L"ControlFGLightingDiagnosticR54";
 inline constexpr int kWidth = 490, kButtonFirst = 5400;
+inline constexpr int kRaySlider = 5390;
+inline bool rayDragging=false;
+inline bool RaysEditable() noexcept {
+ return control_rr::RRUserRequested()&&!path_capture::active&&!settings_report::Busy()&&!compare_capture::Active()
+     &&!capture_suite::active&&!control_gi_button::Active()&&!performance_capture::Active();
+}
+inline void RefreshRaySlider(HWND panel) noexcept {
+ HWND slider=GetDlgItem(panel,kRaySlider);if(!slider)return;
+ const bool enabled=RaysEditable();EnableWindow(slider,enabled);
+ if(!enabled)rayDragging=false;
+ if(!rayDragging)SendMessageW(slider,TBM_SETPOS,TRUE,control_rr::GISampleRequested()/2);
+}
 inline constexpr int kModeRows = (kModeCount + 2) / 3;
 inline constexpr int kStatusY=746,kCaptureStatusY=766,kFooterY=812,kHeight=858;
 // Preserve the original three-column controls and theme; group actions by purpose.
@@ -150,6 +164,7 @@ inline void RestoreCursorVisibility() noexcept {
     }
 }
 inline void ClosePanel(HWND panel) noexcept {
+    rayDragging=false;
     const bool returnToGame = PanelHasForeground(panel);
     panelOpen = false;
     RestoreCursorVisibility();
@@ -186,6 +201,12 @@ inline void Paint(HWND window) noexcept {
     DrawLabel(dc,headingFont,L"LIGHTING DIAGNOSTIC R424",{14,8,kWidth-12,32},theme::kAccent);
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
+    wchar_t rayLabel[48]{};
+    const unsigned rayPosition=rayDragging?unsigned(SendMessageW(GetDlgItem(window,kRaySlider),TBM_GETPOS,0,0)):control_rr::GISampleRequested()/2;
+    if(!control_rr::RRUserRequested())wcscpy_s(rayLabel,L"GI RAYS: RR OFF");
+    else if(!rayPosition)wcscpy_s(rayLabel,L"GI RAYS: NATIVE");
+    else swprintf_s(rayLabel,L"GI RAYS: %u",rayPosition*2);
+    DrawLabel(dc,detailFont,rayLabel,{14,348,162,382},theme::kText);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
     DrawLabel(dc,detailFont,L"CAPTURE",{14,524,kWidth-12,548},theme::kAccent);
     const auto mode=LiveSelection::GetMode(selection.Read());
@@ -364,7 +385,14 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_ERASEBKGND: return 1;
     case WM_SETCURSOR: SetCursor(LoadCursorW(nullptr, IDC_ARROW)); return TRUE;
     case WM_PAINT: Paint(window); return 0;
-    case WM_CREATE:
+    case WM_CREATE: {
+        INITCOMMONCONTROLSEX common{sizeof(common),ICC_BAR_CLASSES};InitCommonControlsEx(&common);
+        HWND slider=CreateWindowExW(0,TRACKBAR_CLASSW,L"GI rays",WS_CHILD|WS_VISIBLE|WS_TABSTOP|TBS_HORZ|TBS_AUTOTICKS,
+            166,348,306,36,window,reinterpret_cast<HMENU>(INT_PTR(kRaySlider)),selfModule,nullptr);
+        SendMessageW(slider,TBM_SETRANGE,TRUE,MAKELPARAM(0,8));
+        SendMessageW(slider,TBM_SETPAGESIZE,0,1);
+        SendMessageW(slider,TBM_SETTICFREQ,1,0);
+        RefreshRaySlider(window);
         for (unsigned i=0;i<kButtonCount;++i) {
             if(!ButtonVisible(i))continue;
             const RECT bounds=ButtonRect(i);
@@ -373,6 +401,21 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             SendMessageW(button,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);
         }
         return 0;
+    }
+    case WM_HSCROLL:
+        if(reinterpret_cast<HWND>(lParam)==GetDlgItem(window,kRaySlider)){
+            if(!RaysEditable()){rayDragging=false;RefreshRaySlider(window);return 0;}
+            if(LOWORD(wParam)==TB_THUMBTRACK){rayDragging=true;InvalidateRect(window,nullptr,FALSE);return 0;}
+            rayDragging=false;
+            const unsigned pos=unsigned(SendMessageW(reinterpret_cast<HWND>(lParam),TBM_GETPOS,0,0));
+            if(pos<=8){
+                std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
+                const auto& option=control_settings::Definition(control_settings::Key::GlobalIlluminationSamples);
+                if(pos*2!=control_rr::GISampleRequested()&&control_settings::Write(option,int(pos*2)))FGSettingsMarkSettingsDirty();
+            }
+            RefreshRaySlider(window);InvalidateRect(window,nullptr,FALSE);return 0;
+        }
+        break;
     case WM_DRAWITEM: {
         const auto* item=reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
         const unsigned index=item->CtlID-kButtonFirst;
@@ -646,7 +689,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
             }
             // Release confinement only while this panel owns input, never over other apps.
             if (GetForegroundWindow()==game || PanelHasForeground(panel)) ClipCursor(nullptr);
-            if(GetTickCount64()>=nextRefresh){InvalidateRect(panel,nullptr,FALSE);
+            if(GetTickCount64()>=nextRefresh){RefreshRaySlider(panel);InvalidateRect(panel,nullptr,FALSE);
                 const auto mode=LiveSelection::GetMode(selection.Read());
                 for(unsigned i=0;i<kButtonCount;++i){
                     HWND button=GetDlgItem(panel,kButtonFirst+i);
