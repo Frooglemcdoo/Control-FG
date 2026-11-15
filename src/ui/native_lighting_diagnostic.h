@@ -440,15 +440,12 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
     case WM_COMMAND:
         if(HIWORD(wParam)==BN_CLICKED) {
             const unsigned index=LOWORD(wParam)-kButtonFirst;
-            if(path_capture::active||settings_report::Busy()||compare_capture::Active()||!ButtonVisible(index))return 0;
+            if(!ButtonVisible(index))return 0;
+            if(index!=kModeCount+29&&(path_capture::active||settings_report::Busy()||compare_capture::Active()))return 0;
             if(index==kModeCount+29){
                 if(compare_capture::Start(GetTickCount64()))ClosePanel(window);
                 else {
-#ifdef CONTROL_GI_RAY_COST_CAPTURE
-                    MessageBoxW(window,L"Set GI RAYS to 10, use RR ON, FG OFF, GI RAW BYPASS, and finish other captures. Keep the camera still at the lamp/Jesse view for about two minutes. Only the ray count changes; 10 rays are restored afterward. Two beeps mean the ZIP is ready. Restart if the profiler query budget is exhausted.",L"GI cost capture",MB_OK);
-#else
-                    MessageBoxW(window,L"Enable RR, turn FG off and finish other captures. Keep the camera still with Jesse visible for about five minutes. Two beeps mean the ZIP is ready.",L"RR performance comparison",MB_OK);
-#endif
+                    MessageBoxW(window,compare_capture::startFailure,L"GI cost capture did not start",MB_OK|MB_ICONINFORMATION);
                 }
                 return 0;
             }

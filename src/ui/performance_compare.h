@@ -124,7 +124,7 @@ inline void Summary(){
 #endif
 }
 inline void Finish(HWND game,const char* reason){
- outcome=reason;Restore();performance::watch=false;Summary();
+ Log("GI_COST_R440A finished reason=%s",reason);outcome=reason;Restore();performance::watch=false;Summary();
  Write(L"settings-restored.txt",settings_report::Snapshot());
  if(ioFailed){state=State::Idle;MessageBoxW(game,L"Some report files could not be saved. Partial files remain under LOCALAPPDATA/ControlFGProbe.",L"Performance comparison incomplete",MB_OK);return;}
  wchar_t sys[MAX_PATH]{},exe[MAX_PATH]{};GetSystemDirectoryW(sys,MAX_PATH);swprintf_s(exe,L"%s\\tar.exe",sys);
@@ -133,29 +133,38 @@ inline void Finish(HWND game,const char* reason){
  if(ShellExecuteExW(&run)&&run.hProcess){packager=run.hProcess;state=State::Package;until=GetTickCount64()+60000;}
  else {state=State::Idle;MessageBoxW(game,L"Packaging could not start. Settings restored; report folder retained under LOCALAPPDATA/ControlFGProbe.",L"Performance comparison",MB_OK);}
 }
+inline const wchar_t* startFailure=L"";
+inline bool RejectStart(const wchar_t* reason){
+ startFailure=reason;Log("GI_COST_R440A refused reason=%ls",reason);return false;
+}
 inline bool Start(uint64_t now){
+ startFailure=L"";
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
- if(control_rr::GISampleRequested()!=10||control_rr::RRUserModeValue()!=control_rr::RRUserMode::Full||
-    control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::RawBypass||
-    rt_surface_source::request.load()||rt_surface_source::manualGI.load()||rt_surface_source::manualContact.load())return false;
+ if(control_rr::GISampleRequested()!=10)return RejectStart(L"Set the F10 GI RAYS slider to 10. Keep GI: FIXED selected.");
+ if(control_rr::RRUserModeValue()!=control_rr::RRUserMode::Full)return RejectStart(L"Turn Ray Reconstruction ON before starting this capture.");
+ if(!rt_surface_source::ReadyForRayCostCapture())return RejectStart(L"In F10, select RELAX: OFF and CONTACT: AUTO, and finish any GI comparison/capture. Keep GI: FIXED selected. If these already match, restart the game to clear temporary diagnostic overrides.");
 #endif
- if(Active()||settings_report::Busy()||path_capture::active||path_capture::packager||control_diagnostics::Active()||control_rr_capture_ui::Busy()||capture_suite::active||performance_capture::Active()||control_gi_button::Active()||
-    !control_rr::RRUserRequested()||GetFGUserMultiplier()!=kSLSelectionOff||!gi_reuse::SingleProducerEnabled()||!ModeAvailable(kNativeBlendDefaultMode,readyMask.load())||!performance::Prepare())return false;
- if(performance::count+8192>performance::kCapacity)return false;
- LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return false;qpcFrequency=frequency.QuadPart;
- wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return false;
+ if(Active()||settings_report::Busy()||path_capture::active||path_capture::packager||control_diagnostics::Active()||control_rr_capture_ui::Busy()||capture_suite::active||performance_capture::Active()||control_gi_button::Active())return RejectStart(L"Another capture is active. Let it finish before starting GI COST CAPTURE.");
+ if(!control_rr::RRUserRequested())return RejectStart(L"Turn Ray Reconstruction ON before starting this capture.");
+ if(GetFGUserMultiplier()!=kSLSelectionOff)return RejectStart(L"Turn Frame Generation OFF before starting this capture.");
+ if(!gi_reuse::SingleProducerEnabled())return RejectStart(L"The owned GI path is unavailable. Restart with this capture build installed.");
+ if(!ModeAvailable(kNativeBlendDefaultMode,readyMask.load()))return RejectStart(L"The lighting pipelines are not ready. Return to gameplay, let the scene load, then try again.");
+ if(!performance::Prepare())return RejectStart(L"GPU timing could not initialize or its query budget is exhausted. Restart the game before trying again.");
+ if(performance::count+8192>performance::kCapacity)return RejectStart(L"The GPU query budget is exhausted. Restart the game before trying again.");
+ LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return RejectStart(L"Windows could not provide the performance timer.");qpcFrequency=frequency.QuadPart;
+ wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return RejectStart(L"The LOCALAPPDATA output path is unavailable or too long.");
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-GI-R440-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
+ folder=root+L"\\Performance-GI-R440A-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
  {std::lock_guard<std::recursive_mutex> guard(fgSettingsMutex);CopyFileW(fgSettingsPath.c_str(),(folder+L"\\mod-settings.ini").c_str(),FALSE);}
  wchar_t module[32768]{};GetModuleFileNameW(nullptr,module,32768);if(auto* slash=wcsrchr(module,L'\\')){*slash=0;CopyFileW((std::wstring(module)+L"\\renderer.ini").c_str(),(folder+L"\\renderer.ini").c_str(),FALSE);}
- if(ioFailed)return false;
+ if(ioFailed)return RejectStart(L"Could not write the initial capture report under LOCALAPPDATA/ControlFGProbe.");
  AcquireSRWLockExclusive(&performance::lock);for(unsigned i=0;i<performance::count;++i){performance::samples[i].current=false;performance::samples[i].state=performance::State::Discarded;}ReleaseSRWLockExclusive(&performance::lock);
  savedInterval=performance::sampleInterval.load();performance::sampleInterval=64;performance::skipped=0;
  geometryAtStart=0;control_compare::geometry=0;control_compare::running=true;
- step=0;state=State::Arm;until=now+5000;return true;
+ step=0;state=State::Arm;until=now+5000;Log("GI_COST_R440A accepted rays=10 arm_seconds=5");Beep(700,100);return true;
 }
 inline void Tick(HWND game,uint64_t now){
  if(!Active())return;
@@ -177,7 +186,7 @@ inline void Tick(HWND game,uint64_t now){
   AcquireSRWLockExclusive(&performance::lock);performance::scanFirst=performance::count;ReleaseSRWLockExclusive(&performance::lock);
   session=performance::capture.fetch_add(1)+1;skippedStart=performance::skipped.load();settings_check::Begin();
   control_compare::phase=step;control_compare::enabled=true;performance::enabled=conditions[step].profile;
-  state=State::Measure;until=now+12000;Beep(800,80);return;
+  Log("GI_COST_R440A phase=%u name=%s",step,conditions[step].name);state=State::Measure;until=now+12000;Beep(800,80);return;
  }
  if(state==State::Measure){
   const auto rr=settings_check::counts[conditions[step].rr?settings_check::RRSuccess:settings_check::SRSuccess].load();if(rr!=lastRR){lastRR=rr;lastRRTime=now;}

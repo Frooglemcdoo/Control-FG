@@ -30,6 +30,11 @@ inline unsigned EffectiveRequest() noexcept {
 #endif
 #endif
 }
+// Test the effective rendering path: manualGI=4 is RELAX: OFF, not an active override.
+inline bool ReadyForRayCostCapture() noexcept {
+ return !request.load() && EffectiveRequest()==0 && !manualContact.load() &&
+     control_rr_gi::stageMode.load()==control_rr_gi::StageMode::RawBypass;
+}
 inline bool ManualContactUnfiltered() noexcept {return !request.load() && manualContact.load()==2;}
 inline bool ManualContactPreserved() noexcept {return !request.load() && manualContact.load()==1;}
 inline void ResetManual() noexcept {manualGI.store(defaultManualGI);manualContact.store(0);}
