@@ -3,16 +3,16 @@
 #include <array>
 #include <cstdint>
 namespace control_compare {
-struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,character,volume;bool rr=true,profile=true;};
+struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,character,volume;bool rr=true,profile=true,baseline=false;};
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
 inline constexpr Condition conditions[]={
- {"native_begin",true,0,true,false,true,false},
- {"rays10_begin",true,10,true,false,true,false},
- {"rays10_repeat",true,10,true,false,true,false},
- {"native_repeat",true,0,true,false,true,false},
- {"rays10_return",true,10,true,false,true,false},
- {"rays10_no_queries",true,10,true,false,true,false,true,false},
- {"rays10_profile_return",true,10,true,false,true,false}};
+ {"r442_begin",true,10,true,false,true,false,true,true,true},
+ {"r443_begin",true,10,true,false,true,false},
+ {"r443_repeat",true,10,true,false,true,false},
+ {"r442_repeat",true,10,true,false,true,false,true,true,true},
+ {"r443_return",true,10,true,false,true,false},
+ {"r443_no_queries",true,10,true,false,true,false,true,false},
+ {"r443_profile_return",true,10,true,false,true,false}};
 #else
 inline constexpr Condition conditions[]={
  {"native_rr_begin",false,0,false,false,false,false},
@@ -32,6 +32,9 @@ inline constexpr Condition conditions[]={
 #endif
 inline constexpr unsigned phaseCount=sizeof(conditions)/sizeof(conditions[0]);
 inline constexpr unsigned capacity=65536;
+// Revision 0 = unknown, 1 = R442 reference, 2 = R443 candidate. Measured dispatches only.
+inline std::atomic<bool> evaluatorBaseline{false};
+inline std::atomic<std::uint64_t> evaluatorCounts[phaseCount][3]{};
 struct Cadence {std::uint64_t ticks=0,present=0;unsigned phase=0;std::atomic<bool> ready{false};};
 inline std::array<Cadence,capacity> frames{};
 inline std::atomic<bool> enabled{false},running{false};
@@ -40,6 +43,7 @@ inline std::atomic<unsigned> phase{0},count{0},dropped{0};
 inline std::atomic<std::uint64_t> cpuTicks[phaseCount][3]{},cpuCalls[phaseCount][3]{};
 inline void Reset() noexcept {
  enabled=false;count=0;dropped=0;
+ for(auto& p:evaluatorCounts)for(auto& n:p)n=0;
  for(auto& f:frames)f.ready=false;
  for(unsigned p=0;p<phaseCount;++p)for(unsigned s=0;s<3;++s){cpuTicks[p][s]=0;cpuCalls[p][s]=0;}
 }

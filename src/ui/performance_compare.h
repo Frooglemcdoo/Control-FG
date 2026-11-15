@@ -37,7 +37,7 @@ inline std::string Constants(){
  out<<"clamp="<<unsigned(control_rr_clamp::requestedMode.load())<<" hdr="<<IsHdr10BridgeActive()<<" preset="<<control_rr::RRUserPresetValue();return out.str();
 }
 inline void Restore(){
- control_compare::enabled=false;control_compare::running=false;settings_check::End();performance::enabled=false;
+ control_compare::enabled=false;control_compare::running=false;control_compare::evaluatorBaseline=false;settings_check::End();performance::enabled=false;
  gi_reuse::ownedRequested=saved.owned;control_rr::GISampleSelect(saved.rays);control_visual::characterQuality=saved.quality;
  control_visual::lightingEnabled=saved.lighting;volume_test::phase=saved.volume;character_surface::phase=saved.surface;
  rt_surface_source::request=saved.request;rt_surface_source::manualGI=saved.manualGI;rt_surface_source::manualContact=saved.contact;
@@ -47,7 +47,8 @@ inline void Restore(){
 }
 inline bool Apply(){
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
- // Only the requested count changes. Do not reset lighting, guides or filters.
+ // Compare evaluator revisions at the same ten-ray workload; retain all other settings.
+ control_compare::evaluatorBaseline=conditions[step].baseline;
  control_rr::GISampleSelect(conditions[step].rays);
 #else
  const auto& p=conditions[step];
@@ -140,6 +141,7 @@ inline bool RejectStart(const wchar_t* reason){
 inline bool Start(uint64_t now){
  startFailure=L"";
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(!gi_evaluator::baselineReady.load()||!gi_evaluator::ready.load()||!gi_reuse::guidedEvaluatorReady.load())return RejectStart(L"GI comparison shaders are not ready. Return to gameplay and let the scene load.");
  if(control_rr::GISampleRequested()!=10)return RejectStart(L"Set the F10 GI RAYS slider to 10. Keep GI: FIXED selected.");
  if(control_rr::RRUserModeValue()!=control_rr::RRUserMode::Full)return RejectStart(L"Turn Ray Reconstruction ON before starting this capture.");
  if(!rt_surface_source::ReadyForRayCostCapture())return RejectStart(L"In F10, select RELAX: OFF and CONTACT: AUTO, and finish any GI comparison/capture. Keep GI: FIXED selected. If these already match, restart the game to clear temporary diagnostic overrides.");
@@ -154,7 +156,7 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return RejectStart(L"Windows could not provide the performance timer.");qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return RejectStart(L"The LOCALAPPDATA output path is unavailable or too long.");
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-GI-R442-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
+ folder=root+L"\\Performance-GI-R443-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
@@ -202,7 +204,9 @@ inline void Tick(HWND game,uint64_t now){
   const unsigned mask=results[step].sampleMask;
   const bool rays=conditions[step].rays?mask==(1u<<conditions[step].rays):mask&&!(mask&(mask-1));
   results[step].observed=e[RRSuccess]>100&&!e[SRSuccess]&&!e[RRFailure]&&!e[SRFailure]&&
-      e[OwnedGI]>100&&!e[NativeGI]&&!e[RelaxRecorded]&&!e[RelaxFallback]&&rays;
+      e[OwnedGI]>100&&!e[NativeGI]&&!e[RelaxRecorded]&&!e[RelaxFallback]&&rays&&
+      evaluatorCounts[step][conditions[step].baseline?1:2].load()>100&&
+      evaluatorCounts[step][conditions[step].baseline?2:1].load()==0&&evaluatorCounts[step][0].load()==0;
 #else
   results[step].observed=(conditions[step].rr?(e[RRSuccess]>100&&!e[SRSuccess]):(e[SRSuccess]>100&&!e[RRSuccess]))&&!e[RRFailure]&&!e[SRFailure]&&!e[RelaxFallback]&&
     (conditions[step].owned?e[OwnedGI]>100&&!e[NativeGI]:e[NativeGI]>100&&!e[OwnedGI])&&

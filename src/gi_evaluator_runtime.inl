@@ -3,6 +3,14 @@ namespace gi_evaluator {
 inline const GUID kVariant={0x309e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline const GUID kGuided={0x434e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline const GUID kMode={0x309e0002,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+inline const GUID kR442={0x443e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
+inline const GUID kR442Guided={0x443e0002,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
+inline const GUID kRevision={0x443e0003,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
+inline std::atomic<bool> baselineReady{false};
+#include "../build/gi_evaluator_r442.generated.h"
+#include "../build/gi_guided_r442.generated.h"
+#endif
 inline bool Enabled() noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
  static const bool value=[] {char v[8]{};return gi_reuse::SingleProducerEnabled()||(GetEnvironmentVariableA("CONTROLTOH_GI_EVALUATOR",v,sizeof(v))==1&&v[0]=='1');}();return value;
@@ -32,6 +40,9 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  ID3D12PipelineState* alternate=nullptr;
  HRESULT hr=create(device,&replacement,IID_PPV_ARGS(&alternate));
  if(SUCCEEDED(hr)&&!alternate)hr=E_UNEXPECTED;
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(SUCCEEDED(hr)){const UINT rev=2;hr=alternate->SetPrivateData(kRevision,sizeof(rev),&rev);}
+#endif
  if(SUCCEEDED(hr)){const UINT mode=2;hr=alternate->SetPrivateData(kMode,sizeof(mode),&mode);}
  if(SUCCEEDED(hr)){const UINT mode=1;ID3D12PipelineState* owner=nullptr;hr=native->QueryInterface(IID_PPV_ARGS(&owner));
   // Query only the native owner interface; never retain a global device/PSO.
@@ -46,10 +57,29 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   auto guideHR=create(device,&guidedDesc,IID_PPV_ARGS(&guided));
   if(SUCCEEDED(guideHR))guideHR=native->QueryInterface(IID_PPV_ARGS(&owner));
   const UINT mode=2;
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+  if(SUCCEEDED(guideHR)){const UINT rev=2;guideHR=guided->SetPrivateData(kRevision,sizeof(rev),&rev);}
+#endif
   if(SUCCEEDED(guideHR))guideHR=guided->SetPrivateData(kMode,sizeof(mode),&mode);
   if(SUCCEEDED(guideHR))guideHR=owner->SetPrivateDataInterface(kGuided,guided.Get());
   gi_reuse::guidedEvaluatorReady.store(SUCCEEDED(guideHR));
   Trace("GI_GUIDED_R434 evaluator_ready=%u hr=0x%08lX fixed_scene=1 fraction=0.1",unsigned(SUCCEEDED(guideHR)),static_cast<unsigned long>(guideHR));
+ }
+#endif
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(SUCCEEDED(hr)){
+  Microsoft::WRL::ComPtr<ID3D12PipelineState> owner;auto refHR=native->QueryInterface(IID_PPV_ARGS(&owner));
+  for(unsigned i=0;i<2&&SUCCEEDED(refHR);++i){
+   auto refDesc=*desc;refDesc.CachedPSO={};refDesc.CS=i?D3D12_SHADER_BYTECODE{kGuidedR442,sizeof(kGuidedR442)}:D3D12_SHADER_BYTECODE{kEvaluatorR442,sizeof(kEvaluatorR442)};
+   Microsoft::WRL::ComPtr<ID3D12PipelineState> ref;refHR=create(device,&refDesc,IID_PPV_ARGS(&ref));
+   if(SUCCEEDED(refHR)&&!ref)refHR=E_UNEXPECTED;
+   const UINT mode=2,rev=1;
+   if(SUCCEEDED(refHR))refHR=ref->SetPrivateData(kMode,sizeof(mode),&mode);
+   if(SUCCEEDED(refHR))refHR=ref->SetPrivateData(kRevision,sizeof(rev),&rev);
+   if(SUCCEEDED(refHR))refHR=owner->SetPrivateDataInterface(i?kR442Guided:kR442,ref.Get());
+   if(SUCCEEDED(refHR)){GIOwnedPipeline::Share(native,ref.Get());gi_frozen_prepare::Share(native,ref.Get());}
+  }
+  baselineReady.store(SUCCEEDED(refHR));
  }
 #endif
  if(alternate)alternate->Release();
@@ -62,17 +92,34 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 inline ID3D12PipelineState* Select(ID3D12PipelineState* native) noexcept {
  if(!Enabled()||(!requested.load()&&!gi_reuse::GuidedLiveEnabled())||!native)return nullptr;
  ID3D12PipelineState* result=nullptr;UINT size=sizeof(result);
- if(FAILED(native->GetPrivateData(gi_reuse::GuidedLiveEnabled()&&gi_reuse::guidedScopeActive&&gi_reuse::guidedScopeDraw?kGuided:kVariant,&size,&result)))return nullptr;
+ const bool guided=gi_reuse::GuidedLiveEnabled()&&gi_reuse::guidedScopeActive&&gi_reuse::guidedScopeDraw;
+ const GUID* key=guided?&kGuided:&kVariant;
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(control_compare::evaluatorBaseline.load())key=guided?&kR442Guided:&kR442;
+#endif
+ if(FAILED(native->GetPrivateData(*key,&size,&result)))return nullptr;
  if(size!=sizeof(result)){if(result)result->Release();return nullptr;}return result;
 }
 inline void Bind(ID3D12GraphicsCommandList* list,ID3D12PipelineState* pso) noexcept {
  if(!Enabled())return;UINT mode=0,size=sizeof(mode);
  if(!pso||FAILED(pso->GetPrivateData(kMode,&size,&mode))||size!=sizeof(mode))mode=0;
  list->SetPrivateData(kMode,sizeof(mode),&mode);
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(control_compare::running.load()){
+  UINT rev=0,n=sizeof(rev);if(!pso||FAILED(pso->GetPrivateData(kRevision,&n,&rev))||n!=sizeof(rev))rev=0;
+  list->SetPrivateData(kRevision,sizeof(rev),&rev);
+ }
+#endif
 }
 inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  if(!Enabled())return;UINT mode=0,size=sizeof(mode);
  if(FAILED(list->GetPrivateData(kMode,&size,&mode))||size!=sizeof(mode)||!mode)return;
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(control_compare::enabled.load()){
+  UINT rev=0,n=sizeof(rev);if(FAILED(list->GetPrivateData(kRevision,&n,&rev))||n!=sizeof(rev)||rev>2)rev=0;
+  const auto p=control_compare::phase.load();if(p<control_compare::phaseCount)++control_compare::evaluatorCounts[p][rev];
+ }
+#endif
  settings_check::Record(mode==2?settings_check::OwnedGI:settings_check::NativeGI);
  if(mode==2&&gi_reuse::SingleProducerEnabled())++gi_reuse::singleEvaluatorDispatches;
  const auto rev=revision.load();const auto key=rev*4+mode;

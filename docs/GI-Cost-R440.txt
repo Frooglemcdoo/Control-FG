@@ -1,17 +1,21 @@
-R442 - Combine repeated GI evaluator buffer reads
+R443 - Reuse invariant GI evaluator constants
 
-The evaluator reads adjacent material/light/volume fields through shared
-vector loads. Every consumed word retains its original byte address.
-Ray counts, directions, materials, lighting arithmetic and RR inputs are
-unchanged. No new filtering or history reuse is added. R441 is retained.
-Compiler/address checks and a Windows GPU fixture validate the change.
-An in-game performance gain is not yet measured.
+Retains R434/R439 rays and R442 combined structured reads. Five constant
+reads now execute once before the ray loop; four redundant reads share
+existing identical CBV values. No lighting arithmetic, rays or RR inputs
+are changed. Static address/CFG proofs and Windows GPU tests validate
+this transformation. Performance on the RTX 5090 is not yet measured.
 
 Close Control and extract beside Control_DX12.exe, replacing files.
 Use RR ON, FG OFF, GI RAYS 10, GI GUIDE ON (FIXED), RELAX OFF, CONTACT AUTO.
-Keep REF CLAMP at 60% to match the supplied R441 capture.
-Check the lamp/Jesse view for the same clean image.
-F10 -> GI COST CAPTURE measures Native and 10-ray phases automatically.
+Keep REF CLAMP at 60%. Check the lamp/Jesse view for the same clean image.
+
+F10 -> GI COST CAPTURE now compares R442 and R443 automatically at TEN
+rays throughout, in the same session. It no longer measures Native rays.
+It checks the evaluator revision actually bound, not just the selection.
+Seven phases: R442 / R443 / R443 / R442 / R443 / R443 no-query / R443.
+Each phase has 5 seconds warmup and 12 seconds measurement.
 An immediate beep confirms acceptance. Return to gameplay and remain
 still for about two minutes. Two beeps and Explorer identify the report ZIP.
-Send that ZIP. Ten rays are restored on completion or an aborted run.
+Send that ZIP. Ten rays and the R443 evaluator return after completion
+or an aborted run. R442 is retained inside this build for the comparison.
