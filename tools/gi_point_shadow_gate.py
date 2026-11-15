@@ -47,11 +47,11 @@ float F(uint n){return (Hash(n)&65535)/65535.0f;}
  record.d[0]=asuint(light.x);record.d[1]=asuint(light.y);record.d[2]=asuint(light.z);record.d[3]=asuint(0.95f);
  record.d[4]=asuint(F(n+3)*20);record.d[5]=asuint(F(n+4)*20);record.d[6]=asuint(F(n+5)*20);record.d[7]=asuint(0.01f+F(n+6)*20);
  record.d[9]=asuint(F(n+10)*0.1f);record.d[10]=asuint(1.2f);record.d[11]=asuint(0.7f);
- record.d[12]=asuint(0);record.d[13]=asuint(0);record.d[14]=asuint(1);record.d[15]=asuint(1);
+ record.d[12]=asuint(0.0f);record.d[13]=asuint(0.0f);record.d[14]=asuint(1.0f);record.d[15]=asuint(1.0f);
  // Identity world-to-light transform, with nonzero vectors across all cube faces.
- record.d[16]=asuint(1);record.d[17]=0;record.d[18]=0;
- record.d[20]=0;record.d[21]=asuint(1);record.d[22]=0;
- record.d[24]=0;record.d[25]=0;record.d[26]=asuint(1);
+ record.d[16]=asuint(1.0f);record.d[17]=0;record.d[18]=0;
+ record.d[20]=0;record.d[21]=asuint(1.0f);record.d[22]=0;
+ record.d[24]=0;record.d[25]=0;record.d[26]=asuint(1.0f);
  record.d[28]=asuint(0.3f);record.d[29]=asuint(0.4f);record.d[30]=asuint(0.5f);
  record.d[32]=asuint(0.1f);record.d[33]=asuint(0.2f);record.d[34]=asuint(0.5f);record.d[35]=asuint(0.6f);
  record.d[36]=asuint(0.01f+F(n+31));record.d[39]=(n%3==0?0:2)|(n%5==0?4:0);
