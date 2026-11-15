@@ -18,7 +18,7 @@ if(outcome.rfind("COMPLETE",0)==0){
  for(const auto& s:stats)stable=stable&&s.count>100;
  if(!stable)outcome="INCOMPLETE: repeat drift exceeds 5% or insufficient frame intervals";
 }
-out<<"R441 GI RAY COST: R434/R439 OUTPUT, MULTI-RAY GUIDE BYPASS\nOutcome: "<<outcome<<"\n\n"
+out<<"R442 GI RAY COST: R434/R439 OUTPUT, COMBINED EVALUATOR LOADS\nOutcome: "<<outcome<<"\n\n"
    <<"Only GI sample request changes: Native versus 10. All lighting, guide, character, volume, reflection and GI-stage settings are retained.\n"
    <<"The R434 fixed guide applies only to the one-ray path; its toggle is held fixed. This measures the real selected paths, not pure TraceRay instruction cost.\n"
    <<"Seven phases, each 5-second warmup and 12-second measurement. GPU queries every 64 Presents; rays10_no_queries disables GPU queries and CPU span timers.\n"

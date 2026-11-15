@@ -1,18 +1,17 @@
-R441 - Skip unused one-ray guide work at multi-ray counts
+R442 - Combine repeated GI evaluator buffer reads
 
-This candidate keeps all 10 GI samples, ray directions, ranges, hit/miss
-shading and RR settings. The fixed one-ray guide remains unchanged.
-At counts above one, the ray shader skips 213 guide instructions whose
-results were previously calculated then discarded. The GPU driver may
-already optimize some of this work; performance gain is not yet measured.
-No blur, clamp, temporal reuse or sample reduction is added.
+The evaluator reads adjacent material/light/volume fields through shared
+vector loads. Every consumed word retains its original byte address.
+Ray counts, directions, materials, lighting arithmetic and RR inputs are
+unchanged. No new filtering or history reuse is added. R441 is retained.
+Compiler/address checks and a Windows GPU fixture validate the change.
+An in-game performance gain is not yet measured.
 
 Close Control and extract beside Control_DX12.exe, replacing files.
 Use RR ON, FG OFF, GI RAYS 10, GI GUIDE ON (FIXED), RELAX OFF, CONTACT AUTO.
-Check the accepted lamp/Jesse view for the same clean image.
-F10 -> GI COST CAPTURE measures the same Native/10-ray phases as R440A.
+Keep REF CLAMP at 60% to match the supplied R441 capture.
+Check the lamp/Jesse view for the same clean image.
+F10 -> GI COST CAPTURE measures Native and 10-ray phases automatically.
 An immediate beep confirms acceptance. Return to gameplay and remain
 still for about two minutes. Two beeps and Explorer identify the report ZIP.
 Send that ZIP. Ten rays are restored on completion or an aborted run.
-
-R440A's capture-start fix and specific failure messages are retained.
