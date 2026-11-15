@@ -16,7 +16,7 @@ origin=(rng.normal(size=(N,3))+[-82,25,111]).astype('f')
 origin[:100]=[-82.0759007,25.003847,110.55301]
 x=rng.integers(0,3840,N,dtype='uint32');y=rng.integers(0,2160,N,dtype='uint32');frame=rng.integers(0,100000,N,dtype='uint32')
 old=rng.normal(size=(N,3)).astype('f');old/=np.linalg.norm(old,axis=1)[:,None]
-count=np.ones(N,dtype='uint32');count[-1000:]=4
+count=np.ones(N,dtype='uint32');count[-1000:]=np.resize(np.arange(2,17,dtype='uint32'),1000)
 values={'%GI307SeedA':x*np.uint32(73856093)^y*np.uint32(19349663),'%GI307FrameSeed':frame*np.uint32(83492791),'%226':count}
 for name,a in zip(['%255','%256','%257'],origin.T):values[name]=a
 for name,a in zip(['%FMad61','%FMad59','%FMad57'],normal.T):values[name]=a

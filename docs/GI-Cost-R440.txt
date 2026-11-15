@@ -1,23 +1,18 @@
-R440A - GI ray-cost capture on the accepted R434/R439 rendering baseline
+R441 - Skip unused one-ray guide work at multi-ray counts
 
-This is a measurement build, not a performance optimization.
-Rendering shaders, sampling and filtering are unchanged from R439.
+This candidate keeps all 10 GI samples, ray directions, ranges, hit/miss
+shading and RR settings. The fixed one-ray guide remains unchanged.
+At counts above one, the ray shader skips 213 guide instructions whose
+results were previously calculated then discarded. The GPU driver may
+already optimize some of this work; performance gain is not yet measured.
+No blur, clamp, temporal reuse or sample reduction is added.
 
 Close Control and extract beside Control_DX12.exe, replacing files.
-Use RR ON, FG OFF, RELAX: OFF, GI: FIXED, GI RAYS 10 and your accepted lighting settings.
-Stand at the lamp/Jesse view, press F10, and click GI COST CAPTURE.
-One immediate beep confirms the capture was accepted. If a message appears,
-the capture did not start; it names the blocking requirement.
-Return to gameplay and keep the camera still for about two minutes.
-The capture automatically repeats Native and 10 rays while retaining other
-settings. It also measures 10 rays without GPU timing queries.
-Two beeps and an Explorer window indicate the ZIP is ready. Send that ZIP.
-The original ray selection (10) is restored on completion or an aborted run.
+Use RR ON, FG OFF, GI RAYS 10, GI GUIDE ON (FIXED), RELAX OFF, CONTACT AUTO.
+Check the accepted lamp/Jesse view for the same clean image.
+F10 -> GI COST CAPTURE measures the same Native/10-ray phases as R440A.
+An immediate beep confirms acceptance. Return to gameplay and remain
+still for about two minutes. Two beeps and Explorer identify the report ZIP.
+Send that ZIP. Ten rays are restored on completion or an aborted run.
 
-Reports include effective ray counts, rendered frame cadence, GI tracing plus
-hit-data writes, GI evaluation plus hit-data reads, and RR GPU timings.
-This does not independently isolate memory traffic within those stages.
-Capture is on demand; no profiling runs during ordinary gameplay.
-Do not use the temporary Native phases to judge 10-ray quality.
-
-R440A fixes R440 rejecting RELAX: OFF (manual GI mode 4). Rendering is unchanged.
+R440A's capture-start fix and specific failure messages are retained.
