@@ -188,7 +188,11 @@
         "MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY"
       ],
       "group": "rayTracing",
-      "hidden": true
+      "storage": {
+        "section": "RayReconstruction",
+        "key": "GISamples"
+      },
+      "afterNative": "MENU_OPTIONS_RT_INDIRECT_DIFFUSE_QUALITY"
     },
     {
       "key": "GlassReflections",

@@ -150,8 +150,8 @@ static void FGSettingsLoadSettings() noexcept {
     const unsigned int selection = control_settings::RestoreFG(rawSelection);
     const unsigned int rawTarget = FGSettingsReadStored(control_settings::Key::DynamicTargetFps);
     const unsigned int manualTarget = ClampFGDynamicManualTargetFps(rawTarget);
-    control_rr::GISampleSelect(0); // RR preserves the native GI sample count.
-    for(auto key:{control_settings::Key::EnhancedCharacterLighting,control_settings::Key::EnhancedLighting,control_settings::Key::FpsCounter}) {
+    // R439: restore the explicit ray-count choice; missing/invalid values use Native.
+    for(auto key:{control_settings::Key::GlobalIlluminationSamples,control_settings::Key::EnhancedCharacterLighting,control_settings::Key::EnhancedLighting,control_settings::Key::FpsCounter}) {
         const auto& option=control_settings::Definition(key);
         const unsigned stored=FGSettingsReadStored(key);
         control_settings::Write(option,control_settings::Valid(option,int(stored))?stored:control_settings::Default(option),control_settings::WriteReason::Reset);

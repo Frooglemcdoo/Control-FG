@@ -48,7 +48,7 @@ function exercise(rtx40) {
     ]};
     const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
     const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
-    assert.equal(rows.length,rtx40?11:10);
+    assert.equal(rows.length,rtx40?12:11);
     assert(!byId[10004] && !byId[10005]);
     [10003,10007,10009,10012,10013,10014].concat(rtx40?[10010]:[]).forEach(id=>{
         assert.equal(byId[id].m_eDataType,0);
@@ -85,9 +85,16 @@ function exercise(rtx40) {
     const beforeHidden=events.length;
     engine.trigger('OnIntGraphicsPropertySet',10008,2);
     assert.equal(events.length,beforeHidden);
-    assert(!byId[10006]); // GI sampling belongs to RR, not a separate menu option.
-    engine.trigger('OnIntGraphicsPropertySet',10006,8);
-    assert.equal(events.length,beforeHidden);
+    assert(byId[10006]);
+    assert.equal(byId[10006].cfgDefinition.presentation,'slider');
+    assert.deepEqual(Array.from(byId[10006].cfgDefinition.choices,c=>c.value),[0,2,4,6,8,10,12,14,16]);
+    engine.trigger('OnIntGraphicsPropertySet',10006,4); // Slider position 4 selects 8 rays.
+    assert.equal(byId[10006].m_value,8);
+    assert.deepEqual(events.at(-1),['OnIntGraphicsPropertySet',10006,8]);
+    const afterRays=events.length;
+    engine.trigger('OnIntGraphicsPropertySet',10006,32);
+    assert.equal(events.length,afterRays);
+    assert.equal(byId[10006].m_value,8);
     engine.trigger('OnIntGraphicsPropertySet',10005,76);
     assert(!byId[10005]);
     if(!rtx40){
@@ -98,6 +105,7 @@ function exercise(rtx40) {
     }
     engine.trigger('OnGraphicsReset');
     assert.equal(byId[10003].m_value,0);
+    assert.equal(byId[10006].m_value,0);
     assert.equal(byId[10007].m_value,1);assert.equal(byId[10001].m_value,0);
     engine.trigger('OnEnumGraphicsPropertySet',14,3);
     assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',14,3]);

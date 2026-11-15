@@ -1,0 +1,18 @@
+R439 - R434 baseline with GI ray-count slider
+
+Close Control and extract beside Control_DX12.exe, replacing files.
+Open Options > Graphics > Ray Tracing > Global Illumination Samples.
+Enable Ray Reconstruction and Ray Traced Indirect Diffuse Lighting.
+Choices: Native, 2, 4, 6, 8, 10, 12, 14, 16.
+These are total GI rays per pixel, not additional rays or filter passes.
+Changes apply through the existing producer allocation path on the next frame,
+with a history reset. The choice saves and restores on restart; Native is the
+fresh-install default. An existing valid GISamples value is restored.
+
+Compare Native, 4, 8 and 16 in the same lamp/Jesse view with FG off.
+Check speckles, motion boiling and rendered FPS. Higher counts cost GPU time;
+this build does not claim to fix RR. No new smoothing or history is added.
+R434 Raw Bypass, GI sampling shaders and guide implementation are unchanged.
+Its fixed-scene guide affects only the one-ray path. Higher counts use the
+existing R434 unguided multi-ray path even if the guide toggle says ON.
+The compact log records GI_RAYS_R439 with native, requested and effective rays.
