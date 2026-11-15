@@ -1,0 +1,38 @@
+R438 - RR input: isolated GI excess redistribution candidate
+
+This is a gameplay candidate, not a confirmed speckle/boiling fix.
+Comparison baseline: R436 (R435 rendering path; R437 was rejected).
+
+Close Control. Extract beside Control_DX12.exe, replacing files.
+Use RR ON, RT indirect lighting ON, Enhanced Lighting ON, GI RAYS: NATIVE,
+GI: BOTH, and FG OFF. Keep the same resolution/exposure/reflection settings.
+Do not select RELAX/OWNED FILTER for this isolated comparison.
+
+Check the lamp-lit plant and Jesse first: still view, slow camera pan, and
+Jesse moving past the lamp. Check lamp destruction for lingering light.
+Report whether dots become larger moving patches, whether leaf/hair detail
+changes, and whether lamp illumination or GI spotlight shadows are lost.
+The existing CAPTURE BOTH button remains available if stage data are needed.
+
+Changes
+Adds a current-frame two-pass operation after the GI producer. It redistributes
+only excess above the local compatible-surface median, using the recorded
+lamp diagnostic threshold 0.1 and a 5x5 footprint. It checks primary depth,
+normal, material, object mask and native GI receiver validity. Excess keeps its
+RGB ratio; each donor owns its recipient count. There is no temporal reuse in
+this new operation. R436 temporal coefficients and six native spatial passes
+remain. Rays, lighting evaluator, spotlight shaders, hit distances and RR
+guides are unchanged. RAW BYPASS remains an unmodified control.
+
+Admission
+This first candidate supports a single complete GI producer batch. Unsupported
+batching, dimensions, resource state, descriptor allocation or typed UAV loads
+preserve the baseline path. Check logs for GI_EXCESS_R438 recorded=1. A log
+confirms recorded commands, not visual success. Resource lifetime waits for
+both GPU completion and command-list Reset; there are no CPU readbacks or GPU
+waits in gameplay. The scratch texture is RGBA32F; cost needs measurement.
+
+The .1 threshold is capture-specific. This candidate does not claim a general
+estimator correction, fix for temporal boiling, or verified FPS improvement.
+The final optimization goal is about 1-2 rendered FPS lost or better; it is
+not a hard cap during visual correction.

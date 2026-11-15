@@ -6,6 +6,8 @@
 #include "nrd_prepare.h"
 #include "nrd_finish.h"
 #include "nrd_receiver.h"
+#include "gi_excess_redistribution_d3d12.h"
+#include "../build/gi_excess.generated.h"
 #include <mutex>
 namespace control_rr {
 inline void ApplyRRBundleDefaults(bool enabled) noexcept {
@@ -31,6 +33,7 @@ struct Recording {
  std::shared_ptr<Epoch> epoch;
  std::vector<control_nrd::NativeReceiver::Work> exports;
  std::unique_ptr<control_nrd::NativeTransaction::Work> work;
+ std::unique_ptr<gi_excess::Pipeline::Work> excess;
 };
 static std::recursive_mutex mutex;
 static std::vector<std::unique_ptr<Recording>> recordings;
@@ -46,6 +49,13 @@ static std::atomic<bool> active{false};
 struct Pass {UINT64 frame=0,view=0,serial=0;bool failed=false,producer=false;
  PTGlassRuntime::Context context{};std::unique_ptr<PTGlass::LightingTableShadow> shadow;};
 static thread_local Pass pass;
+static std::unique_ptr<gi_excess::Pipeline> excessPipeline;
+static std::vector<std::unique_ptr<gi_excess::Pipeline::Work>> excessPool;
+static UINT64 lastExcessFrame=0;
+static bool ExcessRequested() noexcept {
+ return control_rr::RRUserRuntimeWorkRequested() && rt_surface_source::EffectiveRequest()==0 &&
+  control_rr_gi::stageMode.load()==control_rr_gi::StageMode::Both;
+}
 struct Mute {bool observing=gi_dual_bridge::observing;hooks::Mute bindings;
  control_rr_clamp::Request* nativeRequest=control_rr_clamp::active;
  Mute(){gi_dual_bridge::observing=false;control_rr_clamp::active=nullptr;}
@@ -62,7 +72,7 @@ static void Reason(const char* reason) noexcept {
 static bool Requested() noexcept {
  if(!control_rr::RRUserRuntimeWorkRequested())return false;
  const auto request=rt_surface_source::EffectiveRequest();
- return request==7||request==3||(!request&&control_rr_gi::stageMode.load()==control_rr_gi::StageMode::BothSteadySpatial);
+ return ExcessRequested()||request==7||request==3||(!request&&control_rr_gi::stageMode.load()==control_rr_gi::StageMode::BothSteadySpatial);
 }
 static void Invalidate(const std::shared_ptr<Epoch>& e) noexcept {
  if(e){e->poisoned=true;e->receiver->AbandonAfterReset();e->filter->AbandonAfterReset();}
@@ -74,6 +84,7 @@ static void Poll() {
  for(auto i=recordings.begin();i!=recordings.end();){auto& r=**i;
   if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}
   if(r.reset&&(!r.submitted||r.fence<=complete)){
+   if(r.excess&&excessPool.size()<4){r.excess->Retire();excessPool.push_back(std::move(r.excess));}
    if(!r.submitted&&(r.filtered||r.exported||(r.work&&r.work->diffuse.commandsRecorded)))Invalidate(r.epoch);
    // Both conditions above are mandatory: completion alone cannot rule out
    // replay of an unreset list. Never recycle failed or obsolete-epoch work.
@@ -187,6 +198,35 @@ static void ProducerDispatch() noexcept {
   UINT mode=0,bytes=sizeof(mode);if(FAILED(b.pipeline->GetPrivateData(native_lighting::gi_evaluator::kMode,&bytes,&mode))||!mode){Reason("producer_variant");return;}
   control_nrd_native::Texture raw;if(!NamedTexture("g_rwtDiffuseGIColorTarget",raw)){Reason("producer_target");return;}
   const UINT w=UINT(raw.desc.Width),h=raw.desc.Height;
+  if(ExcessRequested()){
+   // Operate only on a complete single-batch producer. Multi-batch coverage
+   // needs a separate admission proof; never filter a partially written frame.
+   UINT values[2]{};const char* names[]={"g_uDGIPass","g_uDGIPassCount"};
+   for(unsigned i=0;i<2;++i){int id=-1;
+    if(!control_nrd_native::Resolve(rrNativeClampApi,names[i],id)||!rrNativeClampApi.ReadCurrent(id,values[i])){Reason("excess_batch_constants");return;}}
+   if(values[0]!=0||values[1]!=1){Reason("excess_requires_single_batch");return;}
+   if(raw.state!=D3D12_RESOURCE_STATE_UNORDERED_ACCESS||lastExcessFrame==pass.frame){Reason("excess_target_or_duplicate");return;}
+   // Resolve guide dimensions through the same current native providers.
+   for(const char* name:{"g_tGBuffer1","g_tGBuffer2","g_tLinearDepth"}){
+    control_nrd_native::Texture guide;if(!NamedTexture(name,guide)||guide.desc.Width!=w||guide.desc.Height!=h||
+      !(guide.state&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)){Reason("excess_guide_grid_or_state");return;}}
+   auto* r=GetRecording(c.rays,generation);if(!r||r->excess){Reason("excess_recording_capacity");return;}
+   PTGlass::DescriptorRange fresh;const char* why=nullptr;
+   if(!PTGlassRuntime::FreshCount(c,PTGlass::LightingTableLayout::Count,&fresh,&why)){Reason(why);return;}
+   if(!excessPipeline||!excessPipeline->Matches(b.root.Get()))
+    excessPipeline=std::make_unique<gi_excess::Pipeline>(PTGlassRuntime::device.Get(),b.root.Get(),
+     D3D12_SHADER_BYTECODE{kGIExcessClassify,sizeof(kGIExcessClassify)},D3D12_SHADER_BYTECODE{kGIExcessGather,sizeof(kGIExcessGather)});
+   unsigned held=0;for(const auto& item:recordings)if(item->excess)++held;
+   if(held>=4){Reason("excess_retirement_pending");return;}
+   if(excessPool.empty())r->excess=std::make_unique<gi_excess::Pipeline::Work>();
+   else {r->excess=std::move(excessPool.back());excessPool.pop_back();}
+   if(!excessPipeline->Record(c.list,b.pipeline.Get(),c.gpu,raw.resource,*pass.shadow,sequence,fresh,*r->excess)){
+    Reason("excess_descriptor_or_format");return;}
+   lastExcessFrame=pass.frame;
+   static UINT64 calls=0;++calls;
+   if(calls<=4||calls%240==0)Log("GI_EXCESS_R438 frame=%llu recorded=1 footprint=5 threshold=0.1 history_changed=0 rays_changed=0 calls=%llu",pass.frame,calls);
+   return;
+  }
   // Never overwrite guides/history referenced by an unsubmitted earlier list.
   for(auto& r:recordings)if(!r->reset&&!r->submitted&&((r->list.Get()!=c.list&&(r->exported||r->filtered))||r->filtered)){Reason("producer_submission_pending");return;}
   if(!epoch||epoch->poisoned||epoch->width!=w||epoch->height!=h||epoch->root.Get()!=b.root.Get()){
