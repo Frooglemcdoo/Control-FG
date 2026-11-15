@@ -7,6 +7,7 @@ on:
       - work/gi-replacement-core-r425
       - work/gi-guided-live-r434
       - work/rr-r434-rays-r439
+      - work/gi-cost-r440
       - work/gi-stage-diagnostic-r432
       - work/gi-replacement-binding-r426
       - work/gi-modernization
@@ -1329,7 +1330,7 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools\rt-scene-probe\analyze-instances.py RT-instances-fixture.bin > build\rt-instance-fixture.json
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -1483,6 +1484,10 @@ jobs:
           if errorlevel 1 exit /b 1
           build\test-performance-compare.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /DCONTROL_GI_RAY_COST_CAPTURE tools\test-performance-compare.cpp /Febuild\test-gi-cost.exe
+          if errorlevel 1 exit /b 1
+          build\test-gi-cost.exe
+          if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX /O2 /MT tools\test-gi-stage-timing.cpp /Febuild\test-gi-stage-timing.exe
           if errorlevel 1 exit /b 1
           build\test-gi-stage-timing.exe
@@ -1505,7 +1510,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Cost-R440' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1550,7 +1555,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-R434-Rays-R439') {
+          if ($out -eq 'ControlTOH-GI-Cost-R440') {
+            Copy-Item docs/GI-Cost-R440.txt "$out/ControlTOH/README.txt"
+          } elseif ($out -eq 'ControlTOH-R434-Rays-R439') {
             Copy-Item docs/R434-Rays-R439.txt "$out/ControlTOH/README.txt"
           } elseif ($out -eq 'ControlTOH-GI-Stages-R432') {
             Copy-Item docs/GI-Stages-R432.txt "$out/ControlTOH/README.txt"
@@ -1578,8 +1585,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Cost-R440' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
+            ControlTOH-GI-Cost-R440.zip
+            ControlTOH-GI-Cost-R440.sha256
             ControlTOH-R434-Rays-R439.zip
             ControlTOH-R434-Rays-R439.sha256
             ControlTOH-GI-Guided-Live-R434.zip

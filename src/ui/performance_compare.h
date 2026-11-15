@@ -29,6 +29,10 @@ inline std::string Constants(){
  std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);std::ostringstream out;
  for(const auto& o:control_settings::kOptions){using K=control_settings::Key;
   if(o.key!=K::RayReconstruction&&o.key!=K::GlobalIlluminationSamples&&o.key!=K::EnhancedCharacterLighting&&o.key!=K::EnhancedLighting)out<<o.id<<'='<<control_settings::Read(o.key)<<';';}
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ out<<"guide="<<gi_reuse::guidedRequested.load()<<" stage="<<unsigned(control_rr_gi::stageMode.load())
+    <<" volume="<<volume_test::phase.load()<<" surface="<<character_surface::phase.load();
+#endif
  out<<"RELAX_profile="<<control_relax::Name(control_relax::requested.load())<<"; ";
  out<<"clamp="<<unsigned(control_rr_clamp::requestedMode.load())<<" hdr="<<IsHdr10BridgeActive()<<" preset="<<control_rr::RRUserPresetValue();return out.str();
 }
@@ -42,6 +46,10 @@ inline void Restore(){
  performance::sampleInterval=savedInterval;
 }
 inline bool Apply(){
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ // Only the requested count changes. Do not reset lighting, guides or filters.
+ control_rr::GISampleSelect(conditions[step].rays);
+#else
  const auto& p=conditions[step];
  control_rr::RRUserSetMode(p.rr?control_rr::RRUserMode::Full:control_rr::RRUserMode::Off);
  gi_reuse::ownedRequested=p.owned;control_rr::GISampleSelect(p.rays);control_visual::characterQuality=p.character?3:0;
@@ -49,10 +57,14 @@ inline bool Apply(){
  rt_surface_source::request=p.relax?7:8;rt_surface_source::manualGI=0;rt_surface_source::manualContact=0;
  specularSampleChoice=0;control_rr_gi::stageMode=control_rr_gi::StageMode::RawBypass;
  if(!SelectMode(p.lighting?kNativeBlendDefaultMode:Mode::Native))return false;
+#endif
  expectedSignature=settings_report::Signature();return true;
 }
 inline void Emit(const performance::Sample& s,double ms){gpu.push_back({step,s.present,unsigned(s.stage),ms,s.passOrdinal,s.pipelineIndex,s.x,s.y,s.passShader});}
 inline void Summary(){
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+#include "gi_ray_cost_summary.inl"
+#else
  std::vector<double> intervals[phaseCount];std::ostringstream cadence;
  cadence<<"phase,present,interval_ms\n";uint64_t lastTicks=0,lastPresent=0;unsigned lastPhase=~0u;
  const unsigned n=(std::min)(control_compare::count.load(),capacity);
@@ -109,6 +121,7 @@ inline void Summary(){
  std::string failures="phase,reason,thread_frame,present,guide_frame,same_view,recordings,pending_recordings\n";for(const auto& r:results)failures+=r.failures;Write(L"relax-failures.csv",failures);
  out<<"\nGPU stages are selected spans, not total frame GPU time. GI rays INCLUDE temporal visibility; do not add the nested visibility span again. RELAX total includes prepare, denoise, finish conversion and surrounding work. Denoise includes all relax_dispatch spans. These are NESTED: never add total, denoise and dispatch values together. Per-dispatch rows include their preceding resource barriers and use NRD pipeline index plus dispatch ordinal; shader costs are not inferred from names. Other compute may overlap explicit scopes.\nCPU spans measure command recording/API work, not whole-frame CPU utilization. Frame intervals are application Present cadence with FG off; they include waits and are not GPU durations.\nNo textures, shader dumps or continuous shadow inventory. Counter/fence boundary differences are normal; failures and unobserved paths are not silently treated as successful measurements.\nProfiler fault="<<performance::fault.load()<<" dropped_frame_rows="<<control_compare::dropped.load()<<"\n";
  Write(L"SUMMARY.txt",out.str());
+#endif
 }
 inline void Finish(HWND game,const char* reason){
  outcome=reason;Restore();performance::watch=false;Summary();
@@ -121,13 +134,18 @@ inline void Finish(HWND game,const char* reason){
  else {state=State::Idle;MessageBoxW(game,L"Packaging could not start. Settings restored; report folder retained under LOCALAPPDATA/ControlFGProbe.",L"Performance comparison",MB_OK);}
 }
 inline bool Start(uint64_t now){
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+ if(control_rr::GISampleRequested()!=10||control_rr::RRUserModeValue()!=control_rr::RRUserMode::Full||
+    control_rr_gi::stageMode.load()!=control_rr_gi::StageMode::RawBypass||
+    rt_surface_source::request.load()||rt_surface_source::manualGI.load()||rt_surface_source::manualContact.load())return false;
+#endif
  if(Active()||settings_report::Busy()||path_capture::active||path_capture::packager||control_diagnostics::Active()||control_rr_capture_ui::Busy()||capture_suite::active||performance_capture::Active()||control_gi_button::Active()||
     !control_rr::RRUserRequested()||GetFGUserMultiplier()!=kSLSelectionOff||!gi_reuse::SingleProducerEnabled()||!ModeAvailable(kNativeBlendDefaultMode,readyMask.load())||!performance::Prepare())return false;
  if(performance::count+8192>performance::kCapacity)return false;
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return false;qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return false;
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-R424-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
+ folder=root+L"\\Performance-GI-R440-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return false;
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
@@ -171,6 +189,12 @@ inline void Tick(HWND game,uint64_t now){
   results[step].failures=settings_report::Failures(conditions[step].name);
   results[step].settings=settings_report::Snapshot();results[step].skipped=performance::skipped.load()-skippedStart;
   using namespace settings_check;const auto* e=results[step].evidence;
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+  const unsigned mask=results[step].sampleMask;
+  const bool rays=conditions[step].rays?mask==(1u<<conditions[step].rays):mask&&!(mask&(mask-1));
+  results[step].observed=e[RRSuccess]>100&&!e[SRSuccess]&&!e[RRFailure]&&!e[SRFailure]&&
+      e[OwnedGI]>100&&!e[NativeGI]&&!e[RelaxRecorded]&&!e[RelaxFallback]&&rays;
+#else
   results[step].observed=(conditions[step].rr?(e[RRSuccess]>100&&!e[SRSuccess]):(e[SRSuccess]>100&&!e[RRSuccess]))&&!e[RRFailure]&&!e[SRFailure]&&!e[RelaxFallback]&&
     (conditions[step].owned?e[OwnedGI]>100&&!e[NativeGI]:e[NativeGI]>100&&!e[OwnedGI])&&
     (conditions[step].relax?e[RelaxCompleted]>100:e[RelaxRecorded]==0)&&
@@ -178,16 +202,31 @@ inline void Tick(HWND game,uint64_t now){
     (!conditions[step].volume||e[VolumeEnhanced]>0)&&
     (!conditions[step].lighting||e[EnhancedShadowRays]>0)&&
     (!conditions[step].rays||results[step].sampleMask==(1u<<conditions[step].rays));
+#endif
   state=State::Drain;until=now+5000;
  }
  if(state==State::Drain){const auto pending=performance::Poll(session,Emit);if(pending){if(now>until)Finish(game,"INCOMPLETE: GPU timings did not retire");return;}
   performance::watch=false;
   if(step+1==phaseCount){
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+   bool complete=!control_compare::dropped.load()&&!performance::fault.load();
+   for(unsigned p=0;p<phaseCount;++p){
+    bool rays=false,evaluator=false,rr=false;
+    for(const auto& sample:gpu)if(sample.phase==p){
+     rays|=sample.stage==unsigned(performance::Stage::GICombinedRays);
+     evaluator|=sample.stage==unsigned(performance::Stage::GIEvaluator);
+     rr|=sample.stage==unsigned(performance::Stage::RREvaluation);
+    }
+    complete=complete&&(!conditions[p].profile||(rays&&evaluator&&rr))&&results[p].observed&&!results[p].skipped;
+   }
+   complete=complete&&results[0].sampleMask==results[3].sampleMask;
+#else
    bool complete=!control_compare::dropped.load()&&!performance::fault.load();for(unsigned p=0;p<phaseCount;++p){bool timed=!conditions[p].profile;for(const auto& s:gpu)if(s.phase==p&&s.stage==unsigned(conditions[p].rr?performance::Stage::RREvaluation:performance::Stage::SREvaluation))timed=true;bool details=!conditions[p].relax||!conditions[p].profile;
     if(conditions[p].relax&&conditions[p].profile){bool prepare=false,denoise=false,dispatch=false,finish=false;
      for(const auto& s:gpu)if(s.phase==p){prepare|=s.stage==unsigned(performance::Stage::RelaxPrepare);denoise|=s.stage==unsigned(performance::Stage::RelaxDenoise);dispatch|=s.stage==unsigned(performance::Stage::RelaxDispatch);finish|=s.stage==unsigned(performance::Stage::RelaxFinish);}
      details=prepare&&denoise&&dispatch&&finish;}
     complete=complete&&timed&&details&&results[p].observed&&!results[p].skipped;}
+#endif
    Finish(game,complete?"COMPLETE: inspect repeat drift and timing data":"INCOMPLETE: missing timings/coverage, skipped queries or dropped rows");return;}
   ++step;if(!Apply()){Finish(game,"INCOMPLETE: feature unavailable");return;}state=State::Warm;until=now+5000;
  }

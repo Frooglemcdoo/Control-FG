@@ -55,7 +55,13 @@ inline constexpr unsigned kButtonCount = kModeCount + 30;
 inline constexpr unsigned kButtonCount = kModeCount + 16;
 #endif
 inline const wchar_t* ButtonLabel(unsigned index) noexcept {
-    if(index==kModeCount+29)return L"PERF COMPARE";
+    if(index==kModeCount+29){
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+        return L"GI COST CAPTURE";
+#else
+        return L"PERF COMPARE";
+#endif
+    }
     if(index==kModeCount+28)return settings_report::Busy()?L"CHECK: RUNNING":L"CHECK SETTINGS";
     if(index==kModeCount+27)return path_capture::active?L"CAPTURE: RECORDING":path_capture::TimedRequested()?L"CAPTURE STAGES":L"CAPTURE MOTION";
     if(index==kModeCount+26)return render_fps::enabled?L"FPS: ON":L"FPS: OFF";
@@ -437,7 +443,13 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             if(path_capture::active||settings_report::Busy()||compare_capture::Active()||!ButtonVisible(index))return 0;
             if(index==kModeCount+29){
                 if(compare_capture::Start(GetTickCount64()))ClosePanel(window);
-                else MessageBoxW(window,L"Enable RR, turn FG off and finish other captures. Load the scene until enhanced lighting is ready. Keep the camera still with Jesse visible for about five minutes. The suite changes temporary feature selections automatically and restores them. Two beeps mean the ZIP is ready. Restart if the profiler query budget is exhausted.",L"RR performance comparison",MB_OK);
+                else {
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+                    MessageBoxW(window,L"Set GI RAYS to 10, use RR ON, FG OFF, GI RAW BYPASS, and finish other captures. Keep the camera still at the lamp/Jesse view for about two minutes. Only the ray count changes; 10 rays are restored afterward. Two beeps mean the ZIP is ready. Restart if the profiler query budget is exhausted.",L"GI cost capture",MB_OK);
+#else
+                    MessageBoxW(window,L"Enable RR, turn FG off and finish other captures. Keep the camera still with Jesse visible for about five minutes. Two beeps mean the ZIP is ready.",L"RR performance comparison",MB_OK);
+#endif
+                }
                 return 0;
             }
             if(index==kModeCount+28){

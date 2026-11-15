@@ -1,0 +1,19 @@
+R440 - GI ray-cost capture on the accepted R434/R439 rendering baseline
+
+This is a measurement build, not a performance optimization.
+Rendering shaders, sampling and filtering are unchanged from R439.
+
+Close Control and extract beside Control_DX12.exe, replacing files.
+Use RR ON, FG OFF, GI RAW BYPASS, GI RAYS 10 and your accepted lighting settings.
+Stand at the lamp/Jesse view, press F10, and click GI COST CAPTURE.
+Return to gameplay and keep the camera still for about two minutes.
+The capture automatically repeats Native and 10 rays while retaining other
+settings. It also measures 10 rays without GPU timing queries.
+Two beeps and an Explorer window indicate the ZIP is ready. Send that ZIP.
+The original ray selection (10) is restored on completion or an aborted run.
+
+Reports include effective ray counts, rendered frame cadence, GI tracing plus
+hit-data writes, GI evaluation plus hit-data reads, and RR GPU timings.
+This does not independently isolate memory traffic within those stages.
+Capture is on demand; no profiling runs during ordinary gameplay.
+Do not use the temporary Native phases to judge 10-ray quality.

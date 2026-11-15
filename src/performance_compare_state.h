@@ -4,6 +4,16 @@
 #include <cstdint>
 namespace control_compare {
 struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,character,volume;bool rr=true,profile=true;};
+#ifdef CONTROL_GI_RAY_COST_CAPTURE
+inline constexpr Condition conditions[]={
+ {"native_begin",true,0,true,false,true,false},
+ {"rays10_begin",true,10,true,false,true,false},
+ {"rays10_repeat",true,10,true,false,true,false},
+ {"native_repeat",true,0,true,false,true,false},
+ {"rays10_return",true,10,true,false,true,false},
+ {"rays10_no_queries",true,10,true,false,true,false,true,false},
+ {"rays10_profile_return",true,10,true,false,true,false}};
+#else
 inline constexpr Condition conditions[]={
  {"native_rr_begin",false,0,false,false,false,false},
  {"native_rr_confirm",false,0,false,false,false,false},
@@ -19,6 +29,7 @@ inline constexpr Condition conditions[]={
  {"native_rr_return",false,0,false,false,false,false},
  {"full_rr_no_gpu_queries",true,0,true,true,true,true,true,false},
  {"full_rr_profile_return",true,0,true,true,true,true}};
+#endif
 inline constexpr unsigned phaseCount=sizeof(conditions)/sizeof(conditions[0]);
 inline constexpr unsigned capacity=65536;
 struct Cadence {std::uint64_t ticks=0,present=0;unsigned phase=0;std::atomic<bool> ready{false};};
