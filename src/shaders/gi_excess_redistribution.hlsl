@@ -10,7 +10,7 @@ RWTexture2D<float4> RawGI : register(u0);
 RWTexture2D<float4> Donors : register(u2);
 
 bool MatchingGrid(uint w,uint h) {
-    uint a,b,c; GBuffer1.GetDimensions(a,b); if(a!=w||b!=h)return false;
+    uint a=0,b=0,c=0; GBuffer1.GetDimensions(a,b); if(a!=w||b!=h)return false;
     GBuffer2.GetDimensions(a,b); if(a!=w||b!=h)return false;
     LinearDepth.GetDimensions(a,b); if(a!=w||b!=h)return false;
     Coverage.GetDimensions(a,b,c); if(a!=w||b!=h||c==0)return false;
@@ -22,7 +22,7 @@ bool FiniteColor(float3 c) { return all(isfinite(c)) && all(c >= 0); }
 float Luma(float3 c) { return dot(c, float3(.2126,.7152,.0722)); }
 struct Surface { float z; float3 n; uint material; uint objectMask; bool valid; };
 Surface ReadSurface(int2 p) {
-    Surface s;
+    Surface s=(Surface)0;
     float4 g1 = GBuffer1.Load(int3(p,0));
     float4 g2 = GBuffer2.Load(int3(p,0));
     s.z = LinearDepth.Load(int3(p,0)).x;
@@ -42,7 +42,7 @@ bool Compatible(Surface donor, Surface receiver) {
 
 [numthreads(8,8,1)]
 void Classify(uint3 tid : SV_DispatchThreadID) {
-    uint w,h; RawGI.GetDimensions(w,h); if(any(tid.xy>=uint2(w,h))||!MatchingGrid(w,h))return;
+    uint w=0,h=0; RawGI.GetDimensions(w,h); if(any(tid.xy>=uint2(w,h))||!MatchingGrid(w,h))return;
     int2 p=int2(tid.xy); float3 c=RawGI[p].rgb; Surface s=ReadSurface(p);
     Donors[p]=0;
     if(!s.valid || !FiniteColor(c))return;
@@ -51,7 +51,7 @@ void Classify(uint3 tid : SV_DispatchThreadID) {
     // Fixed lamp diagnostic threshold for this candidate, not a universal
     // scene-independent threshold. Requires gameplay validation before release.
     if(l<=.1)return;
-    float values[25]; uint count=0;
+    float values[25]; [unroll] for(uint init=0;init<25;++init)values[init]=0; uint count=0;
     [loop] for(int y=-2;y<=2;++y) [loop] for(int x=-2;x<=2;++x) {
         int2 q=p+int2(x,y); if(!Inside(q,uint2(w,h)))continue;
         float3 qc=RawGI[q].rgb;
@@ -72,7 +72,7 @@ void Classify(uint3 tid : SV_DispatchThreadID) {
 
 [numthreads(8,8,1)]
 void Gather(uint3 tid : SV_DispatchThreadID) {
-    uint w,h; RawGI.GetDimensions(w,h); if(any(tid.xy>=uint2(w,h))||!MatchingGrid(w,h))return;
+    uint w=0,h=0; RawGI.GetDimensions(w,h); if(any(tid.xy>=uint2(w,h))||!MatchingGrid(w,h))return;
     int2 p=int2(tid.xy); float4 own=Donors[p]; if(own.a==0)return;
     Surface receiver=ReadSurface(p); float4 original=RawGI[p];
     float3 result=original.rgb-(own.a>0?own.rgb*own.a:float3(0,0,0));
