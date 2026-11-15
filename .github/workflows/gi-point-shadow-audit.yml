@@ -1,0 +1,29 @@
+name: Validate GI point shadow gate
+on:
+  push:
+    branches: [work/gi-light-audit-r444]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile GPU test
+        shell: cmd
+        run: |
+          mkdir build
+          for /f "usebackq tokens=*" %%I in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSROOT=%%I"
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-point-shadow-gpu.cpp /Febuild\test-gi-point-shadow.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+      - name: Compare native and gated light evaluation on WARP
+        shell: pwsh
+        run: |
+          python tools/gi_point_shadow_gate.py --fixture build/gi-point-fixture.hlsl
+          if ($LASTEXITCODE -ne 0) { throw 'Fixture generation failed' }
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}/Windows Kits/10/bin/*/x64/dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          & $dxc.FullName -T cs_6_0 -E main -HV 2018 -WX build/gi-point-fixture.hlsl -Fo build/gi-point-fixture.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Shader compilation failed' }
+          ./build/test-gi-point-shadow.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Point shadow equivalence failed' }
