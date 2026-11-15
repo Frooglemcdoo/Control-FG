@@ -92,6 +92,10 @@ int main(){try{
  Require(observed==native.Get(),"stable energy native restore");
  control_rr_gi::spatialSteady=false;
  control_rr_clamp::dispatchOriginal=realDispatch;control_rr_clamp::setOriginal=realSet;
- RunHistoryPixels(gpu,root.Get(),pso.Get(),native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth,bundle->bypass,bundle->owned,bundle->stableEnergy,bundle->adaptive);
+ // R438 restores the R436 production history. Keep the retired R437
+ // bytecode covered separately instead of treating it as the active PSO.
+ p.CS={kGIBalancedHistoryShader,sizeof(kGIBalancedHistoryShader)};
+ ComPtr<ID3D12PipelineState> balanced;Check(gpu.device->CreateComputePipelineState(&p,IID_PPV_ARGS(&balanced)));
+ RunHistoryPixels(gpu,root.Get(),bundle->adaptive,native.Get(),bundle->noHistory,bundle->outlier,bundle->mask,bundle->zero,bundle->smooth,bundle->bypass,bundle->owned,bundle->stableEnergy,balanced.Get());
  std::cout<<"PASS R217 actual native/adaptive WARP PSOs, exact-source capture, duplicate rejection, production dispatch scope, native fallback and exception restoration\n";
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
