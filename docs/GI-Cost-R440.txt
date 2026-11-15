@@ -1,21 +1,26 @@
-R443 - Reuse invariant GI evaluator constants
+R444 - Skip zero-contribution point-light shadow lookups
 
-Retains R434/R439 rays and R442 combined structured reads. Five constant
-reads now execute once before the ray loop; four redundant reads share
-existing identical CBV values. No lighting arithmetic, rays or RR inputs
-are changed. Static address/CFG proofs and Windows GPU tests validate
-this transformation. Performance on the RTX 5090 is not yet measured.
+Uses R442's evaluator and combined buffer reads. R443 constant-read hoisting
+is removed. The point-light shadow block now checks the same saturated
+surface/light cosine used by the final native lighting calculation. When
+that cosine is zero, it skips the shadow lookup. The light list, range,
+attenuation, BRDF, accumulation, spotlights and all ten GI rays remain.
+No history reuse, blur or light-distance cutoff is introduced.
+
+A Windows GPU fixture compares native and gated point-light calculations
+across 65,536 finite cases with varied normals, positions, light parameters,
+shadow flags and procedural shadow moments. Accumulated RGB matches bit for
+bit. This fixture is not a full-scene rendering or hardware performance test.
+Check Jesse, plants, lamps and moving camera lighting for unchanged quality.
 
 Close Control and extract beside Control_DX12.exe, replacing files.
 Use RR ON, FG OFF, GI RAYS 10, GI GUIDE ON (FIXED), RELAX OFF, CONTACT AUTO.
-Keep REF CLAMP at 60%. Check the lamp/Jesse view for the same clean image.
+Keep REF CLAMP at 60%.
 
-F10 -> GI COST CAPTURE now compares R442 and R443 automatically at TEN
-rays throughout, in the same session. It no longer measures Native rays.
-It checks the evaluator revision actually bound, not just the selection.
-Seven phases: R442 / R443 / R443 / R442 / R443 / R443 no-query / R443.
-Each phase has 5 seconds warmup and 12 seconds measurement.
-An immediate beep confirms acceptance. Return to gameplay and remain
-still for about two minutes. Two beeps and Explorer identify the report ZIP.
-Send that ZIP. Ten rays and the R443 evaluator return after completion
-or an aborted run. R442 is retained inside this build for the comparison.
+F10 -> GI COST CAPTURE compares R442 and R444 at ten rays throughout.
+Stay still for about two minutes; the ZIP opens in Explorer on completion.
+The first four phases form an R442 / R444 / R444 / R442 bracket. The primary
+summary comparison uses only that bracket; later phases check stability
+and query overhead. Actual evaluator binding is recorded in every phase.
+The capture restores ten rays and the R444 evaluator on completion/abort.
+No in-game performance gain is claimed until measured on the target GPU.

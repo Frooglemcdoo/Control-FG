@@ -40,6 +40,7 @@ float F(uint n){return (Hash(n)&65535)/65535.0f;}
  if(dot(delta,delta)<0.001f)delta=float3(1,2,3);
  float3 light=pos+delta;float3 normal=normalize(delta)*(n&1?1:-1);
  if((n&7)==0)normal=normalize(float3(F(n+33)-0.5f,F(n+39)-0.5f,F(n+71)-0.5f));
+ if((n&63)==0){delta=float3(2,0,0);light=pos+delta;normal=float3(0,1,0);}
  a.r12.xyz=asuint(pos);a.r13.xyz=asuint(normal);a.r9=asuint(float4(pos+normal*0.07f,1));
  a.r11.xyz=asuint(normalize(float3(0.3f,0.4f,1)));a.r7.w=asuint(F(n+7));a.r11.w=asuint(1-asfloat(a.r7.w));
  a.r14.xyz=asuint(float3(F(n+9),F(n+19),F(n+29)));a.r14.w=0;
@@ -61,7 +62,14 @@ float F(uint n){return (Hash(n)&65535)/65535.0f;}
 }
 '''
 if __name__=='__main__':
- p=argparse.ArgumentParser();p.add_argument('--fixture',type=Path);p.add_argument('--output',type=Path);a=p.parse_args()
+ p=argparse.ArgumentParser();p.add_argument('--fixture',type=Path);p.add_argument('--output',type=Path);p.add_argument('--kernels',type=Path);a=p.parse_args()
  source=(ROOT/'src/shaders/gi_evaluator_secondary.generated.hlsl').read_text()
  if a.fixture:a.fixture.write_text(fixture(source))
  if a.output:a.output.write_text(transform(source))
+
+ if a.kernels:
+  a.kernels.mkdir(parents=True,exist_ok=True)
+  (a.kernels/'gi_point_secondary.generated.hlsl').write_text(transform(source))
+  for name in ['gi_owned_lighting.hlsl','gi_guided_lighting.hlsl']:
+   kernel=(ROOT/'src/shaders'/name).read_text().replace('"gi_evaluator_secondary.generated.hlsl"','"gi_point_secondary.generated.hlsl"')
+   (a.kernels/name).write_text(kernel)

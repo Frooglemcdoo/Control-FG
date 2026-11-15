@@ -7,12 +7,12 @@ struct Condition {const char* name;bool owned;unsigned rays;bool lighting,relax,
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
 inline constexpr Condition conditions[]={
  {"r442_begin",true,10,true,false,true,false,true,true,true},
- {"r443_begin",true,10,true,false,true,false},
- {"r443_repeat",true,10,true,false,true,false},
+ {"r444_begin",true,10,true,false,true,false},
+ {"r444_repeat",true,10,true,false,true,false},
  {"r442_repeat",true,10,true,false,true,false,true,true,true},
- {"r443_return",true,10,true,false,true,false},
- {"r443_no_queries",true,10,true,false,true,false,true,false},
- {"r443_profile_return",true,10,true,false,true,false}};
+ {"r444_return",true,10,true,false,true,false},
+ {"r444_no_queries",true,10,true,false,true,false,true,false},
+ {"r444_profile_return",true,10,true,false,true,false}};
 #else
 inline constexpr Condition conditions[]={
  {"native_rr_begin",false,0,false,false,false,false},
@@ -32,7 +32,7 @@ inline constexpr Condition conditions[]={
 #endif
 inline constexpr unsigned phaseCount=sizeof(conditions)/sizeof(conditions[0]);
 inline constexpr unsigned capacity=65536;
-// Revision 0 = unknown, 1 = R442 reference, 2 = R443 candidate. Measured dispatches only.
+// Revision 0 = unknown, 1 = R442 reference, 2 = R444 candidate. Measured dispatches only.
 inline std::atomic<bool> evaluatorBaseline{false};
 inline std::atomic<std::uint64_t> evaluatorCounts[phaseCount][3]{};
 struct Cadence {std::uint64_t ticks=0,present=0;unsigned phase=0;std::atomic<bool> ready{false};};

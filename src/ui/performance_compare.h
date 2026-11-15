@@ -156,7 +156,7 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return RejectStart(L"Windows could not provide the performance timer.");qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return RejectStart(L"The LOCALAPPDATA output path is unavailable or too long.");
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-GI-R443-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
+ folder=root+L"\\Performance-GI-R444-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");

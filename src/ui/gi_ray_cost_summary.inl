@@ -18,10 +18,10 @@ if(outcome.rfind("COMPLETE",0)==0){
  for(const auto& s:stats)stable=stable&&s.count>100;
  if(!stable)outcome="INCOMPLETE: repeat drift exceeds 5% or insufficient frame intervals";
 }
-out<<"R443 GI EVALUATOR A/B: R442 VERSUS CONSTANT-READ CANDIDATE\nOutcome: "<<outcome<<"\n\n"
-   <<"Only evaluator revision changes: R442 versus R443. Every phase uses 10 rays. Lighting, guide, character, volume, reflection and GI-stage settings are retained.\n"
+out<<"R444 GI EVALUATOR A/B: R442 VERSUS POINT-SHADOW CANDIDATE\nOutcome: "<<outcome<<"\n\n"
+   <<"Only evaluator revision changes: R442 versus R444. Every phase uses 10 rays. Lighting, guide, character, volume, reflection and GI-stage settings are retained.\n"
    <<"The R434 guide toggle is held fixed. The same R441 ray shader and R442 combined buffer reads are used in both revisions.\n"
-   <<"Seven phases, each 5-second warmup and 12-second measurement. GPU queries every 64 Presents; r443_no_queries disables GPU queries and CPU span timers.\n"
+   <<"Seven phases, each 5-second warmup and 12-second measurement. GPU queries every 64 Presents; r444_no_queries disables GPU queries and CPU span timers.\n"
    <<"Cadence and coverage collection remain active in the no-query phase. Do not interpret it as completely uninstrumented gameplay.\n"
    <<"Selected GPU spans are not total GPU frame time. GI ray timing includes traversal and hit-data writes; GI evaluation includes hit-data reads and lighting.\n"
    <<"This capture does not independently separate memory traffic from execution within either span. RR is timed separately.\n"
@@ -32,7 +32,7 @@ for(unsigned p=0;p<phaseCount;++p){const auto& s=stats[p];
  out<<conditions[p].name<<": "<<s.mean<<" ms, "<<(s.mean?1000/s.mean:0)<<" FPS; p99="<<s.p99<<" ms; intervals="<<s.count<<"; coverage="<<results[p].observed<<"; effective_ray_mask="<<results[p].sampleMask<<'\n';
 }
 if(stats[0].mean&&stats[3].mean&&stats[1].mean&&stats[2].mean&&stats[4].mean&&stats[6].mean)
- out<<"\nObserved R443 minus R442 mean frame time (negative is faster): "<<(stats[1].mean+stats[2].mean+stats[4].mean+stats[6].mean)/4-(stats[0].mean+stats[3].mean)/2<<" ms (valid only when repeats/coverage pass).\n";
+ out<<"\nBracketed R444 minus R442 mean frame time (negative is faster): "<<(stats[1].mean+stats[2].mean)/2-(stats[0].mean+stats[3].mean)/2<<" ms (first four phases only; valid when repeats/coverage pass).\n";
 if(stats[4].mean&&stats[5].mean&&stats[6].mean)
  out<<"10-ray profiled bracket minus no-query frame time: "<<(stats[4].mean+stats[6].mean)/2-stats[5].mean<<" ms.\n";
 std::map<std::tuple<unsigned,unsigned,uint64_t>,double> grouped;
@@ -44,7 +44,7 @@ for(unsigned p=0;p<phaseCount;++p){
   for(const auto& item:grouped)if(std::get<0>(item.first)==p&&std::get<1>(item.first)==stage)v.push_back(item.second);
   const auto s=Summarize(v);if(s.count)stages<<conditions[p].name<<','<<performance::Name(performance::Stage(stage))<<','<<s.count<<','<<s.mean<<','<<s.p95<<'\n';
  }
- out<<"\n"<<conditions[p].name<<" evaluator_unknown="<<evaluatorCounts[p][0].load()<<" evaluator_r442="<<evaluatorCounts[p][1].load()<<" evaluator_r443="<<evaluatorCounts[p][2].load()<<" settings/evidence:\n"<<results[p].settings<<'\n';
+ out<<"\n"<<conditions[p].name<<" evaluator_unknown="<<evaluatorCounts[p][0].load()<<" evaluator_r442="<<evaluatorCounts[p][1].load()<<" evaluator_r444="<<evaluatorCounts[p][2].load()<<" settings/evidence:\n"<<results[p].settings<<'\n';
  for(unsigned e=0;e<settings_check::Count;++e)out<<settings_check::names[e]<<'='<<results[p].evidence[e]<<'\n';
 }
 out<<"\nrender_geometry="<<geometryAtStart<<" profiler_fault="<<performance::fault.load()<<" dropped_rows="<<control_compare::dropped.load()<<'\n';
