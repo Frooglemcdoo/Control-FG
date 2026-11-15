@@ -10,11 +10,12 @@ RWTexture2D<float4> RawGI : register(u0);
 RWTexture2D<float4> Donors : register(u2);
 
 bool MatchingGrid(uint w,uint h) {
-    uint a=0,b=0,c=0; GBuffer1.GetDimensions(a,b); if(a!=w||b!=h)return false;
-    GBuffer2.GetDimensions(a,b); if(a!=w||b!=h)return false;
-    LinearDepth.GetDimensions(a,b); if(a!=w||b!=h)return false;
-    Coverage.GetDimensions(a,b,c); if(a!=w||b!=h||c==0)return false;
-    Donors.GetDimensions(a,b); return a==w&&b==h;
+    uint a=0,b=0,c=0,d=0,e=0,f=0,g=0,hc=0,slices=0,i=0,j=0;
+    GBuffer1.GetDimensions(a,b); GBuffer2.GetDimensions(c,d);
+    LinearDepth.GetDimensions(e,f); Coverage.GetDimensions(g,hc,slices);
+    Donors.GetDimensions(i,j);
+    return a==w && b==h && c==w && d==h && e==w && f==h
+        && g==w && hc==h && slices>0 && i==w && j==h;
 }
 
 bool Inside(int2 p, uint2 size) { return all(p >= 0) && all(p < int2(size)); }

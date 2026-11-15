@@ -1,4 +1,4 @@
-"""Current-frame GI excess redistribution reference. Not enabled in the game.
+"""Current-frame GI excess redistribution reference for the R438 candidate.
 
 Every donor owns its normalization. Receiver-normalized smoothing is not an
 equivalent operation and does not conserve RGB near asymmetric boundaries.

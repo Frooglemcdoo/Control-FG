@@ -1,0 +1,21 @@
+{
+  "candidate": "R438 current-frame operator with native receiver validity and object-mask boundary",
+  "donors": 294,
+  "peak_before": 1.6046740234374999,
+  "peak_after": 0.29933483238220215,
+  "above_0_1_before": 299,
+  "above_0_1_after": 68,
+  "relative_rgb_sum_error": [
+    -1.2989609388114332e-14,
+    -7.216449660063518e-15,
+    -3.4416913763379853e-15
+  ],
+  "sse_ratio": 0.32782192802113536,
+  "mae_ratio": 0.9975741461876144,
+  "limitations": [
+    "CPU float64 operator, not live GPU/RR output",
+    "Reference is an eight-seed mean; per-seed maps were not saved",
+    "No motion or character visual acceptance established",
+    "Runtime single-batch admission unverified in game"
+  ]
+}

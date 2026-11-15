@@ -61,6 +61,8 @@ struct Mute {bool observing=gi_dual_bridge::observing;hooks::Mute bindings;
  Mute(){gi_dual_bridge::observing=false;control_rr_clamp::active=nullptr;}
  ~Mute(){control_rr_clamp::active=nativeRequest;gi_dual_bridge::observing=observing;}};
 static void Reason(const char* reason) noexcept {
+ if(ExcessRequested()){static const char* lastExcessReason=nullptr;
+  if(lastExcessReason!=reason){lastExcessReason=reason;Log("GI_EXCESS_R438 recorded=0 reason=%s",reason);}}
  if(settings_check::active.load()&&strcmp(reason,"active")){
   settings_check::reason=reason;settings_check::Record(settings_check::RelaxFallback);
   unsigned pending=0;for(const auto& r:recordings)if(!r->reset&&!r->submitted)++pending;
