@@ -20,9 +20,11 @@ int main(){
  rt_surface_source::manualContact=2;assert(!rt_surface_source::ReadyForRayCostCapture());rt_surface_source::manualContact=0;
  control_rr_gi::stageMode=control_rr_gi::StageMode::Both;assert(!rt_surface_source::ReadyForRayCostCapture());
  control_rr_gi::stageMode=control_rr_gi::StageMode::RawBypass;assert(rt_surface_source::ReadyForRayCostCapture());
- assert(phaseCount==7&&conditions[0].rays==0&&conditions[3].rays==0);
- for(unsigned i=0;i<phaseCount;++i){assert(conditions[i].rr&&!conditions[i].relax);if(i!=0&&i!=3)assert(conditions[i].rays==10);}
+ assert(phaseCount==7&&conditions[0].baseline&&conditions[3].baseline);
+ for(unsigned i=0;i<phaseCount;++i){assert(conditions[i].rr&&!conditions[i].relax);assert(conditions[i].rays==10);assert(conditions[i].baseline==(i==0||i==3));}
  assert(!conditions[5].profile&&conditions[6].profile);
+ evaluatorCounts[0][1]=77;evaluatorCounts[3][2]=99;Reset();
+ for(const auto& p:evaluatorCounts)for(const auto& n:p)assert(n.load()==0);
 #else
  assert(phaseCount==14&&!conditions[0].owned&&!conditions[8].owned);
  assert(conditions[6].relax&&conditions[6].character&&conditions[6].volume&&conditions[6].owned);
