@@ -28,7 +28,7 @@ inline void RefreshRaySlider(HWND panel) noexcept {
  HWND slider=GetDlgItem(panel,kRaySlider);if(!slider)return;
  const bool enabled=RaysEditable();EnableWindow(slider,enabled);
  if(!enabled)rayDragging=false;
- if(!rayDragging)SendMessageW(slider,TBM_SETPOS,TRUE,control_rr::GISampleRequested()/2);
+ if(!rayDragging)SendMessageW(slider,TBM_SETPOS,TRUE,control_rr::GISampleSliderPosition(control_rr::GISampleRequested()));
 }
 inline constexpr int kModeRows = (kModeCount + 2) / 3;
 inline constexpr int kStatusY=746,kCaptureStatusY=766,kFooterY=812,kHeight=858;
@@ -202,10 +202,10 @@ inline void Paint(HWND window) noexcept {
     DrawLabel(dc,detailFont,L"LIGHTING MODES",{14,32,kWidth-12,52},theme::kMutedText);
     DrawLabel(dc,detailFont,L"ADVANCED COMPARISONS",{14,192,kWidth-12,216},theme::kAccent);
     wchar_t rayLabel[48]{};
-    const unsigned rayPosition=rayDragging?unsigned(SendMessageW(GetDlgItem(window,kRaySlider),TBM_GETPOS,0,0)):control_rr::GISampleRequested()/2;
+    const unsigned rayPosition=rayDragging?unsigned(SendMessageW(GetDlgItem(window,kRaySlider),TBM_GETPOS,0,0)):control_rr::GISampleSliderPosition(control_rr::GISampleRequested());
     if(!control_rr::RRUserRequested())wcscpy_s(rayLabel,L"GI RAYS: RR OFF");
     else if(!rayPosition)wcscpy_s(rayLabel,L"GI RAYS: NATIVE");
-    else swprintf_s(rayLabel,L"GI RAYS: %u",rayPosition*2);
+    else swprintf_s(rayLabel,L"GI RAYS: %u",control_rr::GISampleSliderValue(rayPosition));
     DrawLabel(dc,detailFont,rayLabel,{14,348,162,382},theme::kText);
     DrawLabel(dc,detailFont,L"FEATURE COMPARISONS",{14,392,kWidth-12,416},theme::kAccent);
     DrawLabel(dc,detailFont,L"CAPTURE",{14,524,kWidth-12,548},theme::kAccent);
@@ -389,7 +389,7 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
         INITCOMMONCONTROLSEX common{sizeof(common),ICC_BAR_CLASSES};InitCommonControlsEx(&common);
         HWND slider=CreateWindowExW(0,TRACKBAR_CLASSW,L"GI rays",WS_CHILD|WS_VISIBLE|WS_TABSTOP|TBS_HORZ|TBS_AUTOTICKS,
             166,348,306,36,window,reinterpret_cast<HMENU>(INT_PTR(kRaySlider)),selfModule,nullptr);
-        SendMessageW(slider,TBM_SETRANGE,TRUE,MAKELPARAM(0,8));
+        SendMessageW(slider,TBM_SETRANGE,TRUE,MAKELPARAM(0,15));
         SendMessageW(slider,TBM_SETPAGESIZE,0,1);
         SendMessageW(slider,TBM_SETTICFREQ,1,0);
         RefreshRaySlider(window);
@@ -408,10 +408,10 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
             if(LOWORD(wParam)==TB_THUMBTRACK){rayDragging=true;InvalidateRect(window,nullptr,FALSE);return 0;}
             rayDragging=false;
             const unsigned pos=unsigned(SendMessageW(reinterpret_cast<HWND>(lParam),TBM_GETPOS,0,0));
-            if(pos<=8){
+            if(pos<=15){
                 std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);
                 const auto& option=control_settings::Definition(control_settings::Key::GlobalIlluminationSamples);
-                if(pos*2!=control_rr::GISampleRequested()&&control_settings::Write(option,int(pos*2)))FGSettingsMarkSettingsDirty();
+                if(control_rr::GISampleSliderValue(pos)!=control_rr::GISampleRequested()&&control_settings::Write(option,int(control_rr::GISampleSliderValue(pos))))FGSettingsMarkSettingsDirty();
             }
             RefreshRaySlider(window);InvalidateRect(window,nullptr,FALSE);return 0;
         }

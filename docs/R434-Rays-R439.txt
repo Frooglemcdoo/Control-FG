@@ -3,14 +3,14 @@ R439 - R434 baseline with F10 GI ray-count slider
 Close Control and extract beside Control_DX12.exe, replacing files.
 Press F10. Use the GI RAYS slider below the advanced comparison buttons.
 Enable Ray Reconstruction and Ray Traced Indirect Diffuse Lighting.
-Choices: Native, 2, 4, 6, 8, 10, 12, 14, 16.
+Choices: Native, then 2 through 16 in single-ray steps (including 3).
 These are total GI rays per pixel, not additional rays or filter passes.
 Dragging previews the count; releasing the slider applies it.
 Changes apply through the existing producer allocation path on the next frame,
 with a history reset. The choice saves and restores on restart; Native is the
 fresh-install default. An existing valid GISamples value is restored.
 
-Compare Native, 4, 8 and 16 in the same lamp/Jesse view with FG off.
+Compare 2 and 3 in the same lamp/Jesse view with FG off.
 Check speckles, motion boiling and rendered FPS. Higher counts cost GPU time;
 this build does not claim to fix RR. No new smoothing or history is added.
 R434 Raw Bypass, GI sampling shaders and guide implementation are unchanged.

@@ -7,8 +7,8 @@
 int main(){
  using namespace control_rr;
  assert(GISampleRequested()==0); // R392 startup preserves the native count.
- for(unsigned requested: {0u,1u,2u,3u,4u,6u,8u,10u,12u,14u,16u,17u,32u,0xffffffffu}){
-  const bool accepted=requested==2||requested==4||requested==6||requested==8||requested==10||requested==14||requested==12||requested==16;
+ for(unsigned requested: {0u,1u,2u,3u,4u,5u,6u,7u,8u,9u,10u,11u,12u,13u,14u,15u,16u,17u,32u,0xffffffffu}){
+  const bool accepted=requested>=2&&requested<=16;
   assert(NormalizeGISampleRequest(requested)==(accepted?requested:0u));
   for(unsigned n: {0u,1u,2u,4u,16u,0xffffffffu}){
    assert(GISampleComparison(n,requested,false)==n);
@@ -16,14 +16,16 @@ int main(){
   }
  }
  unsigned cycle=0;
- for(unsigned expected=2;expected<=16;expected+=2){
+ for(unsigned expected=2;expected<=16;++expected){
   cycle=NextGISampleRequest(cycle);assert(cycle==expected);
  }
  assert(NextGISampleRequest(cycle)==2);
+ for(unsigned pos=0;pos<=15;++pos){const unsigned rays=GISampleSliderValue(pos);assert(rays==(pos?pos+1:0));assert(GISampleSliderPosition(rays)==pos);}
+ assert(GISampleSliderValue(16)==0);
  GISampleFrameSelection latch;
  RRFrameCoordinator frame;
  for(unsigned f=1;f<=7;++f){
-  const unsigned next[]={4,4,6,8,2,0,4};
+  const unsigned next[]={2,2,3,4,2,0,3};
   GISampleSelect(next[f-1]);
   assert(frame.Begin({f,3840,2160,3840,2160,0},true,true));
   const bool changed=latch.Latch(GISampleRequested(),true);
@@ -53,5 +55,5 @@ int main(){
  assert(!off.Begin({1,3840,2160,3840,2160,0},false,false));
  assert(!off.ResetForSignalChange());
  assert(!off.Reset());
- puts("PASS: GI 2/4/6/8/10/12/14/16; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
+ puts("PASS: GI integer counts 2 through 16; native=2 regression; invalid/native/off preservation; frame snapshot; one history reset per change; late reset rejected");
 }
