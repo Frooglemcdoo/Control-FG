@@ -26,6 +26,8 @@ jobs:
           }
           & $dxc -T cs_6_0 -E main -WX tools/gi-pilot-resolve-validation.hlsl -Fo gi-pilot-resolve.dxil
           if($LASTEXITCODE -ne 0) {throw 'Pilot compile failed'}
+          & $dxc -T cs_6_0 -E main -WX tools/gi-auto-binding-validation.hlsl -Fo gi-auto-binding.dxil
+          if($LASTEXITCODE -ne 0) {throw 'Binding compile failed'}
       - name: Validate GPU targets and pilot resolve
         shell: cmd
         run: |
@@ -39,4 +41,8 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-pilot-guide-resolve.cpp /Fetest-gi-pilot-guide-resolve.exe
           if errorlevel 1 exit /b 1
           test-gi-pilot-guide-resolve.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-binding-gpu.cpp /Fetest-gi-auto-binding-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          test-gi-auto-binding-gpu.exe
           if errorlevel 1 exit /b 1
