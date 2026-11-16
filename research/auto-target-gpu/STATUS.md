@@ -64,7 +64,9 @@ The new path needs all of the following before it can be enabled:
 4. DXR root compatibility: adding a private local-root target SRV to an isolated
    raygen export is a candidate; it requires a properly aligned larger shader
    record and explicit association. Existing native hit/miss/global-root bindings
-   and original record arguments must remain valid. This is not implemented yet.
+   and original record arguments must remain valid. The private local-root layout
+   and 64-byte record encoder now exist and serialize successfully, but native
+   state-object augmentation, upload records and actual DXR dispatch remain unimplemented.
 5. Matching evaluator root extension and complete native binding restoration.
    Producer/evaluator must reproduce the exact same random coordinates and frozen
    receiver decode. The pilot must be independent of the other nine samples.
@@ -75,3 +77,32 @@ The new path needs all of the following before it can be enabled:
    Windows proxy build. Only after that is a gameplay package meaningful.
 
 No user capture is required to finish these software integration steps.
+
+## Immutable binding and retirement validation
+
+Commit 7646e93a143c09d8db6bde66ca6a6eca4a451347, Windows run 43904848014:
+shader compilation and all Windows validation executables passed.
+
+- `auto_target_binding.h` shares version, source frame, ray count and mixture
+  fraction between C++/HLSL. It rejects invalid bounds and incompatible headers
+  before sampling. The source frame identifies target construction, not the
+  current tracing frame. It limits mixture fraction to the pilot estimator bound.
+- `d3d12_auto_target_binding.h` retains proven resource/backing storage and fixes
+  selection once. It supplies private space-19 root parameters, a padded 64-byte
+  ray-generation record encoder and evaluator root arguments from one owner.
+  Space-19 compatibility with native roots still needs explicit runtime admission.
+- `test-gi-auto-binding-gpu.cpp` executes the evaluator binding on D3D12 WARP and
+  compares its exact controls against the encoded raygen record. Correct targets
+  are accepted; mismatched source frame and version are rejected. Local root
+  serialization/creation passes. This does NOT execute DXR or link a state object.
+- The fixture admits target owners through existing D3D12SnapshotRetirement,
+  drops external target references before submission, and verifies that ownership
+  cannot retire while submission is pending or the recording remains replayable.
+  Successful command-list reset plus observed private-fence completion permits
+  retirement. Blocking waits exist only in the fixture, not the binding/runtime.
+
+This is reusable binding infrastructure, not live hook integration. The caller
+must still establish immutable GPU contents, queue ordering, resource states,
+root compatibility and retention of shader-record uploads/training workspace.
+The current class only owns target storage. Neither producer nor evaluator game
+hooks include it yet. No gameplay build or new capture is warranted at this point.
