@@ -34,6 +34,8 @@ jobs:
           if($LASTEXITCODE -ne 0) {throw 'Auto evaluator compile failed'}
           & $dxc -T cs_6_0 -E main -HV 2018 -WX tools/gi-auto-sample-validation.hlsl -Fo gi-auto-sample.dxil
           if($LASTEXITCODE -ne 0) {throw 'Auto sampler compile failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX tools/gi-auto-training-validation.hlsl -Fo gi-auto-training.dxil
+          if($LASTEXITCODE -ne 0) {throw 'Training compile failed'}
       - name: Validate GPU targets and pilot resolve
         shell: cmd
         run: |
@@ -55,4 +57,12 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-sample-gpu.cpp /Fetest-gi-auto-sample-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           test-gi-auto-sample-gpu.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-roots-gpu.cpp /Fetest-gi-auto-roots-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          test-gi-auto-roots-gpu.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-training-gpu.cpp /Fetest-gi-auto-training-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          test-gi-auto-training-gpu.exe
           if errorlevel 1 exit /b 1

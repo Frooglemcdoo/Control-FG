@@ -7,6 +7,7 @@ Texture2D<float4> gbuffer : register(t0);
 Texture2D<float4> linearDepth : register(t1);
 Texture2D<float4> clipDepth : register(t2);
 RaytracingAccelerationStructure scene : register(t4);
+RWTexture2DArray<uint> materials : register(u0);
 cbuffer System : register(b0) {uint4 system[71];}
 cbuffer NativeGI : register(b1) {uint4 controls;uint passCount;}
 StructuredBuffer<GIAutoTargets> targets : register(t0,space19);
@@ -19,7 +20,7 @@ void giAutoRaygen() {
  if(controls.z!=10||controls.w!=0||passCount!=1||selection.rayCount!=10)return;
  GIFrozenReceiver receiver=GIFrozenDecodeReceiver(pixel,gbuffer.Load(int3(pixel,0)),
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
- if(!receiver.valid)return;
+ if(!receiver.valid){[unroll]for(uint i=0;i<10;++i)materials[uint3(pixel,i)]=65534;return;}
  GIAutoTargets frozen=targets[0];
  [loop]for(uint rayIndex=0;rayIndex<10;++rayIndex) {
   GIAutoDraw draw=GIAutoSample(pixel,system[69].z,0,rayIndex,receiver.origin,receiver.normal,frozen,selection);
