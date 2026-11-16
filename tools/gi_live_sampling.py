@@ -3,6 +3,7 @@
 This is the first rendering stage, not spatial/temporal ReSTIR reuse. No resource
 or SBT changes. Both audited native libraries are transformed at three random
 coordinate definitions only; native cosine mapping and range law remain intact.
+Owned/guided exports additionally use progressive scrambled angles at four rays.
 """
 import argparse, base64, hashlib, json, re, subprocess
 from pathlib import Path
@@ -92,6 +93,8 @@ def main():
             programs += [('GICompactShared',compact_shared_hits(source)),
                          ('GICompactPhaseA',compact_raygen(source,0,0)),
                          ('GICompactPhaseB',compact_raygen(source,0,1))]
+        from gi_progressive_sampling import transform as progressive
+        programs=[(name,progressive(program,v) if name in ('GIOwnedRay','GIGuidedRay') else program) for name,program in programs]
         for name, program in programs:
             ir_path=build/f'{name}-{v}.ll';ir_path.write_text(program)
             compiled=ir_path.with_suffix('.dxil')
@@ -104,7 +107,7 @@ def main():
         subprocess.run([a.assembler,str(ir),str(output),str(Path(a.dxc).parent/'dxcompiler.dll')],check=True)
         blob=output.read_bytes();assert blob[:4]==b'DXBC' and any(blob[4:20])
         header.append(f'static const unsigned char kGILiveShader{v}[]={{\n'+','.join(f'0x{x:02x}' for x in blob)+'\n};')
-        reports.append(dict(variant=v,native_sha256=HASHES[v],sha256=hashlib.sha256(blob).hexdigest(),bytes=len(blob),stage='stratified_initial_rays',extra_dispatches=0,ray_count_changed=False,restir_reuse=False,quality_verified=False))
+        reports.append(dict(variant=v,native_sha256=HASHES[v],sha256=hashlib.sha256(blob).hexdigest(),bytes=len(blob),stage='four_ray_progressive_angles',progressive_ray_count=4,other_counts_unchanged=True,extra_dispatches=0,ray_count_changed=False,restir_reuse=False,quality_verified=False))
     (build/'gi_live_sampling.generated.h').write_text('\n'.join(header)+'\n')
     (build/'gi-live-sampling-validation.json').write_text(json.dumps(reports,indent=2)+'\n')
     print(json.dumps(reports))

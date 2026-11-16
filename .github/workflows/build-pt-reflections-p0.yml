@@ -712,7 +712,7 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-evaluator-loads-gpu.cpp /Febuild\test-gi-loads.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-point-shadow-gpu.cpp /Febuild\test-gi-point-shadow.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-progressive-gpu.cpp /Febuild\test-gi-progressive.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 tools\test-gi-owned-source-recorder-gpu.cpp /Febuild\test-owned-source-recorder.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
@@ -873,12 +873,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'GI load fixture transform failed' }
           ./build/test-gi-loads.exe
           if ($LASTEXITCODE -ne 0) { throw 'GI original/combined GPU load mismatch' }
-          python tools/gi_point_shadow_gate.py --fixture build/gi-point-fixture.hlsl --kernels build/gi-point
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate generation failed' }
-          & $dxc -T cs_6_0 -E main -HV 2018 -WX build/gi-point-fixture.hlsl -Fo build/gi-point-fixture.dxil
-          if ($LASTEXITCODE -ne 0) { throw 'Point fixture compile failed' }
-          ./build/test-gi-point-shadow.exe
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate GPU equivalence failed' }
+          python tools/test-gi-progressive.py --dxc $dxc
+          if ($LASTEXITCODE -ne 0) { throw 'Progressive coordinate/CFG validation failed' }
+          python tools/test-gi-progressive.py --fixture build/gi-progressive-fixture.hlsl
+          if ($LASTEXITCODE -ne 0) { throw 'Progressive fixture generation failed' }
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX build/gi-progressive-fixture.hlsl -Fo build/gi-progressive-fixture.dxil
+          if ($LASTEXITCODE -ne 0) { throw 'Progressive fixture compile failed' }
+          ./build/test-gi-progressive.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Progressive GPU coordinate validation failed' }
           & $dxc -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_owned_lighting.hlsl -Fo build/gi_evaluator.dxil
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator compile failed' }
           Copy-Item build/gi_evaluator.dxil build/gi_evaluator-reference.dxil
@@ -890,13 +892,6 @@ jobs:
           Copy-Item build/gi_evaluator.dxil build/gi_evaluator-r442.dxil
           python -c "from pathlib import Path;Path('build/gi_evaluator_r442.generated.h').write_text('static const unsigned char kEvaluatorR442[]={'+','.join(str(x) for x in Path('build/gi_evaluator-r442.dxil').read_bytes())+'};')"
           if ($LASTEXITCODE -ne 0) { throw 'R442 baseline embedding failed' }
-          & $dxc -T cs_6_0 -E main -HV 2018 -WX -I src/shaders build/gi-point/gi_owned_lighting.hlsl -Fo build/gi_evaluator-point.dxil
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate evaluator compile failed' }
-          python tools/gi_evaluator_loads.py --dxc $dxc --assembler build/assemble-validated-dxil.exe --input build/gi_evaluator-point.dxil --output build/gi_evaluator.dxil
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate combined loads failed' }
-          & $dxc -dumpbin build/gi_evaluator-point.dxil | Set-Content -Encoding ascii build/gi_evaluator-point.ll
-          python tools/test-gi-evaluator-loads.py build/gi_evaluator-point.ll
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate field-address equivalence failed' }
           python tools/embed-gi-evaluator.py build/gi_evaluator.dxil build/gi_evaluator.generated.h
           if ($LASTEXITCODE -ne 0) { throw 'GI evaluator embedding failed' }
           & $dxc -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_guided_lighting.hlsl -Fo build/gi-guided-evaluator.dxil
@@ -910,13 +905,6 @@ jobs:
           Copy-Item build/gi-guided-evaluator.dxil build/gi-guided-evaluator-r442.dxil
           python -c "from pathlib import Path;Path('build/gi_guided_r442.generated.h').write_text('static const unsigned char kGuidedR442[]={'+','.join(str(x) for x in Path('build/gi-guided-evaluator-r442.dxil').read_bytes())+'};')"
           if ($LASTEXITCODE -ne 0) { throw 'R442 baseline embedding failed' }
-          & $dxc -T cs_6_0 -E main -HV 2018 -WX -I src/shaders build/gi-point/gi_guided_lighting.hlsl -Fo build/gi-guided-evaluator-point.dxil
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate evaluator compile failed' }
-          python tools/gi_evaluator_loads.py --dxc $dxc --assembler build/assemble-validated-dxil.exe --input build/gi-guided-evaluator-point.dxil --output build/gi-guided-evaluator.dxil
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate combined loads failed' }
-          & $dxc -dumpbin build/gi-guided-evaluator-point.dxil | Set-Content -Encoding ascii build/gi-guided-evaluator-point.ll
-          python tools/test-gi-evaluator-loads.py build/gi-guided-evaluator-point.ll
-          if ($LASTEXITCODE -ne 0) { throw 'Point gate field-address equivalence failed' }
           python -c "from pathlib import Path;p=Path('build/gi_guided.generated.h');p.write_text('static const unsigned char kGuidedEvaluator[]={'+','.join(str(x) for x in Path('build/gi-guided-evaluator.dxil').read_bytes())+'};')"
           if ($LASTEXITCODE -ne 0) { throw 'Guided live evaluator embedding failed' }
           foreach($stage in 'proposals','shading','resolve','trace') {
@@ -1562,7 +1550,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-PointGate-R444' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Progressive4-R445' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1607,7 +1595,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-PointGate-R444') {
+          if ($out -eq 'ControlTOH-GI-Progressive4-R445') {
             Copy-Item docs/GI-Cost-R440.txt "$out/ControlTOH/README.txt"
           } elseif ($out -eq 'ControlTOH-R434-Rays-R439') {
             Copy-Item docs/R434-Rays-R439.txt "$out/ControlTOH/README.txt"
@@ -1637,10 +1625,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-PointGate-R444' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Progressive4-R445' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
-            ControlTOH-GI-PointGate-R444.zip
-            ControlTOH-GI-PointGate-R444.sha256
+            ControlTOH-GI-Progressive4-R445.zip
+            ControlTOH-GI-Progressive4-R445.sha256
             ControlTOH-R434-Rays-R439.zip
             ControlTOH-R434-Rays-R439.sha256
             ControlTOH-GI-Guided-Live-R434.zip

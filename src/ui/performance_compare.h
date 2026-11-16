@@ -47,7 +47,7 @@ inline void Restore(){
 }
 inline bool Apply(){
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
- // Compare evaluator revisions at the same ten-ray workload; retain all other settings.
+ // Compare accepted ten-ray sampling with four progressive rays; retain all lighting settings.
  control_compare::evaluatorBaseline=conditions[step].baseline;
  control_rr::GISampleSelect(conditions[step].rays);
 #else
@@ -142,7 +142,7 @@ inline bool Start(uint64_t now){
  startFailure=L"";
 #ifdef CONTROL_GI_RAY_COST_CAPTURE
  if(!gi_evaluator::baselineReady.load()||!gi_evaluator::ready.load()||!gi_reuse::guidedEvaluatorReady.load())return RejectStart(L"GI comparison shaders are not ready. Return to gameplay and let the scene load.");
- if(control_rr::GISampleRequested()!=10)return RejectStart(L"Set the F10 GI RAYS slider to 10. Keep GI: FIXED selected.");
+ if(control_rr::GISampleRequested()!=4)return RejectStart(L"Set the F10 GI RAYS slider to 4. Keep GI: FIXED selected.");
  if(control_rr::RRUserModeValue()!=control_rr::RRUserMode::Full)return RejectStart(L"Turn Ray Reconstruction ON before starting this capture.");
  if(!rt_surface_source::ReadyForRayCostCapture())return RejectStart(L"In F10, select RELAX: OFF and CONTACT: AUTO, and finish any GI comparison/capture. Keep GI: FIXED selected. If these already match, restart the game to clear temporary diagnostic overrides.");
 #endif
@@ -156,7 +156,7 @@ inline bool Start(uint64_t now){
  LARGE_INTEGER frequency{};if(!QueryPerformanceFrequency(&frequency)||!frequency.QuadPart)return RejectStart(L"Windows could not provide the performance timer.");qpcFrequency=frequency.QuadPart;
  wchar_t env[MAX_PATH]{};const DWORD len=GetEnvironmentVariableW(L"LOCALAPPDATA",env,MAX_PATH);if(!len||len>=MAX_PATH)return RejectStart(L"The LOCALAPPDATA output path is unavailable or too long.");
  const auto root=std::wstring(env)+L"\\ControlFGProbe";CreateDirectoryW(root.c_str(),nullptr);
- folder=root+L"\\Performance-GI-R444-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
+ folder=root+L"\\Performance-GI-R445-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(now);if(!CreateDirectoryW(folder.c_str(),nullptr))return RejectStart(L"Could not create the capture folder under LOCALAPPDATA/ControlFGProbe.");
  saved={LiveSelection::GetMode(selection.Read()),gi_reuse::ownedRequested.load(),control_visual::lightingEnabled.load(),control_rr::GISampleRequested(),control_visual::characterQuality.load(),volume_test::phase.load(),character_surface::phase.load(),rt_surface_source::request.load(),rt_surface_source::manualGI.load(),rt_surface_source::manualContact.load(),specularSampleChoice.load(),control_rr_gi::stageMode.load(),control_rr::RRUserModeValue()};
  ioFailed=false;gpu.clear();gpu.reserve(8192);control_compare::Reset();for(auto& r:results)r=Result{};
  constantConfig=Constants();Write(L"settings-original.txt",settings_report::Snapshot());Write(L"SUMMARY.txt","INCOMPLETE: performance comparison started. Keep game open until two beeps.\n");
@@ -166,7 +166,7 @@ inline bool Start(uint64_t now){
  AcquireSRWLockExclusive(&performance::lock);for(unsigned i=0;i<performance::count;++i){performance::samples[i].current=false;performance::samples[i].state=performance::State::Discarded;}ReleaseSRWLockExclusive(&performance::lock);
  savedInterval=performance::sampleInterval.load();performance::sampleInterval=64;performance::skipped=0;
  geometryAtStart=0;control_compare::geometry=0;control_compare::running=true;
- step=0;state=State::Arm;until=now+5000;Log("GI_COST_R440A accepted rays=10 arm_seconds=5");Beep(700,100);return true;
+ step=0;state=State::Arm;until=now+5000;Log("GI_COST_R440A accepted rays=4 arm_seconds=5");Beep(700,100);return true;
 }
 inline void Tick(HWND game,uint64_t now){
  if(!Active())return;

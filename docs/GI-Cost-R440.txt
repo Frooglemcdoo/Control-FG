@@ -1,26 +1,34 @@
-R444 - Skip zero-contribution point-light shadow lookups
+R445 - Four-ray progressive angular sampling candidate
 
-Uses R442's evaluator and combined buffer reads. R443 constant-read hoisting
-is removed. The point-light shadow block now checks the same saturated
-surface/light cosine used by the final native lighting calculation. When
-that cosine is zero, it skips the shadow lookup. The light list, range,
-attenuation, BRDF, accumulation, spotlights and all ten GI rays remain.
-No history reuse, blur or light-distance cutoff is introduced.
+Returns to R442 evaluator arithmetic. Neither R443 constant hoisting nor
+R444 point-shadow gating is enabled. At exactly FOUR rays, angular sample
+coordinates use a progressive Sobol sequence with nested binary scrambling
+per pixel/batch/dimension. Consecutive frames cover complementary directions.
+Other ray counts, including the accepted TEN-ray reference, retain R442's
+angular sequence. Ray range sampling, hit/miss shading and light intensity
+remain unchanged. No new lighting history, spatial blur or clamp is added.
+This is not ReSTIR GI and does not yet claim ten-ray image quality.
 
-A Windows GPU fixture compares native and gated point-light calculations
-across 65,536 finite cases with varied normals, positions, light parameters,
-shadow flags and procedural shadow moments. Accumulated RGB matches bit for
-bit. This fixture is not a full-scene rendering or hardware performance test.
-Check Jesse, plants, lamps and moving camera lighting for unchanged quality.
+Synthetic angular integration tests show less multi-frame error than the old
+four-ray sampler, but do not consistently match ten rays. Single-frame and
+motion quality remain unverified. The existing RR temporal reconstruction
+may benefit from better sample coverage; this must be checked in the game.
+Integer/float coordinate tests, dyadic coverage tests and reversible shader
+edits validate the sampling implementation. Windows GPU tests independently
+check output bits, including frame counter boundaries.
 
 Close Control and extract beside Control_DX12.exe, replacing files.
-Use RR ON, FG OFF, GI RAYS 10, GI GUIDE ON (FIXED), RELAX OFF, CONTACT AUTO.
-Keep REF CLAMP at 60%.
+In F10 set GI RAYS to FOUR. Keep GI GUIDE ON (FIXED), RELAX OFF,
+CONTACT AUTO, RR ON, FG OFF and REF CLAMP 60%.
+Compare FOUR against TEN in the same lamp/Jesse view, first still and then
+moving Jesse/camera. Check hair, jaw/neck, plants, dark surfaces and changes
+when lights move or disappear. TEN remains the known quality reference.
 
-F10 -> GI COST CAPTURE compares R442 and R444 at ten rays throughout.
-Stay still for about two minutes; the ZIP opens in Explorer on completion.
-The first four phases form an R442 / R444 / R444 / R442 bracket. The primary
-summary comparison uses only that bracket; later phases check stability
-and query overhead. Actual evaluator binding is recorded in every phase.
-The capture restores ten rays and the R444 evaluator on completion/abort.
-No in-game performance gain is claimed until measured on the target GPU.
+F10 -> GI COST CAPTURE requires FOUR selected. It compares TEN reference rays
+against FOUR progressive rays automatically. Stay still for about two minutes.
+The first four phases are 10 / 4 / 4 / 10; later phases check repeat stability
+and profiling overhead. The ZIP opens in Explorer on completion.
+Four rays are restored on completion or abort. Set TEN manually if four-ray
+quality is not acceptable. Report image quality as well as the timing ZIP.
+
+Method background: https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
