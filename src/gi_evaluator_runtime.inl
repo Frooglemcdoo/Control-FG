@@ -1,5 +1,12 @@
 // Included inside native_lighting. Native PSOs own alternates through COM private data.
 namespace gi_evaluator {
+inline void AutoShare(IUnknown* source,ID3D12PipelineState* alternate)noexcept {
+#ifdef CONTROL_GI_AUTO_TARGETS
+ gi_auto_prepare::Share(source,alternate);
+#else
+ (void)source;(void)alternate;
+#endif
+}
 inline const GUID kVariant={0x309e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline const GUID kGuided={0x434e0001,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
 inline const GUID kMode={0x309e0002,0x1739,0x4401,{0x91,0x33,0x41,0x51,0x61,0x71,0x81,0x91}};
@@ -33,7 +40,9 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  char sha[65]{};
  if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de"))return;
  gi_frozen_prepare::Observe(device,desc,native);
+#ifdef CONTROL_GI_AUTO_TARGETS
  gi_auto_prepare::Observe(device,desc,native);
+#endif
  const auto owned=GIOwnedPipeline::Attach(device,desc->pRootSignature,native);
  if(GIOwnedPipeline::Enabled())Trace("GI_OWNED_PIPELINE attached=%u hr=0x%08lX dispatch_hook=1",unsigned(owned==S_OK),static_cast<unsigned long>(owned));
  if(!Enabled())return;
@@ -50,7 +59,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   if(SUCCEEDED(hr)&&owner){hr=owner->SetPrivateData(kMode,sizeof(mode),&mode);
    if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(kVariant,alternate);owner->Release();}
  }
- if(SUCCEEDED(hr)&&alternate){GIOwnedPipeline::Share(native,alternate);gi_frozen_prepare::Share(native,alternate);gi_auto_prepare::Share(native,alternate);}
+ if(SUCCEEDED(hr)&&alternate){GIOwnedPipeline::Share(native,alternate);gi_frozen_prepare::Share(native,alternate);AutoShare(native,alternate);}
 #ifdef CONTROL_GI_GUIDED_LIVE
  if(SUCCEEDED(hr)){
   auto guidedDesc=*desc;guidedDesc.CS={kGuidedEvaluator,sizeof(kGuidedEvaluator)};guidedDesc.CachedPSO={};
@@ -63,7 +72,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 #endif
   if(SUCCEEDED(guideHR))guideHR=guided->SetPrivateData(kMode,sizeof(mode),&mode);
   if(SUCCEEDED(guideHR))guideHR=owner->SetPrivateDataInterface(kGuided,guided.Get());
-  if(SUCCEEDED(guideHR))gi_auto_prepare::Share(native,guided.Get());
+  if(SUCCEEDED(guideHR))AutoShare(native,guided.Get());
   gi_reuse::guidedEvaluatorReady.store(SUCCEEDED(guideHR));
   Trace("GI_GUIDED_R434 evaluator_ready=%u hr=0x%08lX fixed_scene=1 fraction=0.1",unsigned(SUCCEEDED(guideHR)),static_cast<unsigned long>(guideHR));
  }
@@ -79,7 +88,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
    if(SUCCEEDED(refHR))refHR=ref->SetPrivateData(kMode,sizeof(mode),&mode);
    if(SUCCEEDED(refHR))refHR=ref->SetPrivateData(kRevision,sizeof(rev),&rev);
    if(SUCCEEDED(refHR))refHR=owner->SetPrivateDataInterface(i?kR442Guided:kR442,ref.Get());
-   if(SUCCEEDED(refHR)){GIOwnedPipeline::Share(native,ref.Get());gi_frozen_prepare::Share(native,ref.Get());gi_auto_prepare::Share(native,ref.Get());}
+   if(SUCCEEDED(refHR)){GIOwnedPipeline::Share(native,ref.Get());gi_frozen_prepare::Share(native,ref.Get());AutoShare(native,ref.Get());}
   }
   baselineReady.store(SUCCEEDED(refHR));
  }

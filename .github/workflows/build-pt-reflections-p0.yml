@@ -924,7 +924,7 @@ jobs:
           }
           python -c "from pathlib import Path;Path('build/gi_temporal.generated.h').write_text(''.join('static const unsigned char kTemporal%d[]={'%v+','.join(str(x) for x in Path('build/gi-temporal-%d.dxil'%v).read_bytes())+'};'+chr(10) for v in (0,1)))"
           if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
-          python tools/build-gi-auto.py --dxc $dxc --output build
+          python tools/build-gi-auto.py --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe
           if ($LASTEXITCODE -ne 0) { throw 'Auto GI shader build failed' }
           python tools/build-gi-frozen.py --dxc $dxc --output build
           if($LASTEXITCODE -ne 0){throw 'Frozen GI runtime embedding failed'}
