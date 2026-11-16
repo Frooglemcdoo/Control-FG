@@ -44,6 +44,13 @@ inline bool Source10() noexcept {
  static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_SOURCE10",b,4)==1&&b[0]=='1';}();
  return OwnedTrace()&&value;
 }
+inline unsigned RequestedSourceRays() noexcept {
+#ifdef CONTROL_GI_LONG_SEQUENCE
+ return control_rr::GISampleRequested();
+#else
+ return 0;
+#endif
+}
 // 112^2 * (16 rays + one summary) fits the existing 262144-record buffer.
 static_assert(112u*112u*17u<=262144u,"Source ROI must retain complete ray sets");
 inline D3D12_SHADER_BYTECODE OwnedBytecode() noexcept {
@@ -85,7 +92,7 @@ inline void Fail(const char* code,const wchar_t* message) noexcept {
 inline const wchar_t* Status() noexcept {
  if(OwnedTrace()) switch(phase.load()) {
  case Phase::Idle:
-  if(Source10()&&control_rr::GISampleRequested()!=10)return L"NOT ARMED: set GI RAYS to 10; keep GI: FIXED, RR ON, RELAX OFF.";
+  if(Source10()&&RequestedSourceRays()!=10)return L"NOT ARMED: set GI RAYS to 10; keep GI: FIXED, RR ON, RELAX OFF.";
   return enabledReady.load()?L"Place the issue in the orange box. Ctrl+arrows moves box; F7 arms.":L"WAITING: owned evaluator unavailable. Load level; enable Owned GI.";
  case Phase::Countdown:return L"Capture in five seconds. Keep reproducing the issue in motion.";
  case Phase::Armed:return L"ARMED: keep moving. Waiting for owned GI and matching RR frame.";
@@ -116,7 +123,7 @@ using InstanceRequest=void (*)() noexcept;
 inline std::atomic<InstanceRequest> instanceRequest{nullptr};
 inline bool Request(const char* source) noexcept {
  if(!Enabled())return false;
- if(Source10()&&control_rr::GISampleRequested()!=10){Trace("GI_SOURCE_R446_REQUEST accepted=0 reason=requires_10_rays requested=%u",control_rr::GISampleRequested());return false;}
+ if(Source10()&&RequestedSourceRays()!=10){Trace("GI_SOURCE_R446_REQUEST accepted=0 reason=requires_10_rays requested=%u",RequestedSourceRays());return false;}
  if(!enabledReady.load()){notice.store(L"NOT ARMED: probe not ready. Load the level first.");Trace("GI_SPOT_R275_REQUEST accepted=0 source=%s reason=not_ready",source);return false;}
  AcquireSRWLockExclusive(&lock);
  const bool accepted=phase.load()==Phase::Idle;
@@ -273,7 +280,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
  if(!Attached(list,psoKey,pso)||!Attached(pso.Get(),variantKey,trace)||!Attached(trace.Get(),traceRootKey,root)||!Attached(trace.Get(),nativeRootKey,nativeRoot))return false;
  gridWidth.store(x*8);gridHeight.store(y*16);
  if(phase.load()!=Phase::Armed)return false;
- if(Source10()&&control_rr::GISampleRequested()!=10){Fail("source_ray_count_changed",L"FAILED: GI ray count changed. Restart capture with 10 rays.");return false;}
+ if(Source10()&&RequestedSourceRays()!=10){Fail("source_ray_count_changed",L"FAILED: GI ray count changed. Restart capture with 10 rays.");return false;}
  UINT64 sourceFrame=0;
  if(StackCapture()&&!savedFrames.load()){
   const auto ready=gi_stack_capture::readySource.load();sourceFrame=ready?ready(list):0;
