@@ -106,3 +106,57 @@ must still establish immutable GPU contents, queue ordering, resource states,
 root compatibility and retention of shader-record uploads/training workspace.
 The current class only owns target storage. Neither producer nor evaluator game
 hooks include it yet. No gameplay build or new capture is warranted at this point.
+
+## Paired shader candidates
+
+Commit 4875939b3bd1906b4b4a313d9c110d628a79100c passed Windows run
+43906929079 (job 133438159536), including all earlier tests.
+
+- `gi_auto_sample.hlsl` is shared by producer/evaluator: ten-ray admission,
+  independent per-ray direction inputs, unchanged R307 range hash dimension,
+  one cosine pilot and nine mixture draws. Invalid/empty/stale targets select
+  the ten-ray owned strata/permutation before tracing. One valid target is
+  duplicated into the two-cone sampler, preserving a normalized proposal.
+- `gi_auto_raygen.hlsl` compiles as lib_6_3. It uses full-resolution pixel
+  indices, ten native dispatch rays, original hit/miss table indices and the
+  existing shared-hit payload tag. It requires variant zero, batch zero and
+  one pass, with the private space-19 binding. Below-hemisphere draws use mask
+  zero so the native miss routine supplies metadata.
+- `gi_auto_lighting.hlsl` compiles as cs_6_0. Complete secondary RGB, including
+  miss/volume lighting, goes through the matching pilot resolve. RR distance
+  accumulation and the native fade convention remain separate from RGB weights.
+  This candidate includes the base generated secondary evaluator; accepted
+  R442 performance transforms must also be carried over before live comparison.
+- Candidate invalid-receiver/invalid-estimator handling is NOT yet an approved
+  game recovery contract. In particular, a raygen early return can leave stale
+  hit slices, and black evaluator output is only an explicit invalid-result
+  marker at this stage. Clear/status handling must be settled before live use.
+  Do not connect these candidates to gameplay without addressing that gate.
+
+`test-gi-auto-sample-gpu.cpp` executes the shared sampler and resolver on WARP
+for six states x 32,768 receivers (1,966,080 sampled directions): front-facing
+bounds, bounds behind the surface, empty targets, stale source frame, only the
+second bound valid, and a nonfinite bound. All results were finite, directions
+were unit length, weights respected the bound, and constant RGB stayed constant.
+The first receiver's ten directions were distinct in each case. Range values
+matched the existing CPU producer; empty/stale/nonfinite cases produced identical
+fallback directions and unit weights. This does not yet establish full native
+producer parity across captured receivers.
+
+Known cosine expectations versus observed scenario means:
+
+| Scenario | E[z squared], expected .5 | P[z > .8], expected .36 |
+| --- | --- | --- |
+| Front-facing targets | .500130 | .361028 |
+| Targets behind surface | .500009 | .360823 |
+| Empty | .499995 | .359714 |
+| Stale frame | .499995 | .359714 |
+| Second target only | .500029 | .360897 |
+| Nonfinite bound | .499995 | .359714 |
+
+This is shader compilation plus GPU execution of the shared sampling/resolve
+functions, NOT execution of the raygen through a DXR state object, and NOT
+execution of the full native secondary evaluator with game resources. The next
+work is native state-object/local-root association and evaluator root extension,
+complete fallback/status handling, captured receiver parity, live training writes,
+submission/queue integration and then the full proxy build. No package is ready.
