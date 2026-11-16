@@ -25,13 +25,20 @@ def analyze(data):
         if len(sums)!=1 or len(records)!=len(rays)+1:raise ValueError('Missing/duplicate summary')
         su,sf=sums[0];n=su[2]
         if not 0<n<=64 or len(rays)!=n or [r[0][2] for r in rays]!=list(range(n)):raise ValueError('Incomplete/duplicate ray set')
+        def close(a,b):return abs(a-b)<=2e-5*max(1.,abs(a),abs(b))
+        running=[0.,0.,0.]
         for u,f in rays:
             if u[39]!=n or u[19] not in (1,2,4):raise ValueError('Ray count or branch mismatch')
             # Miss position and normal may be unspecified. Never reject them as radiance.
             required=list(f[4:19])+list(f[20:23])+list(f[24:27])+list(f[28:31])+list(f[56:59])
             if not all(math.isfinite(v) for v in required):raise ValueError('Nonfinite lighting data')
+            for c in range(3):
+                if not close(f[12+c],f[4+c]*f[8+c]):
+                    raise ValueError('Per-ray throughput/contribution mismatch')
+                running[c]+=f[12+c]
+                if not close(f[56+c],running[c]):
+                    raise ValueError('Per-ray running accumulation mismatch')
         if not all(math.isfinite(v) for v in sf[4:31]):raise ValueError('Nonfinite summary')
-        def close(a,b):return abs(a-b)<=2e-5*max(1.,abs(a),abs(b))
         for c in range(3):
             if not close(sf[4+c],sf[15]*rays[-1][1][56+c]/n):raise ValueError('Output/accumulation mismatch')
             if not close(sf[56+c],rays[-1][1][56+c]):raise ValueError('Final running sum mismatch')

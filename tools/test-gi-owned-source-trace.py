@@ -19,6 +19,8 @@ class Trace(unittest.TestCase):
             struct.pack_into('<4f',r,16,1,2,3,4)
             if i<rays:
                 struct.pack_into('<I',r,76,2);struct.pack_into('<I',r,156,rays)
+                struct.pack_into('<3f',r,32,1,1,1)
+                struct.pack_into('<3f',r,48,1,2,3)
                 struct.pack_into('<3f',r,224,i+1,2*(i+1),3*(i+1))
             else:
                 struct.pack_into('<f',r,60,1);struct.pack_into('<3f',r,224,rays,2*rays,3*rays)
@@ -32,7 +34,7 @@ class Trace(unittest.TestCase):
         self.assertEqual(p['output'],[1.,2.,3.])
     def test_corruption_rejected(self):
         mutations=[(4,0),(8,128),(16+204,7),(16+156,3),(16+76,0),(16+4*4,0x7fc00000),
-                   (16+256+8,0),(16+512+12,1),(16+512+16,0x7fc00000),(16+240,9)]
+                   (16+48,0),(16+224,0),(16+256+8,0),(16+512+12,1),(16+512+16,0x7fc00000),(16+240,9)]
         for offset,value in mutations:
             b=self.fixture();struct.pack_into('<I',b,offset,value)
             with self.subTest(offset=offset),self.assertRaises(ValueError):a.analyze(b)
