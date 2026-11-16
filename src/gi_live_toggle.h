@@ -109,6 +109,12 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   Microsoft::WRL::ComPtr<ID3D12StateObject> state;Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> props;
   HRESULT prepared=static_cast<IUnknown*>(candidate)->QueryInterface(IID_PPV_ARGS(&state));if(SUCCEEDED(prepared))prepared=state.As(&props);
   const void* identifier=SUCCEEDED(prepared)?props->GetShaderIdentifier(kExport):nullptr;
+#ifdef CONTROL_GI_AUTO_TARGETS
+  if(automatic&&identifier){
+   const bool found=props->GetShaderIdentifier(gi_reuse::D3D12AutoRaygenAugment::Export)!=nullptr;
+   Log("GI_AUTO_R448 ray_pipeline_prepared=%u",unsigned(found));if(!found)identifier=nullptr;
+  }
+#endif
   const void* phaseIdentifiers[2]={nullptr,nullptr};
   if(compact&&identifier){for(unsigned p=0;p<2;++p)phaseIdentifiers[p]=props->GetShaderIdentifier(kCompactExports[p]);
    if(!phaseIdentifiers[0]||!phaseIdentifiers[1])identifier=nullptr;}

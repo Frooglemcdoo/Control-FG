@@ -8,6 +8,12 @@ using Owner=gi_reuse::D3D12AutoInvocation;
 using Router=gi_reuse::D3D12SplitSubmissionRouter<Owner,8,64ull*1024*1024>;
 inline Router* const router=new(std::nothrow) Router;
 inline std::mutex mutex;
+inline control_rr_native_clamp::Api provider;
+inline bool Provider(const char* name,UINT& value)noexcept {
+ value=0;__try {if(!provider.ready||!provider.resolve)return false;
+  struct Slot {int id,tag;} slot{-1,0};provider.resolve(&slot,name);return provider.ReadCurrent(slot.id,value);
+ }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
+}
 inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
 inline gi_reuse::GIAutoPublishedTarget latest;
 inline std::atomic<bool> halted{false},initialized{false};
@@ -33,9 +39,9 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
     native_lighting::gi_compute_hooks::Muted()||desc->Depth!=1)return false;
  auto scope=gi_native_render_scope::current;if(!scope.token||!scope.frame||scope.frame>UINT_MAX)return false;
  UINT rays=0,pass=0,passes=0;
- if(!GINativeSceneDescriptors::Provider("g_uRTDiffuseRayCount",rays)||rays!=10||
-    !GINativeSceneDescriptors::Provider("g_uDGIPass",pass)||pass!=0||
-    !GINativeSceneDescriptors::Provider("g_uDGIPassCount",passes)||passes!=1)return false;
+ if(!Provider("g_uRTDiffuseRayCount",rays)||rays!=10||
+    !Provider("g_uDGIPass",pass)||pass!=0||
+    !Provider("g_uDGIPassCount",passes)||passes!=1)return false;
  try {
   gi_reuse::ComputeBindingSnapshot bindings;UINT64 ignored=0;
   if(!native_lighting::gi_compute_hooks::Capture(list,bindings,ignored)||bindings.rays.Get()!=state)return false;
@@ -46,7 +52,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   const auto generation=native_lighting::gi_compute_hooks::RecordingGeneration(list);
   if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation))return false;
   {std::lock_guard<std::mutex> lock(mutex);
-   if(!initialized.load()){if(FAILED(router->Initialize(context.queue,&native_lighting::gi_compute_hooks::RecordingGeneration)))return false;queue=context.queue;initialized=true;}
+   if(!initialized.load()){if(!native_lighting::rt_spot_table_audit::InstallGameQueue(context.queue))return false;if(FAILED(router->Initialize(context.queue,&native_lighting::gi_compute_hooks::RecordingGeneration)))return false;queue=context.queue;initialized=true;}
    if(queue.Get()!=context.queue)return false;
   }
   Collect();gi_reuse::GIAutoPublishedTarget prior;
@@ -81,7 +87,7 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
  if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation)){Stop("consumer_generation");return true;}
  const auto ok=router->Access([&](auto& pool){
   auto* owner=pool.View(pending.id);
-  if(!owner||owner->pipelines.Get()!=bundle.Get()||!pool.AttachAndClaimConsumer(pending.id,pending.frame,queue.Get(),{reinterpret_cast<UINT64>(list),generation}))return false;
+  if(!owner||owner->pipelines->nativeRoot.Get()!=bundle->nativeRoot.Get()||!pool.AttachAndClaimConsumer(pending.id,pending.frame,queue.Get(),{reinterpret_cast<UINT64>(list),generation}))return false;
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;return owner->Shade(cmd.Get(),bindings);
  });
  if(!ok)Stop("consumer_recording");
@@ -92,6 +98,7 @@ inline bool Install()noexcept {
  if(!gi_auto_dispatch::Enabled()||!router||!gi_reuse::guidedScopeReady.load()||gi_native_render_scope::leaving.load()||
     gi_frozen_submission::callbacks.load()||native_lighting::gi_compute_hooks::onFrozenRecordingReset.load()||
     native_lighting::gi_compute_hooks::onFrozenRecordingDestroyed.load())return false;
+ if(!provider.Initialize(verifiedRenderer,verifiedD3d))return false;
  native_lighting::gi_compute_hooks::EnableForDenoiser();
  native_lighting::gi_compute_hooks::onFrozenRecordingReset=&Seal;
  native_lighting::gi_compute_hooks::onFrozenRecordingDestroyed=&Seal;
