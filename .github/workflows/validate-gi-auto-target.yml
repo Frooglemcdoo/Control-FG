@@ -28,6 +28,12 @@ jobs:
           if($LASTEXITCODE -ne 0) {throw 'Pilot compile failed'}
           & $dxc -T cs_6_0 -E main -WX tools/gi-auto-binding-validation.hlsl -Fo gi-auto-binding.dxil
           if($LASTEXITCODE -ne 0) {throw 'Binding compile failed'}
+          & $dxc -T lib_6_3 -HV 2018 -WX src/shaders/gi_auto_raygen.hlsl -Fo gi-auto-raygen.dxil
+          if($LASTEXITCODE -ne 0) {throw 'Auto raygen compile failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX src/shaders/gi_auto_lighting.hlsl -Fo gi-auto-lighting.dxil
+          if($LASTEXITCODE -ne 0) {throw 'Auto evaluator compile failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX tools/gi-auto-sample-validation.hlsl -Fo gi-auto-sample.dxil
+          if($LASTEXITCODE -ne 0) {throw 'Auto sampler compile failed'}
       - name: Validate GPU targets and pilot resolve
         shell: cmd
         run: |
@@ -45,4 +51,8 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-binding-gpu.cpp /Fetest-gi-auto-binding-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if errorlevel 1 exit /b 1
           test-gi-auto-binding-gpu.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-sample-gpu.cpp /Fetest-gi-auto-sample-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          test-gi-auto-sample-gpu.exe
           if errorlevel 1 exit /b 1
