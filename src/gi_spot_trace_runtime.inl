@@ -51,8 +51,10 @@ inline unsigned RequestedSourceRays() noexcept {
  return 0;
 #endif
 }
-// 112^2 * (16 rays + one summary) fits the existing 262144-record buffer.
-static_assert(112u*112u*17u<=262144u,"Source ROI must retain complete ray sets");
+// Source10 is gated to exactly ten rays; reserve every ray plus its summary.
+inline constexpr UINT source10Side=512u;
+inline constexpr UINT source10Capacity=source10Side*source10Side*11u;
+static_assert(16ull+UINT64(source10Capacity)*stride<0xffffffffull,"Source buffer size must fit UINT");
 inline D3D12_SHADER_BYTECODE OwnedBytecode() noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
  return {gi_owned_source_trace_shader::bytes,sizeof(gi_owned_source_trace_shader::bytes)};
@@ -63,7 +65,7 @@ inline D3D12_SHADER_BYTECODE OwnedBytecode() noexcept {
 inline std::atomic<int> ownedCenterX{200},ownedCenterY{500};
 inline UINT ownedRegion[4]{};
 inline void OwnedROI(UINT width,UINT height,UINT* r) noexcept {
- const UINT side=Source10()?112u:256u;
+ const UINT side=Source10()?source10Side:256u;
  r[2]=(std::min)(side,width);r[3]=(std::min)(side,height);
  const int x=int(UINT64(width)*ownedCenterX.load()/1000)-int(r[2]/2);
  const int y=int(UINT64(height)*ownedCenterY.load()/1000)-int(r[3]/2);
@@ -72,7 +74,7 @@ inline void OwnedROI(UINT width,UINT height,UINT* r) noexcept {
 }
 inline bool Enabled() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_SPOT_TRACE",b,4)==1&&b[0]=='1';}();return value;}
 inline bool JointTrace() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_JOINT_TRACE",b,4)==1&&b[0]=='1';}();return value;}
-inline UINT Capacity() noexcept {return OwnedTrace()?262144:JointTrace()?1048576:65536;}
+inline UINT Capacity() noexcept {return Source10()?source10Capacity:OwnedTrace()?262144:JointTrace()?1048576:65536;}
 inline UINT FrameCount() noexcept {return OwnedTrace()?1:JointTrace()?8:1;}
 inline bool StackCapture() noexcept {static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_STACK_CAPTURE",b,4)==1&&b[0]=='1';}();return OwnedTrace()||(JointTrace()&&value);}
 inline UINT sampleStep=16,phaseX=0,phaseY=0;
@@ -93,7 +95,7 @@ inline const wchar_t* Status() noexcept {
  if(OwnedTrace()) switch(phase.load()) {
  case Phase::Idle:
   if(Source10()&&RequestedSourceRays()!=10)return L"NOT ARMED: set GI RAYS to 10; keep GI: FIXED, RR ON, RELAX OFF.";
-  return enabledReady.load()?L"Place the issue in the orange box. Ctrl+arrows moves box; F7 arms.":L"WAITING: owned evaluator unavailable. Load level; enable Owned GI.";
+  return enabledReady.load()?L"Place the issue in the orange box. Alt+arrows moves box; F7 arms.":L"WAITING: owned evaluator unavailable. Load level; enable Owned GI.";
  case Phase::Countdown:return L"Capture in five seconds. Keep reproducing the issue in motion.";
  case Phase::Armed:return L"ARMED: keep moving. Waiting for owned GI and matching RR frame.";
  case Phase::Recording:case Phase::Recorded:case Phase::Submitted:return L"Capturing moving GI source and matching RR buffers.";
@@ -151,7 +153,8 @@ inline void InputTick() noexcept {
  DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
  const bool foreground=foregroundPid==GetCurrentProcessId();
  const bool control=(GetAsyncKeyState(VK_CONTROL)&0x8000)!=0,shift=(GetAsyncKeyState(VK_SHIFT)&0x8000)!=0;
- if(OwnedTrace()&&foreground&&control&&phase.load()==Phase::Idle){
+ const bool alt=(GetAsyncKeyState(VK_MENU)&0x8000)!=0;
+ if(OwnedTrace()&&foreground&&alt&&phase.load()==Phase::Idle){
   if(GetAsyncKeyState(VK_LEFT)&0x8000)ownedCenterX.store((std::max)(0,ownedCenterX.load()-10));
   if(GetAsyncKeyState(VK_RIGHT)&0x8000)ownedCenterX.store((std::min)(1000,ownedCenterX.load()+10));
   if(GetAsyncKeyState(VK_UP)&0x8000)ownedCenterY.store((std::max)(0,ownedCenterY.load()-10));

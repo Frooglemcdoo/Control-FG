@@ -24,10 +24,10 @@ set "CONTROLTOH_GI_CAPTURE=0"
 rem Keep the current single-producer path; the legacy evaluator flag disables it.
 set "CONTROLTOH_GI_EVALUATOR="
 set "CONTROLTOH_GI_SINGLE=1"
-echo R446: ten-ray GI source capture while moving.
+echo R447: ten-ray GI source capture while moving.
 echo Set 10 GI rays, GI: FIXED, RR ON, FG OFF, RELAX OFF.
 echo The capture refuses other ray counts; all ten contributions are verified.
-echo An orange box marks the captured region. Ctrl+arrow keys move that box.
+echo An orange box marks the captured region. Alt+arrow keys move that box.
 echo Put the affected hair OR jaw inside it; press F7, then keep reproducing the movement.
 echo Capture starts after five seconds. Keep moving until SAVED appears.
 echo Do not use CAPTURE MOTION or CAPTURE RR during this session.
