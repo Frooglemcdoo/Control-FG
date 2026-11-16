@@ -61,6 +61,8 @@ public:
    if(i!=3)Barrier(list,cells);
    if(i==0)Barrier(list,frozen);
   }
+  // Freeze reads cells; order those reads before any following build clears them.
+  Barrier(list,cells);
   D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   b.Transition={frozen,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};
   list->ResourceBarrier(1,&b);return restore.Restore(list);
