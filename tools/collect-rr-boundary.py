@@ -283,6 +283,10 @@ def validate_owned_source(local,pid,rr_frame,destination):
     parsed=module.analyze(raw)
     if parsed['frame_token']!=rr_frame or parsed['records']!=m.get('records') or parsed['records']>m.get('capacity',0):
         raise ValueError('Owned source header/metadata mismatch')
+    expected=m.get('expected_rays',0)
+    if expected not in (0,10) or (expected and
+        (not parsed['valid_pixels'] or any(p['rays']!=expected for p in parsed['pixels']))):
+        raise ValueError('Source capture did not execute ten rays at every valid receiver')
     x,y,w,h=m['roi']
     if w<=0 or h<=0 or x<0 or y<0 or x+w>m['width'] or y+h>m['height']:
         raise ValueError('Owned source ROI invalid')

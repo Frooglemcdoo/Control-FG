@@ -14,6 +14,7 @@ if not errorlevel 1 (
 )
 set "CONTROLTOH_GI_SPOT_TRACE=1"
 set "CONTROLTOH_GI_OWNED_TRACE=1"
+set "CONTROLTOH_GI_SOURCE10=1"
 set "CONTROLTOH_GI_STACK_CAPTURE=1"
 set "CONTROLTOH_GI_JOINT_TRACE=0"
 set "CONTROLTOH_GI_RAY_TRACE=0"
@@ -23,8 +24,9 @@ set "CONTROLTOH_GI_CAPTURE=0"
 rem Keep the current single-producer path; the legacy evaluator flag disables it.
 set "CONTROLTOH_GI_EVALUATOR="
 set "CONTROLTOH_GI_SINGLE=1"
-echo R424: owned GI source capture while moving. No lighting settings are changed.
-echo Keep your current reproducing settings, Owned GI and RR ON, FG OFF, RELAX OFF.
+echo R446: ten-ray GI source capture while moving.
+echo Set 10 GI rays, GI: FIXED, RR ON, FG OFF, RELAX OFF.
+echo The capture refuses other ray counts; all ten contributions are verified.
 echo An orange box marks the captured region. Ctrl+arrow keys move that box.
 echo Put the affected hair OR jaw inside it; press F7, then keep reproducing the movement.
 echo Capture starts after five seconds. Keep moving until SAVED appears.

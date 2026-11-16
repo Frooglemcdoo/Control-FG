@@ -1,0 +1,109 @@
+{
+  "scope": "best fit over sign/jitter candidates; same material/tag is not object identity; view-normal dot is not world-normal comparison; depth is clip depth without captured previous view transform; no claim of proven visibility or guidance validity",
+  "regions": {
+    "neck": {
+      "dominant_reprojected_id_pairs": [
+        {
+          "previous_id": 1135,
+          "current_id": 707,
+          "pixels": 9821
+        },
+        {
+          "previous_id": 1118,
+          "current_id": 1119,
+          "pixels": 520
+        },
+        {
+          "previous_id": 1135,
+          "current_id": 1119,
+          "pixels": 241
+        },
+        {
+          "previous_id": 1118,
+          "current_id": 707,
+          "pixels": 218
+        }
+      ],
+      "best_albedo_fit": {
+        "mae": 0.01615309529006481,
+        "mv_sign": 1,
+        "jitter_adjustment": [
+          0.8125,
+          -0.333333343
+        ]
+      },
+      "unwarped_albedo_mae": 0.03144771605730057,
+      "same_material_fraction": 0.0,
+      "same_tag_fraction": 0.9575,
+      "same_material_and_tag_fraction": 0.0,
+      "native_normal_dot_percentiles_matched": null,
+      "rr_normal_dot_percentiles_matched": null,
+      "matched_native_dot_gt_095_fraction": 0.0,
+      "native_vs_rr_normal_dot_percentiles": [
+        0.8499047565381115,
+        0.9993895251158685,
+        0.9996261818209282,
+        0.9998247178781551,
+        0.9999239391728041
+      ]
+    },
+    "hand": {
+      "dominant_reprojected_id_pairs": [
+        {
+          "previous_id": 1710,
+          "current_id": 1710,
+          "pixels": 4114
+        },
+        {
+          "previous_id": 314,
+          "current_id": 314,
+          "pixels": 1069
+        },
+        {
+          "previous_id": 314,
+          "current_id": 1710,
+          "pixels": 14
+        },
+        {
+          "previous_id": 1710,
+          "current_id": 314,
+          "pixels": 3
+        }
+      ],
+      "best_albedo_fit": {
+        "mae": 0.0021344718988984823,
+        "mv_sign": 0,
+        "jitter_adjustment": [
+          0.0,
+          0.0
+        ]
+      },
+      "unwarped_albedo_mae": 0.0021344718988984823,
+      "same_material_fraction": 0.9967307692307692,
+      "same_tag_fraction": 0.9967307692307692,
+      "same_material_and_tag_fraction": 0.9967307692307692,
+      "native_normal_dot_percentiles_matched": [
+        0.9786893201197469,
+        0.9970603470427934,
+        0.999988523143257,
+        0.9999996177328587,
+        1.0
+      ],
+      "rr_normal_dot_percentiles_matched": [
+        0.9779890632629394,
+        0.9963874101638794,
+        0.9993208050727844,
+        0.999629545211792,
+        0.9998171865940094
+      ],
+      "matched_native_dot_gt_095_fraction": 0.9940384615384615,
+      "native_vs_rr_normal_dot_percentiles": [
+        0.9994014748909767,
+        0.9995228676102628,
+        0.9996983829349799,
+        0.9998890452079661,
+        0.9999608147258696
+      ]
+    }
+  }
+}

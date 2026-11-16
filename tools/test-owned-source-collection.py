@@ -9,6 +9,7 @@ class Collection(unittest.TestCase):
   self.assertIn('set "CONTROLTOH_GI_SINGLE=1"',text)
   self.assertNotIn('set "CONTROLTOH_GI_EVALUATOR=1"',text)
   self.assertIn('-OwnedSource -CollectExisting -RequireRR',text)
+  self.assertIn('set "CONTROLTOH_GI_SOURCE10=1"',text)
 
  def test_source_join_and_bad_metadata(self):
   with tempfile.TemporaryDirectory() as tmp:
@@ -17,6 +18,12 @@ class Collection(unittest.TestCase):
    m=dict(schema='OGI1',pid=100,engine_frame=123,present=123,width=8,height=8,roi=[2,3,1,1],records=3,capacity=6,overflow=False,evaluator='owned',source_frames=1)
    path.write_text(json.dumps(m));result=c.validate_owned_source(root,100,123,root)
    self.assertTrue(result['same_frame_verified']);self.assertFalse(result['consecutive_source_pair'])
+   bad=dict(m,expected_rays=10);path.write_text(json.dumps(bad))
+   with self.assertRaises(ValueError):c.validate_owned_source(root,100,123,root)
+   path.with_suffix('.bin').write_bytes(t.Trace().fixture(10))
+   ten=dict(m,expected_rays=10,records=11,capacity=16);path.write_text(json.dumps(ten))
+   self.assertTrue(c.validate_owned_source(root,100,123,root)['same_frame_verified'])
+   path.with_suffix('.bin').write_bytes(t.Trace().fixture())
    for key,value in [('overflow',True),('engine_frame',124),('roi',[2,3,2,1]),('roi',[0,0,1,1]),('evaluator','native'),('records',4)]:
     bad=dict(m);bad[key]=value;path.write_text(json.dumps(bad))
     with self.subTest(key=key),self.assertRaises(ValueError):c.validate_owned_source(root,100,123,root)

@@ -1,0 +1,23 @@
+R446 - Ten-ray moving-skin source diagnostic
+
+This is a measurement build, not a visual fix or an FPS improvement.
+Normal ten-ray rendering is unchanged from R445/R442. The four-ray R445
+candidate remains unaccepted; use TEN rays for this capture.
+
+1. With Control closed, extract the package beside Control_DX12.exe.
+2. Launch ControlTOH\Diagnostics\Start-GI-Owned-Source.cmd.
+3. Set 10 GI rays, GI: FIXED, RELAX OFF, RR ON, FG OFF.
+4. Put the affected jaw/neck skin inside the orange box. Ctrl+arrow keys
+   move the box. It is intentionally smaller to capture every ray safely.
+5. Press F7 and keep turning Jesse to reproduce the dots. Capture starts
+   after five seconds. Watch for SAVED; do not use the other capture buttons.
+6. Close Control normally after SAVED. The launcher packages the source
+   records and matching RR buffers. Send the ZIP (a Drive link is fine).
+
+Captures include every ray's secondary lighting, point/spot/volume split,
+running sum and final GI output for a 112x112 region, plus matching RR data.
+The collector rejects missing rays, overflow, mismatched frames, or any
+valid recorded pixel that did not execute all ten rays.
+
+Instrumentation changes capture-frame timing. Do not measure FPS in this session.
+Launch Control normally afterwards to disable the source recorder.

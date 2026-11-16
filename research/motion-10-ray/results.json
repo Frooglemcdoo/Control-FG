@@ -1,0 +1,980 @@
+{
+  "ray_count": 10,
+  "ray_count_evidence": "user confirmation; absent from capture metadata",
+  "regions": {
+    "jaw_neck": [
+      440,
+      710,
+      560,
+      800
+    ],
+    "hand": [
+      945,
+      890,
+      1010,
+      970
+    ]
+  },
+  "frames": [
+    {
+      "frame": 8166,
+      "rr_active": true,
+      "reset": 0,
+      "consecutive": false,
+      "gi_boundary": "raw_bypass",
+      "gi_rgb_exact_match": true,
+      "nonfinite_values": {
+        "pre-filter-gi": 0,
+        "gi-at-rr-input": 0,
+        "input-color": 0,
+        "rr-output": 0,
+        "lighting-diffuse": 0,
+        "lighting-specular": 0,
+        "diffuse": 0,
+        "specular": 0,
+        "normal-roughness": 0,
+        "raw-albedo": 0,
+        "input-motion": 0,
+        "input-depth": 0
+      },
+      "regions": {
+        "jaw_neck": {
+          "peaks": [
+            {
+              "input_xy": [
+                547,
+                751
+              ],
+              "raw_gi_luminance_over_5x5_median": 78.42855913055114,
+              "input_rgb": [
+                0.035675048828125,
+                0.0215606689453125,
+                0.01025390625
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9888727010265184,
+                0.9886306147160298,
+                0.9856690906343006
+              ],
+              "rr_scaled_footprint_xy": [
+                821,
+                1127
+              ],
+              "rr_center_max_red_over_9x9_median": 8.142625607779578,
+              "normal_length": 0.9997163906853594,
+              "roughness": 0.556640625,
+              "motion_pixels": [
+                1.256103515625,
+                0.30521392822265625
+              ]
+            },
+            {
+              "input_xy": [
+                559,
+                750
+              ],
+              "raw_gi_luminance_over_5x5_median": 74.83467707787719,
+              "input_rgb": [
+                0.034820556640625,
+                0.0208892822265625,
+                0.00933074951171875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9933797450153374,
+                0.9935071790540541,
+                0.9910680064390842
+              ],
+              "rr_scaled_footprint_xy": [
+                839,
+                1125
+              ],
+              "rr_center_max_red_over_9x9_median": 18.178331735378716,
+              "normal_length": 0.9997325778062227,
+              "roughness": 0.599609375,
+              "motion_pixels": [
+                1.2359619140625,
+                0.31757354736328125
+              ]
+            },
+            {
+              "input_xy": [
+                543,
+                762
+              ],
+              "raw_gi_luminance_over_5x5_median": 68.39126902511211,
+              "input_rgb": [
+                0.02984619140625,
+                0.01910400390625,
+                0.008514404296875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9881659197661042,
+                0.9885413806659346,
+                0.9849485992103495
+              ],
+              "rr_scaled_footprint_xy": [
+                815,
+                1143
+              ],
+              "rr_center_max_red_over_9x9_median": 17.32293291731669,
+              "normal_length": 0.9994912045250691,
+              "roughness": 0.587890625,
+              "motion_pixels": [
+                1.25244140625,
+                0.3033256530761719
+              ]
+            },
+            {
+              "input_xy": [
+                536,
+                799
+              ],
+              "raw_gi_luminance_over_5x5_median": 114.2359229249926,
+              "input_rgb": [
+                0.0190582275390625,
+                0.01708984375,
+                0.00977325439453125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9833491793434748,
+                0.9895368303571429,
+                0.9892905932864949
+              ],
+              "rr_scaled_footprint_xy": [
+                804,
+                1199
+              ],
+              "rr_center_max_red_over_9x9_median": 6.208663819402075,
+              "normal_length": 0.9995951130883023,
+              "roughness": 0.576171875,
+              "motion_pixels": [
+                1.2261962890625,
+                0.3050422668457031
+              ]
+            },
+            {
+              "input_xy": [
+                464,
+                727
+              ],
+              "raw_gi_luminance_over_5x5_median": 15.00656554791851,
+              "input_rgb": [
+                0.0149078369140625,
+                0.0040740966796875,
+                0.0013256072998046875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9507340711361311,
+                0.8863648832514045,
+                0.7984712230215827
+              ],
+              "rr_scaled_footprint_xy": [
+                696,
+                1091
+              ],
+              "rr_center_max_red_over_9x9_median": 1.942987457240593,
+              "normal_length": 0.9998537493094113,
+              "roughness": 0.576171875,
+              "motion_pixels": [
+                1.419677734375,
+                0.24616241455078125
+              ]
+            },
+            {
+              "input_xy": [
+                511,
+                742
+              ],
+              "raw_gi_luminance_over_5x5_median": 7.942378312683435,
+              "input_rgb": [
+                0.007266998291015625,
+                0.0023212432861328125,
+                0.0008473396301269531
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.938254593175853,
+                0.8801259500821693,
+                0.8068032938238604
+              ],
+              "rr_scaled_footprint_xy": [
+                767,
+                1113
+              ],
+              "rr_center_max_red_over_9x9_median": 1.1629297458893872,
+              "normal_length": 0.9995848568842033,
+              "roughness": 0.576171875,
+              "motion_pixels": [
+                1.3134765625,
+                0.28839111328125
+              ]
+            },
+            {
+              "input_xy": [
+                471,
+                764
+              ],
+              "raw_gi_luminance_over_5x5_median": 20.13795123281818,
+              "input_rgb": [
+                0.006748199462890625,
+                0.0031566619873046875,
+                0.0012540817260742188
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9309152416619559,
+                0.9088462990936556,
+                0.8776240939876426
+              ],
+              "rr_scaled_footprint_xy": [
+                707,
+                1146
+              ],
+              "rr_center_max_red_over_9x9_median": 4.180623973727422,
+              "normal_length": 0.9995973789796664,
+              "roughness": 0.572265625,
+              "motion_pixels": [
+                1.361083984375,
+                0.2602386474609375
+              ]
+            },
+            {
+              "input_xy": [
+                554,
+                744
+              ],
+              "raw_gi_luminance_over_5x5_median": 14.398030526352851,
+              "input_rgb": [
+                0.0063323974609375,
+                0.0036907196044921875,
+                0.00177764892578125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9406532379518072,
+                0.9384765625,
+                0.9214283693501878
+              ],
+              "rr_scaled_footprint_xy": [
+                831,
+                1116
+              ],
+              "rr_center_max_red_over_9x9_median": 4.935467217346412,
+              "normal_length": 0.9993514401615237,
+              "roughness": 0.564453125,
+              "motion_pixels": [
+                1.25,
+                0.31070709228515625
+              ]
+            }
+          ]
+        },
+        "hand": {
+          "peaks": [
+            {
+              "input_xy": [
+                997,
+                932
+              ],
+              "raw_gi_luminance_over_5x5_median": 84.13147922868876,
+              "input_rgb": [
+                0.03704833984375,
+                0.030731201171875,
+                0.0170135498046875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9480539538714992,
+                0.9599817876427508,
+                0.9525469450672646
+              ],
+              "rr_scaled_footprint_xy": [
+                1496,
+                1398
+              ],
+              "rr_center_max_red_over_9x9_median": 1.012081274025261,
+              "normal_length": 0.999542646297643,
+              "roughness": 0.71728515625,
+              "motion_pixels": [
+                -0.804443359375,
+                0.34297943115234375
+              ]
+            },
+            {
+              "input_xy": [
+                950,
+                906
+              ],
+              "raw_gi_luminance_over_5x5_median": 89.01854244269013,
+              "input_rgb": [
+                0.038116455078125,
+                0.031219482421875,
+                0.016448974609375
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.876576261008807,
+                0.8789788000977518,
+                0.8245992288961039
+              ],
+              "rr_scaled_footprint_xy": [
+                1425,
+                1359
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0391246684350133,
+              "normal_length": 0.9994940148198705,
+              "roughness": 0.67822265625,
+              "motion_pixels": [
+                -0.54290771484375,
+                0.7470703125
+              ]
+            },
+            {
+              "input_xy": [
+                982,
+                907
+              ],
+              "raw_gi_luminance_over_5x5_median": 43.365670301384945,
+              "input_rgb": [
+                0.0221099853515625,
+                0.0194244384765625,
+                0.012115478515625
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7916602640829883,
+                0.8187015170856246,
+                0.7854563523299748
+              ],
+              "rr_scaled_footprint_xy": [
+                1473,
+                1361
+              ],
+              "rr_center_max_red_over_9x9_median": 1.060248853962017,
+              "normal_length": 0.9996772260099199,
+              "roughness": 0.68603515625,
+              "motion_pixels": [
+                -0.7391357421875,
+                0.4113006591796875
+              ]
+            },
+            {
+              "input_xy": [
+                957,
+                912
+              ],
+              "raw_gi_luminance_over_5x5_median": 37.44871481616484,
+              "input_rgb": [
+                0.01885986328125,
+                0.016448974609375,
+                0.01036834716796875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7505510941292476,
+                0.7722145321196661,
+                0.7287843772994849
+              ],
+              "rr_scaled_footprint_xy": [
+                1436,
+                1368
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0257376020087885,
+              "normal_length": 0.9998945314698451,
+              "roughness": 0.68603515625,
+              "motion_pixels": [
+                -0.54443359375,
+                0.704498291015625
+              ]
+            },
+            {
+              "input_xy": [
+                1006,
+                896
+              ],
+              "raw_gi_luminance_over_5x5_median": 29.56919312107661,
+              "input_rgb": [
+                0.0158233642578125,
+                0.01313018798828125,
+                0.00745391845703125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7947165802796529,
+                0.8198540092969204,
+                0.7779534768423746
+              ],
+              "rr_scaled_footprint_xy": [
+                1509,
+                1344
+              ],
+              "rr_center_max_red_over_9x9_median": 1.1387720773759462,
+              "normal_length": 0.9996008672497526,
+              "roughness": 0.71337890625,
+              "motion_pixels": [
+                -0.84716796875,
+                0.36529541015625
+              ]
+            },
+            {
+              "input_xy": [
+                989,
+                930
+              ],
+              "raw_gi_luminance_over_5x5_median": 19.007665253613983,
+              "input_rgb": [
+                0.014068603515625,
+                0.01068115234375,
+                0.005859375
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7213005016268981,
+                0.7289983258928572,
+                0.6556447347005209
+              ],
+              "rr_scaled_footprint_xy": [
+                1484,
+                1395
+              ],
+              "rr_center_max_red_over_9x9_median": 1.4506892895015906,
+              "normal_length": 0.9999165649177691,
+              "roughness": 0.67431640625,
+              "motion_pixels": [
+                -0.6884765625,
+                0.37525177001953125
+              ]
+            },
+            {
+              "input_xy": [
+                970,
+                893
+              ],
+              "raw_gi_luminance_over_5x5_median": 19.997165335005864,
+              "input_rgb": [
+                0.0119476318359375,
+                0.00986480712890625,
+                0.00632476806640625
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7190393518518519,
+                0.7472175899071926,
+                0.7107351783964113
+              ],
+              "rr_scaled_footprint_xy": [
+                1455,
+                1340
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0062843676355067,
+              "normal_length": 0.9997175831157283,
+              "roughness": 0.70947265625,
+              "motion_pixels": [
+                -0.7427978515625,
+                0.487518310546875
+              ]
+            },
+            {
+              "input_xy": [
+                956,
+                925
+              ],
+              "raw_gi_luminance_over_5x5_median": 14.751420775160208,
+              "input_rgb": [
+                0.01352691650390625,
+                0.0098876953125,
+                0.0057373046875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.6079363190919346,
+                0.5697925708912037,
+                0.4349728848071808
+              ],
+              "rr_scaled_footprint_xy": [
+                1434,
+                1388
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0362573099415204,
+              "normal_length": 0.999616251270037,
+              "roughness": 0.68212890625,
+              "motion_pixels": [
+                -0.45166015625,
+                0.7765960693359375
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "frame": 8167,
+      "rr_active": true,
+      "reset": 0,
+      "consecutive": true,
+      "gi_boundary": "raw_bypass",
+      "gi_rgb_exact_match": true,
+      "nonfinite_values": {
+        "pre-filter-gi": 0,
+        "gi-at-rr-input": 0,
+        "input-color": 0,
+        "rr-output": 0,
+        "lighting-diffuse": 0,
+        "lighting-specular": 0,
+        "diffuse": 0,
+        "specular": 0,
+        "normal-roughness": 0,
+        "raw-albedo": 0,
+        "input-motion": 0,
+        "input-depth": 0
+      },
+      "regions": {
+        "jaw_neck": {
+          "peaks": [
+            {
+              "input_xy": [
+                544,
+                788
+              ],
+              "raw_gi_luminance_over_5x5_median": 209.52158207274,
+              "input_rgb": [
+                0.035552978515625,
+                0.0305633544921875,
+                0.0186767578125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9927977467811159,
+                0.9951995834373439,
+                0.995745889501634
+              ],
+              "rr_scaled_footprint_xy": [
+                816,
+                1182
+              ],
+              "rr_center_max_red_over_9x9_median": 18.228571428571428,
+              "normal_length": 0.9997087292863132,
+              "roughness": 0.583984375,
+              "motion_pixels": [
+                1.2030029296875,
+                0.2741432189941406
+              ]
+            },
+            {
+              "input_xy": [
+                489,
+                722
+              ],
+              "raw_gi_luminance_over_5x5_median": 42.858363139511184,
+              "input_rgb": [
+                0.0222015380859375,
+                0.0141448974609375,
+                0.006378173828125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9748509987113402,
+                0.9760884405339806,
+                0.9687786193555622
+              ],
+              "rr_scaled_footprint_xy": [
+                734,
+                1083
+              ],
+              "rr_center_max_red_over_9x9_median": 9.422096317280452,
+              "normal_length": 0.9997418785747875,
+              "roughness": 0.564453125,
+              "motion_pixels": [
+                1.3623046875,
+                0.22298812866210938
+              ]
+            },
+            {
+              "input_xy": [
+                468,
+                788
+              ],
+              "raw_gi_luminance_over_5x5_median": 82.63420222350707,
+              "input_rgb": [
+                0.01824951171875,
+                0.0141754150390625,
+                0.00649261474609375
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9655165656354515,
+                0.9742892853538752,
+                0.9710646023061105
+              ],
+              "rr_scaled_footprint_xy": [
+                702,
+                1182
+              ],
+              "rr_center_max_red_over_9x9_median": 4.716917922948074,
+              "normal_length": 0.9996424695980934,
+              "roughness": 0.580078125,
+              "motion_pixels": [
+                1.396484375,
+                0.16324996948242188
+              ]
+            },
+            {
+              "input_xy": [
+                559,
+                738
+              ],
+              "raw_gi_luminance_over_5x5_median": 41.69694987436652,
+              "input_rgb": [
+                0.01442718505859375,
+                0.00829315185546875,
+                0.0034008026123046875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9786540273003702,
+                0.9777528820722171,
+                0.9688277744671902
+              ],
+              "rr_scaled_footprint_xy": [
+                839,
+                1107
+              ],
+              "rr_center_max_red_over_9x9_median": 6.2517407605784685,
+              "normal_length": 0.9994612673133557,
+              "roughness": 0.572265625,
+              "motion_pixels": [
+                1.224365234375,
+                0.27568817138671875
+              ]
+            },
+            {
+              "input_xy": [
+                474,
+                778
+              ],
+              "raw_gi_luminance_over_5x5_median": 41.17949239505364,
+              "input_rgb": [
+                0.0117340087890625,
+                0.007755279541015625,
+                0.0033359527587890625
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9470497399219766,
+                0.9542451887604525,
+                0.9484415201543739
+              ],
+              "rr_scaled_footprint_xy": [
+                711,
+                1167
+              ],
+              "rr_center_max_red_over_9x9_median": 1.1959082455052696,
+              "normal_length": 0.9995633677083666,
+              "roughness": 0.591796875,
+              "motion_pixels": [
+                1.38427734375,
+                0.17569541931152344
+              ]
+            },
+            {
+              "input_xy": [
+                552,
+                713
+              ],
+              "raw_gi_luminance_over_5x5_median": 12.264787093873785,
+              "input_rgb": [
+                0.0136260986328125,
+                0.003917694091796875,
+                0.0012693405151367188
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.8804033542133258,
+                0.7786578779211295,
+                0.6460514885424493
+              ],
+              "rr_scaled_footprint_xy": [
+                828,
+                1070
+              ],
+              "rr_center_max_red_over_9x9_median": 1.9124820659971307,
+              "normal_length": 0.9996275506224963,
+              "roughness": 0.509765625,
+              "motion_pixels": [
+                1.319580078125,
+                0.21457672119140625
+              ]
+            },
+            {
+              "input_xy": [
+                540,
+                743
+              ],
+              "raw_gi_luminance_over_5x5_median": 30.27120170948089,
+              "input_rgb": [
+                0.0103759765625,
+                0.007564544677734375,
+                0.004222869873046875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.954519473805147,
+                0.9616407431921331,
+                0.9602202955623306
+              ],
+              "rr_scaled_footprint_xy": [
+                810,
+                1115
+              ],
+              "rr_center_max_red_over_9x9_median": 5.729530818767249,
+              "normal_length": 0.9997384206068362,
+              "roughness": 0.572265625,
+              "motion_pixels": [
+                1.25244140625,
+                0.2600669860839844
+              ]
+            },
+            {
+              "input_xy": [
+                556,
+                762
+              ],
+              "raw_gi_luminance_over_5x5_median": 11.852530643638392,
+              "input_rgb": [
+                0.00824737548828125,
+                0.0020999908447265625,
+                0.0005860328674316406
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9677635002312673,
+                0.9300041510558583,
+                0.86646282546786
+              ],
+              "rr_scaled_footprint_xy": [
+                834,
+                1143
+              ],
+              "rr_center_max_red_over_9x9_median": 5.063627730294397,
+              "normal_length": 0.9997849531213928,
+              "roughness": 0.62744140625,
+              "motion_pixels": [
+                1.2066650390625,
+                0.2796363830566406
+              ]
+            }
+          ]
+        },
+        "hand": {
+          "peaks": [
+            {
+              "input_xy": [
+                968,
+                893
+              ],
+              "raw_gi_luminance_over_5x5_median": 82.30123909043044,
+              "input_rgb": [
+                0.037567138671875,
+                0.031097412109375,
+                0.017364501953125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.909194760357433,
+                0.9176122423945045,
+                0.8896840502800967
+              ],
+              "rr_scaled_footprint_xy": [
+                1452,
+                1340
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0602593440122043,
+              "normal_length": 0.9999189343972895,
+              "roughness": 0.70947265625,
+              "motion_pixels": [
+                -0.73486328125,
+                0.487518310546875
+              ]
+            },
+            {
+              "input_xy": [
+                985,
+                935
+              ],
+              "raw_gi_luminance_over_5x5_median": 67.49318695449034,
+              "input_rgb": [
+                0.0321044921875,
+                0.026031494140625,
+                0.01302337646484375
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9207239187262357,
+                0.9340104777256741,
+                0.914213532513181
+              ],
+              "rr_scaled_footprint_xy": [
+                1478,
+                1403
+              ],
+              "rr_center_max_red_over_9x9_median": 0.9963669391462306,
+              "normal_length": 0.9997434286944693,
+              "roughness": 0.67431640625,
+              "motion_pixels": [
+                -0.628662109375,
+                0.424346923828125
+              ]
+            },
+            {
+              "input_xy": [
+                1008,
+                896
+              ],
+              "raw_gi_luminance_over_5x5_median": 65.80859590089712,
+              "input_rgb": [
+                0.031402587890625,
+                0.0264434814453125,
+                0.014617919921875
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.9005253887269193,
+                0.9148469056549337,
+                0.8921540644572025
+              ],
+              "rr_scaled_footprint_xy": [
+                1512,
+                1344
+              ],
+              "rr_center_max_red_over_9x9_median": 1.012531328320802,
+              "normal_length": 0.9996775241293245,
+              "roughness": 0.71337890625,
+              "motion_pixels": [
+                -0.8514404296875,
+                0.35121917724609375
+              ]
+            },
+            {
+              "input_xy": [
+                978,
+                942
+              ],
+              "raw_gi_luminance_over_5x5_median": 23.690999292654038,
+              "input_rgb": [
+                0.01384735107421875,
+                0.010528564453125,
+                0.005512237548828125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7995222107438017,
+                0.829645748414855,
+                0.7902249134948097
+              ],
+              "rr_scaled_footprint_xy": [
+                1467,
+                1413
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0204626334519573,
+              "normal_length": 0.9995337103216636,
+              "roughness": 0.69384765625,
+              "motion_pixels": [
+                -0.55877685546875,
+                0.5022811889648438
+              ]
+            },
+            {
+              "input_xy": [
+                988,
+                963
+              ],
+              "raw_gi_luminance_over_5x5_median": 47.912385515453664,
+              "input_rgb": [
+                0.01169586181640625,
+                0.01006317138671875,
+                0.005950927734375
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.8955753373695369,
+                0.9295223950435937,
+                0.932246594551282
+              ],
+              "rr_scaled_footprint_xy": [
+                1482,
+                1445
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0174152153987168,
+              "normal_length": 0.9995695916413665,
+              "roughness": 0.67431640625,
+              "motion_pixels": [
+                -0.7843017578125,
+                0.3369712829589844
+              ]
+            },
+            {
+              "input_xy": [
+                1009,
+                964
+              ],
+              "raw_gi_luminance_over_5x5_median": 1.0660117031771188,
+              "input_rgb": [
+                0.01210784912109375,
+                0.0055084228515625,
+                0.00215911865234375
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.8801246455576559,
+                0.8545939691179016,
+                0.7683886201137368
+              ],
+              "rr_scaled_footprint_xy": [
+                1514,
+                1446
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0325581395348837,
+              "normal_length": 0.999567057349972,
+              "roughness": 0.70947265625,
+              "motion_pixels": [
+                -0.7977294921875,
+                0.3362846374511719
+              ]
+            },
+            {
+              "input_xy": [
+                1004,
+                948
+              ],
+              "raw_gi_luminance_over_5x5_median": 22.89889162868723,
+              "input_rgb": [
+                0.009490966796875,
+                0.0081329345703125,
+                0.00510406494140625
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.830155056772508,
+                0.8779099913520169,
+                0.8758977368273543
+              ],
+              "rr_scaled_footprint_xy": [
+                1506,
+                1422
+              ],
+              "rr_center_max_red_over_9x9_median": 1.0012626262626263,
+              "normal_length": 0.9998738760686129,
+              "roughness": 0.69775390625,
+              "motion_pixels": [
+                -0.8038330078125,
+                0.333709716796875
+              ]
+            },
+            {
+              "input_xy": [
+                1002,
+                909
+              ],
+              "raw_gi_luminance_over_5x5_median": 7.859457495859008,
+              "input_rgb": [
+                0.00988006591796875,
+                0.00482940673828125,
+                0.00232696533203125
+              ],
+              "diffuse_reconstructed_fraction_rgb": [
+                0.7426701254826255,
+                0.6483032805094787,
+                0.5268042392418033
+              ],
+              "rr_scaled_footprint_xy": [
+                1503,
+                1364
+              ],
+              "rr_center_max_red_over_9x9_median": 1.01994301994302,
+              "normal_length": 0.9994972649122279,
+              "roughness": 0.71728515625,
+              "motion_pixels": [
+                -0.8331298828125,
+                0.336456298828125
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

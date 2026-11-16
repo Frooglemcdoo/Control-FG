@@ -40,6 +40,12 @@ inline bool OwnedTrace() noexcept {
  return false;
 #endif
 }
+inline bool Source10() noexcept {
+ static const bool value=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_SOURCE10",b,4)==1&&b[0]=='1';}();
+ return OwnedTrace()&&value;
+}
+// 112^2 * (16 rays + one summary) fits the existing 262144-record buffer.
+static_assert(112u*112u*17u<=262144u,"Source ROI must retain complete ray sets");
 inline D3D12_SHADER_BYTECODE OwnedBytecode() noexcept {
 #ifdef CONTROL_GI_LONG_SEQUENCE
  return {gi_owned_source_trace_shader::bytes,sizeof(gi_owned_source_trace_shader::bytes)};
@@ -50,7 +56,8 @@ inline D3D12_SHADER_BYTECODE OwnedBytecode() noexcept {
 inline std::atomic<int> ownedCenterX{200},ownedCenterY{500};
 inline UINT ownedRegion[4]{};
 inline void OwnedROI(UINT width,UINT height,UINT* r) noexcept {
- r[2]=(std::min)(256u,width);r[3]=(std::min)(256u,height);
+ const UINT side=Source10()?112u:256u;
+ r[2]=(std::min)(side,width);r[3]=(std::min)(side,height);
  const int x=int(UINT64(width)*ownedCenterX.load()/1000)-int(r[2]/2);
  const int y=int(UINT64(height)*ownedCenterY.load()/1000)-int(r[3]/2);
  r[0]=UINT((std::max)(0,(std::min)(int(width-r[2]),x)));
@@ -77,7 +84,9 @@ inline void Fail(const char* code,const wchar_t* message) noexcept {
 }
 inline const wchar_t* Status() noexcept {
  if(OwnedTrace()) switch(phase.load()) {
- case Phase::Idle:return enabledReady.load()?L"Place the issue in the orange box. Ctrl+arrows moves box; F7 arms.":L"WAITING: owned evaluator unavailable. Load level; enable Owned GI.";
+ case Phase::Idle:
+  if(Source10()&&control_rr::GISampleRequested()!=10)return L"NOT ARMED: set GI RAYS to 10; keep GI: FIXED, RR ON, RELAX OFF.";
+  return enabledReady.load()?L"Place the issue in the orange box. Ctrl+arrows moves box; F7 arms.":L"WAITING: owned evaluator unavailable. Load level; enable Owned GI.";
  case Phase::Countdown:return L"Capture in five seconds. Keep reproducing the issue in motion.";
  case Phase::Armed:return L"ARMED: keep moving. Waiting for owned GI and matching RR frame.";
  case Phase::Recording:case Phase::Recorded:case Phase::Submitted:return L"Capturing moving GI source and matching RR buffers.";
@@ -107,6 +116,7 @@ using InstanceRequest=void (*)() noexcept;
 inline std::atomic<InstanceRequest> instanceRequest{nullptr};
 inline bool Request(const char* source) noexcept {
  if(!Enabled())return false;
+ if(Source10()&&control_rr::GISampleRequested()!=10){Trace("GI_SOURCE_R446_REQUEST accepted=0 reason=requires_10_rays requested=%u",control_rr::GISampleRequested());return false;}
  if(!enabledReady.load()){notice.store(L"NOT ARMED: probe not ready. Load the level first.");Trace("GI_SPOT_R275_REQUEST accepted=0 source=%s reason=not_ready",source);return false;}
  AcquireSRWLockExclusive(&lock);
  const bool accepted=phase.load()==Phase::Idle;
@@ -225,7 +235,7 @@ inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* des
  parameters[9].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;parameters[9].Constants={0,2,8};
  rd.NumParameters=(JointTrace()||OwnedTrace())?10:9;rd.pParameters=parameters;
  ComPtr<ID3DBlob> blob,error;HRESULT hr=D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error);
- ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> pso,owner;
+ ComPtr<ID3D12RootSignature> root;ComPtr<ID3D12PipelineState> pso,owner,guidedOwner;
  if(SUCCEEDED(hr))hr=d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root));
  auto replacement=*desc;replacement.pRootSignature=root.Get();replacement.CS=OwnedTrace()?OwnedBytecode():D3D12_SHADER_BYTECODE{shader.bytes,shader.size};replacement.CachedPSO={};
  if(SUCCEEDED(hr))hr=create(d,&replacement,IID_PPV_ARGS(&pso));
@@ -233,6 +243,9 @@ inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* des
  if(SUCCEEDED(hr)&&OwnedTrace()){
 #ifdef CONTROL_GI_LONG_SEQUENCE
   ComPtr<ID3D12PipelineState> owned;
+  // At ten rays, the fixed evaluator has exactly the same lighting arithmetic.
+  // Its one-ray guide weight is not used. Preserve legacy one-ray tracing.
+  if(Source10()&&gi_reuse::GuidedLiveEnabled()&&!Attached(owner.Get(),gi_evaluator::kGuided,guidedOwner))hr=E_FAIL;
   if(!Attached(owner.Get(),gi_evaluator::kVariant,owned))hr=E_FAIL;
   else {UINT mode=0,n=sizeof(mode);if(FAILED(owned->GetPrivateData(gi_evaluator::kMode,&n,&mode))||n!=sizeof(mode)||mode!=2)hr=E_FAIL;else owner=owned;}
 #else
@@ -242,7 +255,8 @@ inline void Observe(ID3D12Device* d,const D3D12_COMPUTE_PIPELINE_STATE_DESC* des
  if(SUCCEEDED(hr))hr=pso->SetPrivateDataInterface(traceRootKey,root.Get());
  if(SUCCEEDED(hr))hr=pso->SetPrivateDataInterface(nativeRootKey,desc->pRootSignature);
  if(SUCCEEDED(hr))hr=owner->SetPrivateDataInterface(variantKey,pso.Get());
- if(SUCCEEDED(hr)){AcquireSRWLockExclusive(&lock);const bool ready=Initialize(d);ReleaseSRWLockExclusive(&lock);if(!ready){owner->SetPrivateDataInterface(variantKey,nullptr);hr=E_FAIL;}}
+ if(SUCCEEDED(hr)&&guidedOwner)hr=guidedOwner->SetPrivateDataInterface(variantKey,pso.Get());
+ if(SUCCEEDED(hr)){AcquireSRWLockExclusive(&lock);const bool ready=Initialize(d);ReleaseSRWLockExclusive(&lock);if(!ready){owner->SetPrivateDataInterface(variantKey,nullptr);if(guidedOwner)guidedOwner->SetPrivateDataInterface(variantKey,nullptr);hr=E_FAIL;}}
  if(OwnedTrace())Trace("GI_OWNED_SOURCE_R424_PIPELINE owner=owned ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
  Trace("GI_SPOT_R274_PIPELINE variant=6 ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
 }
@@ -259,6 +273,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z) noexc
  if(!Attached(list,psoKey,pso)||!Attached(pso.Get(),variantKey,trace)||!Attached(trace.Get(),traceRootKey,root)||!Attached(trace.Get(),nativeRootKey,nativeRoot))return false;
  gridWidth.store(x*8);gridHeight.store(y*16);
  if(phase.load()!=Phase::Armed)return false;
+ if(Source10()&&control_rr::GISampleRequested()!=10){Fail("source_ray_count_changed",L"FAILED: GI ray count changed. Restart capture with 10 rays.");return false;}
  UINT64 sourceFrame=0;
  if(StackCapture()&&!savedFrames.load()){
   const auto ready=gi_stack_capture::readySource.load();sourceFrame=ready?ready(list):0;
@@ -327,7 +342,7 @@ inline void Poll() noexcept {
   HANDLE file=CreateFileW(path,GENERIC_WRITE,FILE_SHARE_READ,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
   if(file==INVALID_HANDLE_VALUE)ok=false;else{
    char metadata[512]{};int length=sprintf_s(metadata,"{\"schema\":\"gi-stack-r285\",\"pid\":%lu,\"frame_index\":%u,\"present\":%llu,\"engine_frame\":%llu,\"width\":%u,\"height\":%u,\"step\":%u,\"phase_x\":%u,\"phase_y\":%u,\"records\":%u,\"overflow\":%s}\n",GetCurrentProcessId(),savedFrames.load()+1,capturedPresent,engineFrame,groups[0]*8,groups[1]*16,sampleStep,phaseX,phaseY,records,records>Capacity()?"true":"false");
-   if(OwnedTrace())length=sprintf_s(metadata,"{\"schema\":\"OGI1\",\"pid\":%lu,\"engine_frame\":%llu,\"present\":%llu,\"width\":%u,\"height\":%u,\"roi\":[%u,%u,%u,%u],\"records\":%u,\"capacity\":%u,\"overflow\":%s,\"evaluator\":\"owned\",\"source_frames\":1}\n",GetCurrentProcessId(),engineFrame,capturedPresent,groups[0]*8,groups[1]*16,ownedRegion[0],ownedRegion[1],ownedRegion[2],ownedRegion[3],records,Capacity(),records>Capacity()?"true":"false");
+   if(OwnedTrace())length=sprintf_s(metadata,"{\"schema\":\"OGI1\",\"pid\":%lu,\"engine_frame\":%llu,\"present\":%llu,\"width\":%u,\"height\":%u,\"roi\":[%u,%u,%u,%u],\"records\":%u,\"capacity\":%u,\"overflow\":%s,\"evaluator\":\"owned\",\"source_frames\":1,\"expected_rays\":%u}\n",GetCurrentProcessId(),engineFrame,capturedPresent,groups[0]*8,groups[1]*16,ownedRegion[0],ownedRegion[1],ownedRegion[2],ownedRegion[3],records,Capacity(),records>Capacity()?"true":"false",Source10()?10u:0u);
    DWORD written=0;ok=length>0&&WriteFile(file,metadata,static_cast<DWORD>(length),&written,nullptr)&&written==static_cast<DWORD>(length);CloseHandle(file);
   }
  }

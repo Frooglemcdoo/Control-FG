@@ -11,20 +11,25 @@ class Trace(unittest.TestCase):
         self.assertEqual(m.erase(s),inputs[0])
         self.assertEqual(m.erase(e).replace('"gi_owned_source_secondary.generated.hlsl"','"gi_evaluator_secondary.generated.hlsl"'),inputs[1])
         with self.assertRaises(ValueError):m.generate(inputs[0]+' ',inputs[1])
-    def fixture(self):
-        header=struct.pack('<4I',3,a.MAGIC,256,123);rows=[]
-        for i in range(3):
-            r=bytearray(256);struct.pack_into('<4I',r,0,2,3,i,1 if i<2 else 2)
+    def fixture(self,rays=2):
+        header=struct.pack('<4I',rays+1,a.MAGIC,256,123);rows=[]
+        for i in range(rays+1):
+            r=bytearray(256);struct.pack_into('<4I',r,0,2,3,i,1 if i<rays else 2)
             struct.pack_into('<I',r,204,123)
             struct.pack_into('<4f',r,16,1,2,3,4)
-            if i<2:
-                struct.pack_into('<I',r,76,2);struct.pack_into('<I',r,156,2)
+            if i<rays:
+                struct.pack_into('<I',r,76,2);struct.pack_into('<I',r,156,rays)
                 struct.pack_into('<3f',r,224,i+1,2*(i+1),3*(i+1))
             else:
-                struct.pack_into('<f',r,60,1);struct.pack_into('<3f',r,224,2,4,6)
+                struct.pack_into('<f',r,60,1);struct.pack_into('<3f',r,224,rays,2*rays,3*rays)
             rows.append(r)
         return bytearray(header+b''.join(rows))
     def test_complete(self):self.assertEqual(a.analyze(self.fixture())['valid_pixels'],1)
+    def test_ten_ray_set(self):
+        p=a.analyze(self.fixture(10))['pixels'][0]
+        self.assertEqual(p['rays'],10)
+        self.assertEqual(len(p['ray_details']),10)
+        self.assertEqual(p['output'],[1.,2.,3.])
     def test_corruption_rejected(self):
         mutations=[(4,0),(8,128),(16+204,7),(16+156,3),(16+76,0),(16+4*4,0x7fc00000),
                    (16+256+8,0),(16+512+12,1),(16+512+16,0x7fc00000),(16+240,9)]
