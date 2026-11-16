@@ -23,9 +23,9 @@ inline thread_local Pending pending{};
 inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R448 halted=1 reason=%s restart_required=1",reason);}
 inline void Collect()noexcept {
  if(!initialized.load())return;
- std::array<std::unique_ptr<Owner>,8> retired;router->CollectReady(retired);
+ std::array<std::unique_ptr<Owner>,8> retired;std::array<bool,8> submitted{};router->CollectReady(retired,&submitted);
  std::lock_guard<std::mutex> lock(mutex);
- for(auto& owner:retired)if(owner&&owner->shaded&&(!latest.buffer||owner->output.epoch!=latest.epoch||owner->output.frame>latest.frame))latest=owner->output;
+ for(unsigned i=0;i<retired.size();++i){auto& owner=retired[i];if(submitted[i]&&owner&&owner->shaded&&(!latest.buffer||owner->output.epoch!=latest.epoch||owner->output.frame>latest.frame))latest=owner->output;}
 }
 inline UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists)noexcept{return initialized.load()?router->Before(q,count,lists):0;}
 inline void After(ID3D12CommandQueue* q,UINT64 token,bool submitted)noexcept{if(initialized.load())router->After(q,token,submitted);}

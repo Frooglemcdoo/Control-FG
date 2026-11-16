@@ -31,7 +31,10 @@ The complete Windows proxy/package build is being validated.
 - Each invocation retains its target, shader record, training, cell and output
   buffers. Existing split-submission retirement tracks the actual native queue,
   Execute, Reset/destruction and private-fence completion. Completed outputs are
-  published only after both recordings retire; targets are never overwritten.
+  published only after both recordings actually submit and retire; targets are
+  never overwritten. Discarded consumer recordings can release storage without
+  publishing uninitialized output. The retirement test covers zero, one and two
+  submitted stages.
   No deferred native scene replay, old radiance blending, blocking readback,
   device-wide wait or legacy scene inventory is introduced.
 - Default launch leaves this route disabled. The R448 launcher sets

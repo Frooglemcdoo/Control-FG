@@ -96,6 +96,17 @@ int main(){
   assert(atomic.SceneReleaseReady(token)&&atomic.Seal(a)&&atomic.Seal(b));
   atomic.Complete(99,2);assert(atomic.Take(token,out));out.reset();
  }
+ // Publication requires both actual submissions, separately from safe storage
+ // reclamation after a reset/discard. All three cases are safe to retire.
+ for(unsigned executed=0;executed<=2;++executed){
+  Pool publication;auto item=std::make_unique<Owner>(deaths);
+  const auto key=publication.Admit(1,a,50,item);assert(key&&publication.Attach(key,1,b));
+  if(executed>=1){auto batch=publication.Before(99,&a,1);assert(publication.After(batch,99,1,true));}
+  if(executed==2){auto batch=publication.Before(99,&b,1);assert(publication.After(batch,99,2,true));}
+  assert(publication.Seal(a)&&publication.Seal(b));if(executed)publication.Complete(99,executed);
+  bool submitted=true;assert(publication.TakeReady(out,&submitted));assert(submitted==(executed==2));out.reset();
+  submitted=true;assert(!publication.TakeReady(out,&submitted)&&!submitted);
+ }
  // Same list pointer is reusable only AFTER the producer's successful Reset.
  Pool reuse;auto o=std::make_unique<Owner>(deaths);auto token=reuse.Admit(1,a,50,o);
  assert(!reuse.Attach(token,1,{10,2}));assert(reuse.Seal(a));assert(reuse.Attach(token,1,{10,2}));

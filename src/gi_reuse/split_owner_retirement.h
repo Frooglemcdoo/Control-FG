@@ -118,9 +118,17 @@ public:
  }
  // Transfer one fully retired owner for host reuse. Never destroy resources
  // while the submission router lock is held; caller owns the returned object.
- bool TakeReady(std::unique_ptr<Owner>& out)noexcept {
+ bool TakeReady(std::unique_ptr<Owner>& out,bool* submittedBoth=nullptr)noexcept {
+  if(submittedBoth)*submittedBoth=false;
   if(!state_||out)return false;
-  for(auto& entry:state_->entries)if(entry.owner&&entry.lease.Retirable())return Take(entry.id,out);
+  for(auto& entry:state_->entries)if(entry.owner&&entry.lease.Retirable()){
+   // Reset can retire discarded recordings. Their GPU outputs are NOT valid
+   // publications merely because their storage can now be reclaimed.
+   const bool both=entry.lease.SubmittedBoth();
+   if(!Take(entry.id,out))return false;
+   if(submittedBoth)*submittedBoth=both;
+   return true;
+  }
   return false;
  }
  bool SceneReleaseReady(U64 id)noexcept {auto* e=Find(id);return e&&e->lease.SceneReleaseReady();}

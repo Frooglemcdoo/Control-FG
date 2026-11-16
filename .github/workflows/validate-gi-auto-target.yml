@@ -66,3 +66,7 @@ jobs:
           if errorlevel 1 exit /b 1
           test-gi-auto-training-gpu.exe
           if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-split-owner-retirement.cpp /Fetest-gi-split-owner-retirement.exe
+          if errorlevel 1 exit /b 1
+          test-gi-split-owner-retirement.exe
+          if errorlevel 1 exit /b 1

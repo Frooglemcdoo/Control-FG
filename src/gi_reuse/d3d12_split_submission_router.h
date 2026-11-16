@@ -87,9 +87,12 @@ public:
  }
  // Collect only after GPU completion AND both recording seals. Release scene
  // tokens before removing their entries. Returned owners die outside our lock.
- void CollectReady(std::array<std::unique_ptr<Owner>,Capacity>& output)noexcept {
+ void CollectReady(std::array<std::unique_ptr<Owner>,Capacity>& output,std::array<bool,Capacity>* submittedBoth=nullptr)noexcept {
   std::lock_guard<std::mutex> lock(mutex_);pool_.Poll();ReleaseReadyScenes();
-  for(auto& owner:output)if(!owner&&!pool_.TakeReady(owner))break;
+  for(unsigned i=0;i<Capacity;++i)if(!output[i]){
+   bool both=false;if(!pool_.TakeReady(output[i],&both))break;
+   if(submittedBoth)(*submittedBoth)[i]=both;
+  }
  }
  void Reset(ID3D12CommandList* list,UINT64 previous)noexcept {
   if(!list||!previous)return;
