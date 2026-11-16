@@ -1,0 +1,47 @@
+#include "gpu_test_device.h"
+#include "../src/gi_reuse/d3d12_auto_target_build.h"
+#include <limits>
+int main()try {
+ using namespace gi_reuse;Device d(false);constexpr UINT slots=256;
+ std::vector<GIAutoTraining> records;
+ GIAutoTraining a{{.2f,.2f,3.2f},2,1,7,0,0},b{{1.2f,.2f,3.2f},1,1,7,0,0};
+ for(UINT i=0;i<400;++i)records.push_back(i<200?a:b);
+ auto bad=a;bad.version=6;bad.energy=10000;for(UINT i=0;i<50;++i)records.push_back(bad);
+ bad=a;bad.energy=std::numeric_limits<float>::quiet_NaN();records.push_back(bad);
+ bad=a;bad.position.x=std::numeric_limits<float>::infinity();records.push_back(bad);
+ bad=a;bad.energy=-1;records.push_back(bad);
+ auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
+ auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto back=d.Buffer(3*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
+ const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
+ for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
+ D3D12AutoTargetBuild builder;Check(builder.Initialize(d.device.Get(),shaders));
+ // A real previous compute root/PSO is required for tested state restoration.
+ D3D12_ROOT_PARAMETER params[4]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[0].Descriptor={0,0};
+ params[1].ParameterType=params[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;params[1].Descriptor={0,0};params[2].Descriptor={1,0};
+ params[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[3].Constants={0,0,8};
+ D3D12_ROOT_SIGNATURE_DESC rd{};rd.NumParameters=4;rd.pParameters=params;ComPtr<ID3DBlob> blob,error;Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
+ ComPtr<ID3D12RootSignature> root;Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
+ D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS=shaders[3];ComPtr<ID3D12PipelineState> prior;Check(d.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&prior)));
+ ComputeBindingTracker tracker;tracker.Root(root.Get());tracker.Pipeline(prior.Get());tracker.Descriptor(0,RootArgumentKind::SRV,input->GetGPUVirtualAddress());tracker.Descriptor(1,RootArgumentKind::UAV,cells->GetGPUVirtualAddress());tracker.Descriptor(2,RootArgumentKind::UAV,frozen->GetGPUVirtualAddress());UINT control[8]{};tracker.Constants(3,0,8,control);ComputeBindingSnapshot restore;Require(tracker.Capture(restore),"restore snapshot");
+ Require(!builder.Record(d.list.Get(),input.Get(),65536,cells.Get(),frozen.Get(),slots,1,7,.5f,512,8,restore),"unsafe count admitted");
+ Require(!builder.Record(d.list.Get(),input.Get(),400,cells.Get(),cells.Get(),slots,1,7,.5f,512,8,restore),"alias admitted");
+ Require(!builder.Record(d.list.Get(),empty.Get(),400,cells.Get(),frozen.Get(),slots,1,7,.5f,512,8,restore),"short input admitted");
+ Require(builder.Record(d.list.Get(),input.Get(),UINT(records.size()),cells.Get(),frozen.Get(),slots,1,7,.5f,512,8,restore),"first build");
+ auto copy=[&](UINT index){d.Transition(frozen.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyBufferRegion(back.Get(),index*sizeof(GIAutoTargets),frozen.Get(),0,sizeof(GIAutoTargets));d.Transition(frozen.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);};copy(0);
+ Require(builder.Record(d.list.Get(),empty.Get(),0,cells.Get(),frozen.Get(),slots,2,7,.5f,512,8,restore),"empty build");copy(1);
+ Require(builder.Record(d.list.Get(),input.Get(),UINT(records.size()),cells.Get(),frozen.Get(),slots,3,8,.5f,512,8,restore),"new epoch build");copy(2);d.Submit();
+ GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
+ Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
+ Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
+ Require(mapped[0].scores[0]==204800&&mapped[0].scores[1]==102400,"target ordering/scores");
+ Require(std::abs(mapped[0].bounds[0].center.x-.25f)<1e-6&&std::abs(mapped[0].bounds[1].center.x-1.25f)<1e-6,"target centers");
+ Require(std::abs(mapped[0].bounds[0].radius-.4330127f)<1e-6,"enclosing radius");
+ Require(!GIAutoMatches(mapped[0],8,1)&&!GIAutoMatches(mapped[0],7,2),"wrong identity admitted");
+ Require(mapped[1].frame==2&&mapped[1].validMask==0&&mapped[1].scores[0]==0,"empty frame retained stale target");
+ Require(mapped[2].version==8&&mapped[2].validMask==0,"epoch retained stale target");
+ D3D12_RANGE none{};back->Unmap(0,&none);
+ std::cout<<"PASS GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, ABI and production recording. No live integration or GPU timing claim.\n";return 0;
+}catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
