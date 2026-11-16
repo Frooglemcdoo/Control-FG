@@ -1,6 +1,12 @@
 #pragma once
 #include "visual_settings_policy.h"
 #include "gi_frozen_dispatch_bridge.h"
+#include "gi_auto_dispatch_bridge.h"
+#ifdef CONTROL_GI_AUTO_TARGETS
+#include "gi_reuse/d3d12_auto_pipeline_bundle.h"
+#include "gi_reuse/d3d12_auto_raygen.h"
+#include "../build/gi_auto.generated.h"
+#endif
 #include "gi_phase_audit.h"
 #ifdef CONTROL_GI_LONG_SEQUENCE
 #include "gi_reuse/d3d12_frozen_raygen.h"
@@ -289,6 +295,7 @@ inline void RecordCompute(const D3D12_COMPUTE_PIPELINE_STATE_DESC*) noexcept;
 }
 #include "gi_source_runtime.inl"
 namespace gi_frozen_prepare { inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*) noexcept; inline void Share(IUnknown*,ID3D12PipelineState*) noexcept; inline void CheckBinding(ID3D12GraphicsCommandList*) noexcept; }
+namespace gi_auto_prepare {inline void Observe(ID3D12Device*,const D3D12_COMPUTE_PIPELINE_STATE_DESC*,IUnknown*)noexcept;inline void Share(IUnknown*,ID3D12PipelineState*)noexcept;}
 #include "gi_evaluator_runtime.inl"
 #include "gi_spot_pcf_runtime.inl"
 namespace gi_binding_audit {
@@ -526,8 +533,9 @@ inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* lis
     rt_spot_capture_runtime::BeforeCompute(list,x,y,z);
     const auto timing=performance::Begin(list,performance::ComputeStage(list),x,y,z,0,performance::ComputeShader(list));
     // R171: preserve native serial shading and dispatch dimensions.
+    const auto automatic=gi_auto_dispatch::shade.load();
     const auto frozen=gi_frozen_dispatch::shade.load();
-    if(!(frozen&&frozen(list,x,y,z))&&!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
+    if(!(automatic&&automatic(list,x,y,z))&&!(frozen&&frozen(list,x,y,z))&&!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
     gi_owned_dispatch::After(list,x,y,z);
@@ -562,6 +570,7 @@ inline bool PatchSlot(void** slot, void* expected, void* hook) noexcept {
 #include "gi_binding_audit.inl"
 #include "gi_compute_hooks.inl"
 #include "gi_frozen_prepare.inl"
+#include "gi_auto_prepare.inl"
 namespace gi_phase_bindings {
 inline void Record(ID3D12GraphicsCommandList* list,unsigned kind,UINT x,UINT y,UINT z) noexcept {
  if(!gi_phase_audit::Enabled())return;

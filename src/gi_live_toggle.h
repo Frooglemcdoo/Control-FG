@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_reuse/native_gi_identity.h"
+#include "gi_auto_dispatch_bridge.h"
 #include "gi_frozen_dispatch_bridge.h"
 #include "gi_reuse/owned_request.h"
 // Main runtime preincludes these globally; standalone fixtures include here.
@@ -42,9 +43,17 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   const bool guided=variant==0&&gi_reuse::GuidedLiveEnabled();
   const bool frozen=!guided&&variant==0&&gi_reuse::SingleProducerEnabled()&&FrozenPipelineRequested();
   const bool compact=!guided&&variant==0&&gi_reuse::SingleProducerEnabled()&&(CompactRequested()||frozen);
+  bool automatic=false;
+#ifdef CONTROL_GI_AUTO_TARGETS
+  gi_reuse::D3D12AutoRaygenAugment autoAugment;
+  if(variant==0&&gi_auto_dispatch::Enabled())if(const auto check=gi_auto_dispatch::rootReady.load())
+   for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE&&desc->pSubobjects[i].pDesc)
+    automatic=check(static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(desc->pSubobjects[i].pDesc)->pGlobalRootSignature);
+  if(automatic&&FAILED(autoAugment.Initialize(device,{gi_auto_shader::kRaygen,sizeof(gi_auto_shader::kRaygen)})))automatic=false;
+#endif
   gi_reuse::D3D12FrozenRaygenAugment frozenAugment;
   if(frozen&&FAILED(frozenAugment.Initialize(device,{gi_frozen_shader::kRaygen,sizeof(gi_frozen_shader::kRaygen)})))return next(device,desc,iid,out);
-  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+(frozen?6:3)+1);
+  std::vector<D3D12_STATE_SUBOBJECT> objects(desc->pSubobjects,desc->pSubobjects+desc->NumSubobjects);objects.reserve(desc->NumSubobjects+(frozen?6:3)+1+(automatic?3:0));
   std::vector<D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION> associations(desc->NumSubobjects);
   std::vector<std::vector<LPCWSTR>> names(desc->NumSubobjects);
   for(UINT i=0;i<desc->NumSubobjects;++i){
@@ -58,6 +67,9 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
     if(objects[target].Type==D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE)return next(device,desc,iid,out);
     names[i].assign(associations[i].pExports,associations[i].pExports+associations[i].NumExports);names[i].push_back(kExport);
     if(guided)names[i].push_back(kGuideExport);
+#ifdef CONTROL_GI_AUTO_TARGETS
+    if(automatic)names[i].push_back(gi_reuse::D3D12AutoRaygenAugment::Export);
+#endif
     if(compact){names[i].push_back(kCompactExports[0]);names[i].push_back(kCompactExports[1]);}
     if(frozen)names[i].push_back(gi_reuse::D3D12FrozenRaygenAugment::Export);
     associations[i].NumExports=static_cast<UINT>(names[i].size());associations[i].pExports=names[i].data();break;
@@ -88,6 +100,9 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
 #endif
   objects.push_back({D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,&lib});
   if(frozen&&!frozenAugment.Append(objects))return next(device,desc,iid,out);
+#ifdef CONTROL_GI_AUTO_TARGETS
+  if(automatic&&!autoAugment.Append(objects))return next(device,desc,iid,out);
+#endif
   auto augmented=*desc;augmented.NumSubobjects=static_cast<UINT>(objects.size());augmented.pSubobjects=objects.data();
   void* candidate=nullptr;const HRESULT hr=next(device,&augmented,iid,&candidate);
   if(FAILED(hr)||!candidate){if(candidate)static_cast<IUnknown*>(candidate)->Release();Log("GI_TOGGLE_R308 create_failed=1 hr=0x%08lX native_fallback=1",static_cast<unsigned long>(hr));return next(device,desc,iid,out);}
@@ -124,6 +139,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
   if(SUCCEEDED(list->GetPrivateData(kState,&size,state.GetAddressOf()))&&state){
    Microsoft::WRL::ComPtr<ID3D12Resource> record;size=sizeof(ID3D12Resource*);
    if(SUCCEEDED(state->GetPrivateData(kRecord,&size,record.GetAddressOf()))&&record){
+    if(const auto automatic=gi_auto_dispatch::ray.load())if(automatic(list,desc,state.Get()))return true;
     if(!gi_reuse::GuidedLiveEnabled())if(const auto frozen=gi_frozen_dispatch::ray.load())if(frozen(list,desc,state.Get()))return true;
     gi_phase_bindings::Record(list,1,desc->Width,desc->Height,desc->Depth);
     const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();

@@ -1,0 +1,32 @@
+R448 - Automatic world-target GI: experimental test build
+
+This is an integration candidate, not a confirmed speckle fix. Windows software
+GPU tests cover estimator math, bounds, root layouts and resource retirement.
+Image quality and FPS on Control / RTX hardware are not yet verified.
+
+Install with Control closed by extracting beside Control_DX12.exe.
+Run ControlTOH\Diagnostics\Start-GI-Auto-R448.cmd.
+Use TEN GI rays, GI FIXED, RR ON, RELAX OFF. Keep the same settings and scene
+for comparison. Launching the game normally leaves automatic guidance disabled.
+
+The candidate retains ten rays, uses one independent reference ray and nine
+weighted guided rays, and learns two target bounds from fresh secondary hits.
+No old radiance is blended. Target learning and guiding are separate: empty or
+invalid target lists retain the existing ten-ray owned sampling pattern.
+
+The runtime admits only the verified native callback, variant zero, one pass,
+batch zero, a matching prepared evaluator and observed command-list lifetimes.
+Unsupported counts/routes remain on the prior path. Native diagnostics disable
+new auto admissions; do not treat source-capture timing as normal performance.
+No capture or navigation key is assigned by this build; existing box movement
+remains Alt+arrows, not Ctrl.
+
+If integration fails after ray production, the session disables further auto
+admissions and logs GI_AUTO_R448 halted=1. A failed current pass can be skipped;
+this candidate is not ready for general release. Restart normally to return to
+the baseline path. Check probe logs for pipeline_ready, producer and evaluator
+entries to confirm the candidate actually records both stages. Those logs do
+not by themselves prove a visual improvement or valid targets on every frame.
+
+Use the existing compact-log collector after a visual comparison. Do not run
+another large source capture unless specifically needed.

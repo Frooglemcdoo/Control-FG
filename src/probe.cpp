@@ -1112,6 +1112,7 @@ static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[
 #include "gi_native_scene_window.h"
 #include "gi_frozen_lifetime.h"
 #include "gi_frozen_runtime.h"
+#include "gi_auto_runtime.h"
 #include "gi_frozen_scene_contract.h"
 #include "rr_hair_opacity_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
@@ -1538,6 +1539,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         if(gi_reuse::GuidedLiveEnabled()){
             const bool installed=gi_native_render_scope::Install(renderer,d3d);
             gi_reuse::guidedScopeReady.store(installed);
+#ifdef CONTROL_GI_AUTO_TARGETS
+            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R448 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
+#endif
             Log("GI_GUIDED_R434 scope_ready=%u same_invocation_pair=1 fixed_scene=1",unsigned(installed));
         }
         {char enabled[4]{};
