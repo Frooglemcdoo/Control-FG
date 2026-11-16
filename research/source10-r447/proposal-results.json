@@ -1,0 +1,99 @@
+{
+  "training_receivers": 131072,
+  "heldout_skin_receivers": 14553,
+  "assumptions": [
+    "Cosine PDF approximated from recorded receiver normal and endpoint direction",
+    "Independent-draw second moment only; ten-ray correlations not modeled",
+    "Single-frame spatial holdout is not temporal validation",
+    "Fresh tracing and exact producer/evaluator PDF pairing remain mandatory"
+  ],
+  "old_fixed_bounds": {
+    "second_moment_proxy_ratio": 1.111044114441537,
+    "baseline_energy_inside_cones_fraction": 0.0004597072172149521,
+    "ray_directions_inside_cones_fraction": 0.00040541469112897685,
+    "max_weight": 1.1111111111111112,
+    "bounds": [
+      {
+        "center": [
+          -82.0759007,
+          25.003847,
+          110.55301
+        ],
+        "radius": 0.160592319
+      },
+      {
+        "center": [
+          -82.0279381,
+          25.345521,
+          110.818513
+        ],
+        "radius": 0.136421514
+      }
+    ]
+  },
+  "automatic_world_bounds": {
+    "second_moment_proxy_ratio": 0.26382775014346244,
+    "baseline_energy_inside_cones_fraction": 1.0,
+    "ray_directions_inside_cones_fraction": 1.0,
+    "max_weight": 1.0958903956206316,
+    "bounds": [
+      {
+        "center": [
+          -80.20044820674073,
+          25.484004714113237,
+          105.05029740174066
+        ],
+        "radius": 0.1504984006105336
+      },
+      {
+        "center": [
+          -82.02686722629271,
+          25.01943445625204,
+          107.15614091781634
+        ],
+        "radius": 0.28825216943691595
+      }
+    ]
+  },
+  "automatic_far_bound_only": {
+    "second_moment_proxy_ratio": 0.22673104327666063,
+    "baseline_energy_inside_cones_fraction": 0.03803334607521429,
+    "ray_directions_inside_cones_fraction": 0.0017041159898302754,
+    "max_weight": 1.1111111111111112,
+    "bounds": [
+      {
+        "center": [
+          -82.02686722629271,
+          25.01943445625204,
+          107.15614091781634
+        ],
+        "radius": 0.28825216943691595
+      }
+    ]
+  },
+  "stale_shifted_world_bounds": {
+    "second_moment_proxy_ratio": 1.1098420804100853,
+    "baseline_energy_inside_cones_fraction": 0.008374931372813511,
+    "ray_directions_inside_cones_fraction": 0.005071119356833642,
+    "max_weight": 1.1111111111111112,
+    "bounds": [
+      {
+        "center": [
+          -75.20044820674073,
+          25.484004714113237,
+          105.05029740174066
+        ],
+        "radius": 0.1504984006105336
+      },
+      {
+        "center": [
+          -77.02686722629271,
+          25.01943445625204,
+          107.15614091781634
+        ],
+        "radius": 0.28825216943691595
+      }
+    ]
+  },
+  "stale_proposal_second_moment_upper_bound": 1.1111111111111112
+}

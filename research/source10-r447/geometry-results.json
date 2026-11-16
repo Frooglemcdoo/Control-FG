@@ -1,0 +1,243 @@
+{
+  "geometry": [
+    {
+      "pixel": [
+        582,
+        919
+      ],
+      "secondary_projected_pixel": [
+        3105.0837845527712,
+        881.6619052209568
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.741694450378418,
+      "primary_cosine": 0.6899711489677429,
+      "secondary_facing_cosine": 0.9138328433036804,
+      "secondary_normal_length": 0.9933518767356873
+    },
+    {
+      "pixel": [
+        669,
+        782
+      ],
+      "secondary_projected_pixel": [
+        3127.8798189672507,
+        892.133133905255
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.741302728652954,
+      "primary_cosine": 0.6396155953407288,
+      "secondary_facing_cosine": 0.6534514427185059,
+      "secondary_normal_length": 0.9852269887924194
+    },
+    {
+      "pixel": [
+        662,
+        813
+      ],
+      "secondary_projected_pixel": [
+        3096.2193986493503,
+        908.3554175853322
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.705061912536621,
+      "primary_cosine": 0.22938239574432373,
+      "secondary_facing_cosine": 0.5944210886955261,
+      "secondary_normal_length": 0.9843427538871765
+    },
+    {
+      "pixel": [
+        654,
+        872
+      ],
+      "secondary_projected_pixel": [
+        3125.3371445194807,
+        930.9899152299464
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.716242551803589,
+      "primary_cosine": 0.4099254906177521,
+      "secondary_facing_cosine": 0.5272829532623291,
+      "secondary_normal_length": 0.986870288848877
+    },
+    {
+      "pixel": [
+        556,
+        946
+      ],
+      "secondary_projected_pixel": [
+        3155.5005783749043,
+        927.2118278506504
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.779329538345337,
+      "primary_cosine": 0.67943274974823,
+      "secondary_facing_cosine": 0.5068867206573486,
+      "secondary_normal_length": 0.9891911149024963
+    },
+    {
+      "pixel": [
+        657,
+        851
+      ],
+      "secondary_projected_pixel": [
+        2959.076956611765,
+        844.6737301536333
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.87736177444458,
+      "primary_cosine": 0.2599659264087677,
+      "secondary_facing_cosine": 0.9196927547454834,
+      "secondary_normal_length": 0.994138777256012
+    },
+    {
+      "pixel": [
+        664,
+        870
+      ],
+      "secondary_projected_pixel": [
+        3293.1744889325155,
+        894.8054744779142
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.8482654094696045,
+      "primary_cosine": 0.4558032155036926,
+      "secondary_facing_cosine": 0.7735475897789001,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        646,
+        876
+      ],
+      "secondary_projected_pixel": [
+        3333.3591739733333,
+        840.2775214870588
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.8212478160858154,
+      "primary_cosine": 0.29302433133125305,
+      "secondary_facing_cosine": 0.7826096415519714,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        572,
+        942
+      ],
+      "secondary_projected_pixel": [
+        3259.7976812972975,
+        830.7711998432432
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.9166266918182373,
+      "primary_cosine": 0.5589137077331543,
+      "secondary_facing_cosine": 0.7695013880729675,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        575,
+        905
+      ],
+      "secondary_projected_pixel": [
+        2888.1204116622775,
+        1013.8533266565453
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.5122053623199463,
+      "primary_cosine": 0.6099871397018433,
+      "secondary_facing_cosine": 0.22338014841079712,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        576,
+        920
+      ],
+      "secondary_projected_pixel": [
+        3240.975265283804,
+        843.6670992106984
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.9394562244415283,
+      "primary_cosine": 0.8083529472351074,
+      "secondary_facing_cosine": 0.7585725784301758,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        670,
+        847
+      ],
+      "secondary_projected_pixel": [
+        2884.961445692657,
+        995.4582691149128
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.533672571182251,
+      "primary_cosine": 0.40546417236328125,
+      "secondary_facing_cosine": 0.22832785546779633,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        660,
+        905
+      ],
+      "secondary_projected_pixel": [
+        3230.027358584071,
+        823.9794987982301
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.908952474594116,
+      "primary_cosine": 0.5543933510780334,
+      "secondary_facing_cosine": 0.7601019144058228,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        666,
+        822
+      ],
+      "secondary_projected_pixel": [
+        3290.091526468607,
+        871.8512873678408
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.862708330154419,
+      "primary_cosine": 0.9071021676063538,
+      "secondary_facing_cosine": 0.7631319165229797,
+      "secondary_normal_length": 0.99951171875
+    },
+    {
+      "pixel": [
+        554,
+        942
+      ],
+      "secondary_projected_pixel": [
+        3207.948682247453,
+        843.2058026043668
+      ],
+      "secondary_in_view": false,
+      "world_distance": 2.986193895339966,
+      "primary_cosine": 0.5400218963623047,
+      "secondary_facing_cosine": 0.7488808035850525,
+      "secondary_normal_length": 0.99951171875
+    }
+  ],
+  "clamp_loss": {
+    "2": {
+      "skin_gi_energy_removed_fraction": 0.03697061072278915,
+      "affected_pixels": 325
+    },
+    "4": {
+      "skin_gi_energy_removed_fraction": 0.027700952432691463,
+      "affected_pixels": 139
+    },
+    "10": {
+      "skin_gi_energy_removed_fraction": 0.014573845166933965,
+      "affected_pixels": 50
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "2": {
+    "skin_gi_energy_removed_fraction": 0.03697061072278915,
+    "affected_pixels": 325
+  },
+  "4": {
+    "skin_gi_energy_removed_fraction": 0.027700952432691463,
+    "affected_pixels": 139
+  },
+  "10": {
+    "skin_gi_energy_removed_fraction": 0.014573845166933965,
+    "affected_pixels": 50
+  }
+}
