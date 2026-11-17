@@ -1,0 +1,761 @@
+{
+  "scope": "Synthetic exact finite enumeration; not Control image/FPS evidence",
+  "cases": [
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.00010000000000000002,
+        "variance": 9.999000000000004e-06,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 9.999999999999999e-05,
+        "variance": 1.099881000090008e-05,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.00010000000000000003,
+        "variance": 1.666500000000001e-05,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 1.0000000000000002,
+        "variance": 4.930380657631325e-32,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999997,
+        "variance": 1.1093356479670476e-31,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0,
+        "variance": 2.666719996799428e-06,
+        "maximum_possible": 1.3999839990399425
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.20098000000000005,
+        "variance": 0.0009603039600000003,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.20097999999999994,
+        "variance": 0.0010563257124864436,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.20098000000000002,
+        "variance": 0.0016267455567371492,
+        "maximum_possible": 10.079996799807988
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 0.0001,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.00010000000000000002,
+        "variance": 9.999000000000004e-06,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.00010000000000000002,
+        "variance": 9.999000000000004e-06,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.00010000000000000002,
+        "variance": 9.999000000000004e-06,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 0.0001,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 1.0000000000000002,
+        "variance": 4.930380657631325e-32,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 1.0,
+        "variance": 0.0,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0000000000000002,
+        "variance": 4.930380657631325e-32,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 0.0001,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.20098000000000005,
+        "variance": 0.0009603039600000003,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.20098,
+        "variance": 0.0009603039600000001,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.20098000000000005,
+        "variance": 0.0009603039600000004,
+        "maximum_possible": 10.0
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.00010000000000000002,
+        "variance": 9.999000000000004e-06,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.0001,
+        "variance": 2.0087910080927155e-06,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.0001,
+        "variance": 3.7485003655490787e-13,
+        "maximum_possible": 0.00024996250562415637
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 1.0000000000000002,
+        "variance": 4.930380657631325e-32,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 1.0,
+        "variance": 0.0,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0000000000000002,
+        "variance": 1.6660001624662562e-05,
+        "maximum_possible": 1.0000999850022498
+      }
+    },
+    {
+      "cosine_probability": 0.0001,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.20098000000000005,
+        "variance": 0.0009603039600000003,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.20098,
+        "variance": 0.0001929242884172244,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.20098000000000008,
+        "variance": 6.56639984628712e-07,
+        "maximum_possible": 0.20099985002249668
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.001,
+        "variance": 9.99e-05,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.0009999999999999998,
+        "variance": 0.00010988100090081068,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.0010000000000000002,
+        "variance": 0.00016650000000000004,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 1.0,
+        "variance": 0.0,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999998,
+        "variance": 4.9303806576313227e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0,
+        "variance": 2.6671996794234203e-05,
+        "maximum_possible": 1.3998399039423655
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.20980000000000004,
+        "variance": 0.009594396000000003,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.20980000000000001,
+        "variance": 0.010552971326513859,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.20980000000000001,
+        "variance": 0.016252955617114116,
+        "maximum_possible": 10.079967980788473
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 0.001,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.001,
+        "variance": 9.99e-05,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.001,
+        "variance": 9.99e-05,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.001,
+        "variance": 9.99e-05,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 0.001,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 1.0,
+        "variance": 0.0,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0,
+        "variance": 0.0,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 0.001,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.20980000000000004,
+        "variance": 0.009594396000000003,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.20979999999999996,
+        "variance": 0.009594395999999998,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.20980000000000004,
+        "variance": 0.009594396000000003,
+        "maximum_possible": 10.0
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.001,
+        "variance": 9.99e-05,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.001,
+        "variance": 2.0871080277502464e-05,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.001,
+        "variance": 3.735036486707782e-10,
+        "maximum_possible": 0.0024962556165751375
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 1.0,
+        "variance": 0.0,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 1.0000000000000002,
+        "variance": 4.930380657631325e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0000000000000002,
+        "variance": 0.0001660016216314571,
+        "maximum_possible": 1.0009985022466303
+      }
+    },
+    {
+      "cosine_probability": 0.001,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.20980000000000004,
+        "variance": 0.009594396000000003,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.20980000000000004,
+        "variance": 0.0020044585498513365,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.20980000000000004,
+        "variance": 5.699846620483655e-06,
+        "maximum_possible": 0.2099850224663006
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.01,
+        "variance": 0.00099,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.01,
+        "variance": 0.0010881009081735618,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.01,
+        "variance": 0.00165,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.9999999999999999,
+        "variance": 0.0002671967418191234,
+        "maximum_possible": 1.3983903420523138
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.298,
+        "variance": 0.09507960000000001,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.298,
+        "variance": 0.10450121122098886,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.298,
+        "variance": 0.16107950477108124,
+        "maximum_possible": 10.079678068410463
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 0.01,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.01,
+        "variance": 0.00099,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.01,
+        "variance": 0.0009899999999999998,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.01,
+        "variance": 0.00099,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 0.01,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 0.01,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.298,
+        "variance": 0.09507960000000001,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.29799999999999993,
+        "variance": 0.09507959999999997,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.298,
+        "variance": 0.0950796,
+        "maximum_possible": 10.0
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.01,
+        "variance": 0.00099,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.010000000000000002,
+        "variance": 0.00027974311926605503,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.009999999999999998,
+        "variance": 3.603581741852509e-07,
+        "maximum_possible": 0.02463054187192118
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 1.0000000000000002,
+        "variance": 4.930380657631325e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 1.0,
+        "variance": 0.0016015918852677778,
+        "maximum_possible": 1.0098522167487685
+      }
+    },
+    {
+      "cosine_probability": 0.01,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.298,
+        "variance": 0.09507960000000001,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.2980000000000001,
+        "variance": 0.02686652917431193,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.29799999999999993,
+        "variance": 4.498871605717163e-06,
+        "maximum_possible": 0.2985221674876847
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.04999999999999998,
+        "variance": 0.004749999999999999,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.04999999999999998,
+        "variance": 0.005202617801047117,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.05,
+        "variance": 0.007916666666666667,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 0.9999999999999996,
+        "variance": 1.9721522630525286e-31,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999997,
+        "variance": 1.1093356479670476e-31,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.9999999999999996,
+        "variance": 0.0013462287880398208,
+        "maximum_possible": 1.3917525773195876
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 0,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.6899999999999998,
+        "variance": 0.45618999999999993,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.6899999999999997,
+        "variance": 0.4996594136125651,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.69,
+        "variance": 0.7731677666772948,
+        "maximum_possible": 10.078350515463917
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 0.05,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.04999999999999998,
+        "variance": 0.004749999999999999,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.04999999999999998,
+        "variance": 0.004749999999999998,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.04999999999999999,
+        "variance": 0.004749999999999999,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 0.05,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 0.9999999999999996,
+        "variance": 1.9721522630525286e-31,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999994,
+        "variance": 3.0814879110195756e-31,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.9999999999999997,
+        "variance": 1.1093356479670474e-31,
+        "maximum_possible": 1.0
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 0.05,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.6899999999999998,
+        "variance": 0.45618999999999993,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.6899999999999996,
+        "variance": 0.4561899999999998,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.6899999999999998,
+        "variance": 0.45618999999999993,
+        "maximum_possible": 10.0
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 0,
+      "native_iid": {
+        "mean": 0.04999999999999998,
+        "variance": 0.004749999999999999,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.049999999999999996,
+        "variance": 0.002424137931034482,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.04999999999999999,
+        "variance": 3.8534342888047614e-05,
+        "maximum_possible": 0.11627906976744187
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 1,
+      "other_rgb_scalar": 1,
+      "native_iid": {
+        "mean": 0.9999999999999996,
+        "variance": 1.9721522630525286e-31,
+        "maximum_possible": 1.0
+      },
+      "r448_pilot": {
+        "mean": 0.9999999999999999,
+        "variance": 1.2325951644078308e-32,
+        "maximum_possible": 1.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.9999999999999999,
+        "variance": 0.006850549846764018,
+        "maximum_possible": 1.0465116279069768
+      }
+    },
+    {
+      "cosine_probability": 0.05,
+      "guide_probability": 1,
+      "rare_rgb_scalar": 10,
+      "other_rgb_scalar": 0.2,
+      "native_iid": {
+        "mean": 0.6899999999999998,
+        "variance": 0.45618999999999993,
+        "maximum_possible": 10.0
+      },
+      "r448_pilot": {
+        "mean": 0.69,
+        "variance": 0.23281420689655163,
+        "maximum_possible": 10.0
+      },
+      "r449_fixed_mixture": {
+        "mean": 0.6899999999999998,
+        "variance": 0.001960798629890034,
+        "maximum_possible": 1.1627906976744187
+      }
+    }
+  ]
+}

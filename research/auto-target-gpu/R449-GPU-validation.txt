@@ -1,0 +1,20 @@
+Code commit: 53340a212e435e6a8c6254d67892d869a20b2242
+Focused Windows/WARP run: 44009548196
+Not native Control DXR execution or RTX image/FPS evidence.
+2026-11-17T03:21:15.5317779Z PASS GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.
+2026-11-17T03:21:15.8514681Z PASS exhaustive RGB expectation, nonnegative resolve, constant field, version/count/weight rejection. Research-only; no game integration.
+2026-11-17T03:21:17.1597146Z PASS immutable target selection, local-root serialization, ray-record layout, GPU evaluator identity, stale rejection and completion retirement. DXR dispatch and live hooks not tested.
+2026-11-17T03:21:18.5312842Z scenario 0 z2=0.499856 cap=0.36021 constant=3.99929 variance=0.00432249 peak=0.601776
+2026-11-17T03:21:18.5314878Z scenario 1 z2=0.500007 cap=0.360387 constant=4 variance=0.000387288 peak=0.570727
+2026-11-17T03:21:18.5316104Z scenario 2 z2=0.499995 cap=0.359714 constant=4 variance=8.38148e-05 peak=0.533059
+2026-11-17T03:21:18.5317006Z scenario 3 z2=0.499995 cap=0.359714 constant=4 variance=8.38148e-05 peak=0.533059
+2026-11-17T03:21:18.5317901Z scenario 4 z2=0.499839 cap=0.360192 constant=3.99922 variance=0.00199522 peak=0.635788
+2026-11-17T03:21:18.5318798Z scenario 5 z2=0.499995 cap=0.359714 constant=4 variance=8.38148e-05 peak=0.533059
+2026-11-17T03:21:18.5319707Z scenario 6 z2=1.00004 cap=0.999973 constant=3.99989 variance=4.76322e-05 peak=1.24982
+2026-11-17T03:21:18.5320561Z scenario 7 z2=1.27157 cap=0.999983 constant=3.99993 variance=2117.66 peak=1666.67
+2026-11-17T03:21:18.5321398Z scenario 8 z2=0.800031 cap=0.999983 constant=3.99993 variance=2.53635e-05 peak=1.00383
+2026-11-17T03:21:18.5322181Z scenario 9 z2=0 cap=0.999973 constant=3.99989 variance=0 peak=0
+2026-11-17T03:21:18.5323503Z PASS paired sampler/resolve: ten proposal/source states, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.
+2026-11-17T03:21:19.8818983Z PASS actual evaluator PSO root extension, private-space collision rejection, DWORD budget and raygen local-root association layout. Native DXR state-object linking not executed.
+2026-11-17T03:21:21.1322978Z PASS irregular tile coverage, bounded writes, invalid receiver/miss clearing and density-corrected training energy.
+2026-11-17T03:21:21.7435135Z PASS shared invocation ownership: no early release, transactional budget, actual batch ordering, replay, failure pinning, Reset generations
