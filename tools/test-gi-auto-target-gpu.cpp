@@ -14,7 +14,7 @@ int main()try {
  auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
  auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto back=d.Buffer(7*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto back=d.Buffer(10*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
  const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
  for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
@@ -47,7 +47,17 @@ int main()try {
  std::vector<GIAutoTraining> rareRecords(200,dim);rareRecords.push_back(rare);
  rareRecords.insert(rareRecords.end(),1000,b);auto rareInput=d.Upload(rareRecords);
  Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,6,7,.5f,512,1,restore),"rare-hit build");copy(5);
- Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,7,7,.5f,512,8,restore),"old threshold control");copy(6);d.Submit();
+ Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,7,7,.5f,512,8,restore),"old threshold control");copy(6);
+ // Two adjacent cells of one patch must not evict a separate observed patch.
+ auto neighbor=a;neighbor.position.x=.7f;neighbor.energy=1.8f;
+ auto distinct=b;distinct.position.x=3.2f;distinct.energy=1.5f;
+ Require(GIAutoHash(0,0,6)%slots!=GIAutoHash(1,0,6)%slots&&GIAutoHash(6,0,6)%slots!=GIAutoHash(0,0,6)%slots&&GIAutoHash(6,0,6)%slots!=GIAutoHash(1,0,6)%slots,"fixture hash collision");
+ auto diverseInput=d.Upload(std::vector<GIAutoTraining>{a,neighbor,distinct});
+ Require(builder.Record(d.list.Get(),diverseInput.Get(),3,cells.Get(),frozen.Get(),slots,8,7,.5f,512,1,restore),"distinct region build");copy(7);
+ neighbor.energy=2.2f;auto swappedInput=d.Upload(std::vector<GIAutoTraining>{a,neighbor,distinct});
+ Require(builder.Record(d.list.Get(),swappedInput.Get(),3,cells.Get(),frozen.Get(),slots,9,7,.5f,512,1,restore),"adjacent rank swap build");copy(8);
+ auto singlePatch=d.Upload(std::vector<GIAutoTraining>{a,neighbor});
+ Require(builder.Record(d.list.Get(),singlePatch.Get(),2,cells.Get(),frozen.Get(),slots,10,7,.5f,512,1,restore),"single patch fallback");copy(9);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
@@ -62,6 +72,9 @@ int main()try {
  Require(mapped[5].validMask==3&&mapped[5].counts[0]==1&&mapped[5].scores[0]==2048&&mapped[5].counts[1]==1000,"rare peak lost to frequency/collision");
  Require(std::abs(mapped[5].bounds[0].center.x-(float(collisionX)*.5f+.25f))<1e-6,"collision selected wrong location");
  Require(mapped[6].validMask==1&&mapped[6].counts[0]==1000,"eight-record threshold control did not reject rare hit");
+ Require(mapped[7].validMask==3&&mapped[8].validMask==3&&mapped[9].validMask==3,"diversity validity");
+ Require(std::abs(mapped[7].bounds[1].center.x-3.25f)<1e-6&&std::abs(mapped[8].bounds[1].center.x-3.25f)<1e-6,"neighbor rank swap evicted distinct patch");
+ Require(std::abs(mapped[9].bounds[0].center.x-.75f)<1e-6&&std::abs(mapped[9].bounds[1].center.x-.25f)<1e-6,"single patch fallback changed");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;
@@ -83,5 +96,5 @@ int main()try {
  V* pv=nullptr;Check(pilotRead->Map(0,nullptr,reinterpret_cast<void**>(&pv)));
  for(UINT c=0;c<cases;++c){Require(pv[c].w==float(expected[c].valid),"GPU pilot validity");const float actual[]={pv[c].x,pv[c].y,pv[c].z},ref[]={expected[c].rgb.x,expected[c].rgb.y,expected[c].rgb.z};for(UINT k=0;k<3;++k)Require(std::abs(actual[k]-ref[k])<.00001f*(1+std::abs(ref[k])),"GPU pilot result");}
  pilotRead->Unmap(0,&none);
- std::cout<<"PASS GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
+ std::cout<<"PASS distinct-region selection across adjacent rank swaps, single-patch fallback; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

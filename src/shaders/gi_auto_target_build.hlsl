@@ -30,24 +30,50 @@ uint QuantizedScore(GIAutoTraining r){return uint(clamp(r.energy*scoreScale,1.,6
  uint old;InterlockedAdd(cells[slot].score,QuantizedScore(r),old);InterlockedAdd(cells[slot].count,1,old);
 }
 groupshared uint bestSlots[128];groupshared uint bestScores[128];
+groupshared uint firstSlot,fallbackSlot;
 bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldScore||(score==oldScore&&slot<oldSlot);}
+bool Candidate(GIAutoCell c){return c.state==2&&c.count>=minimumCount&&c.score>0;}
 [numthreads(64,1,1)]void Freeze(uint3 id:SV_GroupThreadID){
  uint slots[2]={0xffffffffu,0xffffffffu},scores[2]={0,0};
  if(ControlsValid())for(uint i=id.x;i<cellCount;i+=64){
-  GIAutoCell c=cells[i];if(c.state!=2||c.count<minimumCount||c.score==0)continue;
+  GIAutoCell c=cells[i];if(!Candidate(c))continue;
   uint peak=c.reserved0>>16;
   if(Better(peak,i,scores[0],slots[0])){scores[1]=scores[0];slots[1]=slots[0];scores[0]=peak;slots[0]=i;}
   else if(Better(peak,i,scores[1],slots[1])){scores[1]=peak;slots[1]=i;}
  }
  bestSlots[id.x*2]=slots[0];bestSlots[id.x*2+1]=slots[1];bestScores[id.x*2]=scores[0];bestScores[id.x*2+1]=scores[1];GroupMemoryBarrierWithGroupSync();
  if(id.x==0){
+  firstSlot=0xffffffffu;fallbackSlot=0xffffffffu;uint firstScore=0,secondScore=0;
+  for(uint j=0;j<128;++j)if(bestScores[j]>0){
+   if(Better(bestScores[j],bestSlots[j],firstScore,firstSlot)){
+    secondScore=firstScore;fallbackSlot=firstSlot;firstScore=bestScores[j];firstSlot=bestSlots[j];
+   }else if(Better(bestScores[j],bestSlots[j],secondScore,fallbackSlot)){secondScore=bestScores[j];fallbackSlot=bestSlots[j];}
+  }
+ }
+ GroupMemoryBarrierWithGroupSync();
+ // Search the entire table again: a distinct region may rank below both local
+ // winners. Prefer it over spending both slots on adjacent grid cells.
+ uint separate=0xffffffffu,separateScore=0;
+ if(ControlsValid()&&firstSlot!=0xffffffffu){
+  GIAutoCell a=cells[firstSlot];int3 anchor=int3(a.x,a.y,a.z);
+  for(uint k=id.x;k<cellCount;k+=64){
+   GIAutoCell c=cells[k];if(!Candidate(c)||k==firstSlot)continue;
+   if(all(abs(int3(c.x,c.y,c.z)-anchor)<=1))continue;
+   uint peak=c.reserved0>>16;
+   if(Better(peak,k,separateScore,separate)){separateScore=peak;separate=k;}
+  }
+ }
+ bestSlots[id.x]=separate;bestScores[id.x]=separateScore;GroupMemoryBarrierWithGroupSync();
+ if(id.x==0){
+  uint second=fallbackSlot,score=0,chosen=0xffffffffu;
+  for(uint q=0;q<64;++q)if(bestScores[q]>0&&Better(bestScores[q],bestSlots[q],score,chosen)){score=bestScores[q];chosen=bestSlots[q];}
+  if(chosen!=0xffffffffu)second=chosen;
   GIAutoTargets t=(GIAutoTargets)0;t.schema=0x41544731u;t.version=version;t.frame=frame;
   [unroll]for(uint rank=0;rank<2;++rank){
-   uint chosen=0xffffffffu,score=0,entry=0;
-   for(uint j=0;j<128;++j)if(bestScores[j]>0&&Better(bestScores[j],bestSlots[j],score,chosen)){chosen=bestSlots[j];score=bestScores[j];entry=j;}
-   if(chosen!=0xffffffffu){
-    GIAutoCell c=cells[chosen];t.bounds[rank].center.x=(float(c.x)+.5)*cellSize;t.bounds[rank].center.y=(float(c.y)+.5)*cellSize;t.bounds[rank].center.z=(float(c.z)+.5)*cellSize;
-    t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;bestScores[entry]=0;
+   uint slot=rank==0?firstSlot:second;
+   if(slot!=0xffffffffu){
+    GIAutoCell c=cells[slot];t.bounds[rank].center.x=(float(c.x)+.5)*cellSize;t.bounds[rank].center.y=(float(c.y)+.5)*cellSize;t.bounds[rank].center.z=(float(c.z)+.5)*cellSize;
+    t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
    }
   }targets[0]=t;
  }

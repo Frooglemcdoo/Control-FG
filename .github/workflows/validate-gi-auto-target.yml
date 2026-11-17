@@ -1,7 +1,7 @@
 name: Validate automatic GI targets
 on:
   push:
-    branches: [work/gi-shared-seed-r456]
+    branches: [work/gi-distinct-regions-r457]
   workflow_dispatch:
 jobs:
   validate:
