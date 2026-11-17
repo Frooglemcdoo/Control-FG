@@ -21,7 +21,8 @@ public:
  D3D12AutoTargetBinding target;
  D3D12AutoRaygenRecord record;
  Ptr<ID3D12Resource> training,cells,audit,pixelAudit;
- UINT64 pixelBytes=0,auditOrdinal=0;
+ UINT64 pixelBytes=0,auditOrdinal=0,captureRequest=0;
+ UINT roiX=0,roiY=0;
  GIAutoPublishedTarget output;
  UINT width=0,height=0,step=0,capacity=0;
  bool shaded=false;
@@ -50,7 +51,7 @@ public:
  }
  UINT64 Bytes()const noexcept{return UINT64(capacity)*sizeof(GIAutoTraining)+4096*sizeof(GIAutoCell)+sizeof(GIAutoTargets)+record.RetainedBytes()+target.RetainedBytes()+(audit?2*sizeof(GIAutoTargets):0)+2*pixelBytes;}
  bool Shade(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings)noexcept {
-  if(shaded||!pipelines||!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0))return false;
+  if(shaded||!pipelines||!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0,roiX,roiY))return false;
   D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   barrier.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&barrier);
   shaded=pipelines->builder.Record(list,training.Get(),capacity,cells.Get(),output.buffer.Get(),4096,output.frame,output.epoch,.5f,512,1,bindings);

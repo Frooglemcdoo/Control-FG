@@ -1,5 +1,6 @@
 #pragma once
 #include <atomic>
+#include "gi_auto_capture_control.h"
 #include <d3d12.h>
 namespace gi_auto_dispatch {
 inline bool Enabled()noexcept {

@@ -34,16 +34,16 @@ inline GIAuditTemporalSummary GIAuditTemporal(const GIAutoPixelAudit* a,const GI
 // Matching ordinals alone are insufficient: require exact adjacent engine
 // frames, matching version and dimensions; accept either retirement order.
 class GIAuditPairCache {
- std::uint64_t pair_=0;uint version_=0,w_=0,h_=0,frames_[2]{};
+ std::uint64_t pair_=0;uint version_=0,w_=0,h_=0,x_=0,y_=0,frames_[2]{};
  std::vector<GIAutoPixelAudit> pixels_[2];bool present_[2]{};
 public:
  bool Add(std::uint64_t ordinal,uint frame,uint version,uint w,uint h,const GIAutoPixelAudit* pixels,
-          GIAuditTemporalSummary& summary,uint& first,uint& second){
+          GIAuditTemporalSummary& summary,uint& first,uint& second,uint x=0,uint y=0){
   if(!GIAuditPairDue(ordinal)||!frame||!version||!w||!h||w>512||h>512||!pixels)return false;
   const auto pair=ordinal/600;const auto side=uint(ordinal%600);
   if(pair<pair_)return false;
-  if(pair!=pair_||version!=version_||w!=w_||h!=h_){
-   pair_=pair;version_=version;w_=w;h_=h;present_[0]=present_[1]=false;
+  if(pair!=pair_||version!=version_||w!=w_||h!=h_||x!=x_||y!=y_){
+   pair_=pair;version_=version;w_=w;h_=h;x_=x;y_=y;present_[0]=present_[1]=false;
   }
   pixels_[side].assign(pixels,pixels+size_t(w)*h);frames_[side]=frame;present_[side]=true;
   if(!present_[0]||!present_[1])return false;

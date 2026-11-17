@@ -199,6 +199,7 @@ inline void DrawLabel(HDC dc, HFONT font, const wchar_t* text, RECT bounds, COLO
     SelectObject(dc, previous);
 }
 #include "gi_spot_trace_status.h"
+#include "gi_auto_capture_box.h"
 inline void Paint(HWND window) noexcept {
     namespace theme = control_ui::theme;
     PAINTSTRUCT ps{}; HDC dc = BeginPaint(window, &ps);
@@ -630,6 +631,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
         compare_capture::Tick(game,now);
         UpdateCaptureActivity();
         gi_trace_status::Tick(game);
+        gi_auto_box::Tick(game);
         if(panel && (owner!=game || !lighting_panel::Valid(panel,owner,kClass))){
             if(lighting_panel::Valid(panel,owner,kClass))DestroyWindow(panel);
             Log("F10_PANEL_R337 replacing_window=1");
@@ -713,6 +715,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     }
     DrainDiagnosticLog(true);
     gi_trace_status::Close();
+    gi_auto_box::Close();
     if(f10Registered)UnregisterHotKey(nullptr,f10Id);
     KillTimer(nullptr,timer);RestoreCursorVisibility();if(panel)DestroyWindow(panel);
     DeleteObject(headingFont);DeleteObject(bodyFont);DeleteObject(detailFont);started=false;if(SUCCEEDED(comResult))CoUninitialize();return 0;

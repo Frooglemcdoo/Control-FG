@@ -2,7 +2,8 @@
 uint GIAutoAuditIndex(uint2 pixel) {
  if((trainingCapacityPacked&65536u)==0)return 0xffffffff;
  uint2 size=min(uint2(trainingWidth,trainingHeight),512u);
- uint2 start=uint2(min(trainingWidth-size.x,trainingWidth/5>size.x/2?trainingWidth/5-size.x/2:0), (trainingHeight-size.y)/2);
+ uint2 start=uint2((trainingStepPacked>>9)&16383u,trainingCapacityPacked>>17);
+ if(any(start>uint2(trainingWidth,trainingHeight)-size))return 0xffffffff;
  if(any(pixel<start)||any(pixel>=start+size))return 0xffffffff;
  return trainingCapacity+2*((pixel.y-start.y)*size.x+pixel.x-start.x);
 }

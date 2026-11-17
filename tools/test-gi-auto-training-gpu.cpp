@@ -13,7 +13,7 @@ int main()try {
  Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto code=Read("gi-auto-training.dxil");D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> pso;Check(d.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
  d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(pso.Get());d.list->SetComputeRootUnorderedAccessView(0,training->GetGPUVirtualAddress());
- const UINT control[]={19,17,8,count};d.list->SetComputeRoot32BitConstants(1,4,control,0);
+ const UINT control[]={19,17,8|(256u<<9),count|65536u|(464u<<17)};d.list->SetComputeRoot32BitConstants(1,4,control,0);
  for(UINT phase=0;phase<2;++phase){const UINT test[]={phase,7};d.list->SetComputeRoot32BitConstants(2,2,test,0);d.list->Dispatch(3,3,1);
   d.Transition(training.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyBufferRegion(read.Get(),phase*sentinel.size(),training.Get(),0,sentinel.size());
   d.Transition(training.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);}
