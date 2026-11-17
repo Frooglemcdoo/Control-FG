@@ -18,7 +18,7 @@ inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
 inline gi_reuse::GIAutoPublishedTarget latest;
 inline std::atomic<bool> halted{false},initialized{false};
 inline std::atomic<UINT64> produced{0},shaded{0};
-struct Pending {UINT64 scope=0,id=0,frame=0;UINT width=0,height=0;bool consumed=false;};
+struct Pending {UINT64 scope=0,id=0,frame=0;UINT width=0,height=0;bool consumed=false;ID3D12GraphicsCommandList4* producer=nullptr;UINT64 generation=0;};
 inline thread_local Pending pending{};
 inline std::atomic<UINT64> reportedSkips{0};
 inline bool Skip(unsigned bit,const char* reason)noexcept {
@@ -76,7 +76,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   const auto dispatch=native_lighting::rt_shadow_capture::Lookup(list).dispatch;if(!dispatch)return Skip(18,"native_ray_dispatch_missing");
   const auto bytes=owner->Bytes();const auto id=router->Access([&](auto& pool){return pool.Admit(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,owner);});
   if(!id)return Skip(19,"invocation_pool_full");
-  pending={scope.token,id,scope.frame,desc->Width,desc->Height,false};
+  pending={scope.token,id,scope.frame,desc->Width,desc->Height,false,list,generation};
   auto replacement=*desc;replacement.RayGenerationShaderRecord=record;
   native_lighting::gi_compute_hooks::Mute mute;dispatch(list,&replacement);
   const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R450 producer=%llu frame=%llu target_source=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,prior.frame);
@@ -100,7 +100,10 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
  if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation)){Stop("consumer_generation");return true;}
  const auto ok=router->Access([&](auto& pool){
   auto* owner=pool.View(pending.id);
-  if(!owner||owner->pipelines->nativeRoot.Get()!=bundle->nativeRoot.Get()||!pool.AttachAndClaimConsumer(pending.id,pending.frame,queue.Get(),{reinterpret_cast<UINT64>(list),generation}))return false;
+  const bool rootMatches=owner&&owner->pipelines->nativeRoot.Get()==bundle->nativeRoot.Get();
+  if(!rootMatches||!pool.AttachAndClaimConsumer(pending.id,pending.frame,queue.Get(),{reinterpret_cast<UINT64>(list),generation})){
+   Log("GI_AUTO_R450 pair_rejected=1 owner_present=%u root_matches=%u same_list=%u same_generation=%u",unsigned(owner!=nullptr),unsigned(rootMatches),unsigned(pending.producer==cmd.Get()),unsigned(pending.generation==generation));return false;
+  }
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;return owner->Shade(cmd.Get(),bindings);
  });
  if(!ok)Stop("consumer_recording");
