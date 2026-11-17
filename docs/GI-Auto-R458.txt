@@ -1,0 +1,30 @@
+R458 - Movable capture box
+
+Install beside Control_DX12.exe and run
+ControlTOH\Diagnostics\Start-GI-Auto-R458.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. Use windowed/borderless mode
+so the Windows capture outline can appear over the game.
+
+An orange square marks the exact 512x512 GI-input region (scaled to your game
+window and DLSS input resolution). Hold ALT and press ARROW KEYS to position it.
+No Ctrl input is used. The outline is click-through and never takes focus.
+Press F7 once when the box covers the remaining speckles. A five-second countdown
+starts. The box locks for the full capture sequence. Stand still for 20 seconds,
+then pan slowly until the status says Capture complete. Keep the issue inside
+the box. Collection no longer expires while you are positioning the box.
+
+Ten snapshots/five adjacent pairs are saved to compact logs. After completion,
+you may move the box and press F7 again without restarting. Run
+ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd and send the ZIP.
+The box hides when you switch to another application or minimize the game.
+No huge files or desktop screenshots are written. The box is not drawn into GI
+or RR buffers. R458 keeps R456's shared seed and original two-brightest-cell selection.
+Each guide is centered on its cell's observed brightest training hit instead
+of the quantized cell center. Guide radius and ten-ray budget are unchanged.
+R457's forced separation is removed. No blur, clamp or lighting history added.
+This targets grid-edge coverage; live benefit has not yet been verified.
+
+Each invocation freezes the selected ROI coordinates for its GPU shader and
+log records. Bounds clamp to the input image. Temporal pairing rejects different
+origins as well as different dimensions/versions. Repeated captures reset their
+pair cache. Extra diagnostics can affect pacing; this is not an FPS benchmark.

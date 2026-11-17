@@ -48,21 +48,20 @@ int main()try {
  rareRecords.insert(rareRecords.end(),1000,b);auto rareInput=d.Upload(rareRecords);
  Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,6,7,.5f,512,1,restore),"rare-hit build");copy(5);
  Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,7,7,.5f,512,8,restore),"old threshold control");copy(6);
- // Two adjacent cells of one patch must not evict a separate observed patch.
- auto neighbor=a;neighbor.position.x=.7f;neighbor.energy=1.8f;
- auto distinct=b;distinct.position.x=3.2f;distinct.energy=1.5f;
- Require(GIAutoHash(0,0,6)%slots!=GIAutoHash(1,0,6)%slots&&GIAutoHash(6,0,6)%slots!=GIAutoHash(0,0,6)%slots&&GIAutoHash(6,0,6)%slots!=GIAutoHash(1,0,6)%slots,"fixture hash collision");
- auto diverseInput=d.Upload(std::vector<GIAutoTraining>{a,neighbor,distinct});
- Require(builder.Record(d.list.Get(),diverseInput.Get(),3,cells.Get(),frozen.Get(),slots,8,7,.5f,512,1,restore),"distinct region build");copy(7);
- neighbor.energy=2.2f;auto swappedInput=d.Upload(std::vector<GIAutoTraining>{a,neighbor,distinct});
- Require(builder.Record(d.list.Get(),swappedInput.Get(),3,cells.Get(),frozen.Get(),slots,9,7,.5f,512,1,restore),"adjacent rank swap build");copy(8);
- auto singlePatch=d.Upload(std::vector<GIAutoTraining>{a,neighbor});
- Require(builder.Record(d.list.Get(),singlePatch.Get(),2,cells.Get(),frozen.Get(),slots,10,7,.5f,512,1,restore),"single patch fallback");copy(9);d.Submit();
+ // Near a grid boundary, guide centers follow observed hits continuously.
+ auto left=a;left.position.x=.49f;left.energy=2;
+ auto right=a;right.position.x=.51f;right.energy=1.8f;
+ auto seam=d.Upload(std::vector<GIAutoTraining>{left,right});
+ Require(builder.Record(d.list.Get(),seam.Get(),2,cells.Get(),frozen.Get(),slots,8,7,.5f,512,1,restore),"seam build");copy(7);
+ right.energy=2.2f;auto swapped=d.Upload(std::vector<GIAutoTraining>{left,right});
+ Require(builder.Record(d.list.Get(),swapped.Get(),2,cells.Get(),frozen.Get(),slots,9,7,.5f,512,1,restore),"seam rank swap");copy(8);
+ auto lamp=a;lamp.position={-82.01f,25.01f,107.1f};auto lampInput=d.Upload(std::vector<GIAutoTraining>{lamp});
+ Require(builder.Record(d.list.Get(),lampInput.Get(),1,cells.Get(),frozen.Get(),slots,10,7,.5f,512,1,restore),"observed lamp anchor");copy(9);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
  Require(mapped[0].scores[0]==204800&&mapped[0].scores[1]==102400,"target ordering/scores");
- Require(std::abs(mapped[0].bounds[0].center.x-.25f)<1e-6&&std::abs(mapped[0].bounds[1].center.x-1.25f)<1e-6,"target centers");
+ Require(std::abs(mapped[0].bounds[0].center.x-.2f)<1e-6&&std::abs(mapped[0].bounds[1].center.x-1.2f)<1e-6,"target centers");
  Require(std::abs(mapped[0].bounds[0].radius-.4330127f)<1e-6,"enclosing radius");
  Require(!GIAutoMatches(mapped[0],8,1)&&!GIAutoMatches(mapped[0],7,2),"wrong identity admitted");
  Require(mapped[1].frame==2&&mapped[1].validMask==0&&mapped[1].scores[0]==0,"empty frame retained stale target");
@@ -70,11 +69,17 @@ int main()try {
  Require(mapped[3].validMask==1&&mapped[3].counts[0]==200,"hash collision merged unrelated targets");
  Require(mapped[4].validMask==1&&mapped[4].counts[0]==65535&&mapped[4].scores[0]==4294836225u,"HDR accumulation wrapped");
  Require(mapped[5].validMask==3&&mapped[5].counts[0]==1&&mapped[5].scores[0]==2048&&mapped[5].counts[1]==1000,"rare peak lost to frequency/collision");
- Require(std::abs(mapped[5].bounds[0].center.x-(float(collisionX)*.5f+.25f))<1e-6,"collision selected wrong location");
+ Require(std::abs(mapped[5].bounds[0].center.x-(float(collisionX)*.5f+.2f))<1e-6,"collision selected wrong location");
  Require(mapped[6].validMask==1&&mapped[6].counts[0]==1000,"eight-record threshold control did not reject rare hit");
- Require(mapped[7].validMask==3&&mapped[8].validMask==3&&mapped[9].validMask==3,"diversity validity");
- Require(std::abs(mapped[7].bounds[1].center.x-3.25f)<1e-6&&std::abs(mapped[8].bounds[1].center.x-3.25f)<1e-6,"neighbor rank swap evicted distinct patch");
- Require(std::abs(mapped[9].bounds[0].center.x-.75f)<1e-6&&std::abs(mapped[9].bounds[1].center.x-.25f)<1e-6,"single patch fallback changed");
+ Require(mapped[7].validMask==3&&mapped[8].validMask==3,"seam guide slots lost");
+ Require(std::abs(mapped[7].bounds[0].center.x-.49f)<1e-6&&std::abs(mapped[7].bounds[1].center.x-.51f)<1e-6,"guide snapped to cell center");
+ Require(std::abs(mapped[8].bounds[0].center.x-.51f)<1e-6&&std::abs(mapped[8].bounds[1].center.x-.49f)<1e-6,"rank swap moved guide off observed patch");
+ const auto& anchored=mapped[9].bounds[0];
+ Require(mapped[9].validMask==1&&std::abs(anchored.radius-.4330127f)<1e-6,"anchor inflated radius");
+ const float edge[]={-81.902153f,24.974337f,107.284500f};
+ const auto distance=[&](float x,float y,float z){return std::sqrt((edge[0]-x)*(edge[0]-x)+(edge[1]-y)*(edge[1]-y)+(edge[2]-z)*(edge[2]-z));};
+ Require(distance(-82.25f,25.25f,107.25f)>anchored.radius,"captured grid-edge fixture no longer outside old bound");
+ Require(distance(anchored.center.x,anchored.center.y,anchored.center.z)<anchored.radius,"observed anchor missed captured bright edge");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;
@@ -96,5 +101,5 @@ int main()try {
  V* pv=nullptr;Check(pilotRead->Map(0,nullptr,reinterpret_cast<void**>(&pv)));
  for(UINT c=0;c<cases;++c){Require(pv[c].w==float(expected[c].valid),"GPU pilot validity");const float actual[]={pv[c].x,pv[c].y,pv[c].z},ref[]={expected[c].rgb.x,expected[c].rgb.y,expected[c].rgb.z};for(UINT k=0;k<3;++k)Require(std::abs(actual[k]-ref[k])<.00001f*(1+std::abs(ref[k])),"GPU pilot result");}
  pilotRead->Unmap(0,&none);
- std::cout<<"PASS distinct-region selection across adjacent rank swaps, single-patch fallback; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
+ std::cout<<"PASS observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
