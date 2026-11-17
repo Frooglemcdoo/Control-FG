@@ -16,6 +16,8 @@ inline bool Provider(const char* name,UINT& value)noexcept {
 }
 inline Microsoft::WRL::ComPtr<ID3D12CommandQueue> queue;
 inline gi_reuse::GIAutoPublishedTarget latest;
+inline Microsoft::WRL::ComPtr<ID3D12Device> guideDevice;
+inline gi_reuse::GIAutoGuideSession guideSession;
 inline std::atomic<bool> halted{false},initialized{false};
 inline std::atomic<UINT64> produced{0},shaded{0};
 struct Pending {UINT64 scope=0,id=0,frame=0;UINT width=0,height=0;bool consumed=false;ID3D12GraphicsCommandList4* producer=nullptr;UINT64 generation=0;};
@@ -24,10 +26,10 @@ inline std::atomic<UINT64> reportedSkips{0};
 inline bool Skip(unsigned bit,const char* reason)noexcept {
  const UINT64 mask=1ull<<bit;
  if(!(reportedSkips.load(std::memory_order_relaxed)&mask)&&!(reportedSkips.fetch_or(mask,std::memory_order_relaxed)&mask))
-  Log("GI_AUTO_R452 skipped=%s once=1",reason);
+  Log("GI_AUTO_R453 skipped=%s once=1",reason);
  return false;
 }
-inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R452 halted=1 reason=%s restart_required=1",reason);}
+inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R453 halted=1 reason=%s restart_required=1",reason);}
 inline void Collect()noexcept {
  if(!initialized.load())return;
  std::array<std::unique_ptr<Owner>,8> retired;std::array<bool,8> submitted{};router->CollectReady(retired,&submitted);
@@ -37,11 +39,11 @@ inline void Collect()noexcept {
    void* mapped=nullptr;D3D12_RANGE read{0,2*sizeof(gi_reuse::GIAutoTargets)};
    const auto hr=owner->audit->Map(0,&read,&mapped);
    if(SUCCEEDED(hr)&&mapped){gi_reuse::GIAutoTargets t{};std::memcpy(&t,mapped,sizeof(t));gi_reuse::GIAutoTargets input{};std::memcpy(&input,static_cast<const unsigned char*>(mapped)+sizeof(t),sizeof(input));D3D12_RANGE empty{};owner->audit->Unmap(0,&empty);
-    Log("GI_AUTO_R452 targets frame=%u mask=%u header_valid=%u count0=%u count1=%u score0=%u score1=%u",owner->output.frame,t.validMask,unsigned(gi_reuse::GIAutoMatches(t,owner->output.epoch,owner->output.frame)),t.counts[0],t.counts[1],t.scores[0],t.scores[1]);
-    for(unsigned k=0;k<2;++k)if(t.validMask&(1u<<k))Log("GI_AUTO_R452 target frame=%u index=%u center=(%.6f,%.6f,%.6f) radius=%.6f",owner->output.frame,k,t.bounds[k].center.x,t.bounds[k].center.y,t.bounds[k].center.z,t.bounds[k].radius);
-    Log("GI_AUTO_R452 input_targets frame=%u source=%u mask=%u usable=%u",owner->output.frame,owner->target.Selection().sourceFrame,input.validMask,unsigned(gi_reuse::GIAutoUsable(input,owner->target.Selection())));
-    for(unsigned k=0;k<2;++k)if(input.validMask&(1u<<k))Log("GI_AUTO_R452 input_bound frame=%u index=%u center=(%.6f,%.6f,%.6f) radius=%.6f",owner->output.frame,k,input.bounds[k].center.x,input.bounds[k].center.y,input.bounds[k].center.z,input.bounds[k].radius);
-   }else Log("GI_AUTO_R452 target_readback_failed=1 hr=0x%08lX",static_cast<unsigned long>(hr));
+    Log("GI_AUTO_R453 targets frame=%u mask=%u header_valid=%u count0=%u count1=%u score0=%u score1=%u",owner->output.frame,t.validMask,unsigned(gi_reuse::GIAutoMatches(t,owner->output.epoch,owner->output.frame)),t.counts[0],t.counts[1],t.scores[0],t.scores[1]);
+    for(unsigned k=0;k<2;++k)if(t.validMask&(1u<<k))Log("GI_AUTO_R453 target frame=%u index=%u center=(%.6f,%.6f,%.6f) radius=%.6f",owner->output.frame,k,t.bounds[k].center.x,t.bounds[k].center.y,t.bounds[k].center.z,t.bounds[k].radius);
+    Log("GI_AUTO_R453 input_targets frame=%u source=%u mask=%u usable=%u",owner->output.frame,owner->target.Selection().sourceFrame,input.validMask,unsigned(gi_reuse::GIAutoUsable(input,owner->target.Selection())));
+    for(unsigned k=0;k<2;++k)if(input.validMask&(1u<<k))Log("GI_AUTO_R453 input_bound frame=%u index=%u center=(%.6f,%.6f,%.6f) radius=%.6f",owner->output.frame,k,input.bounds[k].center.x,input.bounds[k].center.y,input.bounds[k].center.z,input.bounds[k].radius);
+   }else Log("GI_AUTO_R453 target_readback_failed=1 hr=0x%08lX",static_cast<unsigned long>(hr));
   }
   if(owner->pixelAudit){
    void* mapped=nullptr;D3D12_RANGE read{0,SIZE_T(owner->pixelBytes)};
@@ -52,13 +54,13 @@ inline void Collect()noexcept {
      const auto w=gi_reuse::GIAuditWidth(owner->width),h=gi_reuse::GIAuditHeight(owner->height);
      const auto x=gi_reuse::GIAuditX(owner->width),y=gi_reuse::GIAuditY(owner->height);
      const auto s=gi_reuse::GIAuditSummarize(pixels,w,h);
-     Log("GI_AUTO_R452 pixels frame=%u source=%u roi=(%u,%u,%u,%u) valid=%u guided=%u invalid=%u spikes=%u downweighted_spikes=%u raw_sum=%.9g weighted_sum=%.9g",owner->output.frame,owner->target.Selection().sourceFrame,x,y,w,h,s.valid,s.guided,s.invalid,s.spikes,s.downweightedSpikes,s.rawSum,s.weightedSum);
+     Log("GI_AUTO_R453 pixels frame=%u source=%u roi=(%u,%u,%u,%u) valid=%u guided=%u invalid=%u spikes=%u downweighted_spikes=%u raw_sum=%.9g weighted_sum=%.9g",owner->output.frame,owner->target.Selection().sourceFrame,x,y,w,h,s.valid,s.guided,s.invalid,s.spikes,s.downweightedSpikes,s.rawSum,s.weightedSum);
      for(const auto& e:s.examples)if(e.luminance>0){const auto& v=pixels[e.index];
-      Log("GI_AUTO_R452 spike frame=%u pixel=(%u,%u) luma=%.9g ratio=%.5g dominant_fraction=%.5g raw_luma=%.9g raw_peak=%.9g weighted_peak=%.9g weight=%.9g material=%u ray=%u downweighted_rays=%u hit=(%.6f,%.6f,%.6f)",owner->output.frame,x+e.index%w,y+e.index/w,e.luminance,e.ratio,v.weightedPeak/e.luminance,gi_reuse::GIAuditLuma(v.raw),v.rawPeak,v.weightedPeak,v.weight,v.material,v.ray,v.covered,v.position[0],v.position[1],v.position[2]);
+      Log("GI_AUTO_R453 spike frame=%u pixel=(%u,%u) luma=%.9g ratio=%.5g dominant_fraction=%.5g raw_luma=%.9g raw_peak=%.9g weighted_peak=%.9g weight=%.9g material=%u ray=%u downweighted_rays=%u hit=(%.6f,%.6f,%.6f)",owner->output.frame,x+e.index%w,y+e.index/w,e.luminance,e.ratio,v.weightedPeak/e.luminance,gi_reuse::GIAuditLuma(v.raw),v.rawPeak,v.weightedPeak,v.weight,v.material,v.ray,v.covered,v.position[0],v.position[1],v.position[2]);
      }
-    }catch(...){Log("GI_AUTO_R452 pixel_summary_failed=1");}
+    }catch(...){Log("GI_AUTO_R453 pixel_summary_failed=1");}
     D3D12_RANGE empty{};owner->pixelAudit->Unmap(0,&empty);
-   }else Log("GI_AUTO_R452 pixel_readback_failed=1 hr=0x%08lX",static_cast<unsigned long>(hr));
+   }else Log("GI_AUTO_R453 pixel_readback_failed=1 hr=0x%08lX",static_cast<unsigned long>(hr));
   }
   if(!latest.buffer||owner->output.epoch!=latest.epoch||owner->output.frame>latest.frame)latest=owner->output;
  }
@@ -89,26 +91,29 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   if(!native_lighting::gi_compute_hooks::Capture(list,bindings,ignored)||bindings.rays.Get()!=state)return Skip(9,"producer_binding_snapshot");
   auto bundle=native_lighting::gi_auto_prepare::ForRoot(bindings.root.Get());if(!bundle)return Skip(10,"matching_evaluator_root_missing");
   gi_reuse::NativeGIRecording context;
-  if(!gi_reuse::ReadCurrentNativeGIRecording(reinterpret_cast<const unsigned char*>(verifiedD3d),list,scope.frame,&context)||
-     context.heaps.deviceEpoch>UINT_MAX)return Skip(11,"native_recording_context");
+  if(!gi_reuse::ReadCurrentNativeGIRecording(reinterpret_cast<const unsigned char*>(verifiedD3d),list,scope.frame,&context))return Skip(11,"native_recording_context");
   const auto generation=native_lighting::gi_compute_hooks::RecordingGeneration(list);
   if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation))return Skip(12,"producer_recording_lifetime");
+  UINT guideVersion=0;
   {std::lock_guard<std::mutex> lock(mutex);
-   if(!initialized.load()){if(!native_lighting::rt_spot_table_audit::InstallGameQueue(context.queue))return Skip(13,"queue_observer");if(FAILED(router->Initialize(context.queue,&native_lighting::gi_compute_hooks::RecordingGeneration)))return Skip(14,"submission_router");queue=context.queue;initialized=true;}
-   if(queue.Get()!=context.queue)return Skip(15,"queue_identity");
+   if(!initialized.load()){if(!native_lighting::rt_spot_table_audit::InstallGameQueue(context.queue))return Skip(13,"queue_observer");if(FAILED(router->Initialize(context.queue,&native_lighting::gi_compute_hooks::RecordingGeneration)))return Skip(14,"submission_router");queue=context.queue;guideDevice=context.device;initialized=true;}
+   if(queue.Get()!=context.queue||guideDevice.Get()!=context.device)return Skip(15,"device_queue_identity");
+   guideVersion=guideSession.Admit(reinterpret_cast<std::uintptr_t>(context.device),reinterpret_cast<std::uintptr_t>(context.queue));
+   if(!guideVersion)return Skip(23,"guide_session_identity");
   }
   Collect();gi_reuse::GIAutoPublishedTarget prior;
   {std::lock_guard<std::mutex> lock(mutex);prior=latest;}
   auto owner=std::make_unique<Owner>();
-  if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),UINT(context.heaps.deviceEpoch),produced.load()<4||(produced.load()<=3000&&produced.load()%600==0),produced.load()>0&&produced.load()<=3000&&produced.load()%600==0)))return Skip(16,"invocation_or_ray_record_prepare");
+  if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),guideVersion,produced.load()<4||(produced.load()<=3000&&produced.load()%600==0),produced.load()>0&&produced.load()<=3000&&produced.load()%600==0)))return Skip(16,"invocation_or_ray_record_prepare");
   const auto record=owner->record.At(state);if(!record.StartAddress)return Skip(17,"ray_record_missing");
   const auto dispatch=native_lighting::rt_shadow_capture::Lookup(list).dispatch;if(!dispatch)return Skip(18,"native_ray_dispatch_missing");
+  const auto selected=owner->target.Selection();
   const auto bytes=owner->Bytes();const auto id=router->Access([&](auto& pool){return pool.Admit(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,owner);});
   if(!id)return Skip(19,"invocation_pool_full");
   pending={scope.token,id,scope.frame,desc->Width,desc->Height,false,list,generation};
   auto replacement=*desc;replacement.RayGenerationShaderRecord=record;
   native_lighting::gi_compute_hooks::Mute mute;dispatch(list,&replacement);
-  const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R452 producer=%llu frame=%llu target_source=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,prior.frame);
+  const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R453 producer=%llu frame=%llu target_source=%u guide_version=%u native_heap_epoch=%llu prior_frame=%u prior_version=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,selected.sourceFrame,selected.version,static_cast<unsigned long long>(context.heaps.deviceEpoch),prior.frame,prior.epoch);
   return true;
  }catch(...){if(pending.id){Stop("producer_exception_after_admission");return true;}return Skip(20,"producer_prepare_exception");}
 }
@@ -131,12 +136,12 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
   auto* owner=pool.View(pending.id);
   const bool rootMatches=owner&&owner->pipelines->nativeRoot.Get()==bundle->nativeRoot.Get();
   if(!rootMatches||!pool.AttachAndClaimConsumer(pending.id,pending.frame,queue.Get(),{reinterpret_cast<UINT64>(list),generation})){
-   Log("GI_AUTO_R452 pair_rejected=1 owner_present=%u root_matches=%u same_list=%u same_generation=%u",unsigned(owner!=nullptr),unsigned(rootMatches),unsigned(pending.producer==cmd.Get()),unsigned(pending.generation==generation));return false;
+   Log("GI_AUTO_R453 pair_rejected=1 owner_present=%u root_matches=%u same_list=%u same_generation=%u",unsigned(owner!=nullptr),unsigned(rootMatches),unsigned(pending.producer==cmd.Get()),unsigned(pending.generation==generation));return false;
   }
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;return owner->Shade(cmd.Get(),bindings);
  });
  if(!ok)Stop("consumer_recording");
- else {const auto n=++shaded;if(n<=4||n%600==0)Log("GI_AUTO_R452 evaluator=%llu frame=%llu training_recorded=1",n,pending.frame);}
+ else {const auto n=++shaded;if(n<=4||n%600==0)Log("GI_AUTO_R453 evaluator=%llu frame=%llu training_recorded=1",n,pending.frame);}
  return true;
 }
 inline bool Install()noexcept {

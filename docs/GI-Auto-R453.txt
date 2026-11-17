@@ -1,0 +1,26 @@
+R453 - Correct automatic guide lifetime
+
+R452 readbacks showed zero guided pixels in all five snapshots. Every frozen
+input target was empty despite valid newly built targets. The owned target
+version incorrectly used a native recording heap/fence epoch. Later recordings
+rejected the completed targets and allocated the empty fallback again.
+
+R453 ties guide versions to the retained D3D12 device/queue session instead.
+Native heap checks, completion fences and resource retirement remain enforced.
+Changing device or queue is rejected; empty, future and wrong-version targets
+remain invalid. Producer logs now report the ACTUAL selected target source,
+not merely the completed target that was offered before fallback.
+
+Install beside Control_DX12.exe with the game closed, then run
+ControlTOH\Diagnostics\Start-GI-Auto-R453.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. At the troublesome light keep
+Jesse's neck/hair near left-center (20% across, halfway down) for about a minute,
+including slow movement. Five all-pixel 512x512 snapshots run automatically.
+Run ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd afterward.
+Existing automated movement remains Alt+arrows, never Ctrl.
+
+The correction should allow the intended guiding/weighting to execute after
+warmup. It does not establish that guiding fixes the visual speckles; the retained
+pixel diagnostics verify actual guide use and residual outliers in the next run.
+Periodic readback/summarization can affect pacing; this is not an FPS benchmark.
+No additional rays, clamp, blur, temporal accumulation or light dimming is added.

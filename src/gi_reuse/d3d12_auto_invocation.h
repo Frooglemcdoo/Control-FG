@@ -1,6 +1,7 @@
 #pragma once
 #include "d3d12_auto_pipeline_bundle.h"
 #include "d3d12_auto_raygen.h"
+#include "auto_guide_session.h"
 namespace gi_reuse {
 struct GIAutoPublishedTarget {
  Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
@@ -30,7 +31,7 @@ public:
   width=w;height=h;step=8;while(UINT64((w+step-1)/step)*((h+step-1)/step)>65535&&step<256)step*=2;
   capacity=((w+step-1)/step)*((h+step-1)/step);if(capacity>65535)return E_INVALIDARG;
   GIAutoPublishedTarget selected=prior;HRESULT hr=S_OK;
-  if(!selected.buffer||selected.epoch!=epoch||selected.frame>=frame){
+  if(!GIAutoPriorCompatible(selected.buffer.Get()!=nullptr,selected.epoch,selected.frame,epoch,frame)){
    selected={};selected.frame=frame;selected.epoch=epoch;
    hr=Buffer(device,sizeof(GIAutoTargets),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,selected.buffer);if(FAILED(hr))return hr;
    void* mapped=nullptr;const D3D12_RANGE empty{};hr=selected.buffer->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
