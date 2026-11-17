@@ -27,8 +27,8 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
   if(SUCCEEDED(hr)){bundle->nativeRoot=desc->pRootSignature;Microsoft::WRL::ComPtr<ID3D12Object> object;hr=native->QueryInterface(IID_PPV_ARGS(&object));
    if(SUCCEEDED(hr))hr=object->SetPrivateDataInterface(key,bundle.Get());}
   if(SUCCEEDED(hr)){std::lock_guard<std::mutex> lock(mutex);latest=bundle;gi_auto_dispatch::rootReady=&RootReady;}
-  Log("GI_AUTO_R448 pipeline_ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
- }catch(...){Log("GI_AUTO_R448 pipeline_ready=0 reason=exception");}
+  Log("GI_AUTO_R449 pipeline_ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
+ }catch(...){Log("GI_AUTO_R449 pipeline_ready=0 reason=exception");}
 #else
  (void)device;(void)desc;(void)native;
 #endif

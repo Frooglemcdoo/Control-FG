@@ -7,7 +7,7 @@ int main()try {
  GIAutoTargets t{};t.schema=0x41544731;t.version=7;t.frame=12;t.validMask=1;
  t.bounds[0]={{1,2,3},.5f};t.counts[0]=42;t.scores[0]=123;
  GIAutoSelection s{7,12,10,.1f};Require(GIAutoUsable(t,s),"valid selection");
- auto invalid=s;invalid.fraction=.11f;Require(!GIAutoSelectionValid(invalid),"pilot mixture bound");
+ auto invalid=s;invalid.fraction=.41f;Require(!GIAutoSelectionValid(invalid),"balance mixture bound");
  invalid=s;invalid.rayCount=1;Require(!GIAutoSelectionValid(invalid),"one ray admitted");
  invalid=s;invalid.fraction=std::numeric_limits<float>::quiet_NaN();Require(!GIAutoSelectionValid(invalid),"NaN fraction");
  auto bad=t;bad.bounds[0].radius=-1;Require(!GIAutoUsable(bad,s),"invalid bounds admitted");

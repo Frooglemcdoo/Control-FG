@@ -36,16 +36,17 @@ GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin
   result.direction=GTLocal(normal,sqrt(uv.y),2*GT_PI*uv.x);
   result.weight=1;result.traceRay=1;return result;
  }
- // Each ray has its own independent hash inputs. The pilot uses the full cosine
- // distribution, not one stratum of the ten-ray native pattern.
- float u=GIProducerUnit(seed,0x68bc21ebu),v=GIProducerUnit(seed,0x02e5be93u);
- if(ray==0){result.direction=GTLocal(normal,sqrt(v),2*GT_PI*u);result.weight=1;result.traceRay=1;return result;}
+ // Stratify the mixture selector over all ten rays. At alpha=.4 this gives
+ // two samples per target cone and six cosine samples, with no noisy pilot.
+ // Each stratum has a fresh independent range draw and within-stratum jitter.
+ float u=min((float(ray)+GIProducerUnit(seed,0x68bc21ebu))/10.0f,.9999999403953552f);
+ float v=GIProducerUnit(seed,0x02e5be93u);
  uint first=(targets.validMask&1)?0:1;
  uint second=targets.validMask==3?1:first;
  GTBound a,b;
  a.center=float3(targets.bounds[first].center.x,targets.bounds[first].center.y,targets.bounds[first].center.z);a.radius=targets.bounds[first].radius;
  b.center=float3(targets.bounds[second].center.x,targets.bounds[second].center.y,targets.bounds[second].center.z);b.radius=targets.bounds[second].radius;
- GTDraw draw=GTSample(origin,normal,a,b,alpha,true,u,v);
+ GTDraw draw=GTSampleMixture(origin,normal,a,b,alpha,true,u,v);
  result.direction=draw.direction;result.weight=draw.radianceWeight;result.traceRay=draw.traceRay;return result;
 }
 #endif

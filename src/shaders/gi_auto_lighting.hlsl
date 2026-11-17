@@ -1,9 +1,8 @@
-// Candidate matching evaluator. Not hooked into gameplay.
+// R449 paired evaluator: stratified mixture with balance weights on every ray.
 #define GI_SECONDARY_LIBRARY_ONLY
 #include "gi_evaluator_secondary.generated.hlsl"
 #include "gi_frozen_receiver.hlsl"
 #include "gi_auto_sample.hlsl"
-#include "../gi_reuse/pilot_guide_resolve.h"
 #include "gi_auto_training.hlsl"
 StructuredBuffer<GIAutoTargets> targets : register(t0,space19);
 cbuffer Selection : register(b0,space19) {GIAutoSelection selection;}
@@ -22,7 +21,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  if(!source.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
  GIAutoTargets frozen=targets[0];float alpha=GIAutoAlpha(frozen,selection);
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
- float3 nativeSum=0;GIPilotResolve resolve=(GIPilotResolve)0;
+ float3 weightedSum=0;bool valid=true;
  [loop]for(uint slice=0;slice<10;++slice) {
   int4 address=int4(id.xy,slice,0);GISecondaryInput hit;
   hit.material=g_tMaterialId.Load(address).x;
@@ -30,22 +29,18 @@ void main(uint3 id:SV_DispatchThreadID) {
   GIEvaluateSecondary(receiver,hit);
   float3 rgb=throughput*asfloat(receiver.r15.xyz);
   GIAutoDraw draw=(GIAutoDraw)0;draw.weight=1;
-  if(alpha>0&&slice>0)draw=GIAutoSample(id.xy,giCB0[69].z,0,slice,source.origin,source.normal,frozen,selection);
+  if(alpha>0)draw=GIAutoSample(id.xy,giCB0[69].z,0,slice,source.origin,source.normal,frozen,selection);
   if(trainingIndex!=0xffffffff&&slice==trainingRay) {
    float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
    GIAutoTrain(trainingIndex,selection.version,hit.material,position,rgb,draw.weight);
   }
-  if(alpha==0)nativeSum+=rgb;
-  else if(slice==0)resolve=GIPilotBegin(GIFrozenPoint(rgb),10,alpha,selection.version);
-  else {
-   resolve=GIPilotAdd(resolve,GIFrozenPoint(rgb),draw.weight,selection.version);
-  }
+  valid=valid&&all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&
+        draw.weight>=0&&draw.weight<=1.66667;
+  weightedSum+=rgb*draw.weight;
  }
- float3 radiance=nativeSum/10;
- if(alpha>0){GIPilotResult result=GIPilotFinish(resolve);radiance=GIFrozenVector(result.rgb);
-  // Invalid estimator input is NOT permission to publish an unweighted average.
-  // Host diagnostics/handling must be implemented before this candidate is live.
-  if(!result.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}}
+ float3 radiance=weightedSum/10;
+ // Never replace a weighted result with an unweighted guided average.
+ if(!valid||!all(isfinite(radiance))){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
  float4 fade=asfloat(giCB1[17]);float nearEdge=fade.x-fade.y;
  float width=(fade.y+fade.x)-nearEdge;float t=saturate((depth-nearEdge)*rcp(width));
  float scale=mad(t*t*(3-2*t),fade.w-fade.z,fade.z);

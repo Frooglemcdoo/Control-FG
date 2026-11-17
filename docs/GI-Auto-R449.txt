@@ -1,0 +1,30 @@
+R449 - Stratified automatic GI guidance: experimental test build
+
+R448 was reported to reduce FPS without fixing speckles. Do not retest R448.
+This candidate changes the estimator, not performance tuning. Its image quality
+and performance require in-game validation; compilation is not a visual pass.
+
+Extract beside Control_DX12.exe with Control closed. Run
+ControlTOH\Diagnostics\Start-GI-Auto-R449.cmd.
+Use TEN GI rays, GI FIXED, RR ON, RELAX OFF, FG OFF for comparison.
+A normal launch leaves automatic guidance disabled for a same-build baseline.
+
+With valid frozen targets, all ten fresh rays use balance weights. The mixture
+selector is stratified: two rays per target cone and six cosine rays. No pilot
+ray receives the old random residual coefficient. Full RGB including misses is
+weighted; no radiance clamp, blur, temporal radiance reuse or extra ray is added.
+Empty/invalid targets preserve the existing ten-ray sampling.
+
+This can reduce rare-hit variance when targets cover the responsible source.
+It cannot guarantee a useful guide: the current learner still selects two global
+cells. Stale or irrelevant targets can increase noise, and constant fields are
+preserved in expectation rather than exactly per pixel. No FPS gain is claimed.
+
+Confirm GI_AUTO_R449 producer and evaluator lines in compact logs; the producer
+identifies estimator=stratified_balance. No such lines means this candidate was
+not demonstrated active. A halted=1 line means pairing failed; do not interpret
+that session as a valid visual comparison. Restart normally for the baseline.
+A partial pairing failure can skip the current GI pass and halt new admissions.
+
+Use the existing compact-log collector after comparison. No new large source
+capture is requested. Existing capture-box movement remains Alt+arrows.

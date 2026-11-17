@@ -34,11 +34,11 @@ float GTConePdf(GTCone cone,float3 direction) {
 bool GTValidBound(GTBound b) {
     return all(isfinite(b.center))&&isfinite(b.radius)&&b.radius>0;
 }
-GTDraw GTSample(float3 origin,float3 unitNormal,GTBound first,GTBound second,
+GTDraw GTSampleMixture(float3 origin,float3 unitNormal,GTBound first,GTBound second,
                 float guideFraction,bool frozenGuideValid,float u,float v) {
     // Caller supplies finite origin/unit normal and independent u,v in [0,1).
     float alpha=frozenGuideValid&&GTValidBound(first)&&GTValidBound(second)&&
-        isfinite(guideFraction)?clamp(guideFraction,0,.1):0;
+        isfinite(guideFraction)?clamp(guideFraction,0,.4):0;
     GTCone a,b;
     if(alpha>0){a=GTMakeCone(origin,first);b=GTMakeCone(origin,second);}
     GTDraw r=(GTDraw)0;
@@ -59,6 +59,12 @@ GTDraw GTSample(float3 origin,float3 unitNormal,GTBound first,GTBound second,
     r.radianceWeight=r.pdf>0?base/r.pdf:(alpha==0?1:0);
     r.traceRay=cosine>0||(alpha==0&&v==0);
     return r;
+}
+
+// Preserve the original prototype contract for existing callers.
+GTDraw GTSample(float3 origin,float3 unitNormal,GTBound first,GTBound second,
+                float guideFraction,bool frozenGuideValid,float u,float v) {
+ return GTSampleMixture(origin,unitNormal,first,second,guideFraction>.1?.1:guideFraction,frozenGuideValid,u,v);
 }
 
 #ifdef GT_COMPILE_TEST
