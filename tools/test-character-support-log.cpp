@@ -15,14 +15,19 @@ int main() {
         "GI_FROZEN_R426 compute_prepared=0 hr=0x80004005",
         "GI_FROZEN_R426 binding_ready=1",
         "GI_TOGGLE_R308 create_failed=1",
-        "GI_TOGGLE_R308 ready=1"
+        "GI_TOGGLE_R308 ready=1",
+        "GI_AUTO_R448 installed=1",
+        "GI_AUTO_R449 producer=1",
+        "GI_AUTO_R450 startup=1 requested=0",
+        "GI_AUTO_R450 skipped=provider_ray_count",
+        "GI_AUTO_R450 halted=1 reason=consumer_recording"
     };
     for (const auto* event : admitted) {
         assert(control_character_support::IsLifecycleEvent(event));
         assert(!control_fg_release_log::ShouldSuppress(event, false));
     }
     const char* const denied[] = {
-        nullptr, "", "PROBE_EXTRA", "GI_FROZEN_R428_FRAME", "GI_FROZEN_R429_EXTRA", "GI_FROZEN_R426_FRAME", "GI_TOGGLE_R3080", "GI_RAY_TRACE", "RR_CHARACTER_GUIDE frame=%llu", "RR_HAIR_RESPONSIVITY frame=%llu",
+        nullptr, "", "GI_AUTO_R450_FRAME", "GI_AUTO_R4500", "PROBE_EXTRA", "GI_FROZEN_R428_FRAME", "GI_FROZEN_R429_EXTRA", "GI_FROZEN_R426_FRAME", "GI_TOGGLE_R3080", "GI_RAY_TRACE", "RR_CHARACTER_GUIDE frame=%llu", "RR_HAIR_RESPONSIVITY frame=%llu",
         "RR_CHARACTER_BASE_ALBEDO_R417_EXTRA", "RR_HAIR_OPACITY_READY_FRAME",
         "RR_CHARACTER_SUPPORT_R4180", "RR_CHARACTER_BASE", "CAMERA_VALUES", "NGX_RESOURCE"
     };

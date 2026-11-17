@@ -49,6 +49,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
   if(variant==0&&gi_auto_dispatch::Enabled())if(const auto check=gi_auto_dispatch::rootReady.load())
    for(UINT i=0;i<desc->NumSubobjects;++i)if(desc->pSubobjects[i].Type==D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE&&desc->pSubobjects[i].pDesc)
     automatic=check(static_cast<const D3D12_GLOBAL_ROOT_SIGNATURE*>(desc->pSubobjects[i].pDesc)->pGlobalRootSignature);
+  if(variant==0&&gi_auto_dispatch::Enabled()&&!automatic){static std::atomic<bool> reported{false};if(!reported.exchange(true))Log("GI_AUTO_R450 ray_pipeline_prepared=0 reason=evaluator_root_not_ready_at_state_creation");}
   if(automatic&&FAILED(autoAugment.Initialize(device,{gi_auto_shader::kRaygen,sizeof(gi_auto_shader::kRaygen)})))automatic=false;
 #endif
   gi_reuse::D3D12FrozenRaygenAugment frozenAugment;
@@ -112,7 +113,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
 #ifdef CONTROL_GI_AUTO_TARGETS
   if(automatic&&identifier){
    const bool found=props->GetShaderIdentifier(gi_reuse::D3D12AutoRaygenAugment::Export)!=nullptr;
-   Log("GI_AUTO_R449 ray_pipeline_prepared=%u",unsigned(found));if(!found)identifier=nullptr;
+   Log("GI_AUTO_R450 ray_pipeline_prepared=%u",unsigned(found));if(!found)identifier=nullptr;
   }
 #endif
   const void* phaseIdentifiers[2]={nullptr,nullptr};

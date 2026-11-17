@@ -20,7 +20,14 @@ inline std::atomic<bool> halted{false},initialized{false};
 inline std::atomic<UINT64> produced{0},shaded{0};
 struct Pending {UINT64 scope=0,id=0,frame=0;UINT width=0,height=0;bool consumed=false;};
 inline thread_local Pending pending{};
-inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R449 halted=1 reason=%s restart_required=1",reason);}
+inline std::atomic<UINT64> reportedSkips{0};
+inline bool Skip(unsigned bit,const char* reason)noexcept {
+ const UINT64 mask=1ull<<bit;
+ if(!(reportedSkips.load(std::memory_order_relaxed)&mask)&&!(reportedSkips.fetch_or(mask,std::memory_order_relaxed)&mask))
+  Log("GI_AUTO_R450 skipped=%s once=1",reason);
+ return false;
+}
+inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R450 halted=1 reason=%s restart_required=1",reason);}
 inline void Collect()noexcept {
  if(!initialized.load())return;
  std::array<std::unique_ptr<Owner>,8> retired;std::array<bool,8> submitted{};router->CollectReady(retired,&submitted);
@@ -35,40 +42,46 @@ inline void Leave(const gi_native_render_scope::Scope& scope,bool)noexcept {
  if(pending.id&&pending.scope==scope.token){if(!pending.consumed){router->CancelUnattached(pending.id);Stop("missing_matching_evaluator");}pending={};}
 }
 inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc,ID3D12StateObject* state)noexcept {
- if(control_diagnostics::Active()||halted.load()||!gi_reuse::guidedRequested.load()||!gi_reuse::singleEvaluatorReady.load()||!list||!desc||!state||pending.id||
-    native_lighting::gi_compute_hooks::Muted()||desc->Depth!=1)return false;
- auto scope=gi_native_render_scope::current;if(!scope.token||!scope.frame||scope.frame>UINT_MAX)return false;
+ if(control_diagnostics::Active())return Skip(0,"diagnostics_active");
+ if(halted.load())return false;
+ if(!gi_reuse::guidedRequested.load())return Skip(1,"gi_fixed_not_selected");
+ if(!gi_reuse::singleEvaluatorReady.load())return Skip(2,"owned_evaluator_not_ready");
+ if(!list||!desc||!state||native_lighting::gi_compute_hooks::Muted()||desc->Depth!=1)return false;
+ if(pending.id)return Skip(3,"previous_pair_pending");
+ auto scope=gi_native_render_scope::current;
+ if(!scope.token||!scope.frame||scope.frame>UINT_MAX)return Skip(4,"native_render_scope_unavailable");
  UINT rays=0,pass=0,passes=0;
- if(!Provider("g_uRTDiffuseRayCount",rays)||rays!=10||
-    !Provider("g_uDGIPass",pass)||pass!=0||
-    !Provider("g_uDGIPassCount",passes)||passes!=1)return false;
+ if(!Provider("g_uRTDiffuseRayCount",rays))return Skip(5,"ray_count_provider");
+ if(rays!=10)return Skip(6,"ray_count_not_ten");
+ if(!Provider("g_uDGIPass",pass)||pass!=0)return Skip(7,"batch_not_zero");
+ if(!Provider("g_uDGIPassCount",passes)||passes!=1)return Skip(8,"pass_count_not_one");
  try {
   gi_reuse::ComputeBindingSnapshot bindings;UINT64 ignored=0;
-  if(!native_lighting::gi_compute_hooks::Capture(list,bindings,ignored)||bindings.rays.Get()!=state)return false;
-  auto bundle=native_lighting::gi_auto_prepare::ForRoot(bindings.root.Get());if(!bundle)return false;
+  if(!native_lighting::gi_compute_hooks::Capture(list,bindings,ignored)||bindings.rays.Get()!=state)return Skip(9,"producer_binding_snapshot");
+  auto bundle=native_lighting::gi_auto_prepare::ForRoot(bindings.root.Get());if(!bundle)return Skip(10,"matching_evaluator_root_missing");
   gi_reuse::NativeGIRecording context;
   if(!gi_reuse::ReadCurrentNativeGIRecording(reinterpret_cast<const unsigned char*>(verifiedD3d),list,scope.frame,&context)||
-     context.heaps.deviceEpoch>UINT_MAX)return false;
+     context.heaps.deviceEpoch>UINT_MAX)return Skip(11,"native_recording_context");
   const auto generation=native_lighting::gi_compute_hooks::RecordingGeneration(list);
-  if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation))return false;
+  if(!generation||!native_lighting::gi_compute_hooks::ObserveDestruction(list,generation))return Skip(12,"producer_recording_lifetime");
   {std::lock_guard<std::mutex> lock(mutex);
-   if(!initialized.load()){if(!native_lighting::rt_spot_table_audit::InstallGameQueue(context.queue))return false;if(FAILED(router->Initialize(context.queue,&native_lighting::gi_compute_hooks::RecordingGeneration)))return false;queue=context.queue;initialized=true;}
-   if(queue.Get()!=context.queue)return false;
+   if(!initialized.load()){if(!native_lighting::rt_spot_table_audit::InstallGameQueue(context.queue))return Skip(13,"queue_observer");if(FAILED(router->Initialize(context.queue,&native_lighting::gi_compute_hooks::RecordingGeneration)))return Skip(14,"submission_router");queue=context.queue;initialized=true;}
+   if(queue.Get()!=context.queue)return Skip(15,"queue_identity");
   }
   Collect();gi_reuse::GIAutoPublishedTarget prior;
   {std::lock_guard<std::mutex> lock(mutex);prior=latest;}
   auto owner=std::make_unique<Owner>();
-  if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),UINT(context.heaps.deviceEpoch))))return false;
-  const auto record=owner->record.At(state);if(!record.StartAddress)return false;
-  const auto dispatch=native_lighting::rt_shadow_capture::Lookup(list).dispatch;if(!dispatch)return false;
+  if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),UINT(context.heaps.deviceEpoch))))return Skip(16,"invocation_or_ray_record_prepare");
+  const auto record=owner->record.At(state);if(!record.StartAddress)return Skip(17,"ray_record_missing");
+  const auto dispatch=native_lighting::rt_shadow_capture::Lookup(list).dispatch;if(!dispatch)return Skip(18,"native_ray_dispatch_missing");
   const auto bytes=owner->Bytes();const auto id=router->Access([&](auto& pool){return pool.Admit(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,owner);});
-  if(!id)return false;
+  if(!id)return Skip(19,"invocation_pool_full");
   pending={scope.token,id,scope.frame,desc->Width,desc->Height,false};
   auto replacement=*desc;replacement.RayGenerationShaderRecord=record;
   native_lighting::gi_compute_hooks::Mute mute;dispatch(list,&replacement);
-  const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R449 producer=%llu frame=%llu target_source=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,prior.frame);
+  const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R450 producer=%llu frame=%llu target_source=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,prior.frame);
   return true;
- }catch(...){if(pending.id){Stop("producer_exception_after_admission");return true;}return false;}
+ }catch(...){if(pending.id){Stop("producer_exception_after_admission");return true;}return Skip(20,"producer_prepare_exception");}
 }
 inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept {
  if(!pending.id||pending.consumed||gi_native_render_scope::current.token!=pending.scope||!list||native_lighting::gi_compute_hooks::Muted())return false;
@@ -91,14 +104,14 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;return owner->Shade(cmd.Get(),bindings);
  });
  if(!ok)Stop("consumer_recording");
- else {const auto n=++shaded;if(n<=4||n%600==0)Log("GI_AUTO_R449 evaluator=%llu frame=%llu training_recorded=1",n,pending.frame);}
+ else {const auto n=++shaded;if(n<=4||n%600==0)Log("GI_AUTO_R450 evaluator=%llu frame=%llu training_recorded=1",n,pending.frame);}
  return true;
 }
 inline bool Install()noexcept {
  if(!gi_auto_dispatch::Enabled()||!router||!gi_reuse::guidedScopeReady.load()||gi_native_render_scope::leaving.load()||
     gi_frozen_submission::callbacks.load()||native_lighting::gi_compute_hooks::onFrozenRecordingReset.load()||
-    native_lighting::gi_compute_hooks::onFrozenRecordingDestroyed.load())return false;
- if(!provider.Initialize(verifiedRenderer,verifiedD3d))return false;
+    native_lighting::gi_compute_hooks::onFrozenRecordingDestroyed.load())return Skip(21,"install_preconditions");
+ if(!provider.Initialize(verifiedRenderer,verifiedD3d))return Skip(22,"provider_initialization");
  native_lighting::gi_compute_hooks::EnableForDenoiser();
  native_lighting::gi_compute_hooks::onFrozenRecordingReset=&Seal;
  native_lighting::gi_compute_hooks::onFrozenRecordingDestroyed=&Seal;

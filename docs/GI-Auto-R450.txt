@@ -1,0 +1,20 @@
+R450 - R449 activation and failure reporting correction
+
+The R449 user run still showed speckles. Its compact log had no GI_AUTO records
+because the normal runtime logging filter wrongly discarded those records.
+Absence of those lines did NOT prove that automatic guidance was inactive.
+
+This package preserves R449 rendering and corrects that reporting defect.
+It is NOT a new speckle fix and does not optimize performance. It reports startup
+activation, pipeline readiness, first occurrence of each skipped prerequisite,
+producer/evaluator recording and failures without enabling heavy diagnostics.
+
+Extract beside Control_DX12.exe with the game closed. Run
+ControlTOH\Diagnostics\Start-GI-Auto-R450.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. Enter the affected scene for
+about 20 seconds, then run ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd.
+Send that small ZIP. No large source capture or extended visual comparison is
+needed: the purpose is to locate the failed activation/pairing condition, if any.
+If both stages ran, the logs will establish that and the investigation must
+continue with target selection and source variance rather than activation.
+Existing capture-box movement remains Alt+arrows.
