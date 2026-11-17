@@ -1,0 +1,32 @@
+R459 - Movable capture box
+
+Install beside Control_DX12.exe and run
+ControlTOH\Diagnostics\Start-GI-Auto-R459.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. Use windowed/borderless mode
+so the Windows capture outline can appear over the game.
+
+An orange square marks the exact 512x512 GI-input region (scaled to your game
+window and DLSS input resolution). Hold ALT and press ARROW KEYS to position it.
+No Ctrl input is used. The outline is click-through and never takes focus.
+Press F7 once when the box covers the remaining speckles. A five-second countdown
+starts. The box locks for the full capture sequence. Stand still for 20 seconds,
+then pan slowly until the status says Capture complete. Keep the issue inside
+the box. Collection no longer expires while you are positioning the box.
+
+Ten snapshots/five adjacent pairs are saved to compact logs. After completion,
+you may move the box and press F7 again without restarting. Run
+ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd and send the ZIP.
+The box hides when you switch to another application or minimize the game.
+No huge files or desktop screenshots are written. The box is not drawn into GI
+or RR buffers. R459 preserves R458's observed-hit centers, shared sampling seed,
+guide radius, weights and ten-ray budget. When the top two centers are closer
+than half a guide radius (0.2165m), the second slot selects the brightest
+eligible anchor outside that small neighborhood. If no alternative exists,
+it retains the R458 pair. Adjacent cells are not excluded by their grid keys.
+No blur, clamp, lighting history or additional rays. This addresses duplicate
+coverage found in the R458 warm-noise capture; live benefit needs testing.
+
+Each invocation freezes the selected ROI coordinates for its GPU shader and
+log records. Bounds clamp to the input image. Temporal pairing rejects different
+origins as well as different dimensions/versions. Repeated captures reset their
+pair cache. Extra diagnostics can affect pacing; this is not an FPS benchmark.

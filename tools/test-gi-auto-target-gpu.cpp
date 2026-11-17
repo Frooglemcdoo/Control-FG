@@ -14,7 +14,7 @@ int main()try {
  auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
  auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto back=d.Buffer(10*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto back=d.Buffer(15*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
  const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
  for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
@@ -56,7 +56,31 @@ int main()try {
  right.energy=2.2f;auto swapped=d.Upload(std::vector<GIAutoTraining>{left,right});
  Require(builder.Record(d.list.Get(),swapped.Get(),2,cells.Get(),frozen.Get(),slots,9,7,.5f,512,1,restore),"seam rank swap");copy(8);
  auto lamp=a;lamp.position={-82.01f,25.01f,107.1f};auto lampInput=d.Upload(std::vector<GIAutoTraining>{lamp});
- Require(builder.Record(d.list.Get(),lampInput.Get(),1,cells.Get(),frozen.Get(),slots,10,7,.5f,512,1,restore),"observed lamp anchor");copy(9);d.Submit();
+ Require(builder.Record(d.list.Get(),lampInput.Get(),1,cells.Get(),frozen.Get(),slots,10,7,.5f,512,1,restore),"observed lamp anchor");copy(9);
+ // Logged warm-spike geometry: two nearby anchors at one patch should leave
+ // a slot for the other patch. Representative training, not a full replay.
+ auto warm0=a;warm0.position={-82.067566f,24.998856f,110.574654f};warm0.energy=4;
+ auto warm1=a;warm1.position={-82.033989f,25.004936f,110.583069f};warm1.energy=3;
+ auto other=a;other.position={-82.015755f,25.004887f,106.912781f};other.energy=2;
+ auto warm=d.Upload(std::vector<GIAutoTraining>{warm0,warm1,other});
+ Require(builder.Record(d.list.Get(),warm.Get(),3,cells.Get(),frozen.Get(),slots,11,7,.5f,512,1,restore),"warm duplicate build");copy(10);
+ warm1.energy=5;auto warmSwap=d.Upload(std::vector<GIAutoTraining>{warm0,warm1,other});
+ Require(builder.Record(d.list.Get(),warmSwap.Get(),3,cells.Get(),frozen.Get(),slots,12,7,.5f,512,1,restore),"warm peak swap");copy(11);
+ // Adjacent grid keys alone must not force separation (R457 regression).
+ right.position.x=.73f;right.energy=1.8f;auto far=b;far.energy=1;
+ auto adjacent=d.Upload(std::vector<GIAutoTraining>{left,right,far});
+ Require(builder.Record(d.list.Get(),adjacent.Get(),3,cells.Get(),frozen.Get(),slots,13,7,.5f,512,1,restore),"distinct adjacent build");copy(12);
+ // Exercise an alternative sharing a scan lane with the winning anchor.
+ std::vector<GIAutoTraining> crowded;auto p0=a;p0.position={.49f,.2f,3.2f};p0.energy=4;
+ auto p1=p0;p1.position.x=.51f;p1.energy=3;crowded={p0,p1};
+ auto p2=p0;p2.energy=2;
+ const auto lane=GIAutoHash(0,0,6)%64;
+ int x=4;while(GIAutoHash(x,0,6)%64!=lane||GIAutoHash(x,0,6)%slots==GIAutoHash(0,0,6)%slots)++x;
+ p2.position.x=float(x)*.5f+.2f;crowded.push_back(p2);
+ auto crowdedInput=d.Upload(crowded);
+ Require(builder.Record(d.list.Get(),crowdedInput.Get(),3,cells.Get(),frozen.Get(),slots,14,7,.5f,512,1,restore),"full rescan build");copy(13);
+ auto onlyDuplicate=d.Upload(std::vector<GIAutoTraining>{warm0,warm1});
+ Require(builder.Record(d.list.Get(),onlyDuplicate.Get(),2,cells.Get(),frozen.Get(),slots,15,7,.5f,512,1,restore),"duplicate fallback");copy(14);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
@@ -80,6 +104,14 @@ int main()try {
  const auto distance=[&](float x,float y,float z){return std::sqrt((edge[0]-x)*(edge[0]-x)+(edge[1]-y)*(edge[1]-y)+(edge[2]-z)*(edge[2]-z));};
  Require(distance(-82.25f,25.25f,107.25f)>anchored.radius,"captured grid-edge fixture no longer outside old bound");
  Require(distance(anchored.center.x,anchored.center.y,anchored.center.z)<anchored.radius,"observed anchor missed captured bright edge");
+ for(UINT i=10;i<=11;++i){
+  Require(mapped[i].validMask==3,"warm patch coverage lost");
+  Require(std::abs(mapped[i].bounds[0].center.z-110.58f)<.02f&&std::abs(mapped[i].bounds[1].center.z-other.position.z)<1e-5f,"near duplicate displaced other bright patch");
+  Require(std::abs(mapped[i].bounds[0].radius-.4330127f)<1e-6,"warm guide radius changed");
+ }
+ Require(std::abs(mapped[12].bounds[1].center.x-.73f)<1e-6,"distinct neighboring anchor wrongly excluded");
+ Require(std::abs(mapped[13].bounds[1].center.x-p2.position.x)<1e-6,"full rescan lost alternative");
+ Require(mapped[14].validMask==3&&std::abs(mapped[14].bounds[1].center.z-warm0.position.z)<1e-5f,"single-patch fallback changed R458 coverage");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;
@@ -101,5 +133,5 @@ int main()try {
  V* pv=nullptr;Check(pilotRead->Map(0,nullptr,reinterpret_cast<void**>(&pv)));
  for(UINT c=0;c<cases;++c){Require(pv[c].w==float(expected[c].valid),"GPU pilot validity");const float actual[]={pv[c].x,pv[c].y,pv[c].z},ref[]={expected[c].rgb.x,expected[c].rgb.y,expected[c].rgb.z};for(UINT k=0;k<3;++k)Require(std::abs(actual[k]-ref[k])<.00001f*(1+std::abs(ref[k])),"GPU pilot result");}
  pilotRead->Unmap(0,&none);
- std::cout<<"PASS observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
+ std::cout<<"PASS near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

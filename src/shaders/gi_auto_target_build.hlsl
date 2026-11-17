@@ -30,6 +30,8 @@ uint QuantizedScore(GIAutoTraining r){return uint(clamp(r.energy*scoreScale,1.,6
  uint old;InterlockedAdd(cells[slot].score,QuantizedScore(r),old);InterlockedAdd(cells[slot].count,1,old);
 }
 groupshared uint bestSlots[128];groupshared uint bestScores[128];
+groupshared uint selectedSlots[2];groupshared uint seekAlternative;
+float3 Anchor(uint slot){GIPoint p=training[65535u-(cells[slot].reserved0&65535u)].position;return float3(p.x,p.y,p.z);}
 bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldScore||(score==oldScore&&slot<oldSlot);}
 [numthreads(64,1,1)]void Freeze(uint3 id:SV_GroupThreadID){
  uint slots[2]={0xffffffffu,0xffffffffu},scores[2]={0,0};
@@ -41,20 +43,47 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
  }
  bestSlots[id.x*2]=slots[0];bestSlots[id.x*2+1]=slots[1];bestScores[id.x*2]=scores[0];bestScores[id.x*2+1]=scores[1];GroupMemoryBarrierWithGroupSync();
  if(id.x==0){
-  GIAutoTargets t=(GIAutoTargets)0;t.schema=0x41544731u;t.version=version;t.frame=frame;
   [unroll]for(uint rank=0;rank<2;++rank){
    uint chosen=0xffffffffu,score=0,entry=0;
    for(uint j=0;j<128;++j)if(bestScores[j]>0&&Better(bestScores[j],bestSlots[j],score,chosen)){chosen=bestSlots[j];score=bestScores[j];entry=j;}
-   if(chosen!=0xffffffffu){
-    GIAutoCell c=cells[chosen];
-    // Claim froze the peak sample and index atomically. Anchor the proposal at
-    // that observed bright point, not the quantized cell center. Keep R456's
-    // ranking and radius; no forced separation or inflated sampling footprint.
-    uint winner=65535u-(c.reserved0&65535u);
-    GIAutoTraining anchor=training[winner];
-    t.bounds[rank].center=anchor.position;
-    t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;bestScores[entry]=0;
-   }
-  }targets[0]=t;
+   selectedSlots[rank]=chosen;if(chosen!=0xffffffffu)bestScores[entry]=0;
+  }
+  seekAlternative=0;
+  if(selectedSlots[0]!=0xffffffffu&&selectedSlots[1]!=0xffffffffu){
+   float3 delta=Anchor(selectedSlots[1])-Anchor(selectedSlots[0]);
+   float nearRadius=cellSize*.433012702; // Half the unchanged guide radius.
+   seekAlternative=dot(delta,delta)<nearRadius*nearRadius?1:0;
+  }
+ }
+ GroupMemoryBarrierWithGroupSync();
+ // Only near-duplicate observed anchors trigger this search. A grid neighbor
+ // may be a distinct useful patch: never exclude it merely by its cell key.
+ // Scan every cell: a lane's third candidate can be the best nonduplicate.
+ if(seekAlternative!=0){
+  uint chosen=0xffffffffu,score=0;
+  float3 first=Anchor(selectedSlots[0]);float nearRadius=cellSize*.433012702;
+  for(uint i=id.x;i<cellCount;i+=64){
+   GIAutoCell c=cells[i];if(c.state!=2||c.count<minimumCount||c.score==0)continue;
+   float3 delta=Anchor(i)-first;if(dot(delta,delta)<nearRadius*nearRadius)continue;
+   uint peak=c.reserved0>>16;if(Better(peak,i,score,chosen)){chosen=i;score=peak;}
+  }
+  bestSlots[id.x]=chosen;bestScores[id.x]=score;
+ }
+ GroupMemoryBarrierWithGroupSync();
+ if(id.x==0){
+  if(seekAlternative!=0){
+   uint chosen=0xffffffffu,score=0;
+   for(uint j=0;j<64;++j)if(bestScores[j]>0&&Better(bestScores[j],bestSlots[j],score,chosen)){chosen=bestSlots[j];score=bestScores[j];}
+   // Keep both R458 guides when training contains only the one bright patch.
+   if(chosen!=0xffffffffu)selectedSlots[1]=chosen;
+  }
+  GIAutoTargets t=(GIAutoTargets)0;t.schema=0x41544731u;t.version=version;t.frame=frame;
+  [unroll]for(uint rank=0;rank<2;++rank){
+   uint chosen=selectedSlots[rank];if(chosen==0xffffffffu)continue;
+   GIAutoCell c=cells[chosen];uint winner=65535u-(c.reserved0&65535u);
+   t.bounds[rank].center=training[winner].position;
+   t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
+  }
+  targets[0]=t;
  }
 }
