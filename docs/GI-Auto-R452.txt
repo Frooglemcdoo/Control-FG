@@ -1,0 +1,33 @@
+R452 - Post-weight GI pixel audit (diagnostic, not a claimed speckle fix)
+
+User reports R451 speckles unchanged. R451 execution and target validity are
+confirmed; matching an old bright-hit location did not establish lower variance.
+R452 preserves R451 tracing, weighting and target learning. It records what
+survives the weighting rather than offering another unmeasured target tweak.
+
+Install with Control closed beside Control_DX12.exe. Launch
+ControlTOH\Diagnostics\Start-GI-Auto-R452.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. At the troublesome light, keep
+Jesse's hair/neck near the left-center of the screen (about 20% across, halfway
+down). Remain there for roughly one minute; include the usual slow movement.
+No capture hotkey or automated movement. Existing movement remains Alt+arrows.
+Run ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd and send that small ZIP.
+
+Five snapshots record EVERY pixel in a 512x512 region, not one pixel per tile.
+At 2560x1440 input this is the same (256,464) region as the R447 neck capture.
+Smaller input dimensions clip the region safely. Snapshots occur after each
+600 guided frames through 3000; return to the troublesome scene promptly.
+Each pixel records full RGB before/after p/q on the same guided rays, the
+largest weighted contribution, its weight, endpoint, material and ray index.
+The exact frozen input bounds are read back too. No added rays or image filter.
+Readback is mapped only after GPU completion; there is no GPU wait. Periodic
+copy and CPU summarization can affect pacing: do not use this run to judge FPS.
+Only aggregate counts and 12 strongest local outliers per snapshot enter the
+logs. Raw snapshots are transient; no large capture files are written.
+
+Interpretation limits: the unweighted guided sum is NOT a native-render baseline.
+This is the evaluator's GI output before downstream RR, not RR's final image.
+Outliers exceed 10x a 5x5 median and luminance .001. They are ROI candidates,
+not a skin-only mask; edges and legitimate bright details can qualify. Missing
+the character with the ROI or exhausting snapshots before the test scene limits
+what the results can establish. No visual improvement is claimed.

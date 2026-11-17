@@ -4,11 +4,14 @@
 #include "gi_frozen_receiver.hlsl"
 #include "gi_auto_sample.hlsl"
 #include "gi_auto_training.hlsl"
+#include "gi_auto_pixel_audit.hlsl"
 StructuredBuffer<GIAutoTargets> targets : register(t0,space19);
 cbuffer Selection : register(b0,space19) {GIAutoSelection selection;}
 [numthreads(8,16,1)]
 void main(uint3 id:SV_DispatchThreadID) {
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
+ uint auditIndex=GIAutoAuditIndex(id.xy);
+ GIAutoAuditWrite(auditIndex,0,0,0,0,0,0,65534,0,0,0);
  uint trainingIndex=GIAutoTrainingIndex(id.xy,giCB0[69].z);
  if(trainingIndex!=0xffffffff)autoTraining[trainingIndex]=(GIAutoTraining)0;
  GIAutoTraining bestTraining=(GIAutoTraining)0;
@@ -22,6 +25,8 @@ void main(uint3 id:SV_DispatchThreadID) {
  GIAutoTargets frozen=targets[0];float alpha=GIAutoAlpha(frozen,selection);
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
  float3 weightedSum=0;bool valid=true;
+ float3 rawSum=0,peakPosition=0;float rawPeak=0,weightedPeak=0,peakWeight=0;
+ uint peakMaterial=65534,peakRay=0,covered=0;
  [loop]for(uint slice=0;slice<10;++slice) {
   int4 address=int4(id.xy,slice,0);GISecondaryInput hit;
   hit.material=g_tMaterialId.Load(address).x;
@@ -36,15 +41,23 @@ void main(uint3 id:SV_DispatchThreadID) {
   }
   valid=valid&&all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&
         draw.weight>=0&&draw.weight<=1.66667;
+  if(auditIndex!=0xffffffff){
+   float lum=dot(rgb,float3(.2126,.7152,.0722));rawSum+=rgb;rawPeak=max(rawPeak,lum);
+   if(draw.weight<1)++covered;
+   if(lum*draw.weight>weightedPeak){weightedPeak=lum*draw.weight;peakWeight=draw.weight;
+    peakPosition=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
+    peakMaterial=hit.material;peakRay=slice;}
+  }
   weightedSum+=rgb*draw.weight;
  }
  if(trainingIndex!=0xffffffff)autoTraining[trainingIndex]=bestTraining;
  float3 radiance=weightedSum/10;
  // Never replace a weighted result with an unweighted guided average.
- if(!valid||!all(isfinite(radiance))){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
+ if(!valid||!all(isfinite(radiance))){GIAutoAuditWrite(auditIndex,rawSum/10,rawPeak/10,radiance,weightedPeak/10,peakPosition,peakWeight,peakMaterial,1|(alpha>0?2:0),peakRay,covered);g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
  float4 fade=asfloat(giCB1[17]);float nearEdge=fade.x-fade.y;
  float width=(fade.y+fade.x)-nearEdge;float t=saturate((depth-nearEdge)*rcp(width));
  float scale=mad(t*t*(3-2*t),fade.w-fade.z,fade.z);
+ GIAutoAuditWrite(auditIndex,scale*rawSum/10,scale*rawPeak/10,scale*radiance,scale*weightedPeak/10,peakPosition,peakWeight,peakMaterial,5|(alpha>0?2:0),peakRay,covered);
  g_rwtDiffuseGIColorTarget[id.xy]=float4(scale*radiance,1);
  g_rwtHitInfo[id.xy]=asfloat(receiver.r5.w)/10;
 }

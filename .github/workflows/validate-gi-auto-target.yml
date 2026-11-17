@@ -1,7 +1,7 @@
 name: Validate automatic GI targets
 on:
   push:
-    branches: [work/gi-rare-target-r451]
+    branches: [work/gi-pixel-audit-r452]
   workflow_dispatch:
 jobs:
   validate:
@@ -36,6 +36,8 @@ jobs:
           if($LASTEXITCODE -ne 0) {throw 'Auto sampler compile failed'}
           & $dxc -T cs_6_0 -E main -HV 2018 -WX tools/gi-auto-training-validation.hlsl -Fo gi-auto-training.dxil
           if($LASTEXITCODE -ne 0) {throw 'Training compile failed'}
+          & $dxc -T cs_6_0 -E main -HV 2018 -WX tools/gi-auto-pixel-validation.hlsl -Fo gi-auto-pixel.dxil
+          if($LASTEXITCODE -ne 0) {throw 'Pixel audit compile failed'}
       - name: Validate GPU targets and pilot resolve
         shell: cmd
         run: |
@@ -69,4 +71,12 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-split-owner-retirement.cpp /Fetest-gi-split-owner-retirement.exe
           if errorlevel 1 exit /b 1
           test-gi-split-owner-retirement.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-pixel-gpu.cpp /Fetest-gi-auto-pixel-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if errorlevel 1 exit /b 1
+          test-gi-auto-pixel-gpu.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-pixel-summary.cpp /Fetest-gi-auto-pixel-summary.exe
+          if errorlevel 1 exit /b 1
+          test-gi-auto-pixel-summary.exe
           if errorlevel 1 exit /b 1
