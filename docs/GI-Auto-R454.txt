@@ -1,0 +1,31 @@
+R454 - Smaller outliers and consecutive-frame measurements
+
+R453 is the user-confirmed improved baseline: speckles are much better but
+remain. All five R453 pixel snapshots used guidance. The previous sparse
+10x/.001 luminance outlier test did not adequately describe the remaining dots.
+R454 preserves R453 ray generation, weighting, learning and guide lifetime.
+
+Install beside Control_DX12.exe with the game closed, then run
+ControlTOH\Diagnostics\Start-GI-Auto-R454.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. Start at the troublesome light
+with Jesse's neck/hair near left-center (20% across, halfway down). Stand still
+for 20 seconds, then pan slowly for another 25 seconds. Collection is automatic.
+Run ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd and send the small ZIP.
+No extra capture hotkey, no Ctrl movement, and no large output files.
+
+Five pairs of consecutive recorded invocations replace the five single-frame
+snapshots, around guided-frame counts 600,1200,1800,2400,3000. Each still samples
+EVERY pixel in the same 512x512 ROI. Old outlier counts remain comparable; added
+counts use luminance >.00001 and 2x/4x/10x spatial median. RGB changes between
+adjacent engine frames are summarized, including changes missed by luminance.
+Pairs with frame gaps, mismatching dimensions or guide version are rejected.
+
+Temporal differences are SCREEN-SPACE, NOT motion-compensated: camera movement,
+Jesse's animation, edges, disocclusion and legitimate lighting changes also count.
+These are measurements before RR, not proof of temporal noise or a final-image
+comparison. Standing still reduces camera-motion ambiguity; animation remains.
+Raw guided sums are not native baselines. No rendering fix is claimed by R454.
+
+Paired snapshots use a 128MiB bounded owner pool (formerly64MiB) so concurrent
+readbacks do not force a fallback; CPU pair storage is bounded at32MiB. No GPU
+wait is introduced. Extra diagnostics can perturb pacing; do not benchmark FPS.

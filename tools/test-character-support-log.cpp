@@ -22,6 +22,7 @@ int main() {
         "GI_AUTO_R451 targets frame=1 mask=3",
         "GI_AUTO_R452 pixels frame=1 spikes=50",
         "GI_AUTO_R453 pixels frame=1 guided=262144",
+        "GI_AUTO_R454 temporal first=1 second=2",
         "GI_AUTO_R450 skipped=provider_ray_count",
         "GI_AUTO_R450 halted=1 reason=consumer_recording"
     };

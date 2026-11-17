@@ -19,7 +19,9 @@ inline float GIAuditLuma(const float* c){return c[0]*.2126f+c[1]*.7152f+c[2]*.07
 struct GIAuditExample {uint index=0;float luminance=0,ratio=0;};
 struct GIAuditSummary {
  uint valid=0,guided=0,invalid=0,spikes=0,downweightedSpikes=0;
+ uint small2=0,small4=0,small10=0;
  double rawSum=0,weightedSum=0;
+ std::array<GIAuditExample,12> smallExamples{};
  std::array<GIAuditExample,12> examples{};
 };
 inline GIAuditSummary GIAuditSummarize(const GIAutoPixelAudit* p,uint w,uint h){
@@ -29,11 +31,14 @@ inline GIAuditSummary GIAuditSummarize(const GIAutoPixelAudit* p,uint w,uint h){
   if(!std::isfinite(a)||!std::isfinite(b)||a<0||b<0||!(v.flags&4)){++s.invalid;continue;}
   ++s.valid;if(v.flags&2)++s.guided;s.rawSum+=a;s.weightedSum+=b;l[i]=b;
  }
- for(uint y=2;y+2<h;++y)for(uint x=2;x+2<w;++x){const uint i=y*w+x;if(l[i]<=.001f)continue;
+ for(uint y=2;y+2<h;++y)for(uint x=2;x+2<w;++x){const uint i=y*w+x;if(l[i]<=.00001f)continue;
   std::array<float,25> window{};uint n=0;
   for(int dy=-2;dy<=2;++dy)for(int dx=-2;dx<=2;++dx)window[n++]=l[size_t(int(y)+dy)*w+size_t(int(x)+dx)];
   std::nth_element(window.begin(),window.begin()+12,window.end());const float ratio=l[i]/std::max(window[12],1e-10f);
-  if(ratio<=10)continue;
+  if(ratio>2){++s.small2;if(ratio>4)++s.small4;if(ratio>10)++s.small10;
+   GIAuditExample e{i,l[i],ratio};for(auto& top:s.smallExamples)if(e.luminance>top.luminance)std::swap(e,top);
+  }
+  if(l[i]<=.001f||ratio<=10)continue;
   ++s.spikes;if(p[i].weight<1)++s.downweightedSpikes;
   GIAuditExample e{i,l[i],ratio};for(auto& top:s.examples)if(e.luminance>top.luminance)std::swap(e,top);
  }

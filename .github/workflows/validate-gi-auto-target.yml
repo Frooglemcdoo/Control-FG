@@ -1,7 +1,7 @@
 name: Validate automatic GI targets
 on:
   push:
-    branches: [work/gi-guide-session-r453]
+    branches: [work/gi-temporal-audit-r454]
   workflow_dispatch:
 jobs:
   validate:
@@ -83,4 +83,8 @@ jobs:
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-guide-session.cpp /Fetest-gi-auto-guide-session.exe
           if errorlevel 1 exit /b 1
           test-gi-auto-guide-session.exe
+          if errorlevel 1 exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-gi-auto-temporal-summary.cpp /Fetest-gi-auto-temporal-summary.exe
+          if errorlevel 1 exit /b 1
+          test-gi-auto-temporal-summary.exe
           if errorlevel 1 exit /b 1

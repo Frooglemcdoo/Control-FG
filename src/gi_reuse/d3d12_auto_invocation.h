@@ -21,7 +21,7 @@ public:
  D3D12AutoTargetBinding target;
  D3D12AutoRaygenRecord record;
  Ptr<ID3D12Resource> training,cells,audit,pixelAudit;
- UINT64 pixelBytes=0;
+ UINT64 pixelBytes=0,auditOrdinal=0;
  GIAutoPublishedTarget output;
  UINT width=0,height=0,step=0,capacity=0;
  bool shaded=false;
