@@ -14,7 +14,7 @@ int main()try {
  auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
  auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto back=d.Buffer(5*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto back=d.Buffer(7*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
  const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
  for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
@@ -40,7 +40,14 @@ int main()try {
  std::vector<GIAutoTraining> collisionRecords(200,a);collisionRecords.insert(collisionRecords.end(),50,colliding);auto collisionInput=d.Upload(collisionRecords);
  Require(builder.Record(d.list.Get(),collisionInput.Get(),250,cells.Get(),frozen.Get(),slots,4,7,.5f,512,8,restore),"collision build");copy(3);
  auto hdr=a;hdr.energy=1e30f;auto hdrInput=d.Upload(std::vector<GIAutoTraining>(65535,hdr));
- Require(builder.Record(d.list.Get(),hdrInput.Get(),65535,cells.Get(),frozen.Get(),slots,5,7,.5f,512,8,restore),"HDR bound build");copy(4);d.Submit();
+ Require(builder.Record(d.list.Get(),hdrInput.Get(),65535,cells.Get(),frozen.Get(),slots,5,7,.5f,512,8,restore),"HDR bound build");copy(4);
+ // One rare bright hit must defeat a frequent dim collision and remain ahead
+ // of a different cell with greater aggregate energy but lower peak energy.
+ auto dim=a;dim.energy=.01f;auto rare=colliding;rare.energy=4;
+ std::vector<GIAutoTraining> rareRecords(200,dim);rareRecords.push_back(rare);
+ rareRecords.insert(rareRecords.end(),1000,b);auto rareInput=d.Upload(rareRecords);
+ Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,6,7,.5f,512,1,restore),"rare-hit build");copy(5);
+ Require(builder.Record(d.list.Get(),rareInput.Get(),UINT(rareRecords.size()),cells.Get(),frozen.Get(),slots,7,7,.5f,512,8,restore),"old threshold control");copy(6);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
@@ -50,8 +57,11 @@ int main()try {
  Require(!GIAutoMatches(mapped[0],8,1)&&!GIAutoMatches(mapped[0],7,2),"wrong identity admitted");
  Require(mapped[1].frame==2&&mapped[1].validMask==0&&mapped[1].scores[0]==0,"empty frame retained stale target");
  Require(mapped[2].version==8&&mapped[2].validMask==0,"epoch retained stale target");
- Require(mapped[3].validMask==1&&(mapped[3].counts[0]==200||mapped[3].counts[0]==50),"hash collision merged unrelated targets");
+ Require(mapped[3].validMask==1&&mapped[3].counts[0]==200,"hash collision merged unrelated targets");
  Require(mapped[4].validMask==1&&mapped[4].counts[0]==65535&&mapped[4].scores[0]==4294836225u,"HDR accumulation wrapped");
+ Require(mapped[5].validMask==3&&mapped[5].counts[0]==1&&mapped[5].scores[0]==2048&&mapped[5].counts[1]==1000,"rare peak lost to frequency/collision");
+ Require(std::abs(mapped[5].bounds[0].center.x-(float(collisionX)*.5f+.25f))<1e-6,"collision selected wrong location");
+ Require(mapped[6].validMask==1&&mapped[6].counts[0]==1000,"eight-record threshold control did not reject rare hit");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;

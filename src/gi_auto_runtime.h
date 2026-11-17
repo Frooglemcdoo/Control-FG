@@ -24,15 +24,25 @@ inline std::atomic<UINT64> reportedSkips{0};
 inline bool Skip(unsigned bit,const char* reason)noexcept {
  const UINT64 mask=1ull<<bit;
  if(!(reportedSkips.load(std::memory_order_relaxed)&mask)&&!(reportedSkips.fetch_or(mask,std::memory_order_relaxed)&mask))
-  Log("GI_AUTO_R450 skipped=%s once=1",reason);
+  Log("GI_AUTO_R451 skipped=%s once=1",reason);
  return false;
 }
-inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R450 halted=1 reason=%s restart_required=1",reason);}
+inline void Stop(const char* reason)noexcept {if(!halted.exchange(true))Log("GI_AUTO_R451 halted=1 reason=%s restart_required=1",reason);}
 inline void Collect()noexcept {
  if(!initialized.load())return;
  std::array<std::unique_ptr<Owner>,8> retired;std::array<bool,8> submitted{};router->CollectReady(retired,&submitted);
  std::lock_guard<std::mutex> lock(mutex);
- for(unsigned i=0;i<retired.size();++i){auto& owner=retired[i];if(submitted[i]&&owner&&owner->shaded&&(!latest.buffer||owner->output.epoch!=latest.epoch||owner->output.frame>latest.frame))latest=owner->output;}
+ for(unsigned i=0;i<retired.size();++i){auto& owner=retired[i];if(!submitted[i]||!owner||!owner->shaded)continue;
+  if(owner->audit){
+   void* mapped=nullptr;D3D12_RANGE read{0,sizeof(gi_reuse::GIAutoTargets)};
+   const auto hr=owner->audit->Map(0,&read,&mapped);
+   if(SUCCEEDED(hr)&&mapped){gi_reuse::GIAutoTargets t{};std::memcpy(&t,mapped,sizeof(t));D3D12_RANGE empty{};owner->audit->Unmap(0,&empty);
+    Log("GI_AUTO_R451 targets frame=%u mask=%u header_valid=%u count0=%u count1=%u score0=%u score1=%u",owner->output.frame,t.validMask,unsigned(gi_reuse::GIAutoMatches(t,owner->output.epoch,owner->output.frame)),t.counts[0],t.counts[1],t.scores[0],t.scores[1]);
+    for(unsigned k=0;k<2;++k)if(t.validMask&(1u<<k))Log("GI_AUTO_R451 target frame=%u index=%u center=(%.6f,%.6f,%.6f) radius=%.6f",owner->output.frame,k,t.bounds[k].center.x,t.bounds[k].center.y,t.bounds[k].center.z,t.bounds[k].radius);
+   }else Log("GI_AUTO_R451 target_readback_failed=1 hr=0x%08lX",static_cast<unsigned long>(hr));
+  }
+  if(!latest.buffer||owner->output.epoch!=latest.epoch||owner->output.frame>latest.frame)latest=owner->output;
+ }
 }
 inline UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists)noexcept{return initialized.load()?router->Before(q,count,lists):0;}
 inline void After(ID3D12CommandQueue* q,UINT64 token,bool submitted)noexcept{if(initialized.load())router->After(q,token,submitted);}
@@ -71,7 +81,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   Collect();gi_reuse::GIAutoPublishedTarget prior;
   {std::lock_guard<std::mutex> lock(mutex);prior=latest;}
   auto owner=std::make_unique<Owner>();
-  if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),UINT(context.heaps.deviceEpoch))))return Skip(16,"invocation_or_ray_record_prepare");
+  if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),UINT(context.heaps.deviceEpoch),produced.load()<4||(produced.load()<=3000&&produced.load()%600==0))))return Skip(16,"invocation_or_ray_record_prepare");
   const auto record=owner->record.At(state);if(!record.StartAddress)return Skip(17,"ray_record_missing");
   const auto dispatch=native_lighting::rt_shadow_capture::Lookup(list).dispatch;if(!dispatch)return Skip(18,"native_ray_dispatch_missing");
   const auto bytes=owner->Bytes();const auto id=router->Access([&](auto& pool){return pool.Admit(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,owner);});
@@ -79,7 +89,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   pending={scope.token,id,scope.frame,desc->Width,desc->Height,false,list,generation};
   auto replacement=*desc;replacement.RayGenerationShaderRecord=record;
   native_lighting::gi_compute_hooks::Mute mute;dispatch(list,&replacement);
-  const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R450 producer=%llu frame=%llu target_source=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,prior.frame);
+  const auto n=++produced;if(n<=4||n%600==0)Log("GI_AUTO_R451 producer=%llu frame=%llu target_source=%u rays=10 guide_fraction=0.4 estimator=stratified_balance",n,scope.frame,prior.frame);
   return true;
  }catch(...){if(pending.id){Stop("producer_exception_after_admission");return true;}return Skip(20,"producer_prepare_exception");}
 }
@@ -102,12 +112,12 @@ inline bool Shade(ID3D12GraphicsCommandList* list,UINT x,UINT y,UINT z)noexcept 
   auto* owner=pool.View(pending.id);
   const bool rootMatches=owner&&owner->pipelines->nativeRoot.Get()==bundle->nativeRoot.Get();
   if(!rootMatches||!pool.AttachAndClaimConsumer(pending.id,pending.frame,queue.Get(),{reinterpret_cast<UINT64>(list),generation})){
-   Log("GI_AUTO_R450 pair_rejected=1 owner_present=%u root_matches=%u same_list=%u same_generation=%u",unsigned(owner!=nullptr),unsigned(rootMatches),unsigned(pending.producer==cmd.Get()),unsigned(pending.generation==generation));return false;
+   Log("GI_AUTO_R451 pair_rejected=1 owner_present=%u root_matches=%u same_list=%u same_generation=%u",unsigned(owner!=nullptr),unsigned(rootMatches),unsigned(pending.producer==cmd.Get()),unsigned(pending.generation==generation));return false;
   }
   pending.consumed=true;native_lighting::gi_compute_hooks::Mute mute;return owner->Shade(cmd.Get(),bindings);
  });
  if(!ok)Stop("consumer_recording");
- else {const auto n=++shaded;if(n<=4||n%600==0)Log("GI_AUTO_R450 evaluator=%llu frame=%llu training_recorded=1",n,pending.frame);}
+ else {const auto n=++shaded;if(n<=4||n%600==0)Log("GI_AUTO_R451 evaluator=%llu frame=%llu training_recorded=1",n,pending.frame);}
  return true;
 }
 inline bool Install()noexcept {

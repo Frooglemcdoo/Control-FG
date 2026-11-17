@@ -19,6 +19,7 @@ int main() {
         "GI_AUTO_R448 installed=1",
         "GI_AUTO_R449 producer=1",
         "GI_AUTO_R450 startup=1 requested=0",
+        "GI_AUTO_R451 targets frame=1 mask=3",
         "GI_AUTO_R450 skipped=provider_ray_count",
         "GI_AUTO_R450 halted=1 reason=consumer_recording"
     };

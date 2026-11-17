@@ -19,12 +19,12 @@ public:
  Ptr<D3D12AutoPipelineBundle> pipelines;
  D3D12AutoTargetBinding target;
  D3D12AutoRaygenRecord record;
- Ptr<ID3D12Resource> training,cells;
+ Ptr<ID3D12Resource> training,cells,audit;
  GIAutoPublishedTarget output;
  UINT width=0,height=0,step=0,capacity=0;
  bool shaded=false;
  HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* state,D3D12AutoPipelineBundle* bundle,
-                    const GIAutoPublishedTarget& prior,UINT w,UINT h,UINT frame,UINT epoch)noexcept {
+                    const GIAutoPublishedTarget& prior,UINT w,UINT h,UINT frame,UINT epoch,bool captureTargets=false)noexcept {
   if(!device||!state||!bundle||!w||!h||w>16384||h>16384||!frame||!epoch)return E_INVALIDARG;
   width=w;height=h;step=8;while(UINT64((w+step-1)/step)*((h+step-1)/step)>65535&&step<256)step*=2;
   capacity=((w+step-1)/step)*((h+step-1)/step);if(capacity>65535)return E_INVALIDARG;
@@ -41,14 +41,20 @@ public:
   hr=Buffer(device,UINT64(capacity)*sizeof(GIAutoTraining),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
   hr=Buffer(device,4096*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
   hr=Buffer(device,sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,output.buffer);if(FAILED(hr))return hr;
+  if(captureTargets){hr=Buffer(device,sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,audit);if(FAILED(hr))return hr;}
   output.frame=frame;output.epoch=epoch;pipelines=bundle;return S_OK;
  }
- UINT64 Bytes()const noexcept{return UINT64(capacity)*sizeof(GIAutoTraining)+4096*sizeof(GIAutoCell)+sizeof(GIAutoTargets)+record.RetainedBytes()+target.RetainedBytes();}
+ UINT64 Bytes()const noexcept{return UINT64(capacity)*sizeof(GIAutoTraining)+4096*sizeof(GIAutoCell)+sizeof(GIAutoTargets)+record.RetainedBytes()+target.RetainedBytes()+(audit?sizeof(GIAutoTargets):0);}
  bool Shade(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings)noexcept {
   if(shaded||!pipelines||!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity))return false;
   D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   barrier.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&barrier);
-  shaded=pipelines->builder.Record(list,training.Get(),capacity,cells.Get(),output.buffer.Get(),4096,output.frame,output.epoch,.5f,512,8,bindings);
+  shaded=pipelines->builder.Record(list,training.Get(),capacity,cells.Get(),output.buffer.Get(),4096,output.frame,output.epoch,.5f,512,1,bindings);
+  if(shaded&&audit){
+   barrier.Transition={output.buffer.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
+   list->CopyBufferRegion(audit.Get(),0,output.buffer.Get(),0,sizeof(GIAutoTargets));
+   std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
+  }
   return shaded;
  }
 };

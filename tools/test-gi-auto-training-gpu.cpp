@@ -20,8 +20,8 @@ int main()try {
  d.Submit();GIAutoTraining* values=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&values)));
  for(UINT phase=0;phase<2;++phase){const auto* row=values+phase*(count+1);
   for(UINT i=0;i<count;++i){const bool valid=phase==0&&i%3==0;Require(row[i].valid==UINT(valid),"stale/invalid training entry");
-   if(valid){Require(row[i].position.x==float(i)&&row[i].version==7,"training identity");Require(std::abs(row[i].energy-(2*.2126f+4*.7152f+8*.0722f)*.5f)<.00001f,"missing density correction");}}
+   if(valid){Require(row[i].position.x==float(i)&&row[i].version==7,"training identity");Require(std::abs(row[i].energy-(2*.2126f+4*.7152f+8*.0722f)*8.f)<.0001f,"bright ray lost or downweighted out of proposal");}}
   Require(std::memcmp(row+count,sentinel.data()+count*sizeof(GIAutoTraining),sizeof(GIAutoTraining))==0,"padded threads overwrite training guard");}
  D3D12_RANGE empty{};read->Unmap(0,&empty);
- std::cout<<"PASS irregular tile coverage, bounded writes, invalid receiver/miss clearing and density-corrected training energy.\n";return 0;
+ std::cout<<"PASS irregular tile coverage, bounded writes, invalid receiver/miss clearing and all-ray maximum and stable raw-brightness proposal score.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

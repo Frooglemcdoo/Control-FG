@@ -11,7 +11,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
  uint trainingIndex=GIAutoTrainingIndex(id.xy,giCB0[69].z);
  if(trainingIndex!=0xffffffff)autoTraining[trainingIndex]=(GIAutoTraining)0;
- uint trainingRay=GIProducerHash(id.x*73856093u^id.y*19349663u^giCB0[69].z*83492791u^0x19d73bafu)%10;
+ GIAutoTraining bestTraining=(GIAutoTraining)0;
  GIShadingRegisters receiver;
  if(asint(giCB4[0].z)!=10||selection.rayCount!=10||!GIInitializeReceiver(id.xy,receiver)) {
   g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;
@@ -30,14 +30,15 @@ void main(uint3 id:SV_DispatchThreadID) {
   float3 rgb=throughput*asfloat(receiver.r15.xyz);
   GIAutoDraw draw=(GIAutoDraw)0;draw.weight=1;
   if(alpha>0)draw=GIAutoSample(id.xy,giCB0[69].z,0,slice,source.origin,source.normal,frozen,selection);
-  if(trainingIndex!=0xffffffff&&slice==trainingRay) {
+  if(trainingIndex!=0xffffffff) {
    float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
-   GIAutoTrain(trainingIndex,selection.version,hit.material,position,rgb,draw.weight);
+   bestTraining=GIAutoKeepBrightest(bestTraining,GIAutoCandidate(selection.version,hit.material,position,rgb,draw.weight));
   }
   valid=valid&&all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&
         draw.weight>=0&&draw.weight<=1.66667;
   weightedSum+=rgb*draw.weight;
  }
+ if(trainingIndex!=0xffffffff)autoTraining[trainingIndex]=bestTraining;
  float3 radiance=weightedSum/10;
  // Never replace a weighted result with an unweighted guided average.
  if(!valid||!all(isfinite(radiance))){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}

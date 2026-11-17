@@ -1,0 +1,24 @@
+R451 - Rare bright-hit target learning (experimental image-quality candidate)
+
+R450 logs confirmed producer/evaluator execution and completed target publication.
+They did not expose target validity or locations. R451 changes the learner:
+- strongest of all ten rays at each selected receiver, rather than one random ray;
+- a single valid bright hit can form a target, instead of requiring eight;
+- hash-slot competition and target ranking favor peak brightness, not arrival
+  order or frequency; unrelated colliding cells are never merged;
+- proposal brightness remains raw, so learning a source does not downweight it
+  out of the guide. Final RGB still uses the unchanged R449 balance estimator.
+
+Install with Control closed beside Control_DX12.exe. Launch
+ControlTOH\Diagnostics\Start-GI-Auto-R451.cmd.
+Use 10 rays, GI FIXED, RR ON, RELAX OFF, FG OFF. Compare the moving neck/hair.
+Run ControlTOH\Tools\Collect-ControlFG-Compact-Logs.cmd afterward.
+A few 64-byte target records are copied and logged only after GPU completion.
+These expose validity, counts, scores and world bounds. No large capture needed.
+
+This is not a verified in-game speckle fix or a performance optimization.
+The learner still samples one receiver per tile and retains only two global
+cells; irrelevant regions or missed rare hits remain possible. GPU tests verify
+rare-hit retention, collision handling and invalid-input clearing, not actual
+Control image quality. No clamp, blur, history blending or extra rays are added.
+Existing capture movement remains Alt+arrows.

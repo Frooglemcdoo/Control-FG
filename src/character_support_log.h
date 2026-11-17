@@ -19,7 +19,8 @@ inline bool IsLifecycleEvent(const char* format) noexcept {
         "GI_COST_R440A",
         "GI_AUTO_R448",
         "GI_AUTO_R449",
-        "GI_AUTO_R450"
+        "GI_AUTO_R450",
+        "GI_AUTO_R451"
     };
     for (const char* marker : markers) {
         const auto n = std::strlen(marker);

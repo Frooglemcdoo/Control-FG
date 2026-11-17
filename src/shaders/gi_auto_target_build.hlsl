@@ -11,18 +11,23 @@ int3 Key(GIAutoTraining r){return int3(floor(float3(r.position.x,r.position.y,r.
  if(id.x<cellCount)cells[id.x]=(GIAutoCell)0;
  if(id.x==0){GIAutoTargets t=(GIAutoTargets)0;t.schema=0x41544731u;t.version=version;t.frame=frame;targets[0]=t;}
 }
+uint QuantizedScore(GIAutoTraining r){return uint(clamp(r.energy*scoreScale,1.,65535.));}
 [numthreads(64,1,1)]void Claim(uint3 id:SV_DispatchThreadID){
  if(id.x>=recordCount)return;GIAutoTraining r=training[id.x];if(!Eligible(r))return;
  int3 k=Key(r);uint slot=GIAutoHash(k.x,k.y,k.z)%cellCount,old;
- InterlockedCompareExchange(cells[slot].state,0,1,old);
- if(old==0){cells[slot].x=k.x;cells[slot].y=k.y;cells[slot].z=k.z;DeviceMemoryBarrier();InterlockedExchange(cells[slot].state,2,old);}
+ // A single atomic chooses the brightest record and its index together.
+ // Ties prefer the lower index. No key can be torn by competing writers.
+ uint priority=(QuantizedScore(r)<<16)|(65535u-id.x);
+ InterlockedMax(cells[slot].reserved0,priority,old);
 }
 [numthreads(64,1,1)]void Accumulate(uint3 id:SV_DispatchThreadID){
  if(id.x>=recordCount)return;GIAutoTraining r=training[id.x];if(!Eligible(r))return;
  int3 k=Key(r);uint slot=GIAutoHash(k.x,k.y,k.z)%cellCount;
- if(cells[slot].state!=2||any(int3(cells[slot].x,cells[slot].y,cells[slot].z)!=k))return;
- uint score=uint(clamp(r.energy*scoreScale,1.,65535.)),old;
- InterlockedAdd(cells[slot].score,score,old);InterlockedAdd(cells[slot].count,1,old);
+ uint priority=cells[slot].reserved0;if(priority==0)return;
+ uint winner=65535u-(priority&65535u);if(winner>=recordCount)return;
+ int3 chosen=Key(training[winner]);if(any(chosen!=k))return;
+ if(id.x==winner){cells[slot].x=k.x;cells[slot].y=k.y;cells[slot].z=k.z;cells[slot].state=2;}
+ uint old;InterlockedAdd(cells[slot].score,QuantizedScore(r),old);InterlockedAdd(cells[slot].count,1,old);
 }
 groupshared uint bestSlots[128];groupshared uint bestScores[128];
 bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldScore||(score==oldScore&&slot<oldSlot);}
@@ -30,8 +35,9 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
  uint slots[2]={0xffffffffu,0xffffffffu},scores[2]={0,0};
  if(ControlsValid())for(uint i=id.x;i<cellCount;i+=64){
   GIAutoCell c=cells[i];if(c.state!=2||c.count<minimumCount||c.score==0)continue;
-  if(Better(c.score,i,scores[0],slots[0])){scores[1]=scores[0];slots[1]=slots[0];scores[0]=c.score;slots[0]=i;}
-  else if(Better(c.score,i,scores[1],slots[1])){scores[1]=c.score;slots[1]=i;}
+  uint peak=c.reserved0>>16;
+  if(Better(peak,i,scores[0],slots[0])){scores[1]=scores[0];slots[1]=slots[0];scores[0]=peak;slots[0]=i;}
+  else if(Better(peak,i,scores[1],slots[1])){scores[1]=peak;slots[1]=i;}
  }
  bestSlots[id.x*2]=slots[0];bestSlots[id.x*2+1]=slots[1];bestScores[id.x*2]=scores[0];bestScores[id.x*2+1]=scores[1];GroupMemoryBarrierWithGroupSync();
  if(id.x==0){
@@ -41,7 +47,7 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
    for(uint j=0;j<128;++j)if(bestScores[j]>0&&Better(bestScores[j],bestSlots[j],score,chosen)){chosen=bestSlots[j];score=bestScores[j];entry=j;}
    if(chosen!=0xffffffffu){
     GIAutoCell c=cells[chosen];t.bounds[rank].center.x=(float(c.x)+.5)*cellSize;t.bounds[rank].center.y=(float(c.y)+.5)*cellSize;t.bounds[rank].center.z=(float(c.z)+.5)*cellSize;
-    t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=score;t.validMask|=1u<<rank;bestScores[entry]=0;
+    t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;bestScores[entry]=0;
    }
   }targets[0]=t;
  }

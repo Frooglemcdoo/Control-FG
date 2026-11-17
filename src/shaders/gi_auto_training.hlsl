@@ -1,6 +1,6 @@
 #ifndef CONTROL_GI_AUTO_TRAINING_H
 #define CONTROL_GI_AUTO_TRAINING_H
-// One randomly chosen receiver and ray per tile. Fixed-address records avoid
+// One randomly chosen receiver per tile, strongest of all ten rays. Fixed-address records avoid
 // atomics/counter overflow. Every tile writes an invalid record before shading,
 // so invalid receivers and misses cannot preserve a previous frame's training.
 RWStructuredBuffer<GIAutoTraining> autoTraining:register(u0,space19);
@@ -15,14 +15,19 @@ uint GIAutoTrainingIndex(uint2 pixel,uint frame) {
  uint index=tile.y*((trainingWidth+trainingStep-1)/trainingStep)+tile.x;
  return all(pixel==chosen)&&index<trainingCapacity?index:0xffffffff;
 }
-void GIAutoTrain(uint index,uint version,uint material,float3 position,float3 rgb,float weight) {
+// Proposal discovery scores raw brightness, not weighted final radiance. This
+// avoids making a learned bright region disappear merely because p/q falls.
+GIAutoTraining GIAutoCandidate(uint version,uint material,float3 position,float3 rgb,float weight) {
  GIAutoTraining record=(GIAutoTraining)0;record.version=version;
- float energy=dot(rgb,float3(.2126,.7152,.0722))*weight;
+ float energy=dot(rgb,float3(.2126,.7152,.0722));
  if(material<65534&&version!=0&&all(isfinite(position))&&all(isfinite(rgb))&&all(rgb>=0)&&
-    isfinite(weight)&&weight>=0&&isfinite(energy)&&energy>0){
+    isfinite(weight)&&weight>0&&isfinite(energy)&&energy>0){
   record.position.x=position.x;record.position.y=position.y;record.position.z=position.z;
   record.energy=energy;record.valid=1;
  }
- autoTraining[index]=record;
+ return record;
+}
+GIAutoTraining GIAutoKeepBrightest(GIAutoTraining best,GIAutoTraining candidate) {
+ if(candidate.valid&&candidate.energy>best.energy)return candidate;return best;
 }
 #endif
