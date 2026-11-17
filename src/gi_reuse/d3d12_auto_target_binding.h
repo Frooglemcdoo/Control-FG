@@ -30,7 +30,7 @@ public:
  static std::array<D3D12_ROOT_PARAMETER,2> Parameters() noexcept {
   std::array<D3D12_ROOT_PARAMETER,2> p{};
   p[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;p[0].Descriptor={0,RegisterSpace};
-  p[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;p[1].Constants={0,RegisterSpace,4};
+  p[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;p[1].Constants={0,RegisterSpace,5};
   return p;
  }
  // Upload/record ownership belongs to the invocation, not this CPU byte array.
@@ -46,7 +46,7 @@ public:
  bool BindEvaluator(ID3D12GraphicsCommandList* list,UINT srvSlot,UINT constantsSlot)const noexcept {
   if(!targets_.resource||!list||srvSlot>=64||constantsSlot>=64||srvSlot==constantsSlot)return false;
   list->SetComputeRootShaderResourceView(srvSlot,targets_.address);
-  list->SetComputeRoot32BitConstants(constantsSlot,4,&selection_,0);return true;
+  list->SetComputeRoot32BitConstants(constantsSlot,5,&selection_,0);return true;
  }
  const GIAutoSelection& Selection()const noexcept{return selection_;}
  UINT64 Address()const noexcept{return targets_.address;}

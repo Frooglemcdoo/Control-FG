@@ -9,9 +9,9 @@ namespace gi_reuse {
 #endif
 // One immutable selection shared by producer and evaluator. Source frame is the
 // frame that BUILT the targets, not necessarily the frame tracing these rays.
-struct GIAutoSelection {uint version,sourceFrame,rayCount;float fraction;};
+struct GIAutoSelection {uint version,sourceFrame,rayCount;float fraction;uint sampleFrame;};
 GI_BIND_INLINE bool GIAutoSelectionValid(GIAutoSelection s) {
- return s.version!=0&&s.sourceFrame!=0&&s.rayCount>=2&&s.rayCount<=64&&
+ return s.version!=0&&s.sourceFrame!=0&&s.sampleFrame!=0&&s.rayCount>=2&&s.rayCount<=64&&
   GIFinite(s.fraction)&&s.fraction>=0&&s.fraction<=.4f;
 }
 GI_BIND_INLINE bool GIAutoUsable(GIAutoTargets t,GIAutoSelection s) {
@@ -23,7 +23,7 @@ GI_BIND_INLINE bool GIAutoUsable(GIAutoTargets t,GIAutoSelection s) {
  return true;
 }
 #ifdef __cplusplus
-static_assert(sizeof(GIAutoSelection)==16,"GPU selection ABI");
+static_assert(sizeof(GIAutoSelection)==20,"GPU selection ABI");
 }
 #endif
 #undef GI_BIND_INLINE

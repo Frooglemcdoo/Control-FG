@@ -1,7 +1,7 @@
 name: Validate automatic GI targets
 on:
   push:
-    branches: [work/gi-capture-box-r455]
+    branches: [work/gi-shared-seed-r456]
   workflow_dispatch:
 jobs:
   validate:

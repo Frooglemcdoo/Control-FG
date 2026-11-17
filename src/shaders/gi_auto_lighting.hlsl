@@ -26,7 +26,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
  float3 weightedSum=0;bool valid=true;
  float3 rawSum=0,peakPosition=0;float rawPeak=0,weightedPeak=0,peakWeight=0;
- uint peakMaterial=65534,peakRay=0,covered=0;
+ uint peakMaterial=65534,peakRay=0,covered=0,peakFlags=0;
  [loop]for(uint slice=0;slice<10;++slice) {
   int4 address=int4(id.xy,slice,0);GISecondaryInput hit;
   hit.material=g_tMaterialId.Load(address).x;
@@ -46,7 +46,16 @@ void main(uint3 id:SV_DispatchThreadID) {
    if(draw.weight<1)++covered;
    if(lum*draw.weight>weightedPeak){weightedPeak=lum*draw.weight;peakWeight=draw.weight;
     peakPosition=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
-    peakMaterial=hit.material;peakRay=slice;}
+    peakMaterial=hit.material;peakRay=slice;peakFlags=0;
+    if(alpha>0&&hit.material<65534){
+     float3 delta=peakPosition-source.origin;
+     if(dot(delta,delta)>1e-12&&dot(normalize(delta),normalize(draw.direction))<.9999)peakFlags|=8;
+     [unroll]for(uint k=0;k<2;++k)if(frozen.validMask&(1u<<k)){
+      float3 c=float3(frozen.bounds[k].center.x,frozen.bounds[k].center.y,frozen.bounds[k].center.z);
+      if(distance(peakPosition,c)<frozen.bounds[k].radius-.001&&draw.weight>1.6)peakFlags|=16;
+     }
+    }
+   }
   }
   weightedSum+=rgb*draw.weight;
  }
@@ -57,7 +66,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  float4 fade=asfloat(giCB1[17]);float nearEdge=fade.x-fade.y;
  float width=(fade.y+fade.x)-nearEdge;float t=saturate((depth-nearEdge)*rcp(width));
  float scale=mad(t*t*(3-2*t),fade.w-fade.z,fade.z);
- GIAutoAuditWrite(auditIndex,scale*rawSum/10,scale*rawPeak/10,scale*radiance,scale*weightedPeak/10,peakPosition,peakWeight,peakMaterial,5|(alpha>0?2:0),peakRay,covered);
+ GIAutoAuditWrite(auditIndex,scale*rawSum/10,scale*rawPeak/10,scale*radiance,scale*weightedPeak/10,peakPosition,peakWeight,peakMaterial,5|(alpha>0?2:0)|peakFlags,peakRay,covered);
  g_rwtDiffuseGIColorTarget[id.xy]=float4(scale*radiance,1);
  g_rwtHitInfo[id.xy]=asfloat(receiver.r5.w)/10;
 }

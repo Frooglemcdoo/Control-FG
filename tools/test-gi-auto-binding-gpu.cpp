@@ -6,8 +6,8 @@ int main()try {
  using namespace gi_reuse;Device d(false);
  GIAutoTargets t{};t.schema=0x41544731;t.version=7;t.frame=12;t.validMask=1;
  t.bounds[0]={{1,2,3},.5f};t.counts[0]=42;t.scores[0]=123;
- GIAutoSelection s{7,12,10,.1f};Require(GIAutoUsable(t,s),"valid selection");
- auto invalid=s;invalid.fraction=.41f;Require(!GIAutoSelectionValid(invalid),"balance mixture bound");
+ GIAutoSelection s{7,12,10,.1f,897};Require(GIAutoUsable(t,s),"valid selection");
+ auto invalid=s;invalid.sampleFrame=0;Require(!GIAutoSelectionValid(invalid),"zero invocation seed admitted");invalid=s;invalid.fraction=.41f;Require(!GIAutoSelectionValid(invalid),"balance mixture bound");
  invalid=s;invalid.rayCount=1;Require(!GIAutoSelectionValid(invalid),"one ray admitted");
  invalid=s;invalid.fraction=std::numeric_limits<float>::quiet_NaN();Require(!GIAutoSelectionValid(invalid),"NaN fraction");
  auto bad=t;bad.bounds[0].radius=-1;Require(!GIAutoUsable(bad,s),"invalid bounds admitted");
@@ -22,9 +22,9 @@ int main()try {
   Require(binding->Initialize(target.Get(),select),"binding initialize");
   Require(!binding->Initialize(target.Get(),s),"immutable selection overwritten");
   Require(binding->EncodeRaygen(identifier.data(),records[i]),"encode raygen");
-  UINT64 address=0;GIAutoSelection decoded{};std::memcpy(&address,records[i].data()+32,8);std::memcpy(&decoded,records[i].data()+40,16);
-  Require(address==target->GetGPUVirtualAddress()&&std::memcmp(&decoded,&select,16)==0,"raygen binding identity");
-  for(UINT j=56;j<64;++j)Require(records[i][j]==0,"shader record padding");
+  UINT64 address=0;GIAutoSelection decoded{};std::memcpy(&address,records[i].data()+32,8);std::memcpy(&decoded,records[i].data()+40,sizeof(GIAutoSelection));
+  Require(address==target->GetGPUVirtualAddress()&&std::memcmp(&decoded,&select,sizeof(GIAutoSelection))==0,"raygen binding identity");
+  for(UINT j=60;j<64;++j)Require(records[i][j]==0,"shader record padding");
  }
  auto* invocation=owner.get();using Retirement=D3D12SnapshotRetirement<Invocation,8,2,4096>;Retirement retirement;
  const auto id=retirement.Admit(101,3*sizeof(GIAutoTargets),owner);Require(id&&!owner,"retirement admission");
@@ -37,10 +37,10 @@ int main()try {
  rd={3,global.data(),0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};blob.Reset();error.Reset();Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));
  ComPtr<ID3D12RootSignature> root;Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto code=Read("gi-auto-binding.dxil");D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> pso;Check(d.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
- auto output=d.Buffer(96,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);auto read=d.Buffer(96,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto output=d.Buffer(144,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);auto read=d.Buffer(144,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(pso.Get());
  for(UINT i=0;i<3;++i){Require(invocation->bindings[i]->BindEvaluator(d.list.Get(),0,1),"evaluator bind");
-  d.list->SetComputeRootUnorderedAccessView(2,output->GetGPUVirtualAddress()+32*i);d.list->Dispatch(1,1,1);}
+  d.list->SetComputeRootUnorderedAccessView(2,output->GetGPUVirtualAddress()+48*i);d.list->Dispatch(1,1,1);}
  d.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyResource(read.Get(),output.Get());
  // Drop all external target references BEFORE submission. The retirement owner
  // now owns the only target leases; fixture storage must not mask a lifetime bug.
@@ -55,9 +55,9 @@ int main()try {
  Check(d.fence->SetEventOnCompletion(2,event));auto wait=WaitForSingleObject(event,15000);CloseHandle(event);Require(wait==WAIT_OBJECT_0,"retirement timeout");
  retirement.Poll();Require(retirement.Take(id,released)&&retirement.RetainedBytes()==0,"completed lease not retired");
  UINT* result=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&result)));
- for(UINT i=0;i<3;++i){Require(result[i*8]==(i==0?1u:0u),"GPU validity differs");
-  Require(result[i*8+1]==7&&result[i*8+2]==12,"GPU target differs");
-  Require(std::memcmp(result+i*8+4,records[i].data()+40,16)==0,"producer/evaluator selection differs");}
+ for(UINT i=0;i<3;++i){Require(result[i*12]==(i==0?1u:0u),"GPU validity differs");
+  Require(result[i*12+1]==7&&result[i*12+2]==12,"GPU target differs");
+  Require(std::memcmp(result+i*12+4,records[i].data()+40,sizeof(GIAutoSelection))==0,"producer/evaluator selection differs");}
  D3D12_RANGE empty{};read->Unmap(0,&empty);
  std::cout<<"PASS immutable target selection, local-root serialization, ray-record layout, GPU evaluator identity, stale rejection and completion retirement. DXR dispatch and live hooks not tested.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

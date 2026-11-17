@@ -39,7 +39,7 @@ public:
    if(!mapped){selected.buffer->Unmap(0,&empty);return E_UNEXPECTED;}
    std::memset(mapped,0,sizeof(GIAutoTargets));const D3D12_RANGE written{0,sizeof(GIAutoTargets)};selected.buffer->Unmap(0,&written);
   }
-  if(!target.Initialize(selected.buffer.Get(),{epoch,selected.frame,10,.4f}))return E_INVALIDARG;
+  if(!target.Initialize(selected.buffer.Get(),{epoch,selected.frame,10,.4f,frame}))return E_INVALIDARG;
   hr=record.Initialize(device,state,target);if(FAILED(hr))return hr;
   pixelBytes=capturePixels?UINT64(GIAuditWidth(w))*GIAuditHeight(h)*sizeof(GIAutoPixelAudit):0;
   hr=Buffer(device,UINT64(capacity)*sizeof(GIAutoTraining)+pixelBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;

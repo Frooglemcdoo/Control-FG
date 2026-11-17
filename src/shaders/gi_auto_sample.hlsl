@@ -27,6 +27,8 @@ float2 GIAutoOwned10(uint2 pixel,uint frame,uint batch,uint ray,uint seed) {
 struct GIAutoDraw {float3 direction;float weight,range;uint traceRay;};
 GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin,
                       float3 normal,GIAutoTargets targets,GIAutoSelection selection) {
+ // Both stages use the invocation seed, never independently sourced native CB clocks.
+ frame=selection.sampleFrame;
  GIAutoDraw result=(GIAutoDraw)0;
  uint seed=GIAutoSeed(pixel,frame,batch,ray);
  result.range=GIProducerUnit(seed,0x967a889bu);

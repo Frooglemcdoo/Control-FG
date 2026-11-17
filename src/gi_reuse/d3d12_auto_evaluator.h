@@ -27,7 +27,7 @@ public:
   if(rd.Flags&D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE)return E_INVALIDARG;
   // Reject collisions with the appended private register space, including
   // descriptor ranges and static samplers. No silent register remapping.
-  UINT cost=12;
+  UINT cost=13;
   std::vector<D3D12_ROOT_PARAMETER> parameters(rd.pParameters,rd.pParameters+rd.NumParameters);
   std::vector<D3D12_ROOT_PARAMETER_TYPE> kinds;std::vector<UINT> constants;
   for(const auto& p:parameters){

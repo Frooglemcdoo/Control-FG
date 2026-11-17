@@ -31,5 +31,5 @@ int main()try {
   }
  }
  D3D12_RANGE empty{};read->Unmap(0,&empty);
- std::cout<<"PASS paired sampler/resolve: ten proposal/source states, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.\n";return 0;
+ std::cout<<"PASS frozen invocation seed despite differing native clocks, fresh invocation changes draw; paired sampler/resolve: ten proposal/source states, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
