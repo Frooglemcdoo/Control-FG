@@ -41,6 +41,18 @@ GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin
  // Each stratum has a fresh independent range draw and within-stratum jitter.
  float u=min((float(ray)+GIProducerUnit(seed,0x68bc21ebu))/10.0f,.9999999403953552f);
  float v=GIProducerUnit(seed,0x02e5be93u);
+ // Latin stratification within each fixed component preserves the component's
+ // full radial marginal while avoiding six independent cosine elevations.
+ // The shared random rotation is independent of per-ray angular/range jitter.
+ if(alpha==.4f){
+  uint component=ray<2?0:(ray<4?1:2);
+  uint size=component==2?6:2;
+  uint local=component==2?ray-4:ray-component*2;
+  uint rotation=GIProducerHash(pixel.x*0x8da6b343u^pixel.y*0xd8163841u^
+                    frame*0xcb1ab31fu^batch*0x165667b1u^component*0x9e3779b9u)%size;
+  v=(float((local+rotation)%size)+v)/float(size);
+ }
+
  uint first=(targets.validMask&1)?0:1;
  uint second=targets.validMask==3?1:first;
  GTBound a,b;

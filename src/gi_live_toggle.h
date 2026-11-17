@@ -112,7 +112,7 @@ inline HRESULT Create(gi_sequence::Create next,ID3D12Device5* device,const D3D12
 #ifdef CONTROL_GI_AUTO_TARGETS
   if(automatic&&identifier){
    const bool found=props->GetShaderIdentifier(gi_reuse::D3D12AutoRaygenAugment::Export)!=nullptr;
-   Log("GI_AUTO_R448 ray_pipeline_prepared=%u",unsigned(found));if(!found)identifier=nullptr;
+   Log("GI_AUTO_R449 ray_pipeline_prepared=%u",unsigned(found));if(!found)identifier=nullptr;
   }
 #endif
   const void* phaseIdentifiers[2]={nullptr,nullptr};
