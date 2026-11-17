@@ -67,8 +67,8 @@ int main()try {
  warm1.energy=5;auto warmSwap=d.Upload(std::vector<GIAutoTraining>{warm0,warm1,other});
  Require(builder.Record(d.list.Get(),warmSwap.Get(),3,cells.Get(),frozen.Get(),slots,12,7,.5f,512,1,restore),"warm peak swap");copy(11);
  // Adjacent grid keys alone must not force separation (R457 regression).
- right.position.x=.73f;right.energy=1.8f;auto far=b;far.energy=1;
- auto adjacent=d.Upload(std::vector<GIAutoTraining>{left,right,far});
+ right.position.x=.73f;right.energy=1.8f;auto distantPatch=b;distantPatch.energy=1;
+ auto adjacent=d.Upload(std::vector<GIAutoTraining>{left,right,distantPatch});
  Require(builder.Record(d.list.Get(),adjacent.Get(),3,cells.Get(),frozen.Get(),slots,13,7,.5f,512,1,restore),"distinct adjacent build");copy(12);
  // Exercise an alternative sharing a scan lane with the winning anchor.
  std::vector<GIAutoTraining> crowded;auto p0=a;p0.position={.49f,.2f,3.2f};p0.energy=4;
