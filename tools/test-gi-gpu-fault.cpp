@@ -10,7 +10,6 @@ static void Log(const char* fmt,...)noexcept {
 }
 #include "../src/gi_gpu_fault.h"
 int main()try {
- using namespace gi_reuse;
  SetEnvironmentVariableA("CONTROLTOH_GPU_FAULT","1");gi_gpu_fault::BeforeDevice();
  Require(gi_gpu_fault::requested.load(),"fault diagnostics not requested");
  Device d(false);gi_gpu_fault::Attach(d.device.Get());Require(gi_gpu_fault::device!=nullptr,"observer attachment failed");
