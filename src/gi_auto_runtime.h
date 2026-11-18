@@ -6,7 +6,7 @@
 #include "gi_reuse/d3d12_native_gi_recording.h"
 namespace gi_auto_runtime {
 using Owner=gi_reuse::D3D12AutoInvocation;
-using Router=gi_reuse::D3D12SplitSubmissionRouter<Owner,8,256ull*1024*1024>;
+using Router=gi_reuse::D3D12SplitSubmissionRouter<Owner,8,512ull*1024*1024>;
 inline Router* const router=new(std::nothrow) Router;
 inline std::mutex mutex;
 inline control_rr_native_clamp::Api provider;
