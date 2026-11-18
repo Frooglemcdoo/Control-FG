@@ -107,6 +107,7 @@ static void Log(const char* format, ...) noexcept {
 
 }
 
+#include "gi_gpu_fault.h"
 #include "gi_frame_capture.h"
 
 static std::wstring ModulePath(HMODULE module) {
@@ -868,7 +869,9 @@ static void HookPresent() {
     TouchSLCurrentBackBufferIndex(count);
     sl::FrameToken* slPresentToken = BeginSLPresentFrame(count);
     if(FGAlignActive(count)) Log("ALIGN_NATIVE_PRESENT present=%llu begin=%llu aa=%llu token=%p tag_mask=0x%X fg_enabled=%u",count,beginCount.load(),aaCount.load(),slPresentToken,GetSLFrameTagMask(count),slFgEnabledByApi.load());
+    gi_gpu_fault::BeginPresent(count);
     originalPresent();
+    gi_gpu_fault::EndPresent();
     EndSLPresentFrame(count, slPresentToken);
     RRGuideAfterPresent(count);
     RRLiveAfterPresent(count);
@@ -1537,13 +1540,13 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         gi_scene_audit::Install(renderer,d3d);
 #ifdef CONTROL_GI_AUTO_TARGETS
-        Log("GI_AUTO_R466 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
+        Log("GI_AUTO_R467 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
 #endif
         if(gi_reuse::GuidedLiveEnabled()){
             const bool installed=gi_native_render_scope::Install(renderer,d3d);
             gi_reuse::guidedScopeReady.store(installed);
 #ifdef CONTROL_GI_AUTO_TARGETS
-            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R466 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
+            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R467 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
 #endif
             Log("GI_GUIDED_R434 scope_ready=%u same_invocation_pair=1 fixed_scene=1",unsigned(installed));
         }
@@ -1692,6 +1695,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
 }
 
 static BOOL CALLBACK LoadReal(PINIT_ONCE, PVOID, PVOID*) noexcept {
+    gi_gpu_fault::BeforeDevice();
     wchar_t path[32768];
     UINT n = GetSystemDirectoryW(path, _countof(path));
     if (!n || n + 10 >= _countof(path)) return TRUE;

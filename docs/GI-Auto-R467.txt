@@ -1,0 +1,17 @@
+R467 - GI freeze fault capture (diagnostic build, not a verified fix)
+
+Install beside Control_DX12.exe. Both 4/10 ray launchers are in ControlTOH/Diagnostics.
+Start with Start-GI-Auto-R467-4Rays.cmd. GI FIXED, RR ON, RELAX OFF, FG OFF.
+Load the level that froze. If frozen, leave it running for 15 seconds, then collect
+compact logs using ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd.
+No F7 or additional thread dump is needed for this run.
+
+The launcher enables DRED before the DXGI factory request. A separate observer
+reports a stalled native Present, device removal reason, GI fence progress and
+available DRED breadcrumbs/page-fault data after removal. It does not bypass
+native waits or change Windows TDR settings. DRED may add overhead: do not use
+this diagnostic run to judge FPS. If the device remains healthy, DRED will not
+provide removal data; the stall/fence report still records that distinction.
+
+Regional shaders and both ray-count options are unchanged from R466. This build
+is to locate the GPU failure before changing rendering behavior.
