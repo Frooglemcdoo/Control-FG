@@ -34,7 +34,7 @@ public:
  UINT roiX=0,roiY=0;
  GIAutoPublishedTarget output;
  UINT width=0,height=0,step=0,capacity=0;
- bool shaded=false,reusedScratch=false;
+ bool shaded=false,reusedScratch=false,producerPrepared=false;
  Ptr<ID3D12Device> ownerDevice;
  std::unique_ptr<D3D12AutoScratch> ReleaseRetiredScratch()noexcept {
   if(!shaded||pixelBytes)return {};
@@ -73,12 +73,17 @@ public:
   output.frame=frame;output.epoch=epoch;pipelines=bundle;return S_OK;
  }
  UINT64 Bytes()const noexcept{return UINT64(capacity)*GIAutoTrainingStride+(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride)+GIAutoPublicationBytes+record.RetainedBytes()+target.RetainedBytes()+(audit?2*GIAutoPublicationBytes:0)+2*pixelBytes;}
- bool Shade(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings)noexcept {
-  if(shaded||!pipelines)return false;
+ void PrepareProducer(ID3D12GraphicsCommandList4* list)noexcept {
+  if(producerPrepared)return;
   if(reusedScratch){
    D3D12_RESOURCE_BARRIER reset{};reset.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
    reset.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&reset);
   }
+  producerPrepared=true;
+ }
+ bool Shade(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings)noexcept {
+  if(shaded||!pipelines)return false;
+  PrepareProducer(list);
   if(pixelBytes){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=training.Get();list->ResourceBarrier(1,&b);}
   timing.Mark(list,2);
   if(!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0,roiX,roiY))return false;

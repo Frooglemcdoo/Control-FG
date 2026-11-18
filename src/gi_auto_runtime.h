@@ -188,7 +188,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   pending={scope.token,id,scope.frame,desc->Width,desc->Height,false,list,generation};
   auto replacement=*desc;replacement.RayGenerationShaderRecord=record;
   gi_gpu_fault::Track(scope.frame,list,false);
-  native_lighting::gi_compute_hooks::Mute mute;activeOwner->timing.Mark(list,0);dispatch(list,&replacement);activeOwner->timing.Mark(list,1);activeOwner->timing.Resolve(list,0,2);
+  native_lighting::gi_compute_hooks::Mute mute;activeOwner->PrepareProducer(list);activeOwner->timing.Mark(list,0);dispatch(list,&replacement);activeOwner->timing.Mark(list,1);activeOwner->timing.Resolve(list,0,2);
   if(collecting){++captureOrdinal;gi_auto_capture::recorded.store(captureOrdinal);}
   gi_gpu_fault::recordedFrame=scope.frame;
   const auto n=++produced;if(n<=32||n%600==0)Log("GI_AUTO_R470 producer=%llu frame=%llu target_source=%u guide_version=%u native_heap_epoch=%llu prior_frame=%u prior_version=%u rays=%u guide_fraction=%.1f scratch_reused=%llu scratch_fresh=%llu estimator=stratified_balance",n,scope.frame,selected.sourceFrame,selected.version,static_cast<unsigned long long>(context.heaps.deviceEpoch),prior.frame,prior.epoch,rays,double(selected.fraction),scratchHits.load(),scratchMisses.load());
