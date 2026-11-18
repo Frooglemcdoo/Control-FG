@@ -1,5 +1,5 @@
 """Create two launch-configured packages from the same verified R461 binary."""
-import argparse, hashlib, pathlib, zipfile
+import argparse, copy, hashlib, pathlib, zipfile
 p=argparse.ArgumentParser();p.add_argument('base');p.add_argument('output');a=p.parse_args()
 out=pathlib.Path(a.output);out.mkdir(parents=True,exist_ok=True)
 with zipfile.ZipFile(a.base) as source:
@@ -15,7 +15,7 @@ with zipfile.ZipFile(a.base) as source:
                 if entry.filename.endswith(launcher):assert f'CONTROLTOH_GI_AUTO_RAYS={rays}'.encode() in data
                 if entry.filename.replace('\\','/').endswith('ControlTOH/README.txt'):
                     data=(f'THIS PACKAGE: {rays} GI RAYS\r\nRun ControlTOH\\Diagnostics\\{launcher}\r\n\r\n').encode()+data
-                target.writestr(entry,data)
+                target.writestr(copy.copy(entry),data)
         with zipfile.ZipFile(path) as check:
             assert check.testzip() is None and check.read('dxgi.dll')==dll
             launchers=[n for n in check.namelist() if 'Start-GI-Auto-R461-' in n]
