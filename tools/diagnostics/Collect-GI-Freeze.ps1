@@ -54,3 +54,4 @@ public static class GIFreezeDump {
 } finally {
   if($child -and -not $child.HasExited){Stop-Process -Id $child.Id -Force}
 }
+exit 0
