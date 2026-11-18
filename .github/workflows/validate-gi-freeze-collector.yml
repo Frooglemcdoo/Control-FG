@@ -1,0 +1,22 @@
+name: Validate GI freeze collector
+on:
+  push:
+    branches: [work/gi-freeze-r466]
+    paths:
+      - tools/diagnostics/Collect-GI-Freeze.*
+      - .github/workflows/validate-gi-freeze-collector.yml
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture live child process stacks and validate archive
+        shell: powershell
+        run: |
+          & tools/diagnostics/Collect-GI-Freeze.ps1 -SelfTest
+          if($LASTEXITCODE -ne 0){throw 'Freeze collector failed'}
+          $zip=Get-ChildItem tools/diagnostics/Control-GI-Freeze-*.zip | Select-Object -First 1
+          if(-not $zip){throw 'No freeze archive'}
+          Expand-Archive $zip.FullName -DestinationPath freeze-check
+          if(@(Get-ChildItem freeze-check/*.dmp).Count -ne 3){throw 'Missing dumps'}
+          if(@(Get-ChildItem freeze-check/*.json).Count -ne 3){throw 'Missing thread metadata'}
