@@ -12,6 +12,7 @@ inline std::atomic<ID3D12Fence*> fence{nullptr};
 inline std::atomic<UINT64> issued{0},presentStart{0},presentFrame{0},recordedFrame{0},retiredFrame{0};
 inline std::atomic<HRESULT> signalResult{S_OK};
 inline void BeforeDevice()noexcept {
+ static std::atomic<bool> attempted{false};if(attempted.exchange(true))return;
  char value[4]{};
  if(GetEnvironmentVariableA("CONTROLTOH_GPU_FAULT",value,4)!=1||value[0]!='1')return;
  requested=true;

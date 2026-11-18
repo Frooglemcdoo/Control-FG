@@ -1695,7 +1695,6 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
 }
 
 static BOOL CALLBACK LoadReal(PINIT_ONCE, PVOID, PVOID*) noexcept {
-    gi_gpu_fault::BeforeDevice();
     wchar_t path[32768];
     UINT n = GetSystemDirectoryW(path, _countof(path));
     if (!n || n + 10 >= _countof(path)) return TRUE;
@@ -1708,7 +1707,7 @@ static FARPROC Real(const char* name) noexcept {
     InitOnceExecuteOnce(&loadOnce, LoadReal, nullptr, nullptr);
     return realDxgi ? GetProcAddress(realDxgi, name) : nullptr;
 }
-static void StartProbe() noexcept { InitOnceExecuteOnce(&probeOnce, Configure, nullptr, nullptr); }
+static void StartProbe() noexcept { gi_gpu_fault::BeforeDevice(); InitOnceExecuteOnce(&probeOnce, Configure, nullptr, nullptr); }
 
 // Export aliases live in dxgi.def. No DXGI/D3D calls or hook work in DllMain.
 extern "C" HRESULT WINAPI ProbeCreateDXGIFactory(REFIID iid, void** factory) {
