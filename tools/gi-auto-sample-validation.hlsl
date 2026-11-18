@@ -4,7 +4,7 @@ static const uint count=32768;
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
  uint scenario=id.x/count,index=id.x%count;
- if(scenario>=10)return;
+ if(scenario>=12)return;
  GIAutoTargets targets=(GIAutoTargets)0;
  targets.schema=0x41544731;targets.version=7;targets.frame=12;targets.validMask=3;
  targets.bounds[0].center.z=3;targets.bounds[0].radius=.5;
@@ -22,6 +22,8 @@ void main(uint3 id:SV_DispatchThreadID) {
   float3 axis=scenario==8?float3(.6,0,.8):float3(0,0,1);
   if(scenario==7)axis=float3(.6,0,.8);
   targets.bounds[0].center.x=axis.x*3;targets.bounds[0].center.z=axis.z*3;targets.bounds[0].radius=.03;
+  if(scenario==10)targets.bounds[0].radius=.4330127;
+  if(scenario==11)targets.bounds[0].radius=.25;
   targets.bounds[1]=targets.bounds[0];
  }
  float alpha=GIAutoAlpha(targets,selection);
@@ -45,8 +47,8 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(!all(isfinite(draw.direction))||abs(dot(draw.direction,draw.direction)-1)>.00001||
      draw.weight<0||draw.weight>1.66667||draw.range<0||draw.range>=1||
      (!draw.traceRay&&draw.weight!=0))valid=0;
-  if(index==0){output[10*count+scenario*20+i*2]=float4(draw.direction,draw.weight);
-   output[10*count+scenario*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
+  if(index==0){output[12*count+scenario*20+i*2]=float4(draw.direction,draw.weight);
+   output[12*count+scenario*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
  }
  float3 result=sum/10;
  output[id.x]=float4(result,valid);

@@ -27,12 +27,12 @@ inline void Close()noexcept {if(box)DestroyWindow(box);if(label)DestroyWindow(la
 inline void Tick(HWND game)noexcept {
  if(!gi_auto_dispatch::Enabled())return;
  if(owner!=game)Close();if(!game)return;
- if(!box||!label){Close();WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.hInstance=selfModule;wc.lpfnWndProc=BoxProc;wc.lpszClassName=L"ControlGIAutoBoxR459";
+ if(!box||!label){Close();WNDCLASSEXW wc{};wc.cbSize=sizeof(wc);wc.hInstance=selfModule;wc.lpfnWndProc=BoxProc;wc.lpszClassName=L"ControlGIAutoBoxR460";
   if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return;
-  wc.lpfnWndProc=LabelProc;wc.lpszClassName=L"ControlGIAutoLabelR459";if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return;
+  wc.lpfnWndProc=LabelProc;wc.lpszClassName=L"ControlGIAutoLabelR460";if(!RegisterClassExW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS)return;
   const DWORD ex=WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE|WS_EX_TRANSPARENT|WS_EX_LAYERED;
-  box=CreateWindowExW(ex,L"ControlGIAutoBoxR459",L"GI capture region",WS_POPUP,0,0,1,1,game,nullptr,selfModule,nullptr);
-  label=CreateWindowExW(ex,L"ControlGIAutoLabelR459",L"GI capture controls",WS_POPUP,0,0,700,48,game,nullptr,selfModule,nullptr);
+  box=CreateWindowExW(ex,L"ControlGIAutoBoxR460",L"GI capture region",WS_POPUP,0,0,1,1,game,nullptr,selfModule,nullptr);
+  label=CreateWindowExW(ex,L"ControlGIAutoLabelR460",L"GI capture controls",WS_POPUP,0,0,700,48,game,nullptr,selfModule,nullptr);
   if(!box||!label){Close();return;}owner=game;SetLayeredWindowAttributes(box,RGB(0,0,0),255,LWA_COLORKEY);SetLayeredWindowAttributes(label,0,235,LWA_ALPHA);
  }
  DWORD pid=0;GetWindowThreadProcessId(GetForegroundWindow(),&pid);
@@ -50,7 +50,7 @@ inline void Tick(HWND game)noexcept {
  if(f7&&!f7Held&&editable&&w&&h){
   gi_auto_capture::frozenCenter.store(gi_auto_capture::center.load());gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
   ++gi_auto_capture::request;armedAt=GetTickCount64();gi_auto_capture::phase=gi_auto_capture::Countdown;
-  Log("GI_AUTO_R459 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
+  Log("GI_AUTO_R460 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
  }
  f7Held=f7;
  if(gi_auto_capture::phase.load()==gi_auto_capture::Countdown&&GetTickCount64()-armedAt>=5000)gi_auto_capture::phase=gi_auto_capture::Collecting;

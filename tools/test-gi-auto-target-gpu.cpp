@@ -14,7 +14,7 @@ int main()try {
  auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
  auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto back=d.Buffer(15*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto back=d.Buffer(18*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
  const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
  for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
@@ -80,13 +80,23 @@ int main()try {
  auto crowdedInput=d.Upload(crowded);
  Require(builder.Record(d.list.Get(),crowdedInput.Get(),3,cells.Get(),frozen.Get(),slots,14,7,.5f,512,1,restore),"full rescan build");copy(13);
  auto onlyDuplicate=d.Upload(std::vector<GIAutoTraining>{warm0,warm1});
- Require(builder.Record(d.list.Get(),onlyDuplicate.Get(),2,cells.Get(),frozen.Get(),slots,15,7,.5f,512,1,restore),"duplicate fallback");copy(14);d.Submit();
+ Require(builder.Record(d.list.Get(),onlyDuplicate.Get(),2,cells.Get(),frozen.Get(),slots,15,7,.5f,512,1,restore),"duplicate fallback");copy(14);
+ // Dense compact source should concentrate proposals; a rare source stays wide.
+ auto compact=a;auto edgeBright=a;edgeBright.position.x=.48f;
+ auto dimEdge=a;dimEdge.position={.49f,.49f,3.49f};dimEdge.energy=.01f;
+ std::vector<GIAutoTraining> compactRecords(16,compact);compactRecords.push_back(dimEdge);
+ auto compactInput=d.Upload(compactRecords);
+ Require(builder.Record(d.list.Get(),compactInput.Get(),UINT(compactRecords.size()),cells.Get(),frozen.Get(),slots,16,7,.5f,512,1,restore),"compact source fit");copy(15);
+ compactRecords.push_back(edgeBright);auto extendedInput=d.Upload(compactRecords);
+ Require(builder.Record(d.list.Get(),extendedInput.Get(),UINT(compactRecords.size()),cells.Get(),frozen.Get(),slots,17,7,.5f,512,1,restore),"extended source fit");copy(16);
+ dimEdge.energy=compact.energy;compactRecords.push_back(dimEdge);auto broadInput=d.Upload(compactRecords);
+ Require(builder.Record(d.list.Get(),broadInput.Get(),UINT(compactRecords.size()),cells.Get(),frozen.Get(),slots,18,7,.5f,512,1,restore),"broad source fit");copy(17);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
  Require(mapped[0].scores[0]==204800&&mapped[0].scores[1]==102400,"target ordering/scores");
  Require(std::abs(mapped[0].bounds[0].center.x-.2f)<1e-6&&std::abs(mapped[0].bounds[1].center.x-1.2f)<1e-6,"target centers");
- Require(std::abs(mapped[0].bounds[0].radius-.4330127f)<1e-6,"enclosing radius");
+ Require(std::abs(mapped[0].bounds[0].radius-.25f)<1e-6,"compact radius floor");
  Require(!GIAutoMatches(mapped[0],8,1)&&!GIAutoMatches(mapped[0],7,2),"wrong identity admitted");
  Require(mapped[1].frame==2&&mapped[1].validMask==0&&mapped[1].scores[0]==0,"empty frame retained stale target");
  Require(mapped[2].version==8&&mapped[2].validMask==0,"epoch retained stale target");
@@ -112,6 +122,10 @@ int main()try {
  Require(std::abs(mapped[12].bounds[1].center.x-.73f)<1e-6,"distinct neighboring anchor wrongly excluded");
  Require(std::abs(mapped[13].bounds[1].center.x-p2.position.x)<1e-6,"full rescan lost alternative");
  Require(mapped[14].validMask==3&&std::abs(mapped[14].bounds[1].center.z-warm0.position.z)<1e-5f,"single-patch fallback changed R458 coverage");
+ Require(std::abs(mapped[15].bounds[0].radius-.25f)<1e-6,"dim sample inflated compact source");
+ Require(std::abs(mapped[16].bounds[0].radius-.33f)<1e-6,"bright source extent/padding lost");
+ Require(std::abs(mapped[17].bounds[0].radius-.4330127f)<1e-6,"broad source radius ceiling lost");
+ Require(std::abs(mapped[5].bounds[0].radius-.4330127f)<1e-6,"rare source narrowed without support");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;
@@ -133,5 +147,5 @@ int main()try {
  V* pv=nullptr;Check(pilotRead->Map(0,nullptr,reinterpret_cast<void**>(&pv)));
  for(UINT c=0;c<cases;++c){Require(pv[c].w==float(expected[c].valid),"GPU pilot validity");const float actual[]={pv[c].x,pv[c].y,pv[c].z},ref[]={expected[c].rgb.x,expected[c].rgb.y,expected[c].rgb.z};for(UINT k=0;k<3;++k)Require(std::abs(actual[k]-ref[k])<.00001f*(1+std::abs(ref[k])),"GPU pilot result");}
  pilotRead->Unmap(0,&none);
- std::cout<<"PASS near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
+ std::cout<<"PASS bright-footprint radius fit, dim rejection, padding, floor/ceiling and sparse fallback; near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

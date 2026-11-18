@@ -28,6 +28,15 @@ uint QuantizedScore(GIAutoTraining r){return uint(clamp(r.energy*scoreScale,1.,6
  int3 chosen=Key(training[winner]);if(any(chosen!=k))return;
  if(id.x==winner){cells[slot].x=k.x;cells[slot].y=k.y;cells[slot].z=k.z;cells[slot].state=2;}
  uint old;InterlockedAdd(cells[slot].score,QuantizedScore(r),old);InterlockedAdd(cells[slot].count,1,old);
+ // Fit only the bright part of this cell; dim background must not widen a
+ // narrow source. Positive float bits preserve ordering for atomic max.
+ GIAutoTraining anchor=training[winner];
+ if(r.energy>=anchor.energy*.25){
+  float3 delta=float3(r.position.x-anchor.position.x,r.position.y-anchor.position.y,r.position.z-anchor.position.z);
+  float maximum=cellSize*.866025404;
+  float extent2=min(dot(delta,delta),maximum*maximum);
+  InterlockedMax(cells[slot].reserved1,asuint(extent2),old);
+ }
 }
 groupshared uint bestSlots[128];groupshared uint bestScores[128];
 groupshared uint selectedSlots[2];groupshared uint seekAlternative;
@@ -51,7 +60,7 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
   seekAlternative=0;
   if(selectedSlots[0]!=0xffffffffu&&selectedSlots[1]!=0xffffffffu){
    float3 delta=Anchor(selectedSlots[1])-Anchor(selectedSlots[0]);
-   float nearRadius=cellSize*.433012702; // Half the unchanged guide radius.
+   float nearRadius=cellSize*.433012702; // R459 duplicate distance stays unchanged.
    seekAlternative=dot(delta,delta)<nearRadius*nearRadius?1:0;
   }
  }
@@ -82,7 +91,11 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
    uint chosen=selectedSlots[rank];if(chosen==0xffffffffu)continue;
    GIAutoCell c=cells[chosen];uint winner=65535u-(c.reserved0&65535u);
    t.bounds[rank].center=training[winner].position;
-   t.bounds[rank].radius=cellSize*.866025404;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
+   // Sparse discovery retains R458's broad radius. Dense cells fit the
+   // observed bright footprint, with padding and a conservative radius floor.
+   float maximum=cellSize*.866025404;
+   float fitted=clamp(sqrt(asfloat(c.reserved1))+cellSize*.1,cellSize*.5,maximum);
+   t.bounds[rank].radius=c.count>=8?fitted:maximum;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
   }
   targets[0]=t;
  }
