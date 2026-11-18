@@ -3,6 +3,7 @@
 #include "d3d12_auto_raygen.h"
 #include "auto_guide_session.h"
 #include <memory>
+#include "d3d12_auto_timing.h"
 namespace gi_reuse {
 struct GIAutoPublishedTarget {
  Microsoft::WRL::ComPtr<ID3D12Resource> buffer;
@@ -27,6 +28,7 @@ public:
  Ptr<D3D12AutoPipelineBundle> pipelines;
  D3D12AutoTargetBinding target;
  D3D12AutoRaygenRecord record;
+ D3D12AutoTiming timing;
  Ptr<ID3D12Resource> training,cells,audit,pixelAudit;
  UINT64 pixelBytes=0,auditOrdinal=0,captureRequest=0;
  UINT roiX=0,roiY=0;
@@ -72,10 +74,14 @@ public:
    D3D12_RESOURCE_BARRIER reset{};reset.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
    reset.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&reset);
   }
+  timing.Mark(list,2);
   if(!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0,roiX,roiY))return false;
+  timing.Mark(list,3);
   D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
   barrier.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE};list->ResourceBarrier(1,&barrier);
+  timing.Mark(list,4);
   shaded=pipelines->builder.Record(list,training.Get(),capacity,cells.Get(),output.buffer.Get(),4096,output.frame,output.epoch,.5f,512,1,bindings);
+  timing.Mark(list,5);timing.Resolve(list,2,4);
   if(shaded&&audit){
    barrier.Transition={output.buffer.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
    list->CopyBufferRegion(audit.Get(),0,output.buffer.Get(),0,sizeof(GIAutoTargets));

@@ -102,7 +102,7 @@ public:
      !(training->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
      training->GetDesc().Width<UINT64(capacity)*sizeof(GIAutoTraining)+(pixels?UINT64(GIAuditWidth(width))*GIAuditHeight(height)*sizeof(GIAutoPixelAudit):0)||
      !training->GetGPUVirtualAddress()||training->GetGPUVirtualAddress()%8||
-     target.Selection().rayCount!=10||
+     (target.Selection().rayCount!=10&&target.Selection().rayCount!=4)||
      (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
   struct Replay {
    ID3D12GraphicsCommandList4* list;

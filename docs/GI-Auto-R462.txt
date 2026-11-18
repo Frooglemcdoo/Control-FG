@@ -1,0 +1,20 @@
+R462 - Four-ray evaluator correction and sampled GPU stage timing
+
+Install beside Control_DX12.exe with the game closed. Run the matching R462
+launcher in ControlTOH/Diagnostics. RR ON, GI FIXED, RELAX OFF, FG OFF.
+The launcher selects 4 or 10 actual GI rays without changing saved settings.
+
+Fix: the R461 host evaluator still required ten rays and halted the four-ray
+path at its first invocation. R462 admits both tested ray counts. Ten-ray
+sampling, weighting and guide shaders are unchanged from R461.
+
+GPU timestamps now sample ray traversal, lighting evaluator and guide-building
+scopes once per 120 invocations. Readback occurs only after existing GPU and
+recording retirement, without waiting. F7 pixel capture suppresses sampling.
+These are scoped GPU times, not whole-frame time, and concurrent work can affect
+them. This is a correctness fix and performance diagnostic, not a claimed FPS fix.
+
+Play the same scene for about 60 seconds WITHOUT F7, then run
+ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd. Compare ten rays first.
+Four rays remain experimental; corrected execution still needs live validation.
+Optional visual capture uses F7 and Alt+arrows; never Ctrl for box movement.
