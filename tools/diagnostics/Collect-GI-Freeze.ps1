@@ -46,7 +46,7 @@ public static class GIFreezeDump {
   $zip="$folder.zip"
   Compress-Archive -Path "$folder\*" -DestinationPath $zip
   Write-Host "SUCCESS: Upload this ZIP: $zip"
-  if(-not $SelfTest){Start-Process explorer.exe -ArgumentList "/select,`"$zip`"""}
+  if(-not $SelfTest){Start-Process explorer.exe -ArgumentList ('/select,"'+$zip+'"')}
 } catch {
   Write-Host "Capture failed: $($_.Exception.Message)" -ForegroundColor Red
   Write-Host 'If access was denied, right-click Collect-GI-Freeze.cmd and select Run as administrator.'
