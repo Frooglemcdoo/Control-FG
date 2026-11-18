@@ -20,7 +20,7 @@ void giAutoRaygen() {
  if((selection.rayCount!=10&&selection.rayCount!=4)||controls.z!=selection.rayCount||controls.w!=0||passCount!=1)return;
  GIFrozenReceiver receiver=GIFrozenDecodeReceiver(pixel,gbuffer.Load(int3(pixel,0)),
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
- if(!receiver.valid){[unroll]for(uint i=0;i<selection.rayCount;++i)materials[uint3(pixel,i)]=65534;return;}
+ if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i)materials[uint3(pixel,i)]=65534;return;}
  GIAutoTargets frozen=targets[0];
  [loop]for(uint rayIndex=0;rayIndex<selection.rayCount;++rayIndex) {
   GIAutoDraw draw=GIAutoSample(pixel,system[69].z,0,rayIndex,receiver.origin,receiver.normal,frozen,selection);
