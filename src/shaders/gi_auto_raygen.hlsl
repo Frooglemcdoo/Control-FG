@@ -1,5 +1,5 @@
-// Candidate variant-zero full-resolution raygen. NOT hooked into gameplay.
-// Host must admit ten rays, batch zero, one pass and the shared-hit variant from
+// Paired variant-zero full-resolution raygen, installed by the owned GI hook.
+// Host must admit four or ten rays, batch zero, one pass and the shared-hit variant from
 // gi_single_producer.py in the SAME state object. Native global root is preserved.
 #include "gi_frozen_receiver.hlsl"
 #include "gi_auto_sample.hlsl"
@@ -17,12 +17,12 @@ struct Payload {uint slice;};
 void giAutoRaygen() {
  uint2 pixel=DispatchRaysIndex().xy;
  // These are admission requirements, not a safe post-dispatch recovery path.
- if(controls.z!=10||controls.w!=0||passCount!=1||selection.rayCount!=10)return;
+ if((selection.rayCount!=10&&selection.rayCount!=4)||controls.z!=selection.rayCount||controls.w!=0||passCount!=1)return;
  GIFrozenReceiver receiver=GIFrozenDecodeReceiver(pixel,gbuffer.Load(int3(pixel,0)),
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
- if(!receiver.valid){[unroll]for(uint i=0;i<10;++i)materials[uint3(pixel,i)]=65534;return;}
+ if(!receiver.valid){[unroll]for(uint i=0;i<selection.rayCount;++i)materials[uint3(pixel,i)]=65534;return;}
  GIAutoTargets frozen=targets[0];
- [loop]for(uint rayIndex=0;rayIndex<10;++rayIndex) {
+ [loop]for(uint rayIndex=0;rayIndex<selection.rayCount;++rayIndex) {
   GIAutoDraw draw=GIAutoSample(pixel,system[69].z,0,rayIndex,receiver.origin,receiver.normal,frozen,selection);
   RayDesc ray;ray.Origin=receiver.origin;ray.Direction=draw.direction;ray.TMin=0;
   ray.TMax=asfloat(controls.x)*(.8f+.4f*draw.range);

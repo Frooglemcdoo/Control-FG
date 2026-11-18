@@ -16,6 +16,7 @@
 #include "rr_diffuse_source_policy.h"
 #include "rt_surface_source_capture.h"
 #include "rr_gi_sample_control.h"
+#include "gi_auto_dispatch_bridge.h"
 #include "rr_gi_signal_history.h"
 #include "gi_reuse/owned_request.h"
 #include "rr_sample_diagnostic.h"
@@ -290,7 +291,8 @@ static unsigned RRNativeGISampleCount(void* option) {
  const unsigned nativeCount=rrNativeGISampleOriginal(option);
  const DWORD saved=GetLastError();
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
- const unsigned effective=control_rr::GISampleComparison(nativeCount,rrNativeGISampleSelection.requested,full);
+ const unsigned launchRays=gi_auto_dispatch::LaunchRays();
+ const unsigned effective=control_rr::GISampleComparison(nativeCount,launchRays?launchRays:rrNativeGISampleSelection.requested,full);
  settings_check::RecordGISamples(effective);
  static thread_local unsigned lastNative=~0u,lastEffective=~0u;
  if(nativeCount!=lastNative||effective!=lastEffective)

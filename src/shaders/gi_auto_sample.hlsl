@@ -3,17 +3,17 @@
 #include "../gi_reuse/auto_target_binding.h"
 #include "../gi_reuse/producer_sampling.h"
 #include "gi_guided_target.hlsl"
-// First live candidate is deliberately restricted to the captured ten-ray ABI.
+// Paired ten-ray baseline and four-ray candidate, both single-batch.
 // The caller must freeze one target resource for producer AND evaluator.
 float GIAutoAlpha(GIAutoTargets targets,GIAutoSelection selection) {
- return selection.rayCount==10&&GIAutoUsable(targets,selection)?selection.fraction:0;
+ return ((selection.rayCount==10&&selection.fraction==.4f)||(selection.rayCount==4&&selection.fraction==.5f))&&GIAutoUsable(targets,selection)?selection.fraction:0;
 }
 uint GIAutoSeed(uint2 pixel,uint frame,uint batch,uint ray) {
  return pixel.x*73856093u^pixel.y*19349663u^frame*83492791u^
         batch*2654435761u^ray*1597334677u;
 }
 // Exact R307 + owned strata permutation; four-ray progressive mode is excluded
-// by ten-ray admission. Range remains the original third hash dimension.
+// from this ten-ray fallback. Four rays use their own complete strata.
 float2 GIAutoOwned10(uint2 pixel,uint frame,uint batch,uint ray,uint seed) {
  uint column=ray%2,row=ray/2;
  uint key=(pixel.x*73856093u^pixel.y*19349663u^batch*2654435761u)^((frame>>2)*2654435761u);
@@ -34,22 +34,25 @@ GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin
  result.range=GIProducerUnit(seed,0x967a889bu);
  float alpha=GIAutoAlpha(targets,selection);
  if(alpha==0) {
-  float2 uv=GIAutoOwned10(pixel,frame,batch,ray,seed);
+  float2 uv;
+  if(selection.rayCount==4){GIProducerCoordinates nativeDraw=GIProducerSample(pixel.x,pixel.y,frame,batch,ray,4);uv=float2(nativeDraw.u,nativeDraw.v);}
+  else uv=GIAutoOwned10(pixel,frame,batch,ray,seed);
   result.direction=GTLocal(normal,sqrt(uv.y),2*GT_PI*uv.x);
   result.weight=1;result.traceRay=1;return result;
  }
- // Stratify the mixture selector over all ten rays. At alpha=.4 this gives
- // two samples per target cone and six cosine samples, with no noisy pilot.
+ // Stratify the mixture selector over the selected ray count. At alpha=.4 this gives
+ // two samples per target cone and six cosine samples; four rays use 1+1+2.
  // Each stratum has a fresh independent range draw and within-stratum jitter.
- float u=min((float(ray)+GIProducerUnit(seed,0x68bc21ebu))/10.0f,.9999999403953552f);
+ float u=min((float(ray)+GIProducerUnit(seed,0x68bc21ebu))/float(selection.rayCount),.9999999403953552f);
  float v=GIProducerUnit(seed,0x02e5be93u);
  // Latin stratification within each fixed component preserves the component's
  // full radial marginal while avoiding six independent cosine elevations.
  // The shared random rotation is independent of per-ray angular/range jitter.
- if(alpha==.4f){
-  uint component=ray<2?0:(ray<4?1:2);
-  uint size=component==2?6:2;
-  uint local=component==2?ray-4:ray-component*2;
+ if(alpha==.4f||alpha==.5f){
+  uint perGuide=selection.rayCount==4?1:2;
+  uint component=ray<perGuide?0:(ray<2*perGuide?1:2);
+  uint size=component==2?selection.rayCount-2*perGuide:perGuide;
+  uint local=component==2?ray-2*perGuide:ray-component*perGuide;
   uint rotation=GIProducerHash(pixel.x*0x8da6b343u^pixel.y*0xd8163841u^
                     frame*0xcb1ab31fu^batch*0x165667b1u^component*0x9e3779b9u)%size;
   v=(float((local+rotation)%size)+v)/float(size);

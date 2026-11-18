@@ -1,6 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/d3d12_auto_target_binding.h"
 #include "../src/gi_reuse/d3d12_snapshot_retirement.h"
+#include "../src/gi_reuse/d3d12_auto_invocation.h"
 #include <limits>
 int main()try {
  using namespace gi_reuse;Device d(false);
@@ -10,6 +11,7 @@ int main()try {
  auto invalid=s;invalid.sampleFrame=0;Require(!GIAutoSelectionValid(invalid),"zero invocation seed admitted");invalid=s;invalid.fraction=.41f;Require(!GIAutoSelectionValid(invalid),"balance mixture bound");
  invalid=s;invalid.rayCount=1;Require(!GIAutoSelectionValid(invalid),"one ray admitted");
  invalid=s;invalid.fraction=std::numeric_limits<float>::quiet_NaN();Require(!GIAutoSelectionValid(invalid),"NaN fraction");
+ auto four=s;four.rayCount=4;four.fraction=.5f;Require(GIAutoSelectionValid(four),"four-ray mixture rejected");four.fraction=.501f;Require(!GIAutoSelectionValid(four),"four-ray mixture overflow admitted");
  auto bad=t;bad.bounds[0].radius=-1;Require(!GIAutoUsable(bad,s),"invalid bounds admitted");
  auto target=d.Upload(std::vector<GIAutoTargets>{t});
  D3D12AutoTargetBinding untracked;Require(!untracked.Initialize(target.Get(),s),"unproven storage admitted");
@@ -59,5 +61,15 @@ int main()try {
   Require(result[i*12+1]==7&&result[i*12+2]==12,"GPU target differs");
   Require(std::memcmp(result+i*12+4,records[i].data()+40,sizeof(GIAutoSelection))==0,"producer/evaluator selection differs");}
  D3D12_RANGE empty{};read->Unmap(0,&empty);
+ // Retirement transfers private scratch, never the published target buffer.
+ D3D12AutoInvocation retired;retired.ownerDevice=d.device;retired.width=64;retired.height=64;
+ retired.training=d.Buffer(2048,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,true);
+ retired.cells=d.Buffer(4096*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ retired.output.buffer=target;const auto trainingAddress=retired.training->GetGPUVirtualAddress();
+ Require(!retired.ReleaseRetiredScratch(),"unshaded scratch released");retired.shaded=true;
+ retired.pixelBytes=64;Require(!retired.ReleaseRetiredScratch(),"capture scratch entered normal cache");retired.pixelBytes=0;
+ auto reusable=retired.ReleaseRetiredScratch();
+ Require(reusable&&reusable->training->GetGPUVirtualAddress()==trainingAddress&&!retired.training&&!retired.cells,"scratch identity/transfer failed");
+ Require(retired.output.buffer.Get()==target.Get(),"published target recycled with scratch");
  std::cout<<"PASS immutable target selection, local-root serialization, ray-record layout, GPU evaluator identity, stale rejection and completion retirement. DXR dispatch and live hooks not tested.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

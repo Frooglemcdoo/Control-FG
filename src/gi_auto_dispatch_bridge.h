@@ -10,6 +10,11 @@ inline bool Enabled()noexcept {
  return false;
 #endif
 }
+inline UINT LaunchRays()noexcept {
+ static const UINT rays=[] {char value[8]{};const auto n=GetEnvironmentVariableA("CONTROLTOH_GI_AUTO_RAYS",value,8);
+  return n==1&&value[0]=='4'?4u:(n==2&&value[0]=='1'&&value[1]=='0'?10u:0u);}();
+ return Enabled()?rays:0;
+}
 inline std::atomic<bool(*)(ID3D12RootSignature*)noexcept> rootReady{nullptr};
 inline std::atomic<bool(*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*,ID3D12StateObject*)noexcept> ray{nullptr};
 inline std::atomic<bool(*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT)noexcept> shade{nullptr};

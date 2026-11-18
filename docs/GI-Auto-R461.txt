@@ -1,0 +1,25 @@
+R461 - Retired scratch reuse, 10-ray and 4-ray candidates
+
+Install beside Control_DX12.exe. Close the game before switching packages.
+Run the included ControlTOH\Diagnostics\Start-GI-Auto-R461-NRays.cmd.
+The launcher selects the actual GI ray count for that session through the native
+producer getter, before allocation and shader binding. It does not edit your
+saved settings. RR and GI FIXED must be enabled. Keep RELAX and FG OFF for the
+comparison. The saved menu sample selection may differ from the launch override.
+
+10 rays: retain R460 proposal allocation (2+2 guided, 6 general rays).
+4 rays: experimental allocation (1+1 guided, 2 general rays), matching PDFs and
+four-ray averaging. Same learned guide builder; no additional blur or clamp.
+Four-ray visual quality is unverified and may be noisier than the ten-ray build.
+
+Both versions reuse private training/cell buffers and upload ray records only
+after both GPU completion and command-list recording retirement. Published guide
+buffers remain immutable and separately allocated. Scratch reuse saves three
+resource creations per normal frame after warmup; capture frames use fresh
+storage. No GPU waits are added. FPS improvement is not yet measured in-game.
+
+For FPS comparison, play without pressing F7. Compare the same scene, resolution,
+camera and settings against R460. The orange box is optional for log capture:
+Alt+arrows moves it; F7 arms a five-second countdown. Keep the neck/face inside
+it until Capture complete, then run Collect-ControlFG-Compact-Logs.cmd.
+No Ctrl movement input is used. Capture summaries can affect frame pacing.

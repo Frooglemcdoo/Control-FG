@@ -1,7 +1,7 @@
 name: Validate automatic GI targets
 on:
   push:
-    branches: [work/gi-bright-footprint-r460]
+    branches: [work/gi-recycle-dual-r461]
   workflow_dispatch:
 jobs:
   validate:

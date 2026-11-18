@@ -38,7 +38,7 @@ GTDraw GTSampleMixture(float3 origin,float3 unitNormal,GTBound first,GTBound sec
                 float guideFraction,bool frozenGuideValid,float u,float v) {
     // Caller supplies finite origin/unit normal and independent u,v in [0,1).
     float alpha=frozenGuideValid&&GTValidBound(first)&&GTValidBound(second)&&
-        isfinite(guideFraction)?clamp(guideFraction,0,.4):0;
+        isfinite(guideFraction)?clamp(guideFraction,0,.5):0;
     GTCone a,b;
     if(alpha>0){a=GTMakeCone(origin,first);b=GTMakeCone(origin,second);}
     GTDraw r=(GTDraw)0;

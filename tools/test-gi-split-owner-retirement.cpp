@@ -111,5 +111,21 @@ int main(){
  Pool reuse;auto o=std::make_unique<Owner>(deaths);auto token=reuse.Admit(1,a,50,o);
  assert(!reuse.Attach(token,1,{10,2}));assert(reuse.Seal(a));assert(reuse.Attach(token,1,{10,2}));
  assert(reuse.Seal({10,2})&&reuse.Take(token,out));out.reset();
+ // A cached owner can be admitted again only after completion AND both seals.
+ {
+  int released=0;Pool recycling;auto storage=std::make_unique<Owner>(released);auto* identity=storage.get();
+  for(unsigned frame=1;frame<=12;++frame){
+   Pool::Recording producer{10,frame},consumer{20,frame};
+   const auto key=recycling.Admit(frame,producer,40,storage);assert(key&&!storage);
+   auto ticket=recycling.Before(99,&producer,1);assert(ticket.count==1);
+   assert(recycling.After(ticket,99,frame*2-1,true));assert(recycling.AttachAndClaimConsumer(key,frame,99,consumer));
+   ticket=recycling.Before(99,&consumer,1);assert(ticket.count==1);
+   assert(recycling.After(ticket,99,frame*2,true));recycling.Complete(99,frame*2);
+   bool both=false;assert(!recycling.TakeReady(storage,&both));assert(recycling.Seal(producer));
+   assert(!recycling.TakeReady(storage,&both));assert(recycling.Seal(consumer));
+   assert(recycling.TakeReady(storage,&both)&&both&&storage.get()==identity&&released==0);
+  }
+  storage.reset();assert(released==1);
+ }
  std::cout<<"PASS shared invocation ownership: no early release, transactional budget, actual batch ordering, replay, failure pinning, Reset generations\n";
 }

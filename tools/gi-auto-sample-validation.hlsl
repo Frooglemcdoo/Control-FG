@@ -3,14 +3,15 @@ RWStructuredBuffer<float4> output:register(u0);
 static const uint count=32768;
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
- uint scenario=id.x/count,index=id.x%count;
- if(scenario>=12)return;
+ uint testCase=id.x/count,scenario=testCase%12,index=id.x%count;
+ if(testCase>=24)return;
  GIAutoTargets targets=(GIAutoTargets)0;
  targets.schema=0x41544731;targets.version=7;targets.frame=12;targets.validMask=3;
  targets.bounds[0].center.z=3;targets.bounds[0].radius=.5;
  targets.bounds[1].center.x=1;targets.bounds[1].center.z=2;targets.bounds[1].radius=.3;
  targets.counts[0]=targets.counts[1]=42;targets.scores[0]=targets.scores[1]=123;
  GIAutoSelection selection;selection.version=7;selection.sourceFrame=12;selection.rayCount=10;selection.fraction=.4;selection.sampleFrame=897;
+ if(testCase>=12){selection.rayCount=4;selection.fraction=.5;}
  if(scenario==1){targets.bounds[0].center.z=-3;targets.bounds[1].center.z=-2;}
  if(scenario==2)targets.validMask=0;
  if(scenario==3)selection.sourceFrame=13;
@@ -28,7 +29,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  }
  float alpha=GIAutoAlpha(targets,selection);
  float3 sum=0;uint valid=1;
- [loop]for(uint i=0;i<10;++i){
+ [loop]for(uint i=0;i<selection.rayCount;++i){
   GIAutoDraw draw=GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),targets,selection);
   GIAutoDraw other=GIAutoSample(uint2(index%256,index/256),901,0,i,0,float3(0,0,1),targets,selection);
   if(any(draw.direction!=other.direction)||draw.weight!=other.weight||draw.range!=other.range||draw.traceRay!=other.traceRay)valid=0;
@@ -45,11 +46,11 @@ void main(uint3 id:SV_DispatchThreadID) {
   }
   sum+=float3(rgb.x,rgb.y,rgb.z)*draw.weight;
   if(!all(isfinite(draw.direction))||abs(dot(draw.direction,draw.direction)-1)>.00001||
-     draw.weight<0||draw.weight>1.66667||draw.range<0||draw.range>=1||
+     draw.weight<0||draw.weight>(selection.rayCount==4?2.00001:1.66667)||draw.range<0||draw.range>=1||
      (!draw.traceRay&&draw.weight!=0))valid=0;
-  if(index==0){output[12*count+scenario*20+i*2]=float4(draw.direction,draw.weight);
-   output[12*count+scenario*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
+  if(index==0){output[24*count+testCase*20+i*2]=float4(draw.direction,draw.weight);
+   output[24*count+testCase*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
  }
- float3 result=sum/10;
+ float3 result=sum/float(selection.rayCount);
  output[id.x]=float4(result,valid);
 }

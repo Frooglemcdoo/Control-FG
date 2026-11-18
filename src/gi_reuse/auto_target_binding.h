@@ -12,7 +12,7 @@ namespace gi_reuse {
 struct GIAutoSelection {uint version,sourceFrame,rayCount;float fraction;uint sampleFrame;};
 GI_BIND_INLINE bool GIAutoSelectionValid(GIAutoSelection s) {
  return s.version!=0&&s.sourceFrame!=0&&s.sampleFrame!=0&&s.rayCount>=2&&s.rayCount<=64&&
-  GIFinite(s.fraction)&&s.fraction>=0&&s.fraction<=.4f;
+  GIFinite(s.fraction)&&s.fraction>=0&&s.fraction<=(s.rayCount==4?.5f:.4f);
 }
 GI_BIND_INLINE bool GIAutoUsable(GIAutoTargets t,GIAutoSelection s) {
  if(!GIAutoSelectionValid(s)||!GIAutoMatches(t,s.version,s.sourceFrame))return false;

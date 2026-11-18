@@ -37,9 +37,8 @@ public:
 class D3D12AutoRaygenRecord {
  Microsoft::WRL::ComPtr<ID3D12Resource> data_;
  Microsoft::WRL::ComPtr<ID3D12StateObject> state_;
-public:
- HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding)noexcept {
-  if(data_||!device||!state||!binding.Resource())return E_INVALIDARG;
+ HRESULT Write(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding,bool reuse)noexcept {
+  if((data_&&!reuse)||!device||!state||!binding.Resource())return E_INVALIDARG;
   Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> properties;
   auto hr=state->QueryInterface(IID_PPV_ARGS(&properties));if(FAILED(hr))return hr;
   const void* identifier=properties->GetShaderIdentifier(D3D12AutoRaygenAugment::Export);
@@ -48,13 +47,17 @@ public:
   D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
   D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=bytes.size();rd.Height=1;
   rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-  Microsoft::WRL::ComPtr<ID3D12Resource> data;
-  hr=device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&data));if(FAILED(hr))return hr;
+  Microsoft::WRL::ComPtr<ID3D12Resource> data=data_;
+  if(!data)hr=device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&rd,D3D12_RESOURCE_STATE_GENERIC_READ,nullptr,IID_PPV_ARGS(&data));if(FAILED(hr))return hr;
   void* mapped=nullptr;D3D12_RANGE empty{};hr=data->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
   if(!mapped){data->Unmap(0,&empty);return E_UNEXPECTED;}
   std::memcpy(mapped,bytes.data(),bytes.size());const D3D12_RANGE written{0,bytes.size()};data->Unmap(0,&written);
   data_=std::move(data);state_=state;return S_OK;
  }
+public:
+ HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding)noexcept {return Write(device,state,binding,false);}
+ // Only storage returned by completed AND sealed invocation retirement is admitted.
+ HRESULT RewriteRetired(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding)noexcept {return Write(device,state,binding,true);}
  D3D12_GPU_VIRTUAL_ADDRESS_RANGE At(ID3D12StateObject* state)const noexcept {
   if(!data_||state!=state_.Get())return {};
   return {data_->GetGPUVirtualAddress(),D3D12AutoTargetBinding::RecordBytes};
