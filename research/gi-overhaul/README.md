@@ -41,3 +41,24 @@ used official DXC v1.9.2609; archive SHA256
 96faadc7f5c282d2ffda49804beb4c3ee38127bc252b723234e3c5cdf7aa39a1.
 Future game builds remain one package for both ray counts. No new game test is
 requested at this checkpoint; the replacement runtime is not complete.
+
+## GPU construction checkpoint
+
+Added five bounded compute stages: clear, claim receiver region, rank primary,
+rank distinct secondary, publish immutable table. Each training record performs
+at most four region probes. Claim publishes an atomic index into immutable input,
+so another thread never reads a partially initialized multiword key or spins on
+an owner. Hash collisions can exhaust the probe budget and cause fallback; they
+must never mix training across receiver regions.
+
+The new GPU fixture builds two colliding receiver regions with separate bright
+sources and a covered duplicate, rejects invalid-version/NaN records, consumes
+publication through regional lookup, and verifies that an empty next frame clears
+old publication. The separate GPU lookup fixture verifies consumer-side identity.
+
+This prototype takes source bounds as input. Producing trustworthy bounds from
+live ray data, training coverage, temporal publication and game integration are
+still outstanding. Five dispatches versus R465's four is a cost to measure; no
+speedup follows merely from bounded probes. With 4096 slots, cell scratch is
+64 KiB and one published table is 336 KiB, before training, retained versions and
+any allocator overhead. No extra ray traces are introduced by construction.
