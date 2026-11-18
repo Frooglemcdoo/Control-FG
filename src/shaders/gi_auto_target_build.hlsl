@@ -40,6 +40,7 @@ uint QuantizedScore(GIAutoTraining r){return uint(clamp(r.energy*scoreScale,1.,6
 }
 groupshared uint bestSlots[128];groupshared uint bestScores[128];
 groupshared uint selectedSlots[2];groupshared uint seekAlternative;
+groupshared float neighborExtent[128];
 float3 Anchor(uint slot){GIPoint p=training[65535u-(cells[slot].reserved0&65535u)].position;return float3(p.x,p.y,p.z);}
 bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldScore||(score==oldScore&&slot<oldSlot);}
 [numthreads(64,1,1)]void Freeze(uint3 id:SV_GroupThreadID){
@@ -86,6 +87,30 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
    // Keep both R458 guides when training contains only the one bright patch.
    if(chosen!=0xffffffffu)selectedSlots[1]=chosen;
   }
+ }
+ GroupMemoryBarrierWithGroupSync();
+ // A dense fit must not stop at a hash-grid seam. Keep the observed anchor,
+ // but include bright neighboring-cell evidence within a bounded physical
+ // neighborhood. Compact sources and sparse discovery keep their old bounds.
+ [unroll]for(uint rank=0;rank<2;++rank){
+  float extent=0;uint chosen=selectedSlots[rank];
+  if(chosen!=0xffffffffu&&cells[chosen].count>=8){
+   GIAutoCell primary=cells[chosen];uint winner=65535u-(primary.reserved0&65535u);
+   float3 anchor=Anchor(chosen);float energy=training[winner].energy;
+   float reach=cellSize*1.5;
+   for(uint i=id.x;i<cellCount;i+=64){
+    GIAutoCell c=cells[i];if(c.state!=2||c.count==0||c.score==0||i==chosen)continue;
+    uint other=65535u-(c.reserved0&65535u);
+    if(other>=recordCount||training[other].energy<energy*.25)continue;
+    float3 delta=Anchor(i)-anchor;float d2=dot(delta,delta);
+    if(d2>reach*reach)continue;
+    extent=max(extent,sqrt(d2)+sqrt(asfloat(c.reserved1))+cellSize*.1);
+   }
+  }
+  neighborExtent[rank*64+id.x]=extent;
+ }
+ GroupMemoryBarrierWithGroupSync();
+ if(id.x==0){
   GIAutoTargets t=(GIAutoTargets)0;t.schema=0x41544731u;t.version=version;t.frame=frame;
   [unroll]for(uint rank=0;rank<2;++rank){
    uint chosen=selectedSlots[rank];if(chosen==0xffffffffu)continue;
@@ -95,7 +120,10 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
    // observed bright footprint, with padding and a conservative radius floor.
    float maximum=cellSize*.866025404;
    float fitted=clamp(sqrt(asfloat(c.reserved1))+cellSize*.1,cellSize*.5,maximum);
-   t.bounds[rank].radius=c.count>=8?fitted:maximum;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
+   float neighbor=0;
+   [unroll]for(uint lane=0;lane<64;++lane)neighbor=max(neighbor,neighborExtent[rank*64+lane]);
+   // Only observed cross-cell support can exceed the previous radius ceiling.
+   t.bounds[rank].radius=c.count>=8?max(fitted,min(neighbor,cellSize*1.6)):maximum;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
   }
   targets[0]=t;
  }

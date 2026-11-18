@@ -1,0 +1,22 @@
+R464 - Bright guide footprint across grid-cell boundaries
+
+Install beside Control_DX12.exe with the game closed. Run the matching R464
+launcher under ControlTOH/Diagnostics. It fixes actual ray count for the session:
+4 stays four and 10 stays ten regardless of the menu. RR ON, GI FIXED,
+RELAX OFF, FG OFF for comparison. Start with four rays.
+
+Dense guide footprints now incorporate nearby bright evidence from other grid
+cells. The previous fit stopped at one cell and could leave parts of the same
+bright patch outside the sampling guide. Expansion requires a nearby bright
+record; dim and distant cells do not widen the guide. Observed anchors, compact
+fits, sparse fallback, lighting evaluation and sampling weights are preserved.
+No blur, temporal averaging or radiance clamp is added.
+
+This is a targeted noise-fix candidate, not proof all red speckles are eliminated.
+Guide construction does more bounded work; GPU timing remains enabled so its
+cost can be checked. No measured in-game performance or quality claim yet.
+
+Play the same scene about 60 seconds without F7, then collect compact logs via
+ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd. For a separate visual capture,
+move the orange box with Alt+arrows, then F7; never Ctrl to move it. Capture
+readbacks affect pacing, so compare FPS outside capture.

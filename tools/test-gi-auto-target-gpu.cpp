@@ -14,7 +14,7 @@ int main()try {
  auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
  auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto back=d.Buffer(18*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto back=d.Buffer(21*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
  const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
  for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
@@ -90,7 +90,18 @@ int main()try {
  compactRecords.push_back(edgeBright);auto extendedInput=d.Upload(compactRecords);
  Require(builder.Record(d.list.Get(),extendedInput.Get(),UINT(compactRecords.size()),cells.Get(),frozen.Get(),slots,17,7,.5f,512,1,restore),"extended source fit");copy(16);
  dimEdge.energy=compact.energy;compactRecords.push_back(dimEdge);auto broadInput=d.Upload(compactRecords);
- Require(builder.Record(d.list.Get(),broadInput.Get(),UINT(compactRecords.size()),cells.Get(),frozen.Get(),slots,18,7,.5f,512,1,restore),"broad source fit");copy(17);d.Submit();
+ Require(builder.Record(d.list.Get(),broadInput.Get(),UINT(compactRecords.size()),cells.Get(),frozen.Get(),slots,18,7,.5f,512,1,restore),"broad source fit");copy(17);
+ // R464: recorded bright-patch edge crosses x/y/z grid boundaries. This is
+ // representative geometry, not a replay of all live training records.
+ auto center=a;center.position={-81.995224f,25.008234f,106.916672f};center.energy=4;
+ auto neighbor=center;neighbor.position={-82.181389f,24.976089f,107.087799f};neighbor.energy=2;
+ std::vector<GIAutoTraining> cross(16,center);cross.push_back(neighbor);
+ auto crossInput=d.Upload(cross);
+ Require(builder.Record(d.list.Get(),crossInput.Get(),UINT(cross.size()),cells.Get(),frozen.Get(),slots,19,7,.5f,512,1,restore),"bright cross-cell fit");copy(18);
+ cross.back().energy=.01f;auto dimCrossInput=d.Upload(cross);
+ Require(builder.Record(d.list.Get(),dimCrossInput.Get(),UINT(cross.size()),cells.Get(),frozen.Get(),slots,20,7,.5f,512,1,restore),"dim cross-cell rejection");copy(19);
+ cross.back()=neighbor;cross.back().position.z+=3;auto distantInput=d.Upload(cross);
+ Require(builder.Record(d.list.Get(),distantInput.Get(),UINT(cross.size()),cells.Get(),frozen.Get(),slots,21,7,.5f,512,1,restore),"distant bright source separation");copy(20);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
@@ -126,6 +137,12 @@ int main()try {
  Require(std::abs(mapped[16].bounds[0].radius-.33f)<1e-6,"bright source extent/padding lost");
  Require(std::abs(mapped[17].bounds[0].radius-.4330127f)<1e-6,"broad source radius ceiling lost");
  Require(std::abs(mapped[5].bounds[0].radius-.4330127f)<1e-6,"rare source narrowed without support");
+ const auto& crossBound=mapped[18].bounds[0];
+ const float edgeDistance=std::sqrt((neighbor.position.x-crossBound.center.x)*(neighbor.position.x-crossBound.center.x)+(neighbor.position.y-crossBound.center.y)*(neighbor.position.y-crossBound.center.y)+(neighbor.position.z-crossBound.center.z)*(neighbor.position.z-crossBound.center.z));
+ Require(edgeDistance>.25f&&crossBound.radius>edgeDistance+.049f&&crossBound.radius<=.8f,"bright grid-seam edge still uncovered");
+ Require(std::abs(crossBound.center.x-center.position.x)<1e-5f&&std::abs(crossBound.center.z-center.position.z)<1e-5f,"cross-cell fit moved observed anchor");
+ Require(std::abs(mapped[19].bounds[0].radius-.25f)<1e-6,"dim neighboring cell widened source");
+ Require(std::abs(mapped[20].bounds[0].radius-.25f)<1e-6,"distant bright source merged into local bound");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;
@@ -147,5 +164,5 @@ int main()try {
  V* pv=nullptr;Check(pilotRead->Map(0,nullptr,reinterpret_cast<void**>(&pv)));
  for(UINT c=0;c<cases;++c){Require(pv[c].w==float(expected[c].valid),"GPU pilot validity");const float actual[]={pv[c].x,pv[c].y,pv[c].z},ref[]={expected[c].rgb.x,expected[c].rgb.y,expected[c].rgb.z};for(UINT k=0;k<3;++k)Require(std::abs(actual[k]-ref[k])<.00001f*(1+std::abs(ref[k])),"GPU pilot result");}
  pilotRead->Unmap(0,&none);
- std::cout<<"PASS bright-footprint radius fit, dim rejection, padding, floor/ceiling and sparse fallback; near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
+ std::cout<<"PASS cross-cell bright edge coverage, dim/distant rejection and anchored bounds; bright-footprint radius fit, dim rejection, padding, floor/ceiling and sparse fallback; near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
