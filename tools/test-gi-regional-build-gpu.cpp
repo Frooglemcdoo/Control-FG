@@ -1,6 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/regional_target_build.h"
 #include <limits>
+#include <array>
 int main()try{
  using namespace gi_reuse;Device d(false);constexpr UINT capacity=16;
  auto a=GIMakeWorldGuideKey({.1f,.1f,.1f},{0,0,1}),b=a;
