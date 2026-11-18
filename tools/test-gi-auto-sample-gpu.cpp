@@ -10,7 +10,7 @@ int main()try {
  Check(D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error));ComPtr<ID3D12RootSignature> root;
  Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto code=Read("gi-auto-sample.dxil");D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};ComPtr<ID3D12PipelineState> pso;Check(d.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
- d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(pso.Get());d.list->SetComputeRootUnorderedAccessView(0,output->GetGPUVirtualAddress());d.list->Dispatch(count*scenarios/64,1,1);
+ d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(pso.Get());d.list->SetComputeRootUnorderedAccessView(0,output->GetGPUVirtualAddress());d.list->Dispatch(count/64,scenarios,1);
  d.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyResource(read.Get(),output.Get());d.Submit();
  V* values=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&values)));
  double broadVariance=0;
@@ -37,5 +37,5 @@ int main()try {
   }
  }
  D3D12_RANGE empty{};read->Unmap(0,&empty);
- std::cout<<"PASS frozen invocation seed despite differing native clocks, fresh invocation changes draw; paired sampler/resolve: twenty-four proposal/source states at ten and four rays, fitted versus broad source variance, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.\n";return 0;
+ std::cout<<"PASS exact prepared sampling parity with frozen R462 reference; frozen invocation seed despite differing native clocks, fresh invocation changes draw; paired sampler/resolve: twenty-four proposal/source states at ten and four rays, fitted versus broad source variance, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

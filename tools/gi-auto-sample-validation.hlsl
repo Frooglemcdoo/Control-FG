@@ -1,10 +1,11 @@
 #include "../src/shaders/gi_auto_sample.hlsl"
+#include "gi-auto-sample-r462-reference.hlsl"
 RWStructuredBuffer<float4> output:register(u0);
 static const uint count=262144;
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
- uint testCase=id.x/count,scenario=testCase%12,index=id.x%count;
- if(testCase>=24)return;
+ uint testCase=id.y,scenario=testCase%12,index=id.x;
+ if(testCase>=24||index>=count)return;
  GIAutoTargets targets=(GIAutoTargets)0;
  targets.schema=0x41544731;targets.version=7;targets.frame=12;targets.validMask=3;
  targets.bounds[0].center.z=3;targets.bounds[0].radius=.5;
@@ -29,8 +30,19 @@ void main(uint3 id:SV_DispatchThreadID) {
  }
  float alpha=GIAutoAlpha(targets,selection);
  float3 sum=0;uint valid=1;
+ GIAutoPrepared prepared=GIAutoPrepare(0,targets,selection);
  [loop]for(uint i=0;i<selection.rayCount;++i){
-  GIAutoDraw draw=GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),targets,selection);
+  GIAutoDraw draw=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,float3(0,0,1),prepared,selection);
+  R462GIAutoDraw reference=R462GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),targets,selection);
+  if(any(draw.direction!=reference.direction)||draw.weight!=reference.weight||draw.range!=reference.range||draw.traceRay!=reference.traceRay)valid=0;
+  if(index<4096){
+   float3 origin=float3(-82+(index%17)*.11,24+(index%13)*.07,106+(index%19)*.09);
+   if(index%8==0)origin=float3(targets.bounds[0].center.x,targets.bounds[0].center.y,targets.bounds[0].center.z);
+   float3 normal=normalize(float3(float(index%11)-5,float(index%7)-3,1));
+   GIAutoDraw spatial=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,normal,GIAutoPrepare(origin,targets,selection),selection);
+   R462GIAutoDraw oldSpatial=R462GIAutoSample(uint2(index%256,index/256),897,0,i,origin,normal,targets,selection);
+   if(any(spatial.direction!=oldSpatial.direction)||spatial.weight!=oldSpatial.weight||spatial.range!=oldSpatial.range||spatial.traceRay!=oldSpatial.traceRay)valid=0;
+  }
   GIAutoDraw other=GIAutoSample(uint2(index%256,index/256),901,0,i,0,float3(0,0,1),targets,selection);
   if(any(draw.direction!=other.direction)||draw.weight!=other.weight||draw.range!=other.range||draw.traceRay!=other.traceRay)valid=0;
   GIAutoSelection next=selection;next.sampleFrame=898;
@@ -52,5 +64,5 @@ void main(uint3 id:SV_DispatchThreadID) {
    output[24*count+testCase*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
  }
  float3 result=sum/float(selection.rayCount);
- output[id.x]=float4(result,valid);
+ output[testCase*count+index]=float4(result,valid);
 }

@@ -1,0 +1,20 @@
+R463 - Prepared guide sampling performance candidate
+
+Install with the game closed beside Control_DX12.exe. Run the matching R463
+launcher under ControlTOH/Diagnostics. Launcher ray count overrides the menu
+for that session: 4 stays four, 10 stays ten, regardless of the saved selection.
+RR ON, GI FIXED, RELAX OFF, FG OFF for comparison.
+
+Prepare guide validity and cone geometry once per receiver, then reuse across
+rays in the paired producer and lighting evaluator. Sampling seeds, directions,
+weights, source guide learning, ray counts and native lighting are intended to
+remain identical to R462. No new clamp, blur or temporal filter. This change
+is a performance candidate; in-game speedup is not yet measured. It does not
+claim to fix the rare red speckles still reported at four rays.
+
+Automatic GPU timing remains enabled once per 120 invocations, outside F7
+capture. Play the same scene for about 60 seconds without F7, then run
+ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd. Four rays is the working
+baseline; ten rays remains the visual reference. Avoid menu sample changes
+inside either launcher session because the launcher intentionally overrides it.
+Optional visual capture uses F7 and Alt+arrows, never Ctrl to move the box.

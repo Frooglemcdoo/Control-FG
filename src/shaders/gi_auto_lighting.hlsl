@@ -22,7 +22,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  GIFrozenReceiver source=GIFrozenDecodeReceiver(id.xy,g_tGBuffer1.Load(int3(id.xy,0)),
   g_tLinearDepth.Load(int3(id.xy,0)).x,g_tClipDepth.Load(int3(id.xy,0)).x,giCB0);
  if(!source.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
- GIAutoTargets frozen=targets[0];float alpha=GIAutoAlpha(frozen,selection);
+ GIAutoTargets frozen=targets[0];GIAutoPrepared prepared=GIAutoPrepare(source.origin,frozen,selection);float alpha=prepared.alpha;
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
  float3 weightedSum=0;bool valid=true;
  float3 rawSum=0,peakPosition=0;float rawPeak=0,weightedPeak=0,peakWeight=0;
@@ -34,7 +34,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   GIEvaluateSecondary(receiver,hit);
   float3 rgb=throughput*asfloat(receiver.r15.xyz);
   GIAutoDraw draw=(GIAutoDraw)0;draw.weight=1;
-  if(alpha>0)draw=GIAutoSample(id.xy,giCB0[69].z,0,slice,source.origin,source.normal,frozen,selection);
+  if(alpha>0)draw=GIAutoSamplePrepared(id.xy,giCB0[69].z,0,slice,source.normal,prepared,selection);
   if(trainingIndex!=0xffffffff) {
    float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
    bestTraining=GIAutoKeepBrightest(bestTraining,GIAutoCandidate(selection.version,hit.material,position,rgb,draw.weight));

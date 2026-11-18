@@ -24,15 +24,29 @@ float2 GIAutoOwned10(uint2 pixel,uint frame,uint batch,uint ray,uint seed) {
  float v=(float(row)+(float(ybin)+GIProducerUnit(seed,0x02e5be93u))/2.0f)/5.0f;
  return min(float2(u,v),.9999999403953552f);
 }
+// Receiver/guide invariants are prepared once outside the per-ray loop.
+struct GIAutoPrepared {GTCone a,b;float alpha;};
+GIAutoPrepared GIAutoPrepare(float3 origin,GIAutoTargets targets,GIAutoSelection selection) {
+ GIAutoPrepared p=(GIAutoPrepared)0;p.alpha=GIAutoAlpha(targets,selection);
+ if(p.alpha>0){
+  uint first=(targets.validMask&1)?0:1;
+  uint second=targets.validMask==3?1:first;
+  GTBound a,b;
+  a.center=float3(targets.bounds[first].center.x,targets.bounds[first].center.y,targets.bounds[first].center.z);a.radius=targets.bounds[first].radius;
+  b.center=float3(targets.bounds[second].center.x,targets.bounds[second].center.y,targets.bounds[second].center.z);b.radius=targets.bounds[second].radius;
+  p.a=GTMakeCone(origin,a);p.b=GTMakeCone(origin,b);
+ }
+ return p;
+}
 struct GIAutoDraw {float3 direction;float weight,range;uint traceRay;};
-GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin,
-                      float3 normal,GIAutoTargets targets,GIAutoSelection selection) {
+GIAutoDraw GIAutoSamplePrepared(uint2 pixel,uint frame,uint batch,uint ray,
+                      float3 normal,GIAutoPrepared prepared,GIAutoSelection selection) {
  // Both stages use the invocation seed, never independently sourced native CB clocks.
  frame=selection.sampleFrame;
  GIAutoDraw result=(GIAutoDraw)0;
  uint seed=GIAutoSeed(pixel,frame,batch,ray);
  result.range=GIProducerUnit(seed,0x967a889bu);
- float alpha=GIAutoAlpha(targets,selection);
+ float alpha=prepared.alpha;
  if(alpha==0) {
   float2 uv;
   if(selection.rayCount==4){GIProducerCoordinates nativeDraw=GIProducerSample(pixel.x,pixel.y,frame,batch,ray,4);uv=float2(nativeDraw.u,nativeDraw.v);}
@@ -58,12 +72,11 @@ GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin
   v=(float((local+rotation)%size)+v)/float(size);
  }
 
- uint first=(targets.validMask&1)?0:1;
- uint second=targets.validMask==3?1:first;
- GTBound a,b;
- a.center=float3(targets.bounds[first].center.x,targets.bounds[first].center.y,targets.bounds[first].center.z);a.radius=targets.bounds[first].radius;
- b.center=float3(targets.bounds[second].center.x,targets.bounds[second].center.y,targets.bounds[second].center.z);b.radius=targets.bounds[second].radius;
- GTDraw draw=GTSampleMixture(origin,normal,a,b,alpha,true,u,v);
+ GTDraw draw=GTSamplePrepared(normal,prepared.a,prepared.b,alpha,u,v);
  result.direction=draw.direction;result.weight=draw.radianceWeight;result.traceRay=draw.traceRay;return result;
+}
+GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin,
+                      float3 normal,GIAutoTargets targets,GIAutoSelection selection) {
+ return GIAutoSamplePrepared(pixel,frame,batch,ray,normal,GIAutoPrepare(origin,targets,selection),selection);
 }
 #endif
