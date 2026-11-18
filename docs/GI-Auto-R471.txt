@@ -1,0 +1,27 @@
+R471 - Stable source-cell guide coverage candidate
+
+Install beside Control_DX12.exe, preserving folders. Both launchers use one DLL:
+ControlTOH/Diagnostics/Start-GI-Auto-R471-4Rays.cmd
+ControlTOH/Diagnostics/Start-GI-Auto-R471-10Rays.cmd
+Use GI FIXED, RR ON, RELAX OFF, FG OFF for comparison.
+
+R470's 120 selected bright peaks had matching producer/evaluator weights and
+hits aligned with their actual rays. Those examples do not support the earlier
+ray-pairing explanation. They do not characterize every noisy pixel.
+
+R471 changes source guide construction. Training hits map to canonical 0.5m
+world-space source cells. Each guide sphere covers its entire source cell.
+The second guide must represent a different cell, so opposite bright corners
+of one cell cannot occupy both guide slots. Centers remain fixed when the
+winning hit moves inside its cell. Different source cells can still change
+rank between frames; this is not a temporal history filter.
+
+Ray counts, mixture fractions, PDF correction and shaded radiance are retained.
+Native replaced dispatches remain bypassed. No additional GPU pass, ray, or
+brightness clamp. Guide construction retains R469's parallel stripe lists.
+This is a visual-fix candidate, not a confirmed whole-game noise/FPS solution.
+
+Test the known speckle area and a second area. The same capture remains available:
+Alt+arrows moves the box; Alt+Insert starts the 5-second countdown. Reproduce the
+speckles until Capture complete, then collect compact logs. Do not press F7.
+Compare FPS outside capture; forced DRED stays off.

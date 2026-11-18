@@ -8,7 +8,8 @@ int main(int argc,char**)try{
  auto a=GIMakeWorldGuideKey({.1f,.1f,.1f},{0,0,1}),b=a;
  for(float x=2.1f;;x+=.25f){b=GIMakeWorldGuideKey({x,.1f,.1f},{0,0,1});if(GIRegionalSlot(a,capacity,0)==GIRegionalSlot(b,capacity,0))break;}
  const auto record=[](GIWorldGuideKey key,float x,float score){return GIRegionalTraining{key,{{x,0,3},.433012702f},score,7};};
- std::vector<GIRegionalTraining> records={record(a,1,10),record(a,1.1f,9),record(a,5,2),record(b,30,8),record(b,40,1)};
+ std::vector<GIRegionalTraining> records={record(a,1,10),record(a,1.49f,9),record(a,5,2),record(b,-.001f,8),record(b,.001f,1)};
+ records[0].source.center={-1.49f,.01f,-3.49f};records[1].source.center={-1.01f,.49f,-3.01f};
  // Put distinct alternatives in every stripe; the winning stripe is not zero.
  for(unsigned stripe=0;stripe<GIRegionalStripes;++stripe)records.push_back(record(a,50.f+stripe,3.f+float(stripe)/32.f));
  if(argc>1)while(records.size()<65533)records.push_back(record(a,1.05f,1));
@@ -49,13 +50,16 @@ int main(int argc,char**)try{
  GIRegionalTarget* values=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&values)));
  GIAutoTargets chosen{};
  Require(GIRegionalLookup(values,capacity,a,22,7,4,chosen),"GPU lost first receiver region");
- Require(chosen.validMask==3&&chosen.bounds[0].center.x==1&&chosen.bounds[1].center.x==81,"GPU duplicate or invalid candidate displaced distinct source");
+ Require(chosen.validMask==3&&chosen.bounds[0].center.x== -1.25f&&chosen.bounds[1].center.x==81.25f,"GPU duplicate or invalid candidate displaced distinct source");
  Require(chosen.counts[0]==records.size()-4,"invalid training contaminated count");
+ const auto covered=[](GIAutoBound bound,GIPoint p){const float x=p.x-bound.center.x,y=p.y-bound.center.y,z=p.z-bound.center.z;return x*x+y*y+z*z<=bound.radius*bound.radius;};
+ Require(covered(chosen.bounds[0],records[0].source.center)&&covered(chosen.bounds[0],records[1].source.center),"one source-cell guide failed to cover opposite bright corners");
+ Require(chosen.bounds[0].center.y==.25f&&chosen.bounds[0].center.z== -3.25f,"source center not canonical");
  Require(GIRegionalLookup(values,capacity,b,22,7,4,chosen),"GPU lost colliding receiver region");
- Require(chosen.validMask==3&&chosen.bounds[0].center.x==30&&chosen.bounds[1].center.x==40,"GPU shared guides across colliding regions");
+ Require(chosen.validMask==3&&chosen.bounds[0].center.x== -.25f&&chosen.bounds[1].center.x==.25f,"GPU shared guides across colliding regions");
  Require(chosen.counts[0]==2,"GPU cross-region accumulation");
  Require(GIRegionalLookup(values+capacity,capacity,a,22,7,4,chosen),"small rebuild lost region");
- Require(chosen.bounds[1].center.x==5&&chosen.counts[0]==3,"reused stripes retained old winners");
+ Require(chosen.bounds[1].center.x==5.25f&&chosen.counts[0]==3,"reused stripes retained old winners");
  for(UINT i=2*capacity;i<3*capacity;++i)Require(values[i].targets.validMask==0,"empty frame retained stale guide");
  D3D12_RANGE none{};read->Unmap(0,&none);
  std::cout<<"PASS GPU construction -> regional lookup: colliding receivers retain distinct source pairs, covered duplicates/invalid records rejected, empty frame clears publication. No live integration or timing claim.\n";return 0;

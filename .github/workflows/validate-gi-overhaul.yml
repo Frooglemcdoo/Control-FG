@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-packet-r470]
+    branches: [work/gi-source-cells-r471]
   workflow_dispatch:
 jobs:
   validate:
