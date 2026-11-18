@@ -21,6 +21,11 @@ GI_TARGET_INLINE bool GIAutoMatches(GIAutoTargets t,uint version,uint sourceFram
  return t.schema==0x41544731u&&t.version==version&&t.frame==sourceFrame&&t.validMask>0&&t.validMask<=3;
 }
 #ifdef __cplusplus
+#ifdef CONTROL_GI_REGIONAL
+inline constexpr unsigned GIAutoTrainingStride=64,GIAutoCellStride=16,GIAutoPublicationBytes=4096*84;
+#else
+inline constexpr unsigned GIAutoTrainingStride=32,GIAutoCellStride=32,GIAutoPublicationBytes=64;
+#endif
 static_assert(sizeof(GIAutoTraining)==32&&sizeof(GIAutoCell)==32&&sizeof(GIAutoTargets)==64,"GPU ABI");
 }
 #else

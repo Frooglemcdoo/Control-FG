@@ -8,7 +8,7 @@ on:
       - work/gi-guided-live-r434
       - work/rr-r434-rays-r439
       - work/gi-cost-r440
-      - work/gi-recycle-dual-r461
+      - work/gi-overhaul-r466
       - work/gi-stage-diagnostic-r432
       - work/gi-replacement-binding-r426
       - work/gi-modernization
@@ -924,7 +924,7 @@ jobs:
           }
           python -c "from pathlib import Path;Path('build/gi_temporal.generated.h').write_text(''.join('static const unsigned char kTemporal%d[]={'%v+','.join(str(x) for x in Path('build/gi-temporal-%d.dxil'%v).read_bytes())+'};'+chr(10) for v in (0,1)))"
           if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
-          python tools/build-gi-auto.py --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe
+          python tools/build-gi-auto.py --regional --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe
           if ($LASTEXITCODE -ne 0) { throw 'Auto GI shader build failed' }
           python tools/build-gi-frozen.py --dxc $dxc --output build
           if($LASTEXITCODE -ne 0){throw 'Frozen GI runtime embedding failed'}
@@ -1373,7 +1373,7 @@ jobs:
           if errorlevel 1 exit /b 1
           python tools\rt-scene-probe\analyze-instances.py RT-instances-fixture.bin > build\rt-instance-fixture.json
           if errorlevel 1 exit /b 1
-          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
+          cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 /DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
@@ -1553,7 +1553,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/gi-recycle-dual-r461') { 'ControlTOH-GI-Auto-R465' } elseif ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Source10-R447' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/gi-overhaul-r466') { 'ControlTOH-GI-Auto-R466' } elseif ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Source10-R447' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1598,9 +1598,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-Auto-R465') {
-            Copy-Item docs/GI-Auto-R465.txt "$out/ControlTOH/README.txt"
-            Copy-Item tools/diagnostics/Start-GI-Auto-R465-10Rays.cmd,tools/diagnostics/Start-GI-Auto-R465-4Rays.cmd $diagnostics
+          if ($out -eq 'ControlTOH-GI-Auto-R466') {
+            Copy-Item docs/GI-Auto-R466.txt "$out/ControlTOH/README.txt"
+            Copy-Item tools/diagnostics/Start-GI-Auto-R466-10Rays.cmd,tools/diagnostics/Start-GI-Auto-R466-4Rays.cmd $diagnostics
             Copy-Item build/gi-auto-manifest.json "$out/ControlTOH/gi-auto-manifest.json"
           } elseif ($out -eq 'ControlTOH-GI-Source10-R447') {
             Copy-Item docs/GI-Source10-R447.txt "$out/ControlTOH/README.txt"
@@ -1632,10 +1632,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/gi-recycle-dual-r461' && 'ControlTOH-GI-Auto-R465' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/gi-overhaul-r466' && 'ControlTOH-GI-Auto-R466' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
-            ControlTOH-GI-Auto-R465.zip
-            ControlTOH-GI-Auto-R465.sha256
+            ControlTOH-GI-Auto-R466.zip
+            ControlTOH-GI-Auto-R466.sha256
             ControlTOH-GI-Source10-R447.zip
             ControlTOH-GI-Source10-R447.sha256
             ControlTOH-R434-Rays-R439.zip

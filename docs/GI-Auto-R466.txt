@@ -1,0 +1,25 @@
+R466 - Receiver-local GI integration candidate
+
+One package, one DLL, both 4-ray and 10-ray launchers in ControlTOH/Diagnostics.
+Close Control, install beside Control_DX12.exe, and run the matching launcher.
+Launcher fixes actual ray count for that session regardless of the menu.
+RR ON, GI FIXED, RELAX OFF, FG OFF for comparison. Start with 4 rays.
+
+This replaces global two-source selection with a bounded receiver-local table.
+Trace and evaluator share one immutable table and lookup. Missing, stale or
+mismatched regions use full cosine sampling before tracing. The ray/evaluator
+hooks replace the corresponding native dispatches; the regional builder replaces
+the old global builder. Geometry and native hit/material evaluation remain.
+
+This is the first integrated overhaul candidate, not a completed replacement of
+native lighting or proof of whole-game speckle elimination. Training uses 2-metre
+receiver cells, normal groups and a conservative source radius. Coverage at cell
+boundaries, sparse discovery and moving receivers still need live validation.
+Live ray/hit mismatch flags remain an open investigation; static writer audit
+passed but does not prove live constants or storage precision match.
+
+Use the old area and the newer orange-speckle area, then some movement/traversal.
+Compare performance without F7. Collect compact logs after each ray-count run.
+If visual noise remains, a separate F7 capture provides regional occupancy, pixel
+coverage and contract diagnostics. Move the capture box with Alt+arrows, not Ctrl.
+No in-game quality or FPS gain is claimed until measured on your system.

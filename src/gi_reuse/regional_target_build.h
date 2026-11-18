@@ -6,10 +6,10 @@ namespace gi_reuse {
 #endif
 // Proposal data only. Scores never replace evaluated light. Source bounds must
 // come from observed evidence; publication does not manufacture source radiance.
-struct GIRegionalTraining {GIWorldGuideKey receiver;GIAutoBound source;float score;uint version;};
+struct GIRegionalTraining {GIWorldGuideKey receiver;GIAutoBound source;float score;uint version;uint padding[5];};
 struct GIRegionalCell {uint owner,first,second,count;};
 #ifdef __cplusplus
-static_assert(sizeof(GIRegionalTraining)==44,"regional training ABI");
+static_assert(sizeof(GIRegionalTraining)==64,"regional training ABI");
 static_assert(sizeof(GIRegionalCell)==16,"regional cell ABI");
 }
 #endif

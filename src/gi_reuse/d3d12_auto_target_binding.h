@@ -20,7 +20,7 @@ public:
  bool Initialize(ID3D12Resource* targets,GIAutoSelection selection) noexcept {
   if(targets_.resource||!GIAutoSelectionValid(selection))return false;
   BufferStorageLease lease;
-  if(!AcquireStorageLease(targets,lease)||lease.bytes<sizeof(GIAutoTargets)||
+  if(!AcquireStorageLease(targets,lease)||lease.bytes<GIAutoPublicationBytes||
      lease.address%8||(targets->GetDesc().Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))return false;
   targets_=std::move(lease);selection_=selection;return true;
  }

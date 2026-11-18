@@ -30,7 +30,15 @@ jobs:
             & $dxc.FullName -T cs_6_0 -E $entry -WX src/shaders/gi_regional_target_build.hlsl -Fo "regional-$entry.dxil"
             if($LASTEXITCODE -ne 0){throw "Regional compile failed: $entry"}
           }
+          & $dxc.FullName -T cs_6_0 -E main -WX tools/gi-regional-pack-validation.hlsl -Fo gi-regional-pack-validation.dxil
+          if($LASTEXITCODE -ne 0){throw 'Regional pack shader failed'}
           cl /nologo /EHsc /std:c++17 /W4 /WX /O2 tools/test-gi-regional-build-gpu.cpp /Fe:regional-build.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
           if($LASTEXITCODE -ne 0){throw 'Regional build fixture compile failed'}
           ./regional-build.exe
           if($LASTEXITCODE -ne 0){throw 'Regional build fixture failed'}
+          python tools/build-gi-auto.py --regional --dxc $dxc.FullName --output regional-compiled
+          if($LASTEXITCODE -ne 0){throw 'Integrated regional shaders failed'}
+          cl /nologo /EHsc /std:c++17 /W4 /WX /O2 /DCONTROL_GI_REGIONAL tools/test-gi-auto-record-gpu.cpp /Fe:regional-record.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Regional record compile failed'}
+          ./regional-record.exe
+          if($LASTEXITCODE -ne 0){throw 'Regional record fixture failed'}

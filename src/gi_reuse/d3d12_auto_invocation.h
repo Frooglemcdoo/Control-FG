@@ -49,10 +49,10 @@ public:
   GIAutoPublishedTarget selected=prior;HRESULT hr=S_OK;
   if(!GIAutoPriorCompatible(selected.buffer.Get()!=nullptr,selected.epoch,selected.frame,epoch,frame)){
    selected={};selected.frame=frame;selected.epoch=epoch;
-   hr=Buffer(device,sizeof(GIAutoTargets),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,selected.buffer);if(FAILED(hr))return hr;
+   hr=Buffer(device,GIAutoPublicationBytes,D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,selected.buffer);if(FAILED(hr))return hr;
    void* mapped=nullptr;const D3D12_RANGE empty{};hr=selected.buffer->Map(0,&empty,&mapped);if(FAILED(hr))return hr;
    if(!mapped){selected.buffer->Unmap(0,&empty);return E_UNEXPECTED;}
-   std::memset(mapped,0,sizeof(GIAutoTargets));const D3D12_RANGE written{0,sizeof(GIAutoTargets)};selected.buffer->Unmap(0,&written);
+   std::memset(mapped,0,GIAutoPublicationBytes);const D3D12_RANGE written{0,GIAutoPublicationBytes};selected.buffer->Unmap(0,&written);
   }
   if(!target.Initialize(selected.buffer.Get(),{epoch,selected.frame,rayCount,rayCount==4?.5f:.4f,frame}))return E_INVALIDARG;
   if(recycled&&!capturePixels&&recycled->device.Get()==device&&recycled->width==w&&recycled->height==h){
@@ -60,14 +60,14 @@ public:
   }
   hr=reusedScratch?record.RewriteRetired(device,state,target):record.Initialize(device,state,target);if(FAILED(hr))return hr;
   pixelBytes=capturePixels?UINT64(GIAuditWidth(w))*GIAuditHeight(h)*sizeof(GIAutoPixelAudit):0;
-  if(!training)hr=Buffer(device,UINT64(capacity)*sizeof(GIAutoTraining)+pixelBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
-  if(!cells)hr=Buffer(device,4096*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
-  hr=Buffer(device,sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,output.buffer);if(FAILED(hr))return hr;
-  if(captureTargets){hr=Buffer(device,2*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,audit);if(FAILED(hr))return hr;}
+  if(!training)hr=Buffer(device,UINT64(capacity)*GIAutoTrainingStride+pixelBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
+  if(!cells)hr=Buffer(device,4096*GIAutoCellStride,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
+  hr=Buffer(device,GIAutoPublicationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,output.buffer);if(FAILED(hr))return hr;
+  if(captureTargets){hr=Buffer(device,2*GIAutoPublicationBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,audit);if(FAILED(hr))return hr;}
   if(pixelBytes){hr=Buffer(device,pixelBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,pixelAudit);if(FAILED(hr))return hr;}
   output.frame=frame;output.epoch=epoch;pipelines=bundle;return S_OK;
  }
- UINT64 Bytes()const noexcept{return UINT64(capacity)*sizeof(GIAutoTraining)+4096*sizeof(GIAutoCell)+sizeof(GIAutoTargets)+record.RetainedBytes()+target.RetainedBytes()+(audit?2*sizeof(GIAutoTargets):0)+2*pixelBytes;}
+ UINT64 Bytes()const noexcept{return UINT64(capacity)*GIAutoTrainingStride+4096*GIAutoCellStride+GIAutoPublicationBytes+record.RetainedBytes()+target.RetainedBytes()+(audit?2*GIAutoPublicationBytes:0)+2*pixelBytes;}
  bool Shade(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings)noexcept {
   if(shaded||!pipelines)return false;
   if(reusedScratch){
@@ -84,7 +84,7 @@ public:
   timing.Mark(list,5);timing.Resolve(list,2,4);
   if(shaded&&audit){
    barrier.Transition={output.buffer.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
-   list->CopyBufferRegion(audit.Get(),0,output.buffer.Get(),0,sizeof(GIAutoTargets));
+   list->CopyBufferRegion(audit.Get(),0,output.buffer.Get(),0,GIAutoPublicationBytes);
    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
   }
   if(shaded&&audit){
@@ -93,12 +93,12 @@ public:
    const bool upload=heap.Type==D3D12_HEAP_TYPE_UPLOAD;
    barrier.Transition={target.Resource(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};
    if(!upload)list->ResourceBarrier(1,&barrier);
-   list->CopyBufferRegion(audit.Get(),sizeof(GIAutoTargets),target.Resource(),0,sizeof(GIAutoTargets));
+   list->CopyBufferRegion(audit.Get(),GIAutoPublicationBytes,target.Resource(),0,GIAutoPublicationBytes);
    if(!upload){std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);}
   }
   if(shaded&&pixelAudit){
    barrier.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
-   list->CopyBufferRegion(pixelAudit.Get(),0,training.Get(),UINT64(capacity)*sizeof(GIAutoTraining),pixelBytes);
+   list->CopyBufferRegion(pixelAudit.Get(),0,training.Get(),UINT64(capacity)*GIAutoTrainingStride,pixelBytes);
    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
   }
   return shaded;

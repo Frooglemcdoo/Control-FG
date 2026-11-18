@@ -5,7 +5,12 @@ uint GIAutoAuditIndex(uint2 pixel) {
  uint2 start=uint2((trainingStepPacked>>9)&16383u,trainingCapacityPacked>>17);
  if(any(start>uint2(trainingWidth,trainingHeight)-size))return 0xffffffff;
  if(any(pixel<start)||any(pixel>=start+size))return 0xffffffff;
- return trainingCapacity+2*((pixel.y-start.y)*size.x+pixel.x-start.x);
+ #ifdef CONTROL_GI_REGIONAL
+ return 2*trainingCapacity+2*
+#else
+ return trainingCapacity+2*
+#endif
+((pixel.y-start.y)*size.x+pixel.x-start.x);
 }
 void GIAutoAuditWrite(uint index,float3 raw,float rawPeak,float3 weighted,float weightedPeak,
  float3 position,float weight,uint material,uint flags,uint ray,uint covered) {

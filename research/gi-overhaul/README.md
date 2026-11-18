@@ -1,3 +1,9 @@
+# R466 integrated candidate
+
+The checkpoints below document development history. R466 now integrates regional lookup in tracing and evaluation, GPU training packing, five-stage publication, larger immutable buffers and both 4/10-ray launchers. Receiver keys use two-metre cells and normal octants; source bounds use a conservative fixed 0.433 metre radius. Missing or expired regions fall back to cosine sampling. Native geometry, hit records and material evaluation remain in use. This is a first live integration candidate, not a completed replacement of the native GI stack.
+
+Automated validation covers packing, colliding regions, invalid inputs, empty publication, host recording and shader compilation. Live direction-mismatch flags, source discovery, temporal stability, illumination bias and total frame cost remain to be evaluated in game. No noise elimination or performance recovery is claimed.
+
 # GI replacement overhaul: first implementation checkpoint
 
 Production baseline remains R465. These components are intentionally not hooked
