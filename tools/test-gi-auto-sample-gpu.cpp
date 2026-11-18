@@ -1,7 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/producer_sampling.h"
 int main()try {
- Device d(false);constexpr UINT count=32768,scenarios=24,total=count*scenarios+scenarios*20;
+ Device d(false);constexpr UINT count=262144,scenarios=24,total=count*scenarios+scenarios*20;
  struct V{float x,y,z,w;};
  auto output=d.Buffer(UINT64(total)*sizeof(V),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto read=d.Buffer(UINT64(total)*sizeof(V),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -29,7 +29,7 @@ int main()try {
    else Require(moment-z2*z2<broadVariance*.6,"footprint fit did not reduce narrow-source variance");
   }
   if(c==9)Require(z2==0&&peak==0,"blocked source retained energy");
-  std::cout<<"scenario "<<c<<" z2="<<z2<<" cap="<<cap<<" constant="<<constant<<" variance="<<(moment-z2*z2)<<" peak="<<peak<<'\n';
+  std::cout<<"rays "<<rayCount<<" scenario "<<c<<" z2="<<z2<<" cap="<<cap<<" constant="<<constant<<" variance="<<(moment-z2*z2)<<" peak="<<peak<<'\n';
   for(UINT i=0;i<rayCount;++i){const auto& a=values[count*scenarios+testCase*20+i*2];const auto& b=values[count*scenarios+testCase*20+i*2+1];
    const auto native=gi_reuse::GIProducerSample(0,0,897,0,i,rayCount);Require(b.x==native.range,"changed independent range draw");
    if(c==2||c==3||c==5){Require(b.z==0&&a.w==1,"invalid guide not native");Require(std::memcmp(&a,&values[count*scenarios+(testCase>=12?14:2)*20+i*2],sizeof(V))==0,"fallback directions differ");}

@@ -1,6 +1,6 @@
 #include "../src/shaders/gi_auto_sample.hlsl"
 RWStructuredBuffer<float4> output:register(u0);
-static const uint count=32768;
+static const uint count=262144;
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
  uint testCase=id.x/count,scenario=testCase%12,index=id.x%count;
