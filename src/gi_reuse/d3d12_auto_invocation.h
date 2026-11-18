@@ -58,9 +58,14 @@ public:
   if(recycled&&!capturePixels&&recycled->device.Get()==device&&recycled->width==w&&recycled->height==h){
    training=std::move(recycled->training);cells=std::move(recycled->cells);record=std::move(recycled->record);reusedScratch=true;
   }
-  hr=reusedScratch?record.RewriteRetired(device,state,target):record.Initialize(device,state,target);if(FAILED(hr))return hr;
+
   pixelBytes=capturePixels?UINT64(GIAuditWidth(w))*GIAuditHeight(h)*sizeof(GIAutoPixelAudit):0;
+#ifdef CONTROL_GI_REGIONAL
+  if(capturePixels)pixelBytes+=UINT64(GIAuditWidth(w))*GIAuditHeight(h)*(rayCount+1)*16;
+#endif
   if(!training)hr=Buffer(device,UINT64(capacity)*GIAutoTrainingStride+pixelBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
+  const UINT captureControl[]={w,h,GIAuditStepControl(step,roiX),GIAuditCapacityControl(capacity,roiY,capturePixels)};
+  hr=reusedScratch?record.RewriteRetired(device,state,target,training->GetGPUVirtualAddress(),captureControl):record.Initialize(device,state,target,training->GetGPUVirtualAddress(),captureControl);if(FAILED(hr))return hr;
   if(!cells)hr=Buffer(device,(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
   hr=Buffer(device,GIAutoPublicationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,output.buffer);if(FAILED(hr))return hr;
   if(captureTargets){hr=Buffer(device,2*GIAutoPublicationBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,audit);if(FAILED(hr))return hr;}
@@ -74,6 +79,7 @@ public:
    D3D12_RESOURCE_BARRIER reset{};reset.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
    reset.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};list->ResourceBarrier(1,&reset);
   }
+  if(pixelBytes){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=training.Get();list->ResourceBarrier(1,&b);}
   timing.Mark(list,2);
   if(!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0,roiX,roiY))return false;
   timing.Mark(list,3);

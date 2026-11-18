@@ -1,0 +1,18 @@
+R470 - Actual producer ray/weight capture (diagnostic build)
+
+Install beside Control_DX12.exe; both 4/10 launchers are in ControlTOH/Diagnostics.
+Use GI FIXED, RR ON, RELAX OFF, FG OFF. Forced DRED remains disabled.
+This build does not claim a noise or FPS fix.
+
+Normal play retains R469 sampling and guide construction. The existing capture
+box now also records the actual producer origin, direction and weight for every
+ray inside the box on sampled capture frames. The evaluator compares those
+values with its reconstruction and checks the returned hit against the actual
+producer direction. No producer-packet allocation or readback outside capture.
+
+Use the existing GI capture-box control (not F7), place the box over the
+speckles with Alt+arrows, run the capture, and collect compact logs. Capture
+frames have extra GPU storage/readback cost; compare FPS outside the capture.
+New producer_contract lines separate frame/record identity, weight disagreement,
+direction disagreement and actual-ray-to-hit disagreement. These measurements
+are needed before attributing the R469 flags to sampling, transforms or hit data.

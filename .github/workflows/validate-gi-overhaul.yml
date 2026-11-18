@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-cost-r469]
+    branches: [work/gi-packet-r470]
   workflow_dispatch:
 jobs:
   validate:
@@ -44,6 +44,16 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Regional record compile failed'}
           ./regional-record.exe
           if($LASTEXITCODE -ne 0){throw 'Regional record fixture failed'}
+      - name: Validate actual producer packet capture on WARP
+        shell: pwsh
+        run: |
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          & $dxc.FullName -T cs_6_0 -E main -WX tools/gi-producer-packet-validation.hlsl -Fo gi-producer-packet-validation.dxil
+          if($LASTEXITCODE -ne 0){throw 'Producer packet shader failed'}
+          cl /nologo /EHsc /std:c++17 /W4 /WX /DCONTROL_GI_REGIONAL tools/test-gi-producer-packet.cpp /Fe:producer-packet.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Producer packet fixture compile failed'}
+          ./producer-packet.exe
+          if($LASTEXITCODE -ne 0){throw 'Producer packet fixture failed'}
       - name: Validate GPU fault observer with live WARP device
         shell: cmd
         run: |

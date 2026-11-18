@@ -20,6 +20,7 @@ struct GIAuditExample {uint index=0;float luminance=0,ratio=0;};
 struct GIAuditSummary {
  uint valid=0,guided=0,invalid=0,spikes=0,downweightedSpikes=0;
  uint small2=0,small4=0,small10=0,peakDirectionMismatch=0,peakInsideUncovered=0;
+ uint producerStampMismatch=0,producerWeightMismatch=0,producerDirectionMismatch=0,producerHitMismatch=0;
  double rawSum=0,weightedSum=0;
  std::array<GIAuditExample,12> smallExamples{};
  std::array<GIAuditExample,12> examples{};
@@ -31,6 +32,8 @@ inline GIAuditSummary GIAuditSummarize(const GIAutoPixelAudit* p,uint w,uint h){
   if(!std::isfinite(a)||!std::isfinite(b)||a<0||b<0||!(v.flags&4)){++s.invalid;continue;}
   if(v.flags&8)++s.peakDirectionMismatch;
   if(v.flags&16)++s.peakInsideUncovered;
+  if(v.flags&32)++s.producerStampMismatch;if(v.flags&64)++s.producerWeightMismatch;
+  if(v.flags&128)++s.producerDirectionMismatch;if(v.flags&256)++s.producerHitMismatch;
   ++s.valid;if(v.flags&2)++s.guided;s.rawSum+=a;s.weightedSum+=b;l[i]=b;
  }
  for(uint y=2;y+2<h;++y)for(uint x=2;x+2<w;++x){const uint i=y*w+x;if(l[i]<=.00001f)continue;

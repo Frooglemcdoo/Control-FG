@@ -17,8 +17,8 @@ public:
  static constexpr LPCWSTR Export=L"controlAutoGIRaygen";
  HRESULT Initialize(ID3D12Device* device,D3D12_SHADER_BYTECODE code)noexcept {
   if(root_||!device||!code.pShaderBytecode||!code.BytecodeLength)return E_INVALIDARG;
-  const auto p=D3D12AutoTargetBinding::Parameters();
-  D3D12_ROOT_SIGNATURE_DESC rd{2,p.data(),0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
+  const auto p=D3D12AutoTargetBinding::RaygenParameters();
+  D3D12_ROOT_SIGNATURE_DESC rd{UINT(p.size()),p.data(),0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE};
   Microsoft::WRL::ComPtr<ID3DBlob> blob,error;
   auto hr=D3D12SerializeRootSignature(&rd,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error);if(FAILED(hr))return hr;
   hr=device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root_));if(FAILED(hr))return hr;
@@ -37,13 +37,13 @@ public:
 class D3D12AutoRaygenRecord {
  Microsoft::WRL::ComPtr<ID3D12Resource> data_;
  Microsoft::WRL::ComPtr<ID3D12StateObject> state_;
- HRESULT Write(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding,bool reuse)noexcept {
+ HRESULT Write(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding,bool reuse,UINT64 captureAddress,const UINT* controls)noexcept {
   if((data_&&!reuse)||!device||!state||!binding.Resource())return E_INVALIDARG;
   Microsoft::WRL::ComPtr<ID3D12StateObjectProperties> properties;
   auto hr=state->QueryInterface(IID_PPV_ARGS(&properties));if(FAILED(hr))return hr;
   const void* identifier=properties->GetShaderIdentifier(D3D12AutoRaygenAugment::Export);
   std::array<unsigned char,D3D12AutoTargetBinding::RecordBytes> bytes;
-  if(!binding.EncodeRaygen(identifier,bytes))return E_INVALIDARG;
+  if(!binding.EncodeRaygen(identifier,bytes,captureAddress,controls))return E_INVALIDARG;
   D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_UPLOAD;hp.CreationNodeMask=hp.VisibleNodeMask=1;
   D3D12_RESOURCE_DESC rd{};rd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;rd.Width=bytes.size();rd.Height=1;
   rd.DepthOrArraySize=rd.MipLevels=1;rd.SampleDesc.Count=1;rd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -55,9 +55,9 @@ class D3D12AutoRaygenRecord {
   data_=std::move(data);state_=state;return S_OK;
  }
 public:
- HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding)noexcept {return Write(device,state,binding,false);}
+ HRESULT Initialize(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding,UINT64 captureAddress=0,const UINT* controls=nullptr)noexcept {return Write(device,state,binding,false,captureAddress,controls);}
  // Only storage returned by completed AND sealed invocation retirement is admitted.
- HRESULT RewriteRetired(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding)noexcept {return Write(device,state,binding,true);}
+ HRESULT RewriteRetired(ID3D12Device* device,ID3D12StateObject* state,const D3D12AutoTargetBinding& binding,UINT64 captureAddress=0,const UINT* controls=nullptr)noexcept {return Write(device,state,binding,true,captureAddress,controls);}
  D3D12_GPU_VIRTUAL_ADDRESS_RANGE At(ID3D12StateObject* state)const noexcept {
   if(!data_||state!=state_.Get())return {};
   return {data_->GetGPUVirtualAddress(),D3D12AutoTargetBinding::RecordBytes};

@@ -49,6 +49,24 @@ void main(uint3 id:SV_DispatchThreadID) {
    if(lum*draw.weight>weightedPeak){weightedPeak=lum*draw.weight;peakWeight=draw.weight;
     peakPosition=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
     peakMaterial=hit.material;peakRay=slice;peakFlags=0;
+    uint packetBase=2*trainingCapacity+2*min(trainingWidth,512u)*min(trainingHeight,512u);
+    uint pixelIndex=(auditIndex-2*trainingCapacity)/2;
+    uint packetIndex=pixelIndex*(selection.rayCount+1);
+    GIAutoTraining originPair=autoTraining[packetBase+packetIndex/2];
+    float3 actualOrigin=(packetIndex&1)?asfloat(uint3(originPair.valid,originPair.version,originPair.reserved0)):float3(originPair.position.x,originPair.position.y,originPair.position.z);
+    uint stamp=(packetIndex&1)?originPair.reserved1:asuint(originPair.energy);
+    uint directionIndex=packetIndex+slice+1;
+    GIAutoTraining directionPair=autoTraining[packetBase+directionIndex/2];
+    float4 actual=(directionIndex&1)?asfloat(uint4(directionPair.valid,directionPair.version,directionPair.reserved0,directionPair.reserved1)):float4(directionPair.position.x,directionPair.position.y,directionPair.position.z,directionPair.energy);
+    if(stamp!=selection.sampleFrame)peakFlags|=32;
+    else {
+     if(abs(actual.w-draw.weight)>1e-5)peakFlags|=64;
+     // alpha=0 still needs an expected direction for diagnostics only.
+     GIAutoDraw expected=GIAutoSamplePrepared(id.xy,giCB0[69].z,0,slice,source.normal,prepared,selection);
+     if(dot(normalize(actual.xyz),normalize(expected.direction))<.999999)peakFlags|=128;
+     float3 actualDelta=peakPosition-actualOrigin;
+     if(hit.material<65534&&dot(actualDelta,actualDelta)>1e-12&&dot(normalize(actualDelta),normalize(actual.xyz))<.9999)peakFlags|=256;
+    }
     if(alpha>0&&hit.material<65534){
      float3 delta=peakPosition-source.origin;
      if(dot(delta,delta)>1e-12&&dot(normalize(delta),normalize(draw.direction))<.9999)peakFlags|=8;
