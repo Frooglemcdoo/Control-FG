@@ -50,7 +50,7 @@ inline void Tick(HWND game)noexcept {
  if(f7&&!f7Held&&editable&&w&&h){
   gi_auto_capture::frozenCenter.store(gi_auto_capture::center.load());gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
   ++gi_auto_capture::request;armedAt=GetTickCount64();gi_auto_capture::phase=gi_auto_capture::Countdown;
-  Log("GI_AUTO_R467 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
+  Log("GI_AUTO_R468 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
  }
  f7Held=f7;
  if(gi_auto_capture::phase.load()==gi_auto_capture::Countdown&&GetTickCount64()-armedAt>=5000)gi_auto_capture::phase=gi_auto_capture::Collecting;

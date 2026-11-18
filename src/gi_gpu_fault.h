@@ -23,7 +23,15 @@ inline void BeforeDevice()noexcept {
   settings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
  }
 }
+struct Invocation {std::atomic<UINT64> frame{0},ray{0},compute{0};};
+inline Invocation invocations[8];
+inline void Track(UINT64 frame,ID3D12GraphicsCommandList* list,bool compute)noexcept {
+ if(!requested.load())return;auto& s=invocations[frame%8];
+ if(!compute){s.frame=0;s.compute=0;s.ray=reinterpret_cast<UINT64>(list);s.frame=frame;}
+ else if(s.frame.load()==frame)s.compute=reinterpret_cast<UINT64>(list);
+}
 inline void DumpRemoved(ID3D12Device* d)noexcept {
+ for(auto& s:invocations)Log("GI_FAULT_R467 invocation frame=%llu ray_list=0x%llX compute_list=0x%llX",s.frame.load(),s.ray.load(),s.compute.load());
  Microsoft::WRL::ComPtr<ID3D12DeviceRemovedExtendedData> dred;
  const auto query=d->QueryInterface(IID_PPV_ARGS(&dred));
  Log("GI_FAULT_R467 dred_interface=0x%08lX",static_cast<unsigned long>(query));

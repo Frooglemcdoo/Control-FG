@@ -37,15 +37,31 @@ uint Find(GIWorldGuideKey receiver){
  if(id.x>=recordCount)return;GIRegionalTraining r=records[id.x];if(!Valid(r))return;
  uint slot=Find(r.receiver);if(slot==0xffffffff)return;uint old;
  InterlockedMax(cells[slot].first,Priority(id.x),old);InterlockedAdd(cells[slot].count,1,old);
+ // Publish only an index here. The inter-dispatch UAV barrier makes the entire
+ // list immutable before Second follows it; nobody follows links in First.
+ InterlockedExchange(cells[slot].second,id.x+1,old);
+ cells[capacity+id.x].owner=old;
 }
 [numthreads(64,1,1)]void Second(uint3 id:SV_DispatchThreadID){
- if(id.x>=recordCount)return;GIRegionalTraining r=records[id.x];if(!Valid(r))return;
- uint slot=Find(r.receiver);if(slot==0xffffffff||cells[slot].first==0)return;
- uint first=RecordIndex(cells[slot].first);if(first==id.x)return;
+ if(id.x>=capacity)return;
+ GIRegionalCell c=cells[id.x];uint winner=0;
+ if(c.first==0){cells[id.x].second=0;return;}
+ uint first=RecordIndex(c.first);
+ if(first>=recordCount){cells[id.x].second=0;return;}
  GIAutoBound primary=records[first].source;
- float3 delta=float3(r.source.center.x-primary.center.x,r.source.center.y-primary.center.y,r.source.center.z-primary.center.z);
- if(dot(delta,delta)<=primary.radius*primary.radius)return;
- uint old;InterlockedMax(cells[slot].second,Priority(id.x),old);
+ uint link=c.second,visited=0;
+ // One writer per receiver region. No atomic operations or polling in this
+ // stage; each accepted record is visited once across all receiver lists.
+ [loop]while(link!=0&&visited<recordCount){
+  uint index=link-1;
+  if(index>=recordCount){winner=0;break;}
+  GIRegionalTraining r=records[index];
+  float3 delta=float3(r.source.center.x-primary.center.x,r.source.center.y-primary.center.y,r.source.center.z-primary.center.z);
+  if(index!=first&&dot(delta,delta)>primary.radius*primary.radius)winner=max(winner,Priority(index));
+  link=cells[capacity+index].owner;++visited;
+ }
+ if(link!=0&&visited==recordCount)winner=0; // Corrupt/cyclic list never spins.
+ cells[id.x].second=winner;
 }
 [numthreads(64,1,1)]void Freeze(uint3 id:SV_DispatchThreadID){
  if(id.x>=capacity)return;GIRegionalTarget outValue=(GIRegionalTarget)0;

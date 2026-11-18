@@ -1,0 +1,15 @@
+R468 - Regional secondary-selection freeze candidate
+
+Install beside Control_DX12.exe. Run ControlTOH/Diagnostics/Start-GI-Auto-R468-4Rays.cmd.
+GI FIXED, RR ON, RELAX OFF, FG OFF. Both 4/10 launchers use the same DLL.
+
+R467 confirmed DEVICE_HUNG after graphics fence progress stopped. Its unfinished
+operation sequence matches regional secondary-source selection. R468 replaces
+per-record contended secondary atomics with a bounded per-region traversal of
+immutable candidate lists. Two-source selection and exact priority/tie rules
+remain. This is a targeted candidate, not a verified live freeze fix.
+
+Fault reporting remains enabled for this run. If frozen, leave it for 15 seconds
+then collect compact logs. If loading succeeds, try movement in the failing area
+and collect compact logs. No F7 or new thread dump is required. DRED can add
+cost, so this is not the final FPS benchmark build.

@@ -46,7 +46,7 @@ public:
      !std::isfinite(cellSize)||cellSize<.01f||cellSize>100||!std::isfinite(scoreScale)||scoreScale<=0||scoreScale>65535||!minimumCount||minimumCount>65535||
      training==cells||training==frozen||cells==frozen||
      !Buffer(training,UINT64(count?count:1)*sizeof(GIRegionalTraining),false)||
-     !Buffer(cells,UINT64(slots)*sizeof(GIRegionalCell),true)||!Buffer(frozen,UINT64(slots)*sizeof(GIRegionalTarget),true)||
+     !Buffer(cells,(UINT64(slots)+count)*sizeof(GIRegionalCell),true)||!Buffer(frozen,UINT64(slots)*sizeof(GIRegionalTarget),true)||
      (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
   list->SetComputeRootSignature(root_.Get());
   list->SetComputeRootShaderResourceView(0,training->GetGPUVirtualAddress());
@@ -56,7 +56,7 @@ public:
   std::memcpy(&control[4],&cellSize,4);std::memcpy(&control[5],&scoreScale,4);list->SetComputeRoot32BitConstants(3,8,control,0);
   for(UINT i=0;i<5;++i){
    list->SetPipelineState(stages_[i].Get());
-   const UINT groups=(((i==0||i==4)?slots:count)+63)/64;
+   const UINT groups=(((i==0||i==3||i==4)?slots:count)+63)/64;
    if(groups)list->Dispatch(groups,1,1);
    if(i!=4)Barrier(list,cells);
    if(i==0)Barrier(list,frozen);

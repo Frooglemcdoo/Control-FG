@@ -61,13 +61,13 @@ public:
   hr=reusedScratch?record.RewriteRetired(device,state,target):record.Initialize(device,state,target);if(FAILED(hr))return hr;
   pixelBytes=capturePixels?UINT64(GIAuditWidth(w))*GIAuditHeight(h)*sizeof(GIAutoPixelAudit):0;
   if(!training)hr=Buffer(device,UINT64(capacity)*GIAutoTrainingStride+pixelBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
-  if(!cells)hr=Buffer(device,4096*GIAutoCellStride,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
+  if(!cells)hr=Buffer(device,(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
   hr=Buffer(device,GIAutoPublicationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,output.buffer);if(FAILED(hr))return hr;
   if(captureTargets){hr=Buffer(device,2*GIAutoPublicationBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,audit);if(FAILED(hr))return hr;}
   if(pixelBytes){hr=Buffer(device,pixelBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,pixelAudit);if(FAILED(hr))return hr;}
   output.frame=frame;output.epoch=epoch;pipelines=bundle;return S_OK;
  }
- UINT64 Bytes()const noexcept{return UINT64(capacity)*GIAutoTrainingStride+4096*GIAutoCellStride+GIAutoPublicationBytes+record.RetainedBytes()+target.RetainedBytes()+(audit?2*GIAutoPublicationBytes:0)+2*pixelBytes;}
+ UINT64 Bytes()const noexcept{return UINT64(capacity)*GIAutoTrainingStride+(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride)+GIAutoPublicationBytes+record.RetainedBytes()+target.RetainedBytes()+(audit?2*GIAutoPublicationBytes:0)+2*pixelBytes;}
  bool Shade(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings)noexcept {
   if(shaded||!pipelines)return false;
   if(reusedScratch){

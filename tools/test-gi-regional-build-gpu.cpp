@@ -3,17 +3,18 @@
 #include "../src/gi_reuse/d3d12_regional_target_build.h"
 #include <limits>
 #include <array>
-int main()try{
- using namespace gi_reuse;Device d(false);constexpr UINT capacity=64;
+int main(int argc,char**)try{
+ using namespace gi_reuse;Device d(false);const UINT capacity=argc>1?4096u:64u;
  auto a=GIMakeWorldGuideKey({.1f,.1f,.1f},{0,0,1}),b=a;
  for(float x=2.1f;;x+=.25f){b=GIMakeWorldGuideKey({x,.1f,.1f},{0,0,1});if(GIRegionalSlot(a,capacity,0)==GIRegionalSlot(b,capacity,0))break;}
  const auto record=[](GIWorldGuideKey key,float x,float score){return GIRegionalTraining{key,{{x,0,3},.433012702f},score,7};};
  std::vector<GIRegionalTraining> records={record(a,1,10),record(a,1.1f,9),record(a,5,2),record(b,30,8),record(b,40,1)};
+ if(argc>1)while(records.size()<65533)records.push_back(record(a,1.05f,1));
  auto invalid=record(a,100,1000);invalid.version=6;records.push_back(invalid);
  invalid=record(a,200,1000);invalid.score=std::numeric_limits<float>::quiet_NaN();records.push_back(invalid);
  auto source=d.Upload(records);
  auto input=d.Buffer(records.size()*sizeof(GIRegionalTraining),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto cells=d.Buffer(capacity*sizeof(GIRegionalCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto cells=d.Buffer((capacity+records.size())*sizeof(GIRegionalCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto output=d.Buffer(capacity*sizeof(GIRegionalTarget),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto read=d.Buffer(2*capacity*sizeof(GIRegionalTarget),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  D3D12_ROOT_PARAMETER params[4]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[0].Descriptor={0,0};
@@ -24,16 +25,18 @@ int main()try{
  ComPtr<ID3D12RootSignature> root;Check(d.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
  auto packCode=Read("gi-regional-pack-validation.dxil");D3D12_COMPUTE_PIPELINE_STATE_DESC packDesc{};packDesc.pRootSignature=root.Get();packDesc.CS={packCode.data(),packCode.size()};ComPtr<ID3D12PipelineState> packPso;
  Check(d.device->CreateComputePipelineState(&packDesc,IID_PPV_ARGS(&packPso)));
- d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(packPso.Get());d.list->SetComputeRootShaderResourceView(0,source->GetGPUVirtualAddress());d.list->SetComputeRootUnorderedAccessView(1,input->GetGPUVirtualAddress());d.list->SetComputeRoot32BitConstant(3,UINT(records.size()),0);d.list->Dispatch(1,1,1);
+ d.list->SetComputeRootSignature(root.Get());d.list->SetPipelineState(packPso.Get());d.list->SetComputeRootShaderResourceView(0,source->GetGPUVirtualAddress());d.list->SetComputeRootUnorderedAccessView(1,input->GetGPUVirtualAddress());d.list->SetComputeRoot32BitConstant(3,UINT(records.size()),0);d.list->Dispatch((UINT(records.size())+63)/64,1,1);
  d.Transition(input.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
  const char* names[]={"Clear","Claim","First","Second","Freeze"};std::array<ComPtr<ID3D12PipelineState>,5> psos;
  std::array<std::vector<char>,5> codes;std::array<D3D12_SHADER_BYTECODE,5> shaders;
  for(UINT i=0;i<5;++i){codes[i]=Read((std::string("regional-")+names[i]+".dxil").c_str());shaders[i]={codes[i].data(),codes[i].size()};D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS=shaders[i];Check(d.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&psos[i])));}
+ auto shortCells=d.Buffer(capacity*sizeof(GIRegionalCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  D3D12RegionalTargetBuild builder;Check(builder.Initialize(d.device.Get(),shaders));
  ComputeBindingSnapshot restore;restore.root=root;restore.pipeline=psos[0];restore.arguments.Root(reinterpret_cast<UINT64>(root.Get()));
  restore.arguments.Descriptor(0,RootArgumentKind::SRV,input->GetGPUVirtualAddress());restore.arguments.Descriptor(1,RootArgumentKind::UAV,cells->GetGPUVirtualAddress());restore.arguments.Descriptor(2,RootArgumentKind::UAV,output->GetGPUVirtualAddress());
  const UINT initial[]={0,capacity,20,7};restore.arguments.Constants(3,0,4,initial);
  Require(!builder.Record(d.list.Get(),input.Get(),UINT(records.size()),cells.Get(),cells.Get(),capacity,20,7,.5f,512,1,restore),"aliased regional output admitted");
+ Require(!builder.Record(d.list.Get(),input.Get(),UINT(records.size()),shortCells.Get(),output.Get(),capacity,20,7,.5f,512,1,restore),"undersized candidate-link scratch admitted");
  const auto build=[&](UINT count,UINT frame,UINT destination){
   Require(builder.Record(d.list.Get(),input.Get(),count,cells.Get(),output.Get(),capacity,frame,7,.5f,512,1,restore),"production regional builder rejected fixture");
   d.Transition(output.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -45,7 +48,7 @@ int main()try{
  GIAutoTargets chosen{};
  Require(GIRegionalLookup(values,capacity,a,22,7,4,chosen),"GPU lost first receiver region");
  Require(chosen.validMask==3&&chosen.bounds[0].center.x==1&&chosen.bounds[1].center.x==5,"GPU duplicate or invalid candidate displaced distinct source");
- Require(chosen.counts[0]==3,"invalid training contaminated count");
+ Require(chosen.counts[0]==records.size()-4,"invalid training contaminated count");
  Require(GIRegionalLookup(values,capacity,b,22,7,4,chosen),"GPU lost colliding receiver region");
  Require(chosen.validMask==3&&chosen.bounds[0].center.x==30&&chosen.bounds[1].center.x==40,"GPU shared guides across colliding regions");
  Require(chosen.counts[0]==2,"GPU cross-region accumulation");
