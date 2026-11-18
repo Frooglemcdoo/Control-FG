@@ -535,10 +535,13 @@ inline void STDMETHODCALLTYPE ComputeDispatchHook(ID3D12GraphicsCommandList* lis
     // R171: preserve native serial shading and dispatch dimensions.
     const auto automatic=gi_auto_dispatch::shade.load();
     const auto frozen=gi_frozen_dispatch::shade.load();
-    if(!(automatic&&automatic(list,x,y,z))&&!(frozen&&frozen(list,x,y,z))&&!gi_spot_trace::Dispatch(list,x,y,z))original(list,x,y,z);
+    const bool autoReplaced=automatic&&automatic(list,x,y,z);
+    const bool replaced=autoReplaced||(frozen&&frozen(list,x,y,z))||gi_spot_trace::Dispatch(list,x,y,z);
+    if(!replaced)original(list,x,y,z);
+    if(autoReplaced)gi_auto_dispatch::Bypassed(true);
     performance::End(timing);
     rt_spot_capture_runtime::AfterCompute(list,x,y,z);
-    gi_owned_dispatch::After(list,x,y,z);
+    if(!replaced)gi_owned_dispatch::After(list,x,y,z);
 }
 inline HRESULT STDMETHODCALLTYPE ResetHook(ID3D12GraphicsCommandList* list, ID3D12CommandAllocator* allocator, ID3D12PipelineState* pso) {
     const auto original = Lookup(list).reset;

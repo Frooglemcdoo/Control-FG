@@ -15,6 +15,8 @@ inline UINT LaunchRays()noexcept {
   return n==1&&value[0]=='4'?4u:(n==2&&value[0]=='1'&&value[1]=='0'?10u:0u);}();
  return Enabled()?rays:0;
 }
+inline std::atomic<void(*)(bool)noexcept> bypassed{nullptr};
+inline void Bypassed(bool evaluator)noexcept {if(const auto callback=bypassed.load())callback(evaluator);}
 inline std::atomic<bool(*)(ID3D12RootSignature*)noexcept> rootReady{nullptr};
 inline std::atomic<bool(*)(ID3D12GraphicsCommandList4*,const D3D12_DISPATCH_RAYS_DESC*,ID3D12StateObject*)noexcept> ray{nullptr};
 inline std::atomic<bool(*)(ID3D12GraphicsCommandList*,UINT,UINT,UINT)noexcept> shade{nullptr};

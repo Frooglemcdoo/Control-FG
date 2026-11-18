@@ -146,7 +146,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
   if(SUCCEEDED(list->GetPrivateData(kState,&size,state.GetAddressOf()))&&state){
    Microsoft::WRL::ComPtr<ID3D12Resource> record;size=sizeof(ID3D12Resource*);
    if(SUCCEEDED(state->GetPrivateData(kRecord,&size,record.GetAddressOf()))&&record){
-    if(const auto automatic=gi_auto_dispatch::ray.load())if(automatic(list,desc,state.Get()))return true;
+    if(const auto automatic=gi_auto_dispatch::ray.load())if(automatic(list,desc,state.Get())){gi_auto_dispatch::Bypassed(false);return true;}
     if(!gi_reuse::GuidedLiveEnabled())if(const auto frozen=gi_frozen_dispatch::ray.load())if(frozen(list,desc,state.Get()))return true;
     gi_phase_bindings::Record(list,1,desc->Width,desc->Height,desc->Depth);
     const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();

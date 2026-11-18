@@ -21,9 +21,14 @@ GI_TARGET_INLINE bool GIAutoMatches(GIAutoTargets t,uint version,uint sourceFram
  return t.schema==0x41544731u&&t.version==version&&t.frame==sourceFrame&&t.validMask>0&&t.validMask<=3;
 }
 #ifdef __cplusplus
+inline constexpr unsigned GIRegionalStripes=32;
+#else
+static const uint GIRegionalStripes=32;
+#endif
+#ifdef __cplusplus
 #ifdef CONTROL_GI_REGIONAL
 inline constexpr unsigned GIAutoLinkStride=16;
-inline constexpr unsigned GIAutoTrainingStride=64,GIAutoCellStride=16,GIAutoPublicationBytes=4096*84;
+inline constexpr unsigned GIAutoTrainingStride=64,GIAutoCellStride=16*(1+GIRegionalStripes),GIAutoPublicationBytes=4096*84;
 #else
 inline constexpr unsigned GIAutoLinkStride=0;
 inline constexpr unsigned GIAutoTrainingStride=32,GIAutoCellStride=32,GIAutoPublicationBytes=64;

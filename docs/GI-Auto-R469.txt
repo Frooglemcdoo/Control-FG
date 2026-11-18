@@ -1,0 +1,26 @@
+R469 - GI dispatch ownership and guide-builder cost
+
+Install beside Control_DX12.exe. Both launchers use the same DLL:
+ControlTOH/Diagnostics/Start-GI-Auto-R469-4Rays.cmd
+ControlTOH/Diagnostics/Start-GI-Auto-R469-10Rays.cmd
+GI FIXED, RR ON, RELAX OFF, FG OFF for comparable performance measurements.
+Restart with the other launcher to change the ray count.
+
+R468's 4-ray log measured guide construction at 1.36 ms mean / 2.66 ms peak
+(23 samples outside capture). R469 divides each receiver's candidate list into
+32 parallel lists and reduces their winners. Exact candidate priority and
+primary/secondary selection remain unchanged. No extra rays or temporal blur.
+Normal launchers now clear the forced DRED diagnostic flag used for the freeze
+investigation. This is not a measured live FPS improvement yet.
+
+Accepted replacement ray dispatches bypass native rays; accepted replacement
+GI6 evaluations bypass native GI6. The legacy owned post-dispatch replay is now
+explicitly excluded after any replacement. Required geometry, hit/miss material
+work, and downstream reconstruction remain. Bounded 'bypass' log counters record
+native dispatch suppression at the hooks. Rejected admission retains fallback.
+The R468 log did not establish that duplicate native GI caused the FPS loss.
+
+No F7 for the performance run: stage timings and bypass counts log automatically.
+Play the same area and collect compact logs. Residual speckles are not claimed
+fixed by this cost/ownership change; their input-direction flags remain under
+investigation. Capture-box movement remains Alt+arrows, not Ctrl.

@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-secondary-r468]
+    branches: [work/gi-cost-r469]
   workflow_dispatch:
 jobs:
   validate:

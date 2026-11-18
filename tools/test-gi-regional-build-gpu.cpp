@@ -9,14 +9,16 @@ int main(int argc,char**)try{
  for(float x=2.1f;;x+=.25f){b=GIMakeWorldGuideKey({x,.1f,.1f},{0,0,1});if(GIRegionalSlot(a,capacity,0)==GIRegionalSlot(b,capacity,0))break;}
  const auto record=[](GIWorldGuideKey key,float x,float score){return GIRegionalTraining{key,{{x,0,3},.433012702f},score,7};};
  std::vector<GIRegionalTraining> records={record(a,1,10),record(a,1.1f,9),record(a,5,2),record(b,30,8),record(b,40,1)};
+ // Put distinct alternatives in every stripe; the winning stripe is not zero.
+ for(unsigned stripe=0;stripe<GIRegionalStripes;++stripe)records.push_back(record(a,50.f+stripe,3.f+float(stripe)/32.f));
  if(argc>1)while(records.size()<65533)records.push_back(record(a,1.05f,1));
  auto invalid=record(a,100,1000);invalid.version=6;records.push_back(invalid);
  invalid=record(a,200,1000);invalid.score=std::numeric_limits<float>::quiet_NaN();records.push_back(invalid);
  auto source=d.Upload(records);
  auto input=d.Buffer(records.size()*sizeof(GIRegionalTraining),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto cells=d.Buffer((capacity+records.size())*sizeof(GIRegionalCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto cells=d.Buffer((capacity*(1+GIRegionalStripes)+records.size())*sizeof(GIRegionalCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto output=d.Buffer(capacity*sizeof(GIRegionalTarget),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto read=d.Buffer(2*capacity*sizeof(GIRegionalTarget),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto read=d.Buffer(3*capacity*sizeof(GIRegionalTarget),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  D3D12_ROOT_PARAMETER params[4]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_SRV;params[0].Descriptor={0,0};
  params[1].ParameterType=params[2].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;params[1].Descriptor={0,0};params[2].Descriptor={1,0};
  params[3].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;params[3].Constants={0,0,4};
@@ -43,16 +45,18 @@ int main(int argc,char**)try{
   d.list->CopyBufferRegion(read.Get(),destination*capacity*sizeof(GIRegionalTarget),output.Get(),0,capacity*sizeof(GIRegionalTarget));
   d.Transition(output.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
  };
- build(UINT(records.size()),20,0);build(0,21,1);d.Submit();
+ build(UINT(records.size()),20,0);build(5,21,1);build(0,22,2);d.Submit();
  GIRegionalTarget* values=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&values)));
  GIAutoTargets chosen{};
  Require(GIRegionalLookup(values,capacity,a,22,7,4,chosen),"GPU lost first receiver region");
- Require(chosen.validMask==3&&chosen.bounds[0].center.x==1&&chosen.bounds[1].center.x==5,"GPU duplicate or invalid candidate displaced distinct source");
+ Require(chosen.validMask==3&&chosen.bounds[0].center.x==1&&chosen.bounds[1].center.x==81,"GPU duplicate or invalid candidate displaced distinct source");
  Require(chosen.counts[0]==records.size()-4,"invalid training contaminated count");
  Require(GIRegionalLookup(values,capacity,b,22,7,4,chosen),"GPU lost colliding receiver region");
  Require(chosen.validMask==3&&chosen.bounds[0].center.x==30&&chosen.bounds[1].center.x==40,"GPU shared guides across colliding regions");
  Require(chosen.counts[0]==2,"GPU cross-region accumulation");
- for(UINT i=capacity;i<2*capacity;++i)Require(values[i].targets.validMask==0,"empty frame retained stale guide");
+ Require(GIRegionalLookup(values+capacity,capacity,a,22,7,4,chosen),"small rebuild lost region");
+ Require(chosen.bounds[1].center.x==5&&chosen.counts[0]==3,"reused stripes retained old winners");
+ for(UINT i=2*capacity;i<3*capacity;++i)Require(values[i].targets.validMask==0,"empty frame retained stale guide");
  D3D12_RANGE none{};read->Unmap(0,&none);
  std::cout<<"PASS GPU construction -> regional lookup: colliding receivers retain distinct source pairs, covered duplicates/invalid records rejected, empty frame clears publication. No live integration or timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
