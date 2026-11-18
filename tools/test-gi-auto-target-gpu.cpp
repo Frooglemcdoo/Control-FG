@@ -14,7 +14,7 @@ int main()try {
  auto input=d.Upload(records);auto empty=d.Upload(std::vector<GIAutoTraining>(1));
  auto cells=d.Buffer(slots*sizeof(GIAutoCell),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto frozen=d.Buffer(sizeof(GIAutoTargets),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
- auto back=d.Buffer(21*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
+ auto back=d.Buffer(24*sizeof(GIAutoTargets),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<std::vector<char>,4> code;std::array<D3D12_SHADER_BYTECODE,4> shaders;
  const char* names[]={"gi-auto-Clear.dxil","gi-auto-Claim.dxil","gi-auto-Accumulate.dxil","gi-auto-Freeze.dxil"};
  for(UINT i=0;i<4;++i){code[i]=Read(names[i]);shaders[i]={code[i].data(),code[i].size()};}
@@ -101,7 +101,22 @@ int main()try {
  cross.back().energy=.01f;auto dimCrossInput=d.Upload(cross);
  Require(builder.Record(d.list.Get(),dimCrossInput.Get(),UINT(cross.size()),cells.Get(),frozen.Get(),slots,20,7,.5f,512,1,restore),"dim cross-cell rejection");copy(19);
  cross.back()=neighbor;cross.back().position.z+=3;auto distantInput=d.Upload(cross);
- Require(builder.Record(d.list.Get(),distantInput.Get(),UINT(cross.size()),cells.Get(),frozen.Get(),slots,21,7,.5f,512,1,restore),"distant bright source separation");copy(20);d.Submit();
+ Require(builder.Record(d.list.Get(),distantInput.Get(),UINT(cross.size()),cells.Get(),frozen.Get(),slots,21,7,.5f,512,1,restore),"distant bright source separation");copy(20);
+ // R465: anchors > the old 0.2165m cutoff but inside fitted primary coverage
+ // must not displace the separate bright patch. Both dense rank orders tested.
+ auto duplicate=center;duplicate.position={-82.050514f,25.059763f,107.129669f};duplicate.energy=3;
+ auto separate=center;separate.position={-82.068909f,25.059168f,110.528084f};separate.energy=2;
+ std::vector<GIAutoTraining> coverage(16,center);coverage.insert(coverage.end(),16,duplicate);coverage.push_back(separate);
+ auto coverageInput=d.Upload(coverage);
+ Require(builder.Record(d.list.Get(),coverageInput.Get(),UINT(coverage.size()),cells.Get(),frozen.Get(),slots,22,7,.5f,512,1,restore),"covered duplicate alternative");copy(21);
+ for(auto& r:coverage)if(r.position.z==duplicate.position.z)r.energy=5;
+ auto coverageSwap=d.Upload(coverage);
+ Require(builder.Record(d.list.Get(),coverageSwap.Get(),UINT(coverage.size()),cells.Get(),frozen.Get(),slots,23,7,.5f,512,1,restore),"covered duplicate rank swap");copy(22);
+ auto outside=a;outside.position.x=.6f;outside.energy=.1f;
+ auto weaker=b;weaker.energy=.05f;
+ std::vector<GIAutoTraining> uncovered(16,a);uncovered.push_back(outside);uncovered.push_back(weaker);
+ auto uncoveredInput=d.Upload(uncovered);
+ Require(builder.Record(d.list.Get(),uncoveredInput.Get(),UINT(uncovered.size()),cells.Get(),frozen.Get(),slots,24,7,.5f,512,1,restore),"outside compact primary retained");copy(23);d.Submit();
  GIAutoTargets* mapped=nullptr;Check(back->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
  Require(GIAutoMatches(mapped[0],7,1)&&mapped[0].validMask==3,"target header");
  Require(mapped[0].counts[0]==200&&mapped[0].counts[1]==200,"invalid training contaminated count");
@@ -143,6 +158,15 @@ int main()try {
  Require(std::abs(crossBound.center.x-center.position.x)<1e-5f&&std::abs(crossBound.center.z-center.position.z)<1e-5f,"cross-cell fit moved observed anchor");
  Require(std::abs(mapped[19].bounds[0].radius-.25f)<1e-6,"dim neighboring cell widened source");
  Require(std::abs(mapped[20].bounds[0].radius-.25f)<1e-6,"distant bright source merged into local bound");
+ for(UINT i=21;i<=22;++i){
+  Require(mapped[i].validMask==3,"coverage-aware selection lost target");
+  Require(std::abs(mapped[i].bounds[1].center.z-separate.position.z)<1e-5f,"covered duplicate displaced separate patch");
+  const auto& c=mapped[i].bounds[0];const auto& covered=i==21?duplicate:center;
+  const float dx=c.center.x-covered.position.x,dy=c.center.y-covered.position.y,dz=c.center.z-covered.position.z;
+  const float distance=std::sqrt(dx*dx+dy*dy+dz*dz);
+  Require(distance>.216506f&&distance<c.radius,"fixture does not cover old cutoff regression");
+ }
+ Require(std::abs(mapped[23].bounds[0].radius-.25f)<1e-6f&&std::abs(mapped[23].bounds[1].center.x-outside.position.x)<1e-6f,"uncovered nearby patch wrongly excluded");
  D3D12_RANGE none{};back->Unmap(0,&none);
  // Execute the actual shared pilot-resolve shader, not only its CPU counterpart.
  Device pilotDevice(false);struct V{float x,y,z,w;};constexpr UINT cases=4;
@@ -164,5 +188,5 @@ int main()try {
  V* pv=nullptr;Check(pilotRead->Map(0,nullptr,reinterpret_cast<void**>(&pv)));
  for(UINT c=0;c<cases;++c){Require(pv[c].w==float(expected[c].valid),"GPU pilot validity");const float actual[]={pv[c].x,pv[c].y,pv[c].z},ref[]={expected[c].rgb.x,expected[c].rgb.y,expected[c].rgb.z};for(UINT k=0;k<3;++k)Require(std::abs(actual[k]-ref[k])<.00001f*(1+std::abs(ref[k])),"GPU pilot result");}
  pilotRead->Unmap(0,&none);
- std::cout<<"PASS cross-cell bright edge coverage, dim/distant rejection and anchored bounds; bright-footprint radius fit, dim rejection, padding, floor/ceiling and sparse fallback; near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
+ std::cout<<"PASS coverage-aware distinct patch selection, dense peak swaps and uncovered nearby preservation; cross-cell bright edge coverage, dim/distant rejection and anchored bounds; bright-footprint radius fit, dim rejection, padding, floor/ceiling and sparse fallback; near-duplicate alternatives, peak swaps, adjacent-patch preservation, full rescan and fallback; observed-hit anchors, grid-seam rank swaps, captured edge coverage without radius inflation; GPU target build: score ordering, invalid inputs, empty expiry, epoch isolation, collision separation, bounded HDR accumulation, GPU pilot resolve and production recording. No live integration or GPU timing claim.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

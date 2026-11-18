@@ -41,8 +41,34 @@ uint QuantizedScore(GIAutoTraining r){return uint(clamp(r.energy*scoreScale,1.,6
 groupshared uint bestSlots[128];groupshared uint bestScores[128];
 groupshared uint selectedSlots[2];groupshared uint seekAlternative;
 groupshared float neighborExtent[128];
+groupshared float firstRadius;
 float3 Anchor(uint slot){GIPoint p=training[65535u-(cells[slot].reserved0&65535u)].position;return float3(p.x,p.y,p.z);}
 bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldScore||(score==oldScore&&slot<oldSlot);}
+float LaneExtent(uint chosen,uint lane){
+  float extent=0;
+  if(chosen!=0xffffffffu&&cells[chosen].count>=8){
+   GIAutoCell primary=cells[chosen];uint winner=65535u-(primary.reserved0&65535u);
+   float3 anchor=Anchor(chosen);float energy=training[winner].energy;
+   float reach=cellSize*1.5;
+   for(uint i=lane;i<cellCount;i+=64){
+    GIAutoCell c=cells[i];if(c.state!=2||c.count==0||c.score==0||i==chosen)continue;
+    uint other=65535u-(c.reserved0&65535u);
+    if(other>=recordCount||training[other].energy<energy*.25)continue;
+    float3 delta=Anchor(i)-anchor;float d2=dot(delta,delta);
+    if(d2>reach*reach)continue;
+    extent=max(extent,sqrt(d2)+sqrt(asfloat(c.reserved1))+cellSize*.1);
+   }
+  }
+ return extent;
+}
+float Radius(uint chosen,uint offset){
+ if(chosen==0xffffffffu)return 0;
+ GIAutoCell c=cells[chosen];float maximum=cellSize*.866025404;
+ float fitted=clamp(sqrt(asfloat(c.reserved1))+cellSize*.1,cellSize*.5,maximum);
+ float neighbor=0;
+ [unroll]for(uint lane=0;lane<64;++lane)neighbor=max(neighbor,neighborExtent[offset+lane]);
+ return c.count>=8?max(fitted,min(neighbor,cellSize*1.6)):maximum;
+}
 [numthreads(64,1,1)]void Freeze(uint3 id:SV_GroupThreadID){
  uint slots[2]={0xffffffffu,0xffffffffu},scores[2]={0,0};
  if(ControlsValid())for(uint i=id.x;i<cellCount;i+=64){
@@ -58,20 +84,28 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
    for(uint j=0;j<128;++j)if(bestScores[j]>0&&Better(bestScores[j],bestSlots[j],score,chosen)){chosen=bestSlots[j];score=bestScores[j];entry=j;}
    selectedSlots[rank]=chosen;if(chosen!=0xffffffffu)bestScores[entry]=0;
   }
+ }
+ GroupMemoryBarrierWithGroupSync();
+ // Fit the primary before choosing the second guide. Dense, observed coverage
+ // defines redundancy; sparse discovery keeps the conservative R459 distance.
+ neighborExtent[id.x]=LaneExtent(selectedSlots[0],id.x);
+ GroupMemoryBarrierWithGroupSync();
+ if(id.x==0){
+  firstRadius=Radius(selectedSlots[0],0);
   seekAlternative=0;
   if(selectedSlots[0]!=0xffffffffu&&selectedSlots[1]!=0xffffffffu){
    float3 delta=Anchor(selectedSlots[1])-Anchor(selectedSlots[0]);
-   float nearRadius=cellSize*.433012702; // R459 duplicate distance stays unchanged.
+   float nearRadius=cells[selectedSlots[0]].count>=8?firstRadius:cellSize*.433012702;
    seekAlternative=dot(delta,delta)<nearRadius*nearRadius?1:0;
   }
  }
  GroupMemoryBarrierWithGroupSync();
- // Only near-duplicate observed anchors trigger this search. A grid neighbor
- // may be a distinct useful patch: never exclude it merely by its cell key.
+ // An already-covered anchor need not consume the second guide when another
+ // bright patch is available. Never exclude a candidate by grid key alone.
  // Scan every cell: a lane's third candidate can be the best nonduplicate.
  if(seekAlternative!=0){
   uint chosen=0xffffffffu,score=0;
-  float3 first=Anchor(selectedSlots[0]);float nearRadius=cellSize*.433012702;
+  float3 first=Anchor(selectedSlots[0]);float nearRadius=cells[selectedSlots[0]].count>=8?firstRadius:cellSize*.433012702;
   for(uint i=id.x;i<cellCount;i+=64){
    GIAutoCell c=cells[i];if(c.state!=2||c.count<minimumCount||c.score==0)continue;
    float3 delta=Anchor(i)-first;if(dot(delta,delta)<nearRadius*nearRadius)continue;
@@ -89,26 +123,8 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
   }
  }
  GroupMemoryBarrierWithGroupSync();
- // A dense fit must not stop at a hash-grid seam. Keep the observed anchor,
- // but include bright neighboring-cell evidence within a bounded physical
- // neighborhood. Compact sources and sparse discovery keep their old bounds.
- [unroll]for(uint rank=0;rank<2;++rank){
-  float extent=0;uint chosen=selectedSlots[rank];
-  if(chosen!=0xffffffffu&&cells[chosen].count>=8){
-   GIAutoCell primary=cells[chosen];uint winner=65535u-(primary.reserved0&65535u);
-   float3 anchor=Anchor(chosen);float energy=training[winner].energy;
-   float reach=cellSize*1.5;
-   for(uint i=id.x;i<cellCount;i+=64){
-    GIAutoCell c=cells[i];if(c.state!=2||c.count==0||c.score==0||i==chosen)continue;
-    uint other=65535u-(c.reserved0&65535u);
-    if(other>=recordCount||training[other].energy<energy*.25)continue;
-    float3 delta=Anchor(i)-anchor;float d2=dot(delta,delta);
-    if(d2>reach*reach)continue;
-    extent=max(extent,sqrt(d2)+sqrt(asfloat(c.reserved1))+cellSize*.1);
-   }
-  }
-  neighborExtent[rank*64+id.x]=extent;
- }
+ // Only the final secondary needs fitting; retain the primary reduction.
+ neighborExtent[64+id.x]=LaneExtent(selectedSlots[1],id.x);
  GroupMemoryBarrierWithGroupSync();
  if(id.x==0){
   GIAutoTargets t=(GIAutoTargets)0;t.schema=0x41544731u;t.version=version;t.frame=frame;
@@ -116,14 +132,8 @@ bool Better(uint score,uint slot,uint oldScore,uint oldSlot){return score>oldSco
    uint chosen=selectedSlots[rank];if(chosen==0xffffffffu)continue;
    GIAutoCell c=cells[chosen];uint winner=65535u-(c.reserved0&65535u);
    t.bounds[rank].center=training[winner].position;
-   // Sparse discovery retains R458's broad radius. Dense cells fit the
-   // observed bright footprint, with padding and a conservative radius floor.
-   float maximum=cellSize*.866025404;
-   float fitted=clamp(sqrt(asfloat(c.reserved1))+cellSize*.1,cellSize*.5,maximum);
-   float neighbor=0;
-   [unroll]for(uint lane=0;lane<64;++lane)neighbor=max(neighbor,neighborExtent[rank*64+lane]);
-   // Only observed cross-cell support can exceed the previous radius ceiling.
-   t.bounds[rank].radius=c.count>=8?max(fitted,min(neighbor,cellSize*1.6)):maximum;t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
+   t.bounds[rank].radius=rank==0?firstRadius:Radius(chosen,64);
+   t.counts[rank]=c.count;t.scores[rank]=c.score;t.validMask|=1u<<rank;
   }
   targets[0]=t;
  }

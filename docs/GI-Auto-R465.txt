@@ -1,0 +1,18 @@
+R465 - Coverage-aware second guide selection
+
+Close the game and install beside Control_DX12.exe. Run the matching R465
+launcher under ControlTOH/Diagnostics. It fixes actual rays at 4 or 10 regardless
+of the menu. RR ON, GI FIXED, RELAX OFF, FG OFF for comparison. Test four first.
+
+Dense primary guide coverage now determines which other anchors are redundant.
+When a second anchor is already inside that coverage, select the brightest
+available uncovered anchor. Retain both guides if no alternative exists. Sparse
+sources keep conservative discovery behavior. Bounds remain fitted from current
+training; no stale radiance, blur, clamp, extra rays or scene-specific positions.
+The primary fit runs before selection and the secondary fit after selection,
+retaining two neighborhood scans rather than adding another full scan.
+
+Build and GPU fixtures cannot prove live speckles eliminated or FPS recovered.
+Play the same scene about 60 seconds without F7 and collect compact logs using
+ControlTOH/Tools/Collect-ControlFG-Compact-Logs.cmd. FPS comparisons should be
+outside capture. The capture box uses Alt+arrows, never Ctrl.
