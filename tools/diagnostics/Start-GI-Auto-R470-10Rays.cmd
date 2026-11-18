@@ -15,7 +15,8 @@ set "CONTROLTOH_GI_FROZEN_RENDER="
 set "CONTROLTOH_GI_FROZEN_PREPARE="
 echo R470 10-ray GI with receiver-local GI guidance.
 echo This launcher selects 10 GI rays. Use GI FIXED, RR ON, RELAX OFF.
-echo GPU stage timings are sampled automatically. Do not press F7 for this run.
+echo Diagnostic capture: Alt+arrows to position the box; Alt+Insert to capture.
+echo Do not press F7. Judge FPS outside the capture.
 echo Normal performance mode: forced GPU crash diagnostics are disabled.
 echo Close any running game before launching this session.
 start "" /wait "Control_DX12.exe" -dx12

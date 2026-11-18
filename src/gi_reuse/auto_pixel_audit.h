@@ -13,6 +13,7 @@ struct GIAutoPixelAudit {
 static_assert(sizeof(GIAutoPixelAudit)==64,"pixel audit GPU ABI");
 inline uint GIAuditWidth(uint w){return std::min(w,512u);}
 inline uint GIAuditHeight(uint h){return std::min(h,512u);}
+inline std::uint64_t GIAuditProducerBytes(uint w,uint h,uint rays){return ((std::uint64_t(GIAuditWidth(w))*GIAuditHeight(h)*(rays+1)+1)/2)*32;}
 inline uint GIAuditX(uint w){const auto n=GIAuditWidth(w);return std::min(w-n,w/5>n/2?w/5-n/2:0u);}
 inline uint GIAuditY(uint h){return (h-GIAuditHeight(h))/2;}
 inline float GIAuditLuma(const float* c){return c[0]*.2126f+c[1]*.7152f+c[2]*.0722f;}

@@ -100,9 +100,9 @@ public:
      UINT64((width+step-1)/step)*((height+step-1)/step)!=capacity||
      training==target.Resource()||training->GetDesc().Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||
      !(training->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
-     training->GetDesc().Width<UINT64(capacity)*GIAutoTrainingStride+(pixels?UINT64(GIAuditWidth(width))*GIAuditHeight(height)*(sizeof(GIAutoPixelAudit)
+     training->GetDesc().Width<UINT64(capacity)*GIAutoTrainingStride+(pixels?(UINT64(GIAuditWidth(width))*GIAuditHeight(height)*sizeof(GIAutoPixelAudit)
 #ifdef CONTROL_GI_REGIONAL
-       +(target.Selection().rayCount+1)*16
+       +GIAuditProducerBytes(width,height,target.Selection().rayCount)
 #endif
        ):0)||
      !training->GetGPUVirtualAddress()||training->GetGPUVirtualAddress()%8||

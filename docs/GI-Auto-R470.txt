@@ -10,8 +10,8 @@ ray inside the box on sampled capture frames. The evaluator compares those
 values with its reconstruction and checks the returned hit against the actual
 producer direction. No producer-packet allocation or readback outside capture.
 
-Use the existing GI capture-box control (not F7), place the box over the
-speckles with Alt+arrows, run the capture, and collect compact logs. Capture
+Place the box over the speckles with Alt+arrows, then press Alt+Insert to start
+the 5-second countdown and capture. Collect compact logs afterward. Do not use F7. Capture
 frames have extra GPU storage/readback cost; compare FPS outside the capture.
 New producer_contract lines separate frame/record identity, weight disagreement,
 direction disagreement and actual-ray-to-hit disagreement. These measurements
