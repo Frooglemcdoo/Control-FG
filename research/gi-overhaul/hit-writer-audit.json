@@ -1,0 +1,40 @@
+{
+  "status": "PASS",
+  "variants": [
+    {
+      "variant": 0,
+      "native_sha256": "6297319e1fec315c06ee75993e797b51def658e7d41f1588d7df3feb41a1ea2f",
+      "owned_distance": "RayTCurrent",
+      "native_distance": "RayTCurrent - 0.01",
+      "position": "view-space world ray endpoint",
+      "world_to_view_rows": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "material_normal_uv_stores_preserved": true,
+      "stores": 3
+    },
+    {
+      "variant": 1,
+      "native_sha256": "1ff8a93460d94f58fc0e70afff994a334f1c45be292e3e858a63f51070e5734a",
+      "owned_distance": "RayTCurrent",
+      "native_distance": "RayTCurrent - 0.01",
+      "position": "view-space world ray endpoint",
+      "world_to_view_rows": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "material_normal_uv_stores_preserved": true,
+      "stores": 3
+    }
+  ],
+  "limits": [
+    "Static SSA audit only; not a live GPU binding audit.",
+    "Actual texture precision, producer/evaluator constants and ray pairing remain unverified by this test.",
+    "Direction mismatch flags must not be dismissed from these results alone."
+  ]
+}
