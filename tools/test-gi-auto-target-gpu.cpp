@@ -163,8 +163,8 @@ int main()try {
   Require(std::abs(mapped[i].bounds[1].center.z-separate.position.z)<1e-5f,"covered duplicate displaced separate patch");
   const auto& c=mapped[i].bounds[0];const auto& covered=i==21?duplicate:center;
   const float dx=c.center.x-covered.position.x,dy=c.center.y-covered.position.y,dz=c.center.z-covered.position.z;
-  const float distance=std::sqrt(dx*dx+dy*dy+dz*dz);
-  Require(distance>.216506f&&distance<c.radius,"fixture does not cover old cutoff regression");
+  const float coveredDistance=std::sqrt(dx*dx+dy*dy+dz*dz);
+  Require(coveredDistance>.216506f&&coveredDistance<c.radius,"fixture does not cover old cutoff regression");
  }
  Require(std::abs(mapped[23].bounds[0].radius-.25f)<1e-6f&&std::abs(mapped[23].bounds[1].center.x-outside.position.x)<1e-6f,"uncovered nearby patch wrongly excluded");
  D3D12_RANGE none{};back->Unmap(0,&none);
