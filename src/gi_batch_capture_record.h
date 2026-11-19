@@ -35,21 +35,23 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
   capture.present=native.presentToken;
   auto& b=capture.batches[batch];UINT64 end=capture.used;
   b.x[0]=input[0].desc.Width<256?0:static_cast<unsigned>(input[0].desc.Width/4)-64;b.x[1]=static_cast<unsigned>(input[0].desc.Width/2)-64;
-  b.y=input[0].desc.Height/2-64;b.commandList=reinterpret_cast<std::uintptr_t>(list);
+  b.slices=input[0].desc.DepthOrArraySize;
+  if(capture.fullScreen){b.x[0]=b.x[1]=0;b.width=UINT(input[0].desc.Width);b.height=input[0].desc.Height;b.regions=1;b.slices=rays;}
+  b.y=capture.fullScreen?0:input[0].desc.Height/2-64;b.commandList=reinterpret_cast<std::uintptr_t>(list);
   for(unsigned i=0;i<3;++i){b.descriptions[i]=input[i].desc;b.states[i]=static_cast<D3D12_RESOURCE_STATES>(input[i].trackedState);
-   b.pixelBytes[i]=GIBatchCapturePixelBytes(input[i].desc.Format);b.rowPitch[i]=(128*b.pixelBytes[i]+255)&~255u;
-   b.sliceBytes[i]=UINT64(b.rowPitch[i])*128;b.offset[i]=end;
-   end+=b.sliceBytes[i]*gi_batch_capture::Regions*input[i].desc.DepthOrArraySize;
+   b.pixelBytes[i]=GIBatchCapturePixelBytes(input[i].desc.Format);b.rowPitch[i]=(b.width*b.pixelBytes[i]+255)&~255u;
+   b.sliceBytes[i]=(UINT64(b.rowPitch[i])*b.height+511)&~511ull;b.offset[i]=end;
+   end+=b.sliceBytes[i]*b.regions*b.slices;
   }
-  if(end>gi_batch_capture::Capacity){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_HITS_R271_FAILED reason=capacity bytes=%llu",end);__leave;}
+  if(end>capture.capacity){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_HITS_R271_FAILED reason=capacity bytes=%llu",end);__leave;}
   for(unsigned i=0;i<3;++i){b.sources[i]=input[i].resource;b.sources[i]->AddRef();}
   bool recorded=true;
-  for(unsigned slice=0;slice<input[0].desc.DepthOrArraySize&&recorded;++slice)for(unsigned roi=0;roi<2&&recorded;++roi){
+  for(unsigned slice=0;slice<b.slices&&recorded;++slice)for(unsigned roi=0;roi<b.regions&&recorded;++roi){
    RRInputCaptureJob copy{};copy.count=3;copy.copyHasBox=true;
    for(unsigned i=0;i<3;++i){copy.sources[i]=b.sources[i];copy.readback[i]=capture.readback;copy.states[i]=b.states[i];copy.copySubresource[i]=slice;
-    copy.copyBox[i]={b.x[roi],b.y,0,b.x[roi]+128,b.y+128,1};
-    auto& f=copy.footprint[i];f.Offset=b.offset[i]+(UINT64(slice)*2+roi)*b.sliceBytes[i];
-    f.Footprint.Format=b.descriptions[i].Format;f.Footprint.Width=f.Footprint.Height=128;f.Footprint.Depth=1;f.Footprint.RowPitch=b.rowPitch[i];
+    copy.copyBox[i]={b.x[roi],b.y,0,b.x[roi]+b.width,b.y+b.height,1};
+    auto& f=copy.footprint[i];f.Offset=b.offset[i]+(UINT64(slice)*b.regions+roi)*b.sliceBytes[i];
+    f.Footprint.Format=b.descriptions[i].Format;f.Footprint.Width=b.width;f.Footprint.Height=b.height;f.Footprint.Depth=1;f.Footprint.RowPitch=b.rowPitch[i];
    }
    DWORD fault=0;bool started=false;
    recorded=RRInputCaptureRecordGuarded(&copy,&native,input,&fault,&started,3);
@@ -57,6 +59,28 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
    if(!recorded)Log("GI_HITS_R271_FAILED reason=copy frame=%llu batch=%u slice=%u roi=%u fault=%lu resources_retained=1",frame,batch,slice,roi,fault);
   }
   if(!recorded){capture.ledger.failed=true;c->policy.phase=P::Failed;__leave;}
+#ifdef CONTROL_GI_AUTO_TARGETS
+  if(capture.fullScreen){
+   RRGuideInputTexture raw{};const auto readRaw=gi_scene_capture::rawTexture.load();
+   bool rawOkay=readRaw&&readRaw(&raw)&&raw.desc.Width==input[0].desc.Width&&raw.desc.Height==input[0].desc.Height&&raw.desc.Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&raw.desc.DepthOrArraySize==1;
+   if(rawOkay){
+    ID3D12Device* device=nullptr;rawOkay=SUCCEEDED(raw.resource->GetDevice(IID_PPV_ARGS(&device)))&&device==c->device;if(device)device->Release();
+   }
+   if(rawOkay){
+    capture.rawOffset=(end+511)&~511ull;capture.rawPitch=(UINT(raw.desc.Width)*8+255)&~255u;
+    capture.rawBytes=UINT64(capture.rawPitch)*raw.desc.Height;rawOkay=capture.rawOffset+capture.rawBytes<=capture.capacity;
+   }
+   if(rawOkay){
+    RRInputCaptureJob copy{};copy.count=1;copy.sources[0]=raw.resource;copy.readback[0]=capture.readback;copy.states[0]=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    auto& f=copy.footprint[0];f.Offset=capture.rawOffset;f.Footprint={raw.desc.Format,UINT(raw.desc.Width),raw.desc.Height,1,capture.rawPitch};
+    capture.rawSource=raw.resource;raw.resource->AddRef();capture.rawDesc=raw.desc;
+    DWORD fault=0;bool started=false;rawOkay=RRInputCaptureRecordGuarded(&copy,&native,&raw,&fault,&started,1,true);capture.commandsStarted|=started;
+   }
+   capture.detailMatched=gi_scene_capture::detailedFrame.load()==frame;
+   if(!rawOkay||!capture.detailMatched){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_SCENE_R476_FAILED frame=%llu raw=%u details=%u resources_retained=1",frame,unsigned(rawOkay),capture.detailMatched);__leave;}
+   capture.rawCaptured=true;end=capture.rawOffset+capture.rawBytes;
+  }
+#endif
   capture.used=end;capture.ledger.Recorded();
   Log("GI_HITS_R271_RECORDED frame=%llu batch=%u batches=%u rays=%u slices=%u bytes=%llu gpu_complete=0",frame,batch,batches,rays,input[0].desc.DepthOrArraySize,end);
  }__except(EXCEPTION_EXECUTE_HANDLER){if(active){active->giHits.ledger.failed=true;active->policy.phase=control_rr::InputCapturePolicy::Failed;}Log("GI_HITS_R271_FAILED reason=exception resources_retained=1");}

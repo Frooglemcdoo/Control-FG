@@ -207,6 +207,9 @@ static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
  if(const auto cb=control_nrd_bridge::producer.load())cb->dispatch();
 #endif
 #ifdef CONTROL_GI_BOUNDARY_CAPTURE
+#ifdef CONTROL_GI_AUTO_TARGETS
+ if(gi_scene_capture::Enabled())return;
+#endif
  if(!GIBatchCaptureEnabled()||!control_rr_gi::boundaryRequested.load())return;
  const DWORD saved=GetLastError();
  control_rr_reflection::Context context{};

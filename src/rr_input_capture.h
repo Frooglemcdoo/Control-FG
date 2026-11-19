@@ -85,7 +85,7 @@ static DWORD WINAPI RRInputCapturePrepare(void* context) noexcept {
   d.Height=1;d.DepthOrArraySize=d.MipLevels=1;d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
   if(SUCCEEDED(hr))hr=c->device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&c->timingReadback));
  }
- if(SUCCEEDED(hr)&&!c->pathCondition)hr=GIBatchCapturePrepare(c->giHits,c->device);
+ if(SUCCEEDED(hr)&&!c->pathCondition)hr=GIBatchCapturePrepare(c->giHits,c->device,c->width,c->height);
  c->policy.Prepared(SUCCEEDED(hr));
  if(FAILED(hr))RRInputCaptureRelease(c); // No commands recorded during allocation.
  Log("RR_INPUT_CAPTURE_C1_PREPARED success=%u width=%u height=%u buffers=%u",unsigned(SUCCEEDED(hr)),c->width,c->height,c->count);
@@ -191,6 +191,9 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    out<<"{\"full_resolution_gi_rgb_pixels_compared\":"<<giCompared<<",\"full_resolution_gi_rgb_pixels_different\":"<<giDifferent<<",";
    out<<"\"path_capture_condition\":"<<c->pathCondition<<",\"export_stride\":"<<c->exportStride<<",\"point_samples_not_filtered\":true,";
    if(c->timedSequence)out<<"\"stage_capture_build\":\"R432\",\"sequence_phase\":\""<<(c->sequencePhase?"moving":"stationary")<<"\",\"gpu_timings_valid\":"<<(timingValid?"true":"false")<<",\"timestamp_frequency\":"<<c->timingFrequency<<",\"timing_frame\":"<<c->timing.frame<<",\"gi_evaluator_expected_batches\":"<<c->timing.expectedBatches<<",\"gi_evaluator_observed_batches\":"<<c->timing.observedBatches<<",\"timing_overflow\":"<<(c->timing.overflow?"true":"false")<<",\"gpu_stage_timings\":"<<timingJSON<<",\"timing_scope\":\"captured_frame_dispatches_not_steady_state_fps\",\"intermediate_temporal_image_captured\":false,";
+#ifdef CONTROL_GI_AUTO_TARGETS
+   if(c->giHits.fullScreen)out<<"\"scene_capture_build\":\"R476\",\"scene_pairs\":2,\"scene_full_resolution\":true,\"texture_resources_dumped\":false,\"individual_light_operands_captured\":false,\"instance_primitive_ids_captured\":false,";
+#endif
    out<<"\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
 #ifdef CONTROL_RR_GI_SEQUENCE
 #ifdef CONTROL_GI_LONG_SEQUENCE
@@ -524,7 +527,7 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
    }
   }
 #ifdef CONTROL_RR_GI_SEQUENCE
-  if(control_rr_capture_ui::Busy()&&rrInputCaptureRequestTick&&GetTickCount64()-rrInputCaptureRequestTick>120000){
+  if(control_rr_capture_ui::Busy()&&rrInputCaptureRequestTick&&GetTickCount64()-rrInputCaptureRequestTick>600000){
    for(auto& job:rrInputCaptures)job.policy.phase=P::Failed;
    control_rr_capture_ui::detail.store(L"Sequence timed out. PACKAGE RR will collect diagnostics.");
   }
@@ -570,4 +573,14 @@ static std::uint64_t RRStackSourceReady(void* commandList) noexcept {
  ReleaseSRWLockShared(&rrInputCaptureLock);return frame;
 }
 static const bool rrStackRegistered=[] {gi_stack_capture::readySource.store(&RRStackSourceReady);return true;}();
+#endif
+
+#ifdef CONTROL_GI_AUTO_TARGETS
+static bool RRSceneWantsGI(unsigned long long frame) noexcept {
+ if(!gi_scene_capture::Enabled()||!control_rr_gi::boundaryRequested.load()||!rrInputCaptureSettledFrame||frame!=rrInputCaptureSettledFrame+1)return false;
+ if(!TryAcquireSRWLockShared(&rrInputCaptureLock))return false;
+ unsigned slot=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
+ bool okay=slot<2&&rrInputCaptures[slot].policy.phase==control_rr::InputCapturePolicy::Ready&&!rrInputCaptures[slot].giHits.commandsStarted;
+ ReleaseSRWLockShared(&rrInputCaptureLock);return okay;
+}
 #endif

@@ -1,8 +1,14 @@
+#include "../gi_reuse/scene_capture_grid.h"
 // Pixel diagnostics share the training allocation, never the learning records.
 uint GIAutoAuditIndex(uint2 pixel) {
  if((trainingCapacityPacked&65536u)==0)return 0xffffffff;
  uint2 size=min(uint2(trainingWidth,trainingHeight),512u);
  uint2 start=uint2((trainingStepPacked>>9)&16383u,trainingCapacityPacked>>17);
+ if(trainingStepPacked&8388608u){
+  uint2 cell=uint2(GISceneCell(pixel.x,trainingWidth,size.x),GISceneCell(pixel.y,trainingHeight,size.y));
+  if(any(cell==0xffffffffu))return 0xffffffff;
+  pixel=cell;start=0;
+ }
  if(any(start>uint2(trainingWidth,trainingHeight)-size))return 0xffffffff;
  if(any(pixel<start)||any(pixel>=start+size))return 0xffffffff;
  #ifdef CONTROL_GI_REGIONAL

@@ -1130,6 +1130,17 @@ static bool RRNativeVramRecoverCachedRRFeature(unsigned long long frame,
     unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height) noexcept;
 #include "rr_native_frame.h"
 #include "nrd_diffuse_native_inputs.h"
+#ifdef CONTROL_GI_AUTO_TARGETS
+static bool ReadSceneRawGI(void* out) noexcept {
+ control_nrd_native::ShaderTexture value{};int id=-1;
+ const control_rr_provider::Access access{nullptr,&RRProviderEntry,&RRProviderCompare};
+ if(!control_nrd_native::Resolve(rrNativeClampApi,"g_rwtDiffuseGIColorTarget",id)||!control_rr_provider::Snapshot(access,id,&RRProviderReadBound,value))return false;
+ control_nrd_native::Texture texture{};if(!control_nrd_native::ReadTexture(value,texture))return false;
+ return RRInputCaptureReadNative(reinterpret_cast<void*>(value.native),texture.resource,static_cast<RRGuideInputTexture*>(out),true);
+}
+static const bool sceneRawRegistered=[] {gi_scene_capture::rawTexture.store(&ReadSceneRawGI);return true;}();
+#endif
+
 #include "nrd_diffuse_runtime.h"
 #include "pt_reflection_diffuse_bridge_runtime.h"
 #include "rr_native_guides.h"
@@ -1540,13 +1551,13 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         gi_scene_audit::Install(renderer,d3d);
 #ifdef CONTROL_GI_AUTO_TARGETS
-        Log("GI_AUTO_R475 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
+        Log("GI_AUTO_R476 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
 #endif
         if(gi_reuse::GuidedLiveEnabled()){
             const bool installed=gi_native_render_scope::Install(renderer,d3d);
             gi_reuse::guidedScopeReady.store(installed);
 #ifdef CONTROL_GI_AUTO_TARGETS
-            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R475 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
+            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R476 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
 #endif
             Log("GI_GUIDED_R434 scope_ready=%u same_invocation_pair=1 fixed_scene=1",unsigned(installed));
         }

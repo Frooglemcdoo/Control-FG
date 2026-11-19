@@ -94,7 +94,7 @@ public:
  // mutes hook observers. No allocations, heap switch, readback or wait here.
  bool Record(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings,
              const D3D12AutoTargetBinding& target,ID3D12Resource* training,
-             UINT width,UINT height,UINT step,UINT capacity,bool pixels=false,UINT roiX=0,UINT roiY=0)const noexcept {
+             UINT width,UINT height,UINT step,UINT capacity,bool pixels=false,UINT roiX=0,UINT roiY=0,bool fullScreenAudit=false)const noexcept {
   if((pixels&&(roiX>width-GIAuditWidth(width)||roiY>height-GIAuditHeight(height)))||!list||!Accept(bindings)||!target.Resource()||!training||!width||!height||
      width>16384||height>16384||step<8||step>256||!capacity||capacity>65535||
      UINT64((width+step-1)/step)*((height+step-1)/step)!=capacity||
@@ -124,7 +124,7 @@ public:
   list->SetComputeRootSignature(root_.Get());bindings.arguments.Replay(replay);list->SetPipelineState(pipeline_.Get());
   target.BindEvaluator(list,first_,first_+1);
   list->SetComputeRootUnorderedAccessView(first_+2,training->GetGPUVirtualAddress());
-  const UINT control[]={width,height,GIAuditStepControl(step,roiX),GIAuditCapacityControl(capacity,roiY,pixels)};
+  const UINT control[]={width,height,(GIAuditStepControl(step,roiX)|(fullScreenAudit?8388608u:0u)),GIAuditCapacityControl(capacity,roiY,pixels)};
   list->SetComputeRoot32BitConstants(first_+3,4,control,0);
   list->Dispatch((width+7)/8,(height+15)/16,1);
   return bindings.Restore(list);

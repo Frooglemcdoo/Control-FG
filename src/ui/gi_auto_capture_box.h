@@ -15,7 +15,11 @@ inline LRESULT CALLBACK LabelProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp)noexcep
  if(msg==WM_PAINT){PAINTSTRUCT ps{};auto dc=BeginPaint(hwnd,&ps);RECT r{};GetClientRect(hwnd,&r);
   auto b=CreateSolidBrush(control_ui::theme::kBackground);FillRect(dc,&r,b);DeleteObject(b);
   const auto phase=gi_auto_capture::phase.load();wchar_t text[240]{};
-  if(!gi_auto_capture::dimensions.load())wcscpy_s(text,L"GI capture: load gameplay with 4 or 10 rays and GI FIXED.");
+  if(gi_scene_capture::Enabled()){
+   const auto state=control_rr_capture_ui::state.load();
+   if(state==control_rr_capture_ui::State::Idle)wcscpy_s(text,L"Full-screen GI + RR capture | Alt + Insert: start | Hold still for first pair");
+   else swprintf_s(text,L"Full-screen capture: %s | %s",control_rr_capture_ui::Label(state),control_rr_capture_ui::detail.load());
+  }else if(!gi_auto_capture::dimensions.load())wcscpy_s(text,L"GI capture: load gameplay with 4 or 10 rays and GI FIXED.");
   else if(phase==gi_auto_capture::Preview)wcscpy_s(text,L"Alt + arrows: move orange box | Alt + Insert: start capture");
   else if(phase==gi_auto_capture::Countdown)swprintf_s(text,L"Box locked. Capture starts in %llu seconds.",(5000-(std::min)(5000ull,GetTickCount64()-armedAt)+999)/1000);
   else if(phase==gi_auto_capture::Collecting)swprintf_s(text,L"Capturing: %u / 10 snapshots saved. Box locked.",gi_auto_capture::completed.load());
@@ -40,6 +44,19 @@ inline void Tick(HWND game)noexcept {
  const bool capture=(GetAsyncKeyState(VK_MENU)&0x8000)&&(GetAsyncKeyState(VK_INSERT)&0x8000);
  if(!focused){ShowWindow(box,SW_HIDE);ShowWindow(label,SW_HIDE);captureHeld=capture;return;}
  const auto dimensions=gi_auto_capture::dimensions.load();const UINT w=UINT(dimensions),h=UINT(dimensions>>32);
+ if(gi_scene_capture::Enabled()){
+  if(capture&&!captureHeld&&w&&h&&control_rr_capture_ui::Request()){
+   ++gi_auto_capture::request;gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
+   gi_auto_capture::phase=gi_auto_capture::Collecting;
+   Log("GI_SCENE_R476 requested=1 pairs=2 full_resolution=1 detailed_grid=512x512");
+  }
+  captureHeld=capture;
+  RECT r{};if(!GetClientRect(game,&r))return;POINT at{};ClientToScreen(game,&at);
+  SetWindowPos(box,HWND_TOPMOST,at.x,at.y,r.right,r.bottom,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+  const int width=(std::min)(1000L,r.right);
+  SetWindowPos(label,HWND_TOPMOST,at.x+(r.right-width)/2,at.y+(std::max)(0L,r.bottom-64),width,48,SWP_NOACTIVATE|SWP_SHOWWINDOW);
+  InvalidateRect(label,nullptr,FALSE);return;
+ }
  auto phase=gi_auto_capture::phase.load();const bool editable=phase==gi_auto_capture::Preview||phase==gi_auto_capture::Complete;
  if(editable&&(GetAsyncKeyState(VK_MENU)&0x8000)){
   auto c=gi_auto_capture::center.load();int x=int(c&65535u),y=int(c>>16);
@@ -50,7 +67,7 @@ inline void Tick(HWND game)noexcept {
  if(capture&&!captureHeld&&editable&&w&&h){
   gi_auto_capture::frozenCenter.store(gi_auto_capture::center.load());gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
   ++gi_auto_capture::request;armedAt=GetTickCount64();gi_auto_capture::phase=gi_auto_capture::Countdown;
-  Log("GI_AUTO_R475 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
+  Log("GI_AUTO_R476 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
  }
  captureHeld=capture;
  if(gi_auto_capture::phase.load()==gi_auto_capture::Countdown&&GetTickCount64()-armedAt>=5000)gi_auto_capture::phase=gi_auto_capture::Collecting;

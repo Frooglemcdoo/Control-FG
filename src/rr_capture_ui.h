@@ -1,5 +1,8 @@
 #pragma once
 #include <atomic>
+#ifdef CONTROL_GI_AUTO_TARGETS
+#include "gi_scene_capture.h"
+#endif
 #include "gi_stack_capture.h"
 #include "gi_path_capture.h"
 #include "rr_input_capture_policy.h"
@@ -33,7 +36,11 @@ inline bool Busy() noexcept {
 // Recovery only reads existing files; it must remain available if the render
 // thread or capture worker stops publishing progress. Do not reset GPU owners.
 inline bool ActionAllowed(bool recoveryAction) noexcept { return recoveryAction || !Busy(); }
-inline unsigned PairLimit() noexcept {return gi_stack_capture::enabled.load()?1:kRRCapturePairs;}
+inline unsigned PairLimit() noexcept {
+#ifdef CONTROL_GI_AUTO_TARGETS
+ if(gi_scene_capture::Enabled())return 2;
+#endif
+ return gi_stack_capture::enabled.load()?1:kRRCapturePairs;}
 inline bool Request() noexcept {
     auto current=state.load();
     if(completedPairs.load()>=PairLimit() || (current!=State::Idle && current!=State::Complete))return false;
@@ -61,9 +68,12 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
         if(outputsValid){completedPairs.store(requests);
 #ifdef CONTROL_RR_GI_SEQUENCE
  if(requests<PairLimit() && automaticPairs.load()){
-  detail.store(L"Pair saved. Next stationary pair queued automatically; hold still.");
+  detail.store(L"Pair saved. Next pair queued; slowly move the camera for the second pair.");
   state.store(State::Queued);requested.store(true,std::memory_order_release);return;
  }
+#ifdef CONTROL_GI_AUTO_TARGETS
+ if(gi_scene_capture::Enabled())detail.store(L"Full-screen sequence saved. Run Package-GI-Scene.cmd and send every ZIP.");else
+#endif
  detail.store(!automaticPairs.load()?L"GI path pair saved. The comparison packages automatically.":gi_stack_capture::enabled.load()?L"Full-screen RR pair saved. GI sequence continues automatically.":L"All 4 pairs saved. Click PACKAGE RR and send every ZIP.");
 #elif defined(CONTROL_GI_BOUNDARY_CAPTURE)
  detail.store(requests<2?L"Clamp pair saved. Select GI BOTH at the same view and capture again.":L"Both pairs saved. Click PACKAGE RR to collect the ZIPs.");

@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-secondary-terms-r475]
+    branches: [work/gi-scene-capture-r476]
   workflow_dispatch:
 jobs:
   validate:
@@ -54,6 +54,15 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Sampler fixture compile failed'}
           ./auto-sample.exe
           if($LASTEXITCODE -ne 0){throw 'Sampler validation failed'}
+      - name: Validate full-screen grid and lossless split packaging
+        shell: pwsh
+        run: |
+          cl /nologo /EHsc /std:c++17 /W4 /WX /O2 tools/test-gi-scene-grid.cpp /Fe:scene-grid.exe
+          if($LASTEXITCODE -ne 0){throw 'Scene grid compile failed'}
+          ./scene-grid.exe
+          if($LASTEXITCODE -ne 0){throw 'Scene grid failed'}
+          python tools/test-gi-scene-package.py
+          if($LASTEXITCODE -ne 0){throw 'Scene package validation failed'}
       - name: Verify secondary translation and observation hooks
         shell: pwsh
         run: |
