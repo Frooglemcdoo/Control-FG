@@ -1,7 +1,7 @@
 """Validate matching full-screen GI/RR frames and stream bounded ZIP parts.
 Does not delete/move capture sources or request any gameplay keypress.
 """
-import argparse, datetime, hashlib, json, os, pathlib, zipfile
+import argparse, datetime, hashlib, json, os, pathlib, zipfile, shutil, sys, traceback
 
 
 def inspect(root, pid):
@@ -56,10 +56,15 @@ def inspect(root, pid):
 
 
 def package(root,files,output,manifest,chunk_bytes=64*1024*1024,part_bytes=256*1024*1024):
+    total=sum(path.stat().st_size for path in files)
     output.mkdir(parents=True,exist_ok=False)
+    print(f"Output: {output.resolve()}",flush=True)
+    print(f"Source data: {total/2**30:.2f} GiB; destination free: {shutil.disk_usage(output).free/2**30:.2f} GiB",flush=True)
+    print("Original captures will be kept. Compression size is not known in advance.",flush=True)
     manifest.update(files=[],parts=[]);archive=None;part_size=0;number=0
     try:
         for path in files:
+            print(f'File {len(manifest["files"])+1}/{len(files)}: {path.name}',flush=True)
             rel=path.relative_to(root).as_posix();entry={'path':rel,'bytes':path.stat().st_size,'chunks':[]};digest=hashlib.sha256()
             with path.open('rb') as source:
                 offset=0
@@ -72,6 +77,7 @@ def package(root,files,output,manifest,chunk_bytes=64*1024*1024,part_bytes=256*1
                         archive=zipfile.ZipFile(output/name,'w',zipfile.ZIP_DEFLATED,compresslevel=6,allowZip64=True);part_size=0
                     name=f'payload/{len(manifest["files"]):05d}-{len(entry["chunks"]):05d}.bin'
                     archive.writestr(name,data);part_size+=len(data);digest.update(data)
+                    print(f'  Part {number:03d}: {offset+len(data)}/{entry["bytes"]} source bytes',flush=True)
                     entry['chunks'].append({'part':number,'entry':name,'offset':offset,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()});offset+=len(data)
             if offset!=entry['bytes']:raise ValueError(f'File changed while packaging: {rel}')
             entry['sha256']=digest.hexdigest();manifest['files'].append(entry)
@@ -79,7 +85,11 @@ def package(root,files,output,manifest,chunk_bytes=64*1024*1024,part_bytes=256*1
         if archive:archive.close()
     for part in manifest['parts']:
         p=output/part['file'];part['bytes']=p.stat().st_size
-        with p.open('rb') as f:part['sha256']=hashlib.file_digest(f,'sha256').hexdigest()
+        print(f'Verifying part hash: {p.name}',flush=True)
+        digest=hashlib.sha256()
+        with p.open('rb') as f:
+            for data in iter(lambda:f.read(1024*1024),b''):digest.update(data)
+        part['sha256']=digest.hexdigest()
     with zipfile.ZipFile(output/'scene-manifest.zip','w',zipfile.ZIP_DEFLATED) as z:z.writestr('scene-manifest.json',json.dumps(manifest,indent=2))
     return output
 
@@ -107,4 +117,10 @@ def main():
     print(('COMPLETE' if not issues else 'INCOMPLETE DIAGNOSTIC')+': '+str(output))
     for issue in issues:print(issue)
     print('Send scene-manifest.zip and EVERY scene-part ZIP. Original captures remain in place.')
-if __name__=='__main__':main()
+if __name__=='__main__':
+    print(f'GI scene packager R482 fix 2; Python {sys.version}',flush=True)
+    try:main()
+    except Exception:
+        traceback.print_exc()
+        print('FAILED: Keep the original captures. Do not upload partial ZIPs without scene-manifest.zip. Send the packager log; no new game capture is needed.',file=sys.stderr,flush=True)
+        sys.exit(1)
