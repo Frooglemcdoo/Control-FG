@@ -121,7 +121,7 @@
         },
         {
           "value": 1,
-          "label": "REBLUR before RR"
+          "label": "REBLUR + RR (RR on)"
         }
       ],
       "storage": {

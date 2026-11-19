@@ -6,11 +6,29 @@ static RRReflectionBindFn rrReflectionOriginalBind=nullptr;
 static RRAlbedoCallPatch rrReflectionCallPatch{};
 static bool rrReflectionCaptureEnabled=false;
 #include "rr_reflection_handoff_windows.h"
+#ifdef CONTROL_REBLUR_ONLY
+#include "nrd_specular_handoff.h"
+static thread_local control_nrd::SpecularHandoff rrReblurHandoff;
+static void (*rrReblurLightBindOriginal)(void*)=nullptr;
+static RRAlbedoCallPatch rrReblurLightBindPatch{};
+static void RRReblurLightBind(void* shader) {
+ rrReblurLightBindOriginal(shader);
+ const DWORD saved=GetLastError();
+ control_rr_reflection::Context current{};
+ const bool valid=RRReflectionCurrent(nullptr,current);
+ const auto owner=rrReblurHandoff.Take(valid?current:control_rr_reflection::Context{});
+ if(owner)if(const auto callbacks=control_nrd_bridge::specular.load())callbacks->produce(reinterpret_cast<void*>(owner));
+ SetLastError(saved);
+}
+#endif
 static std::uintptr_t RRReflectionHookBind(void* owner) {
  const auto result=rrReflectionOriginalBind(owner); // exactly once; native exceptions propagate
  const DWORD saved=GetLastError();
 #ifdef CONTROL_REBLUR_ONLY
- if(const auto callbacks=control_nrd_bridge::specular.load())callbacks->produce(owner);
+ // This helper binds providers before the reflection lighting pipeline.
+ // Inject only after its later lighting bind has established native GPU state.
+ control_rr_reflection::Context context{};
+ rrReblurHandoff.Arm(reinterpret_cast<std::uintptr_t>(owner),RRReflectionCurrent(nullptr,context)?context:control_rr_reflection::Context{});
 #else
  if(rrReflectionCaptureEnabled&&control_rr::RRUserRuntimeWorkRequested()&&control_rr::RRUserPresetValue()==control_rr::RRPresetF)RRReflectionAfterBind(owner);
 #endif
@@ -32,12 +50,23 @@ static bool RRReflectionInstall(HMODULE renderer,HMODULE d3d) noexcept {
  rrReflectionOriginalBind=reinterpret_cast<RRReflectionBindFn>(base+control_rr_reflection::BindFunctionRva);
  if(!RRAlbedoPrepareCallPatch(base+control_rr_reflection::BindCallRva,reinterpret_cast<void*>(rrReflectionOriginalBind),
    reinterpret_cast<void*>(&RRReflectionHookBind),&rrReflectionCallPatch))return false;
+#ifdef CONTROL_REBLUR_ONLY
+ rrReblurLightBindOriginal=reinterpret_cast<void(*)(void*)>(base+0x1db750);
+ if(!RRAlbedoPrepareCallPatch(base+0x1296f0,reinterpret_cast<void*>(rrReblurLightBindOriginal),reinterpret_cast<void*>(&RRReblurLightBind),&rrReblurLightBindPatch))return false;
+#endif
  if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,true))return false;
  if(!rrReflectionCallPatch.writeHealthy){
   if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,false))Log("RR_REFLECTION_HOOK_ROLLBACK_FAILED");
   return false;
  }
-#ifndef CONTROL_REBLUR_ONLY
+#ifdef CONTROL_REBLUR_ONLY
+ if(!RRAlbedoExchangeCall(&rrReblurLightBindPatch,true)||!rrReblurLightBindPatch.writeHealthy){
+  RRAlbedoExchangeCall(&rrReblurLightBindPatch,false);
+  RRAlbedoExchangeCall(&rrReflectionCallPatch,false);
+  return false;
+ }
+ Log("REBLUR_BUILD reflection_guides=lighting_bind producer=0x129662 consumer=0x1296f0");
+#else
  if(!RRReflectionInstallPrimaryAppend(d3d)){
   if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,false))Log("RR_REFLECTION_HOOK_ROLLBACK_FAILED");
   return false;

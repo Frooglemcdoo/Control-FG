@@ -24,8 +24,10 @@ static void SpecularProducer(void* owner) noexcept {
   gi_reuse::ComputeBindingSnapshot binding;UINT64 generation=0;gi_reuse::GraphicsTableState graphics;
   ComPtr<ID3D12GraphicsCommandList4> nativeList;
   const auto reset=gi_dual_bridge::resetReady.load();
-  if(!reset||!reset(list)||!hooks::Capture(list,binding,generation)||!binding.Ready()||FAILED(list->QueryInterface(IID_PPV_ARGS(&nativeList)))||
-     !Initialize(reinterpret_cast<ID3D12CommandQueue*>(source.context.queue))){SpecularReason("specular_producer_context");return;}
+  if(!reset||!reset(list)){SpecularReason("specular_reset_coverage");return;}
+  if(!hooks::Capture(list,binding,generation)||!binding.Ready()){SpecularReason("specular_binding_snapshot");return;}
+  if(FAILED(list->QueryInterface(IID_PPV_ARGS(&nativeList)))){SpecularReason("specular_command_interface");return;}
+  if(!Initialize(reinterpret_cast<ID3D12CommandQueue*>(source.context.queue))){SpecularReason("specular_queue_initialization");return;}
   hooks::CaptureGraphics(list,graphics);if(!graphics.known){SpecularReason("specular_graphics_state");return;}
   RRDistanceInput distance;const char* why=nullptr;
   if(!RRDistanceReadInput(source,distance,&why)||!distance.valid){SpecularReason("specular_distance_contract");return;}

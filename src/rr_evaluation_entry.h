@@ -158,6 +158,16 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
 #else
     if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);
 #endif
+#ifdef CONTROL_REBLUR_ONLY
+    // State changes only: confirm actual RR evaluation, not just menu intent.
+    {static unsigned last=~0u;static const char* lastReason=nullptr;
+     const bool success=(result&0xFFF00000u)!=0xBAD00000u;
+     const unsigned status=unsigned(control_rr::RRUserRequested())|(unsigned(rrAttempt)<<1)|(unsigned(success)<<2)|(unsigned(rrNativeFrame.Stopped())<<3);
+     const char* reason=rrNativeFrame.StopReason();
+     if(status!=last||reason!=lastReason){last=status;lastReason=reason;
+      Log("REBLUR_RR requested=%u evaluated=%u success=%u stopped=%u reason=%s frame=%llu",unsigned(control_rr::RRUserRequested()),unsigned(rrAttempt),unsigned(rrAttempt&&success),unsigned(rrNativeFrame.Stopped()),reason?reason:"none",in.frame);}
+    }
+#endif
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,

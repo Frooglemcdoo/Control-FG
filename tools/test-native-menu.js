@@ -80,7 +80,7 @@ function exercise(rtx40) {
     assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',10003,1]);
     assert.equal(byId[10003].m_eDataType,3);
     assert.equal(menu.translate(byId[10003].m_vecPossibleValues[0].m_strLabelLocID),'REBLUR (RR off)');
-    assert.equal(menu.translate(byId[10003].m_vecPossibleValues[1].m_strLabelLocID),'REBLUR before RR');
+    assert.equal(menu.translate(byId[10003].m_vecPossibleValues[1].m_strLabelLocID),'REBLUR + RR (RR on)');
     assert.equal(byId[10003].m_value,1);
     engine.trigger('OnIntGraphicsPropertySet',10005,75);
     assert(!byId[10005]);

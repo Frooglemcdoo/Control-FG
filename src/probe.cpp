@@ -73,7 +73,7 @@ static bool ReleaseLogSuppressed(const char* body) noexcept {
 
 static void Log(const char* format, ...) noexcept {
 #ifdef CONTROL_REBLUR_ONLY
- if(!format||strncmp(format,"REBLUR_",7))return;
+ if(!format||(strncmp(format,"REBLUR_",7)&&strncmp(format,"PROBE v",7)))return;
 #else
  if(!control_diagnostics::Active() && !control_character_support::IsLifecycleEvent(format)) {
 #if defined(CONTROL_RT_OWNED_ASSEMBLY)

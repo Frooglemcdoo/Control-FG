@@ -1,10 +1,23 @@
 #include "../../src/gi_reuse/graphics_table_state.h"
 #include "../../src/nrd_diffuse_session.h"
 #include "../../src/nrd_diffuse_camera.h"
+#include "../../src/nrd_specular_handoff.h"
 #include <cstdio>
 #include <cstdlib>
 static void Require(bool good,const char* what){if(!good){std::fprintf(stderr,"FAIL %s\n",what);std::exit(1);}}
 int main(){
+ control_nrd::SpecularHandoff handoff;
+ control_rr_reflection::Context context{10,20,30,40,50};
+ handoff.Arm(99,context);Require(handoff.Take(context)==99,"reflection handoff after lighting bind");
+ Require(handoff.Take(context)==0,"reflection handoff is single use");
+ for(unsigned field=0;field<5;++field){
+  auto changed=context;
+  switch(field){case 0:++changed.frame;break;case 1:++changed.list;break;case 2:++changed.queue;break;case 3:++changed.device;break;default:++changed.view;break;}
+  handoff.Arm(99,context);Require(handoff.Take(changed)==0,"reject mismatched reflection context");
+  Require(handoff.Take(context)==0,"rejected handoff cannot be reused");
+ }
+ handoff.Arm(99,{});Require(handoff.Take({})==0,"missing reflection context rejected");
+ handoff.Arm(99,context);handoff.Arm(100,context);Require(handoff.Take(context)==100,"new reflection binding replaces pending binding");
  std::array<float,2> jitter{};
  Require(control_nrd::NativeClipShiftToNrdJitter(2*.297851562/2560,-2*.379286706/1440,2560,1440,jitter),"native jitter units");
  Require(std::abs(jitter[0]+.297851562f)<1e-7f&&std::abs(jitter[1]+.379286706f)<1e-7f,"NRD sample offset is inverse raster offset");
