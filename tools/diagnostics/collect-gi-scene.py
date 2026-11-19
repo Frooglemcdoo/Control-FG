@@ -10,7 +10,7 @@ def inspect(root, pid):
         meta=directory/'metadata.json'
         if not meta.exists():continue
         m=json.loads(meta.read_text(encoding='utf-8-sig'))
-        if m.get('scene_capture_build')!='R479':continue
+        if m.get('scene_capture_build')!='R480':continue
         frame=m['frame'];records.append(m);files.update(p for p in directory.iterdir() if p.is_file())
         def require(ok,reason):
             if not ok:issues.append(f'frame {frame}: {reason}')
@@ -38,7 +38,8 @@ def inspect(root, pid):
         require(db.exists() and db.stat().st_size==d['bytes'] and d['red_offset']+d['columns']*d['rows']*d['red_stride']==d['bytes'],'detailed-grid binary size mismatch')
         pair=d.get('paired',{});pb=detail/pair.get('file','missing')
         require(pair.get('same_hits_weights_and_scene') and pair.get('writes_game_outputs') is False and pair.get('before_rr'), 'paired comparison provenance missing')
-        require(pair.get('stride')==32 and pair.get('bytes')==m['width']*m['height']*32 and pb.is_file() and pb.stat().st_size==pair.get('bytes'), 'paired comparison binary missing/size mismatch')
+        require(pair.get('texture_probe_stride')==128 and pair.get('texture_probe_points')==min(m['width'],512)*min(m['height'],512) and pair.get('texture_probe_offset')==m['width']*m['height']*32 and pair.get('total_file_bytes')==m['width']*m['height']*32+min(m['width'],512)*min(m['height'],512)*128, 'texture probe layout missing/mismatched')
+        require(pair.get('stride')==32 and pair.get('bytes')==m['width']*m['height']*32 and pb.is_file() and pb.stat().st_size==pair.get('total_file_bytes'), 'paired comparison binary missing/size mismatch')
     for ordinal in (1,2):
         pair=sorted((m for m in records if m.get('capture_ordinal')==ordinal),key=lambda m:m['frame'])
         if len(pair)!=2 or [m.get('pair_index') for m in pair]!=[0,1] or pair[1]['frame']!=pair[0]['frame']+1 or pair[1].get('previous_frame')!=pair[0]['frame']:
@@ -84,14 +85,14 @@ def main():
         for meta in a.root.glob('rr-input-c1-*/metadata.json'):
             try:
                 m=json.loads(meta.read_text(encoding='utf-8-sig'))
-                if m.get('scene_capture_build')=='R479':candidates.append((meta.stat().st_mtime,m['pid']))
+                if m.get('scene_capture_build')=='R480':candidates.append((meta.stat().st_mtime,m['pid']))
             except (ValueError,OSError):pass
-        if not candidates:raise SystemExit('No R479 scene frames saved. Wait for Saved, or send compact logs if capture failed.')
+        if not candidates:raise SystemExit('No R480 scene frames saved. Wait for Saved, or send compact logs if capture failed.')
         a.pid=max(candidates)[1]
     records,issues,files=inspect(a.root,a.pid)
     if not files:raise SystemExit('No files found for that scene session.')
     output=a.output or pathlib.Path.cwd()/('GI-Scene-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
-    manifest={'schema':'control-gi-scene-r479','pid':a.pid,'complete':not issues,'issues':issues,'frames':[m['frame'] for m in records],
+    manifest={'schema':'control-gi-scene-r480','pid':a.pid,'complete':not issues,'issues':issues,'frames':[m['frame'] for m in records],
               'limitations':['physical SRV slice mapping not independently verified','individual light operands and full texture mip contents not exported','instance/primitive IDs not exported','RR output precedes final display processing'],'reassembly':'Concatenate each file chunks in listed order; verify chunk and whole-file SHA256.'}
     print('Packaging full-screen data. This may take several minutes.',flush=True)
     package(a.root,files,output,manifest)

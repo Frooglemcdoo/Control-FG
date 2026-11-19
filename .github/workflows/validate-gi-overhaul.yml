@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-scene-capture-r479]
+    branches: [work/gi-scene-capture-r480]
   workflow_dispatch:
 jobs:
   validate:
@@ -76,6 +76,16 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Weight fixture compile failed'}
           ./weight-transport.exe
           if($LASTEXITCODE -ne 0){throw 'Weight fixture failed'}
+      - name: Validate texture probe against known mip colors and sampler clamps
+        shell: pwsh
+        run: |
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          & $dxc.FullName -T cs_6_0 -E main -WX tools/gi-texture-probe-validation.hlsl -Fo texture-probe.dxil
+          if($LASTEXITCODE -ne 0){throw 'Texture probe shader failed'}
+          cl /nologo /EHsc /std:c++17 /W4 /WX /O2 tools/test-gi-texture-probe.cpp /Fe:texture-probe.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Texture probe fixture failed'}
+          ./texture-probe.exe
+          if($LASTEXITCODE -ne 0){throw 'Texture probe GPU test failed'}
       - name: Validate full-screen grid and lossless split packaging
         shell: pwsh
         run: |

@@ -16,6 +16,8 @@ class D3D12AutoEvaluator {
  std::vector<D3D12_ROOT_PARAMETER_TYPE> kinds_;
  std::vector<UINT> constants_;
 public:
+ bool materialSamplerKnown=false;
+ D3D12_STATIC_SAMPLER_DESC materialSampler{};
  HRESULT Initialize(ID3D12Device* device,ID3D12RootSignature* native,
                     const void* bytes,SIZE_T size,D3D12_SHADER_BYTECODE shader) {
   if(root_||!device||!native||!bytes||!size||!shader.pShaderBytecode||!shader.BytecodeLength)return E_INVALIDARG;
@@ -25,6 +27,7 @@ public:
   hr=decoded->GetRootSignatureDescAtVersion(D3D_ROOT_SIGNATURE_VERSION_1_0,&desc);if(FAILED(hr))return hr;
   if(!desc||!desc->Desc_1_0.NumParameters||desc->Desc_1_0.NumParameters>60)return E_INVALIDARG;
   auto rd=desc->Desc_1_0;
+  for(UINT i=0;i<rd.NumStaticSamplers;++i){const auto& sampler=rd.pStaticSamplers[i];if(sampler.ShaderRegister==5&&sampler.RegisterSpace==1){materialSampler=sampler;materialSamplerKnown=true;}}
   if(rd.Flags&D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE)return E_INVALIDARG;
   // Reject collisions with the appended private register space, including
   // descriptor ranges and static samplers. No silent register remapping.

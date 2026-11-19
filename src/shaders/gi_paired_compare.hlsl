@@ -8,9 +8,11 @@
 cbuffer Selection:register(b0,space19){GIAutoSelection selection;}
 #include "gi_weight_read.hlsl"
 #include "gi_pair_write.hlsl"
+#include "gi_scene_texture_probe.hlsl"
 [numthreads(8,16,1)]
 void main(uint3 id:SV_DispatchThreadID){
  if(!GIPairEnabled()||any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
+ GIStoreTextureProbe(id.xy);
  GIPairWrite(id.xy,0,0,0,0);
  GIShadingRegisters a;
  if(giCB4[0].z!=selection.rayCount||(selection.rayCount!=4&&selection.rayCount!=10)||!GIInitializeReceiver(id.xy,a))return;
