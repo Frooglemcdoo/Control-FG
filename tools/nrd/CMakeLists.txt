@@ -77,6 +77,25 @@ if(CONTROL_NRD_GPU)
    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_prepare.hlsl"
    VERBATIM)
   list(APPEND conversion_headers "${specular_header}")
+  foreach(spec_shader guides native_prepare)
+   set(spec_output "${CMAKE_CURRENT_BINARY_DIR}/nrd_specular_${spec_shader}.h")
+   set(spec_source "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_specular_guides.hlsl")
+   set(spec_defines)
+   if(spec_shader STREQUAL "native_prepare")
+    set(spec_source "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_prepare.hlsl")
+    list(APPEND spec_defines -D CONTROL_NRD_SPECULAR=1 -D CONTROL_NRD_HIT_NORMALIZED=1)
+   else()
+    set(spec_output "${CMAKE_CURRENT_BINARY_DIR}/nrd_specular_guides_shader.h")
+   endif()
+   add_custom_command(OUTPUT "${spec_output}"
+    COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -HV 2018 -E main -WX
+     ${CONTROL_NRD_SHADER_DEFINES} ${spec_defines} -I "${nrd_SOURCE_DIR}/Shaders"
+     -Fh "${spec_output}" -Vn "kNrd_specular_${spec_shader}" "${spec_source}"
+    DEPENDS "${spec_source}" "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/ControlPrimaryGuideDecode.hlsli"
+     "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/rr_hit_distance_shared.h"
+    VERBATIM)
+   list(APPEND conversion_headers "${spec_output}")
+  endforeach()
  endif()
  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h"
   COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -E main -WX

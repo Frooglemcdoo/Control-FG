@@ -87,7 +87,7 @@ public:
   std::array<External*,7> all{};for(unsigned i=0;i<6;++i)all[i]=&bindings.input[i];all[6]=&bindings.output;
   for(unsigned i=0;i<7;++i){if(!all[i]->resource)return Reject("filter_resource_missing");auto d=all[i]->resource->GetDesc();
    if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||d.Width!=width||d.Height!=height||d.DepthOrArraySize!=1||!d.MipLevels||d.SampleDesc.Count!=1)return Reject("filter_resource_extent");
-   const bool rgba=d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT||d.Format==DXGI_FORMAT_R32G32B32A32_FLOAT;
+   const bool rgba=d.Format==DXGI_FORMAT_R16G16B16A16_FLOAT||d.Format==DXGI_FORMAT_R32G32B32A32_FLOAT||((i==RawGI||i==6)&&signal==Signal::Specular&&d.Format==DXGI_FORMAT_R11G11B10_FLOAT);
    const bool rg=d.Format==DXGI_FORMAT_R16G16_FLOAT||d.Format==DXGI_FORMAT_R32G32_FLOAT;
    const bool scalar=d.Format==DXGI_FORMAT_R16_FLOAT||d.Format==DXGI_FORMAT_R32_FLOAT;
    if(!rgba&&!(i==Motion&&rg)&&!((i==ViewZ||i==HitDistance)&&(rg||scalar)))return Reject("filter_resource_format");

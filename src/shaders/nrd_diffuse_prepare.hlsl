@@ -58,7 +58,11 @@ void main(uint3 tid:SV_DispatchThreadID) {
 #else
  float hitRoughness=1.0;
 #endif
+ #ifdef CONTROL_NRD_HIT_NORMALIZED
+ float normHit=hit;
+#else
  float normHit=REBLUR_FrontEnd_GetNormHitDist(hit,depth,float3(3.0,0.1,20.0),hitRoughness);
+#endif
  RadianceHitDistance[p]=REBLUR_FrontEnd_PackRadianceAndNormHitDist(signal,normHit,true);
 #else
  RadianceHitDistance[p]=RELAX_FrontEnd_PackRadianceAndHitDist(signal,hit,true);

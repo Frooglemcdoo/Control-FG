@@ -1,0 +1,22 @@
+CONTROL: THE OLDEST HOUSE - REBLUR R485 TEST BUILD
+
+Install over the existing ControlTOH installation, beside Control_DX12.exe.
+Close the game first. Keep the existing ControlFGStreamline runtime files.
+
+Graphics > REBLUR Reconstruction:
+  REBLUR (RR off): REBLUR diffuse GI and opaque reflections, DLSS SR/DLAA as selected.
+  REBLUR before RR: the same REBLUR passes feed RR. RR processes the entire image,
+  including Jesse; this mode does not exclude characters.
+
+Use the game's ray-tracing settings to enable the corresponding effects.
+Native shadow-mask denoising is retained. REBLUR filters radiance, not shadow masks.
+No scene-capture hotkey or scene-packaging tools are included. Do not press F7.
+
+The modes reset denoiser history on a change. Allow a moment to settle.
+First initialization and rejected/missing inputs can retain native filtering.
+The support log reports REBLUR_SPECULAR admission/fallback. A selected menu item
+alone does not prove every pass ran. Report visual results and FPS separately.
+
+This is a test build. Synthetic D3D12 validation does not establish in-game
+artifact removal or RTX 5090 performance. Check Jesse moving under GI lighting,
+and reflections elsewhere, using your normal game settings.

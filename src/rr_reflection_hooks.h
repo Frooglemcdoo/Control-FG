@@ -9,7 +9,11 @@ static bool rrReflectionCaptureEnabled=false;
 static std::uintptr_t RRReflectionHookBind(void* owner) {
  const auto result=rrReflectionOriginalBind(owner); // exactly once; native exceptions propagate
  const DWORD saved=GetLastError();
+#ifdef CONTROL_REBLUR_ONLY
+ if(const auto callbacks=control_nrd_bridge::specular.load())callbacks->produce(owner);
+#else
  if(rrReflectionCaptureEnabled&&control_rr::RRUserRuntimeWorkRequested()&&control_rr::RRUserPresetValue()==control_rr::RRPresetF)RRReflectionAfterBind(owner);
+#endif
  SetLastError(saved);return result;
 }
 static bool RRReflectionInitializeAccessOnly(HMODULE d3d) noexcept {
@@ -33,10 +37,12 @@ static bool RRReflectionInstall(HMODULE renderer,HMODULE d3d) noexcept {
   if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,false))Log("RR_REFLECTION_HOOK_ROLLBACK_FAILED");
   return false;
  }
+#ifndef CONTROL_REBLUR_ONLY
  if(!RRReflectionInstallPrimaryAppend(d3d)){
   if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,false))Log("RR_REFLECTION_HOOK_ROLLBACK_FAILED");
   return false;
  }
  rrReflectionCaptureEnabled=true;
+#endif
  Log("RR_REFLECTION_HOOK_INSTALLED callsite=0x129662 helper=0xA3940 copy_only=1 rr_eval=disabled");return true;
 }

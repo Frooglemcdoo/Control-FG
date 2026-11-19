@@ -22,7 +22,7 @@ inline bool Resolve(const control_rr_native_clamp::Api& api,const char* name,int
  __try {struct Slot {int id,tag;} slot{-1,0};api.resolve(&slot,name);id=slot.id;return id>=0&&id<4096;}
  __except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
-inline bool ReadTexture(const ShaderTexture& source,Texture& output) noexcept {
+inline bool ReadTexture(const ShaderTexture& source,Texture& output,bool allowDepth=false) noexcept {
  output={};if(!source.native||!source.descriptor)return false;
  __try {
   const auto* native=reinterpret_cast<const unsigned char*>(source.native);
@@ -36,7 +36,7 @@ inline bool ReadTexture(const ShaderTexture& source,Texture& output) noexcept {
   const auto d=resource->GetDesc();
   if(d.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||!d.Width||!d.Height||d.Width>8192||d.Height>8192||
      d.DepthOrArraySize!=1||d.SampleDesc.Count!=1||d.SampleDesc.Quality||
-     (d.Flags&(D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS|D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)))return false;
+     (d.Flags&D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS)||(!allowDepth&&(d.Flags&D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)))return false;
   output={source,resource,d,static_cast<D3D12_RESOURCE_STATES>(state)};return true;
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }

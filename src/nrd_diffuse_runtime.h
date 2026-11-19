@@ -7,6 +7,11 @@
 #include "nrd_finish.h"
 #include "nrd_receiver.h"
 #include <mutex>
+#ifdef CONTROL_REBLUR_ONLY
+#include "nrd_specular_guides.h"
+#include "nrd_specular_guides_shader.h"
+#include "nrd_specular_native_prepare.h"
+#endif
 namespace control_rr {
 inline void ApplyRRBundleDefaults(bool enabled) noexcept {
  gi_reuse::ownedRequested=enabled;GISampleSelect(0);
@@ -25,10 +30,24 @@ struct Epoch {
  std::unique_ptr<control_nrd::NativeReceiver> receiver;
  std::unique_ptr<control_nrd::DiffusePipeline> filter;
 };
+#ifdef CONTROL_REBLUR_ONLY
+struct SpecularEpoch {
+ UINT width=0,height=0;bool poisoned=false,rrRequested=false;
+ std::unique_ptr<control_nrd::SpecularGuides> guides;
+ std::unique_ptr<control_nrd::DiffusePipeline> filter;
+};
+static std::shared_ptr<SpecularEpoch> specularEpoch;
+#endif
 struct Recording {
  ComPtr<ID3D12GraphicsCommandList4> list;UINT64 generation=0,fence=0;
  bool submitted=false,reset=false,filtered=false,exported=false,checkCompleted=false;
  UINT64 checkGeneration=0;
+#ifdef CONTROL_REBLUR_ONLY
+ bool specularFiltered=false;
+ std::shared_ptr<SpecularEpoch> specularEpoch;
+ std::unique_ptr<control_nrd::SpecularGuides::Work> specularGuides;
+ std::unique_ptr<control_nrd::NativeTransaction::Work> specularWork;
+#endif
  std::shared_ptr<Epoch> epoch;
  std::vector<control_nrd::NativeReceiver::Work> exports;
  std::unique_ptr<control_nrd::NativeTransaction::Work> work;
@@ -75,10 +94,17 @@ static void Invalidate(const std::shared_ptr<Epoch>& e) noexcept {
 }
 static void Poll() {
  const UINT64 complete=fence?fence->GetCompletedValue():0;
- if(complete==UINT64_MAX){Invalidate(epoch);Reason("device_removed");return;}
+ if(complete==UINT64_MAX){
+#ifdef CONTROL_REBLUR_ONLY
+ if(specularEpoch)specularEpoch->poisoned=true;
+#endif
+ Invalidate(epoch);Reason("device_removed");return;}
  for(auto i=recordings.begin();i!=recordings.end();){auto& r=**i;
   if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}
   if(r.reset&&(!r.submitted||r.fence<=complete)){
+   #ifdef CONTROL_REBLUR_ONLY
+   if(!r.submitted&&r.specularEpoch)r.specularEpoch->poisoned=true;
+#endif
    if(!r.submitted&&(r.filtered||r.exported||(r.work&&r.work->diffuse.commandsRecorded)))Invalidate(r.epoch);
    // Both conditions above are mandatory: completion alone cannot rule out
    // replay of an unreset list. Never recycle failed or obsolete-epoch work.
@@ -112,7 +138,11 @@ static UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* l
  if(!active)return 0;mutex.lock();UINT64 mask=0;
  for(unsigned i=0;i<recordings.size();++i){auto& r=*recordings[i];if(r.reset)continue;
   for(UINT j=0;j<count;++j)if(lists&&lists[j]==r.list.Get()){
-   if(q!=queue.Get()||r.submitted||(mask&(1ull<<i))){Invalidate(r.epoch);Reason("queue_or_replay");continue;}
+   if(q!=queue.Get()||r.submitted||(mask&(1ull<<i))){Invalidate(r.epoch);
+#ifdef CONTROL_REBLUR_ONLY
+    if(r.specularEpoch)r.specularEpoch->poisoned=true;
+#endif
+    Reason("queue_or_replay");continue;}
    mask|=1ull<<i;
   }
  }
@@ -122,7 +152,11 @@ static void After(ID3D12CommandQueue* q,UINT64 mask) noexcept {
  if(!mask)return;
  for(unsigned i=0;i<recordings.size();++i)if(mask&(1ull<<i)){
   auto& r=*recordings[i];r.submitted=true;r.fence=++nextFence;
-  if(FAILED(q->Signal(fence.Get(),r.fence))||(r.filtered&&!r.epoch->filter->Submitted(reinterpret_cast<UINT64>(q),r.fence))){r.checkGeneration=0;Invalidate(r.epoch);Reason("submission_failed");}
+  const bool signaled=SUCCEEDED(q->Signal(fence.Get(),r.fence));
+#ifdef CONTROL_REBLUR_ONLY
+  if(r.specularEpoch&&(!signaled||(r.specularFiltered&&!r.specularEpoch->filter->Submitted(reinterpret_cast<UINT64>(q),r.fence))))r.specularEpoch->poisoned=true;
+#endif
+  if(!signaled||(r.filtered&&!r.epoch->filter->Submitted(reinterpret_cast<UINT64>(q),r.fence))){r.checkGeneration=0;Invalidate(r.epoch);Reason("submission_failed");}
   else if(r.filtered)settings_check::RecordFor(settings_check::RelaxSubmitted,r.checkGeneration);
  }
  mutex.unlock();
@@ -157,10 +191,10 @@ static void Copy(D3D12_CPU_DESCRIPTOR_HANDLE dst,UINT count,D3D12_CPU_DESCRIPTOR
 static void Constant(D3D12_CPU_DESCRIPTOR_HANDLE dst,const D3D12_CONSTANT_BUFFER_VIEW_DESC& cb) noexcept {
  if(auto* s=Shadow()){Mute mute;s->ObserveNativeConstant(pass.serial,dst,cb);}
 }
-static bool NamedTexture(const char* name,control_nrd_native::Texture& out) {
+static bool NamedTexture(const char* name,control_nrd_native::Texture& out,bool allowDepth=false) {
  int id=-1;control_nrd_native::ShaderTexture value{};
  const control_rr_provider::Access access{nullptr,&RRProviderEntry,&RRProviderCompare};
- return control_nrd_native::Resolve(rrNativeClampApi,name,id)&&control_rr_provider::Snapshot(access,id,&RRProviderReadBound,value)&&control_nrd_native::ReadTexture(value,out);
+ return control_nrd_native::Resolve(rrNativeClampApi,name,id)&&control_rr_provider::Snapshot(access,id,&RRProviderReadBound,value)&&control_nrd_native::ReadTexture(value,out,allowDepth);
 }
 static bool CameraMatches(const control_nrd_native::Inputs& input,const control_nrd::CameraMatrices& camera) {
  struct Matrix {float v[16];};
@@ -296,6 +330,9 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
   record->filtered=true;lastFilterTicks=now.QuadPart;lastFilterFrame=f.frame;guideFrame=0;Reason("active");gi_dual_bridge::status=1;return true;
  }catch(...){Invalidate(epoch);Reason("filter_exception");return false;}
 }
+#ifdef CONTROL_REBLUR_ONLY
+#include "nrd_specular_runtime.inl"
+#endif
 static const gi_dual_bridge::Callbacks callbacks{&Begin,&End,&Copy,&Constant,&Dispatch,&Reset,&Before,&After};
 static const control_nrd_bridge::Producer producer{&ProducerBegin,&End,&ProducerDispatch};
 static const bool registered=[] {hooks::EnableForDenoiser();gi_dual_bridge::callbacks=&callbacks;control_nrd_bridge::producer=&producer;return true;}();

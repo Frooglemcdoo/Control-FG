@@ -81,7 +81,9 @@ static void Log(const char* format, ...) noexcept {
   return;
 #endif
  }
-#ifdef CONTROL_PERFORMANCE_BUILD
+#if defined(CONTROL_REBLUR_ONLY)
+    if(strncmp(format,"REBLUR_",7))return;
+#elif defined(CONTROL_PERFORMANCE_BUILD)
  return;
 #else
     DWORD savedError = GetLastError();
@@ -1648,7 +1650,7 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
 #else
         const bool d1VramProbeEnabled=d1VramProbeLength>0&&d1VramProbeLength<_countof(d1VramProbeValue)&&d1VramProbeValue[0]!=L'0';
 #endif
-        const bool distanceHooksReady=temporalAccessReady&&d1VramProbeEnabled&&RRReflectionInstall(renderer,d3d);
+        const bool distanceHooksReady=temporalAccessReady&&(control_reblur::Enabled||d1VramProbeEnabled)&&RRReflectionInstall(renderer,d3d);
 #ifdef CONTROL_RR_COMPACT_DISTANCE
         rr_compact_distance::installed.store(distanceHooksReady);
         if(d1VramProbeEnabled&&!distanceHooksReady)rr_compact_distance::reason.store("hook_install_failed");

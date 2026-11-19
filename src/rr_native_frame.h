@@ -558,6 +558,9 @@ static void RRNativeHookTemporalBind(void* technique) {
  if(!rrNativeTemporalBindOriginal)return;
  auto* scope=rrNativeSpecularScope;
  if(!rrNativeFrameEnabled||!scope){rrNativeTemporalBindOriginal(technique);return;}
+#ifdef CONTROL_REBLUR_ONLY
+ rrNativeTemporalBindOriginal(technique);scope->nativeFilterBound=true;return;
+#endif
  if(scope->preserveNativeFiltering){
   rrNativeTemporalBindOriginal(technique);
   scope->nativeFilterBound=true;
@@ -604,6 +607,14 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
  auto* scope=rrNativeSpecularScope;
  if(!rrNativeFrameEnabled||!scope){rrNativeDispatchOriginal(state,groups);return;}
  const DWORD saved=GetLastError();
+#ifdef CONTROL_REBLUR_ONLY
+ const auto callbacks=control_nrd_bridge::specular.load();
+ scope->attempted=true;
+ scope->recorded=scope->nativeFilterBound&&rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&callbacks&&callbacks->filter();
+ scope->failed=!scope->recorded;
+ if(!scope->recorded)rrNativeDispatchOriginal(state,groups);
+ SetLastError(saved);return;
+#endif
  auto access=rrReflectionAccess;access.current=&RRReflectionCurrent;access.user=nullptr;
  if(scope->preserveNativeFiltering){
   bool variantUsed=!scope->temporalOnly;
@@ -831,6 +842,25 @@ static void RRReportSpecularProducer() noexcept {
  }
 }
 static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {
+#ifdef CONTROL_REBLUR_ONLY
+ const auto callbacks=control_nrd_bridge::specular.load();
+ control_rr_specular::Scope reblurScope{};
+ auto reblurAccess=rrReflectionAccess;reblurAccess.current=&RRReflectionCurrent;reblurAccess.user=nullptr;
+ bool admitted=rrNativeFrameEnabled&&!rrNativeSpecularScope&&callbacks&&RRReflectionCurrent(nullptr,reblurScope.frame)&&callbacks->ready(reblurScope.frame.frame);
+ if(admitted)reblurScope.sourceNative=reblurAccess.Callbacks().containerNative(&reblurAccess,reinterpret_cast<std::uintptr_t>(color));
+ admitted=admitted&&reblurScope.sourceNative;
+ if(admitted&&rrNativeFrame.Selected())admitted=rrNativeFrame.BeginLighting(reblurScope.frame.frame);
+ if(!admitted){
+  if(rrNativeFrame.Selected())rrNativeFrame.Fail("reblur_specular_not_ready");
+  rrNativeFilterOriginal(color,history,passes,evaluateColor);return;
+ }
+ reblurScope.rrCommitted=true;rrNativeSpecularScope=&reblurScope;
+ __try {rrNativeFilterOriginal(color,history,0,evaluateColor);}
+ __finally {rrNativeSpecularScope=nullptr;}
+ rrNativeLightingComplete=reblurScope.recorded&&!reblurScope.failed;
+ if(!rrNativeLightingComplete&&rrNativeFrame.Selected())rrNativeFrame.Fail("reblur_specular_failed");
+ return;
+#endif
  control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);
  if(!rrNativeFrameEnabled){
   rrNativeFilterOriginal(color,history,passes,evaluateColor);
