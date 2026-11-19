@@ -26,6 +26,8 @@ FetchContent_Declare(nrd
  PATCH_COMMAND ${CMAKE_COMMAND} -DNRD_SOURCE=<SOURCE_DIR>
    -P ${CMAKE_CURRENT_SOURCE_DIR}/patch_nrd.cmake)
 FetchContent_MakeAvailable(nrd)
+FetchContent_GetProperties(mathlib SOURCE_DIR MATHLIB_SOURCE)
+include(${CMAKE_CURRENT_SOURCE_DIR}/patch_mathlib.cmake)
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/nrd_library_$<CONFIG>.txt" CONTENT "$<TARGET_FILE:NRD>")
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/nrd_shader_blob_$<CONFIG>.txt" CONTENT "$<TARGET_FILE:ShaderMakeBlob>")
 add_executable(control_nrd_contract test_contract.cpp)
