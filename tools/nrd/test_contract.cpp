@@ -8,7 +8,7 @@ static void Require(bool good,const char* what){if(!good){std::fprintf(stderr,"F
 int main(){
  control_nrd::SpecularHandoff handoff;
  control_rr_reflection::Context context{10,20,30,40,50};
- handoff.Arm(99,context);Require(handoff.Take(context)==99,"reflection handoff after lighting bind");
+ handoff.Arm(99,context);Require(handoff.Take(context)==99,"reflection handoff after lighting dispatch");
  Require(handoff.Take(context)==0,"reflection handoff is single use");
  for(unsigned field=0;field<5;++field){
   auto changed=context;
