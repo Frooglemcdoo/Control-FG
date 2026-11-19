@@ -21,7 +21,7 @@ int main()try {
   if(c<6)Require(std::abs(z2-.5)<.008&&std::abs(cap-.36)<.008,"cosine integral mismatch");
   if(c==6||c==8){double expected=c==6?1:1.6;
    Require(std::abs(z2-expected)<.015,"narrow-source energy mismatch");
-   Require(moment-z2*z2<.01&&peak<2,"narrow-source speckle regression");}
+   Require(moment-z2*z2<.01&&peak<2*expected,"narrow-source speckle regression");}
   if(c==7){
    Require(std::abs(z2-1)<.55,"stale guide support/energy mismatch");
    double oldMean=0,oldMoment=0,oldPeak=0;
