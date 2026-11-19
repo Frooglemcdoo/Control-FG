@@ -18,6 +18,7 @@ inline LRESULT CALLBACK LabelProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp)noexcep
   if(gi_scene_capture::Enabled()){
    const auto state=control_rr_capture_ui::state.load();
    if(state==control_rr_capture_ui::State::Idle)wcscpy_s(text,L"Full-screen GI + RR capture | Alt + Insert: start | Hold still for first pair");
+   else if(control_rr_capture_ui::Busy())swprintf_s(text,L"Full-screen capture: %s | Pair %u / 2 | %s",control_rr_capture_ui::Label(state),control_rr_capture_ui::completedPairs.load()+1,control_rr_capture_ui::completedPairs.load()?L"Slowly pan through the problem lighting":L"Hold still");
    else swprintf_s(text,L"Full-screen capture: %s | %s",control_rr_capture_ui::Label(state),control_rr_capture_ui::detail.load());
   }else if(!gi_auto_capture::dimensions.load())wcscpy_s(text,L"GI capture: load gameplay with 4 or 10 rays and GI FIXED.");
   else if(phase==gi_auto_capture::Preview)wcscpy_s(text,L"Alt + arrows: move orange box | Alt + Insert: start capture");

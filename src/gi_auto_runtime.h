@@ -100,7 +100,7 @@ inline void Collect()noexcept {
      }
      if(owner->captureRequest>pixelPairRequest){pixelPairs={};pixelPairRequest=owner->captureRequest;}
      gi_reuse::GIAuditTemporalSummary temporal;UINT first=0,second=0;
-     if(owner->captureRequest==pixelPairRequest&&pixelPairs.Add(owner->auditOrdinal,owner->output.frame,owner->output.epoch,w,h,pixels,temporal,first,second,x,y)){
+     if(!owner->sceneAudit&&owner->captureRequest==pixelPairRequest&&pixelPairs.Add(owner->auditOrdinal,owner->output.frame,owner->output.epoch,w,h,pixels,temporal,first,second,x,y)){
       Log("GI_AUTO_R476 temporal first=%u second=%u motion_compensated=0 compared=%u invalid=%u changed25=%u changed50=%u changed100=%u mean_rgb_abs=%.9g max_rgb_abs=%.9g",first,second,temporal.compared,temporal.invalid,temporal.changed25,temporal.changed50,temporal.changed100,temporal.compared?temporal.rgbAbsSum/(3.0*temporal.compared):0,temporal.maxRgbDelta);
       for(const auto& e:temporal.examples)if(e.absolute>0){
        Log("GI_AUTO_R476 delta first=%u second=%u pixel=(%u,%u) rgb_abs=%.9g relative=%.5g before_rgb=(%.9g,%.9g,%.9g) after_rgb=(%.9g,%.9g,%.9g) before_weight=%.9g after_weight=%.9g before_material=%u after_material=%u",first,second,px(e.index),py(e.index),e.absolute,e.relative,e.before.weighted[0],e.before.weighted[1],e.before.weighted[2],e.after.weighted[0],e.after.weighted[1],e.after.weighted[2],e.before.weight,e.after.weight,e.before.material,e.after.material);

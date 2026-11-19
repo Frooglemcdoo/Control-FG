@@ -68,7 +68,10 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
         if(outputsValid){completedPairs.store(requests);
 #ifdef CONTROL_RR_GI_SEQUENCE
  if(requests<PairLimit() && automaticPairs.load()){
-  detail.store(L"Pair saved. Next pair queued; slowly move the camera for the second pair.");
+  #ifdef CONTROL_GI_AUTO_TARGETS
+  if(gi_scene_capture::Enabled())detail.store(L"Pair saved. Next pair queued; slowly move the camera for the second pair.");else
+#endif
+  detail.store(L"Pair saved. Next stationary pair queued; hold still.");
   state.store(State::Queued);requested.store(true,std::memory_order_release);return;
  }
 #ifdef CONTROL_GI_AUTO_TARGETS
