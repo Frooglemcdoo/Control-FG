@@ -11,6 +11,7 @@
 // R10 diagnostics: two prepared slots capture successive evaluated frames.
 // Inputs and post-RR output are copied on the original list, with exact restoration.
 struct RRInputCaptureJob {
+ unsigned movementKeys=0;
  unsigned exportStride=1,pathCondition=0;wchar_t exportRoot[260]{};
  control_rr::InputCapturePolicy policy{};
  GIBatchCapture giHits{};
@@ -49,8 +50,27 @@ struct RRInputCaptureJob {
 static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
 // Serialize large disk exports without blocking render-side capture progress.
 static SRWLOCK rrInputCaptureExportLock=SRWLOCK_INIT;
-static RRInputCaptureJob rrInputCaptures[2];
-static unsigned rrInputCaptureRecording=2;
+static constexpr unsigned kRRInputCaptureSlots=16;
+static RRInputCaptureJob rrInputCaptures[kRRInputCaptureSlots];
+static unsigned rrInputCaptureRecording=kRRInputCaptureSlots;
+static bool RRMotionCapture() noexcept {
+#ifdef CONTROL_GI_AUTO_TARGETS
+ return gi_scene_capture::Motion();
+#else
+ return false;
+#endif
+}
+static unsigned RRInputCaptureSlotCount() noexcept{return RRMotionCapture()?kRRInputCaptureSlots:2;}
+// Called with capture lock held. Prepare all slots before the first GPU copy.
+static unsigned RRSelectCapture(unsigned long long frame) noexcept {
+ if(!RRMotionCapture()){
+  const auto n=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
+  return n<2?n:kRRInputCaptureSlots;
+ }
+ control_rr::InputCapturePolicy::Phase phases[kRRInputCaptureSlots];std::uint64_t frames[kRRInputCaptureSlots];
+ for(unsigned i=0;i<kRRInputCaptureSlots;++i){phases[i]=rrInputCaptures[i].policy.phase;frames[i]=rrInputCaptures[i].frame;}
+ return control_rr::SelectInputCaptureSequence(phases,frames,kRRInputCaptureSlots,frame);
+}
 static control_rr::InputCaptureSettle rrInputCaptureSettle;
 #ifdef CONTROL_RR_GI_SEQUENCE
 static unsigned long long rrInputCaptureSettledFrame=0,rrInputCaptureRequestTick=0;
@@ -192,8 +212,9 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    out<<"\"path_capture_condition\":"<<c->pathCondition<<",\"export_stride\":"<<c->exportStride<<",\"point_samples_not_filtered\":true,";
    if(c->timedSequence)out<<"\"stage_capture_build\":\"R432\",\"sequence_phase\":\""<<(c->sequencePhase?"moving":"stationary")<<"\",\"gpu_timings_valid\":"<<(timingValid?"true":"false")<<",\"timestamp_frequency\":"<<c->timingFrequency<<",\"timing_frame\":"<<c->timing.frame<<",\"gi_evaluator_expected_batches\":"<<c->timing.expectedBatches<<",\"gi_evaluator_observed_batches\":"<<c->timing.observedBatches<<",\"timing_overflow\":"<<(c->timing.overflow?"true":"false")<<",\"gpu_stage_timings\":"<<timingJSON<<",\"timing_scope\":\"captured_frame_dispatches_not_steady_state_fps\",\"intermediate_temporal_image_captured\":false,";
 #ifdef CONTROL_GI_AUTO_TARGETS
+   if(RRMotionCapture())out<<"\"motion_sequence\":true,\"motion_frames\":16,\"motion_index\":"<<c->pairIndex<<",\"stop_cue_index\":4,\"capture_tick_ms\":"<<c->evaluationTick<<",\"movement_key_bits\":"<<c->movementKeys<<",\"rr_internal_history_available\":false,";
    if(c->giHits.fullScreen)out<<"\"secondary_texture_mip\":"<<(gi_scene_capture::TextureMipOne()?1:0)<<",\"producer_weight_transport\":true,\"paired_mip_capture_expected\":true,";
-   if(c->giHits.fullScreen)out<<"\"scene_capture_build\":\"R483\",\"scene_pairs\":2,\"scene_full_resolution\":true,\"texture_resources_dumped\":false,\"individual_light_operands_captured\":false,\"instance_primitive_ids_captured\":false,";
+   if(c->giHits.fullScreen)out<<"\"scene_capture_build\":\"R484\",\"scene_pairs\":2,\"scene_full_resolution\":true,\"texture_resources_dumped\":false,\"individual_light_operands_captured\":false,\"instance_primitive_ids_captured\":false,";
 #endif
    out<<"\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
 #ifdef CONTROL_RR_GI_SEQUENCE
@@ -327,6 +348,19 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   for(unsigned i=0;i<=outputIndex;++i)for(unsigned j=0;j<i;++j)if(resources[i]==resources[j])valid=false;
   if(!valid){Log("RR_INPUT_CAPTURE_C1_REJECT reason=native_input_format_or_extent frame=%llu",frame);c->policy.phase=Policy::Failed;__leave;}
   if(c->policy.phase==Policy::Requested){
+#ifdef CONTROL_GI_AUTO_TARGETS
+   if(RRMotionCapture()&&c->pairIndex==0){
+    UINT64 images=0;for(unsigned i=0;i<count;++i)images+=((descriptions[i].Width*(descriptions[i].Format==DXGI_FORMAT_R16G16B16A16_FLOAT?8:descriptions[i].Format==DXGI_FORMAT_R32G32B32A32_FLOAT?16:descriptions[i].Format==DXGI_FORMAT_R32G32_FLOAT?8:descriptions[i].Format==DXGI_FORMAT_R16_FLOAT?2:4)+255)&~255ull)*descriptions[i].Height;
+    const auto reserve=gi_motion::Reservation(UINT(width),height,gi_scene_capture::Rays(),images);
+    MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);ULARGE_INTEGER free{};wchar_t root[32768]{};
+    const auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",root,32768);
+    const bool addressable=gi_motion::Addressable(UINT(width),height,gi_scene_capture::Rays(),256ull*1024*1024);
+    const bool enough=addressable&&GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve&&n&&n<32768&&GetDiskFreeSpaceExW(root,&free,nullptr,nullptr)&&free.QuadPart>=reserve;
+    Log("GI_MOTION_R484 preflight width=%llu height=%u rays=%u reserve=%llu available_ram=%llu free_disk=%llu addressable=%u okay=%u",width,height,gi_scene_capture::Rays(),reserve,memory.ullAvailPhys,free.QuadPart,unsigned(addressable),unsigned(enough));
+    if(!enough){for(auto& job:rrInputCaptures)job.policy.phase=Policy::Failed;
+     control_rr_capture_ui::detail.store(L"Motion preflight failed: memory, disk, or buffer limit. Package diagnostics; do not rerun.");__leave;}
+   }
+#endif
    if(FAILED(list->GetDevice(IID_PPV_ARGS(&c->device)))||!c->device){c->policy.phase=Policy::Failed;__leave;}
    c->queue=native.queue;c->queue->AddRef();c->count=count;c->distanceBound=distanceBound;c->rawIndex=rawIndex;c->nativeIndex=nativeIndex;c->outputIndex=outputIndex;c->width=static_cast<UINT>(width);c->height=height;c->preset=preset;c->nativeLighting=nativeLighting;
    const wchar_t* guideNames[]{L"normal-roughness.rgba16f",L"specular.rgba16f",L"diffuse.rgba16f",L"distance.r32f",L"distance-status.r32u"};
@@ -419,11 +453,13 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 #endif
 #ifdef CONTROL_RR_GI_SEQUENCE
   c->evaluationTick=GetTickCount64();
+  c->movementKeys=0;
+  if(RRMotionCapture()){const int keys[]={'W','A','S','D',VK_UP,VK_LEFT,VK_DOWN,VK_RIGHT};for(unsigned k=0;k<8;++k)if(GetAsyncKeyState(keys[k])&0x8000)c->movementKeys|=1u<<k;}
 #endif
   c->frame=frame;c->projectionValid=projectionValid;memcpy(c->projection,projection,sizeof(c->projection));
   c->outputCaptured=false;c->evaluationResult=0;c->reset=0;
   if(ngxGetInt)ngxGetInt(parameters,"Reset",&c->reset);
-  c->previousFrame=c->pairIndex?rrInputCaptures[0].frame:0;
+  c->previousFrame=c->pairIndex?rrInputCaptures[c->pairIndex-1].frame:0;
   DWORD fault=0;bool commandsStarted=false;
   const unsigned allocatedCount=c->count;c->count=outputIndex;
   const bool recorded=RRInputCaptureRecordGuarded(c,&native,nativeInputs,&fault,&commandsStarted,kRRInputCaptureNativeCount);
@@ -440,6 +476,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
    __leave;
   }
   c->policy.Record(native.presentToken);rrInputCaptureRecording=c->pairIndex;
+#ifdef CONTROL_GI_AUTO_TARGETS
+  if(RRMotionCapture())gi_scene_capture::motionRecorded=c->pairIndex+1;
+#endif
   control_rr_capture_ui::detail.store(L"Frame recorded; waiting for native output and GPU completion.");
   Log("RR_INPUT_CAPTURE_C1_RECORDED frame=%llu preset=%u buffers=%u",frame,preset,count);
  } __except(EXCEPTION_EXECUTE_HANDLER){c->policy.phase=control_rr::InputCapturePolicy::Failed;Log("RR_INPUT_CAPTURE_C1_FAILED reason=exception resources_retained=1");}
@@ -460,27 +499,33 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
  rrInputCaptureSettledFrame=settled?frame:0;
 #endif
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
- unsigned select=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,
-  rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
+ if(RRMotionCapture()&&rrInputCaptures[0].frame){
+  for(unsigned i=1;i<kRRInputCaptureSlots;++i)if(rrInputCaptures[i].policy.phase==control_rr::InputCapturePolicy::Ready&&rrInputCaptures[i-1].frame&&
+   (frame>rrInputCaptures[i-1].frame+1||!resetKnown||reset!=0)){
+    rrInputCaptures[i].policy.phase=control_rr::InputCapturePolicy::Failed;
+    control_rr_capture_ui::detail=L"Motion sequence interrupted. Package diagnostics; no retry needed yet.";
+   }
+ }
+ unsigned select=RRSelectCapture(frame);
  // Prepare both slots immediately; only actual GPU recording waits for settling.
- if(select<2&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&!settled){
+ if(select<kRRInputCaptureSlots&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&!settled){
   control_rr_capture_ui::detail.store((gi_stack_capture::motion.load()||(gi_path_capture::enabled.load()&&gi_path_capture::condition.load()==3))?L"Arming motion capture. Keep reproducing the issue while moving.":L"Waiting for 5 seconds of gameplay. Hold still.");
-  select=2;
+  select=kRRInputCaptureSlots;
  }
 #ifdef CONTROL_RR_GI_SEQUENCE
- if(select<2&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&
-    (!rrInputCaptures[select].preGICaptured||rrInputCaptures[select].preGIFrame!=frame))select=2;
+ if(select<kRRInputCaptureSlots&&rrInputCaptures[select].policy.phase==control_rr::InputCapturePolicy::Ready&&
+    (!rrInputCaptures[select].preGICaptured||rrInputCaptures[select].preGIFrame!=frame))select=kRRInputCaptureSlots;
 #endif
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
- if(select<2)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting,lightingMode);
+ if(select<kRRInputCaptureSlots)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting,lightingMode);
 }
 static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,ID3D12Resource* output,unsigned result) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  if(result!=1)rrInputCaptureSettle.Reset();
  RRInputCaptureJob* active=nullptr;
  __try {
-  if(rrInputCaptureRecording>=2)__leave;
-  auto* c=&rrInputCaptures[rrInputCaptureRecording];active=c;rrInputCaptureRecording=2;
+  if(rrInputCaptureRecording>=kRRInputCaptureSlots)__leave;
+  auto* c=&rrInputCaptures[rrInputCaptureRecording];active=c;rrInputCaptureRecording=kRRInputCaptureSlots;
   if(c->frame!=frame||c->sources[c->outputIndex]!=output)__leave;
   c->evaluationResult=result;
   RRGuideInputTexture input{};RRGuideInputSnapshot native{};const char* reason=nullptr;
@@ -514,7 +559,11 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
 DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
    if(buttonRequested || foregroundPid==GetCurrentProcessId()){
     bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<kRRCapturePairs;
-    if(accepted){for(unsigned i=0;i<2;++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;
+    if(accepted){
+#ifdef CONTROL_GI_AUTO_TARGETS
+     if(RRMotionCapture()){gi_scene_capture::motionRecorded=0;gi_scene_capture::motionExported=0;gi_scene_capture::motionFailed=false;}
+#endif
+     for(unsigned i=0;i<RRInputCaptureSlotCount();++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;
 #ifdef CONTROL_RR_GI_SEQUENCE
      rrInputCaptures[i].preGICaptured=false;rrInputCaptures[i].preGIFrame=0;
 #endif
@@ -547,12 +596,31 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
 #else
     true;
 #endif
-   if(mayExport&&c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
+   bool sequenceReady=true;
+  if(RRMotionCapture())for(const auto& pending:rrInputCaptures)if(pending.policy.phase==P::Requested||pending.policy.phase==P::Preparing||pending.policy.phase==P::Ready)sequenceReady=false;
+   if(mayExport&&sequenceReady&&c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
     if(!QueueUserWorkItem(&RRInputCaptureExport,c,WT_EXECUTEDEFAULT))c->policy.phase=P::Failed;
    }
    if(c->policy.CanSubmit(present)){const HRESULT hr=c->queue->Signal(c->fence,1);c->policy.Submit(SUCCEEDED(hr));
     if(FAILED(hr))Log("RR_INPUT_CAPTURE_C1_FAILED reason=signal resources_retained=1");}
   }
+#ifdef CONTROL_GI_AUTO_TARGETS
+  if(RRMotionCapture()){
+   bool failed=gi_scene_capture::motionFailed.load(),idle=true,preparing=false,complete=true;
+   for(unsigned i=0;i<kRRInputCaptureSlots;++i){const auto& c=rrInputCaptures[i];
+    failed|=c.policy.phase==P::Failed;idle&=c.policy.phase==P::Idle;
+    preparing|=c.policy.phase==P::Preparing||c.policy.phase==P::Requested;
+    complete&=c.outputCaptured&&c.evaluationResult==1&&c.frame&&(!i||(c.frame==rrInputCaptures[i-1].frame+1&&c.previousFrame==rrInputCaptures[i-1].frame));
+   }
+   if(failed){control_rr_capture_ui::state=control_rr_capture_ui::State::Failed;control_rr_gi::boundaryRequested=false;}
+   else if(idle&&rrInputCaptures[0].policy.requests&&complete&&gi_scene_capture::motionExported==kRRInputCaptureSlots){
+    control_rr_capture_ui::detail=L"Sequence saved. Run Package-GI-Motion.cmd to validate and review.";
+    control_rr_capture_ui::completedPairs=1;control_rr_capture_ui::state=control_rr_capture_ui::State::Complete;control_rr_gi::boundaryRequested=false;
+   }else if(rrInputCaptures[0].policy.requests){
+    control_rr_capture_ui::state=preparing?control_rr_capture_ui::State::Preparing:(gi_scene_capture::motionRecorded==kRRInputCaptureSlots?control_rr_capture_ui::State::Saving:control_rr_capture_ui::State::Capturing);
+   }
+  }else
+#endif
   control_rr_capture_ui::Publish(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,
       rrInputCaptures[0].policy.requests,rrInputCaptures[0].outputCaptured && rrInputCaptures[1].outputCaptured &&
       rrInputCaptures[0].evaluationResult==1 && rrInputCaptures[1].evaluationResult==1 &&
@@ -580,8 +648,8 @@ static const bool rrStackRegistered=[] {gi_stack_capture::readySource.store(&RRS
 static bool RRSceneWantsGI(unsigned long long frame) noexcept {
  if(!gi_scene_capture::Enabled()||!control_rr_gi::boundaryRequested.load()||!rrInputCaptureSettledFrame||frame!=rrInputCaptureSettledFrame+1)return false;
  if(!TryAcquireSRWLockShared(&rrInputCaptureLock))return false;
- unsigned slot=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
- bool okay=slot<2&&rrInputCaptures[slot].policy.phase==control_rr::InputCapturePolicy::Ready&&!rrInputCaptures[slot].giHits.commandsStarted;
+ unsigned slot=RRSelectCapture(frame);
+ bool okay=slot<kRRInputCaptureSlots&&rrInputCaptures[slot].policy.phase==control_rr::InputCapturePolicy::Ready&&!rrInputCaptures[slot].giHits.commandsStarted;
  ReleaseSRWLockShared(&rrInputCaptureLock);return okay;
 }
 #endif

@@ -1551,14 +1551,14 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
         gi_scene_audit::Install(renderer,d3d);
 #ifdef CONTROL_GI_AUTO_TARGETS
-        Log("GI_AUTO_R483 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
-        Log("GI_AUTO_R483 weights=producer_fp32 secondary_texture_mip=%u weight_bytes_per_pixel_4=16 weight_bytes_per_pixel_10=40",unsigned(gi_scene_capture::TextureMipOne()));
+        Log("GI_AUTO_R484 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
+        Log("GI_AUTO_R484 weights=producer_fp32 secondary_texture_mip=%u weight_bytes_per_pixel_4=16 weight_bytes_per_pixel_10=40",unsigned(gi_scene_capture::TextureMipOne()));
 #endif
         if(gi_reuse::GuidedLiveEnabled()){
             const bool installed=gi_native_render_scope::Install(renderer,d3d);
             gi_reuse::guidedScopeReady.store(installed);
 #ifdef CONTROL_GI_AUTO_TARGETS
-            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R483 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
+            if(gi_auto_dispatch::Enabled())Log("GI_AUTO_R484 installed=%u",unsigned(installed&&gi_auto_runtime::Install()));
 #endif
             Log("GI_GUIDED_R434 scope_ready=%u same_invocation_pair=1 fixed_scene=1",unsigned(installed));
         }

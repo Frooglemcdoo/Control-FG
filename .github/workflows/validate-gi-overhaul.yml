@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-scene-capture-r483]
+    branches: [work/gi-motion-capture-r484]
   workflow_dispatch:
 jobs:
   validate:
@@ -95,6 +95,19 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Scene grid failed'}
           python tools/test-gi-scene-package.py
           if($LASTEXITCODE -ne 0){throw 'Scene package validation failed'}
+      - name: Validate consecutive motion capture and every-ray evidence
+        shell: pwsh
+        run: |
+          cl /nologo /EHsc /std:c++17 /W4 /WX /O2 tools/test-gi-motion-contract.cpp /Fe:motion-contract.exe
+          if($LASTEXITCODE -ne 0){throw 'Motion contract compile failed'}
+          ./motion-contract.exe
+          if($LASTEXITCODE -ne 0){throw 'Motion contract failed'}
+          cl /nologo /EHsc /std:c++17 /W4 /WX /O2 /MT tools/validate-gi-motion.cpp /Fe:validate-gi-motion.exe
+          if($LASTEXITCODE -ne 0){throw 'Motion verifier compile failed'}
+          python tools/test-gi-motion-verifier.py ./validate-gi-motion.exe
+          if($LASTEXITCODE -ne 0){throw 'Motion verifier failed'}
+          python tools/test-gi-motion-package.py
+          if($LASTEXITCODE -ne 0){throw 'Motion package tests failed'}
       - name: Verify secondary translation and observation hooks
         shell: pwsh
         run: |

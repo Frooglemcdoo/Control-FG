@@ -21,7 +21,7 @@ void giAutoRaygen() {
  GIFrozenReceiver receiver=GIFrozenDecodeReceiver(pixel,gbuffer.Load(int3(pixel,0)),
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
  if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i)materials[uint3(pixel,i)]=65534;return;}
- GIAutoTargets frozen=targets[0];GIAutoPrepared prepared=GIAutoPrepare(receiver.origin,receiver.normal,frozen,selection);
+ GIAutoTargets frozen=targets[0];GIAutoPrepared prepared=GIAutoPrepare(receiver.origin,frozen,selection);
  [loop]for(uint rayIndex=0;rayIndex<selection.rayCount;++rayIndex) {
   GIAutoDraw draw=GIAutoSamplePrepared(pixel,system[69].z,0,rayIndex,receiver.normal,prepared,selection);
   RayDesc ray;ray.Origin=receiver.origin;ray.Direction=draw.direction;ray.TMin=0;

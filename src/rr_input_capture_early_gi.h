@@ -9,8 +9,8 @@ static void RRInputCaptureAtGI(unsigned long long frame,ID3D12GraphicsCommandLis
  RRInputCaptureJob* active=nullptr;
  __try {
   using P=control_rr::InputCapturePolicy;
-  const unsigned slot=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
-  if(slot>=2)__leave;
+  const unsigned slot=RRSelectCapture(frame);
+  if(slot>=kRRInputCaptureSlots)__leave;
   // The first RR frame must include the source trace recorded earlier in this frame.
   if(gi_stack_capture::enabled.load()&&slot==0&&gi_stack_capture::sourceFrame.load()!=frame)__leave;
   auto* c=&rrInputCaptures[slot];active=c;

@@ -4,6 +4,7 @@
 #include "auto_guide_session.h"
 #include "auto_weight_layout.h"
 #include <memory>
+#include "../gi_scene_capture.h"
 #include "d3d12_auto_timing.h"
 namespace gi_reuse {
 struct GIAutoPublishedTarget {
@@ -32,6 +33,8 @@ public:
  D3D12AutoRaygenRecord record;
  D3D12AutoTiming timing;
  Ptr<ID3D12Resource> training,cells,audit,pixelAudit,pairAudit;
+ Ptr<ID3D12Resource> motionAudit;
+ UINT64 motionBytes=0,motionOffset=0;
  UINT64 pairBytes=0,weightBytes=0,pixelBytes=0,auditOrdinal=0,captureRequest=0;
  UINT roiX=0,roiY=0;
  GIAutoPublishedTarget output;
@@ -67,20 +70,26 @@ public:
 #endif
 #ifdef CONTROL_GI_REGIONAL
   weightBytes=GIAutoWeightBytes(w,h,rayCount);
-  pairBytes=fullScreenAudit&&capturePixels?GIAutoPairBytes(w,h):0;
+  pairBytes=fullScreenAudit&&capturePixels&&!gi_scene_capture::Motion()?GIAutoPairBytes(w,h):0;
+  motionOffset=UINT64(capacity)*GIAutoTrainingStride+pixelBytes+weightBytes+pairBytes;
+  if(fullScreenAudit&&capturePixels&&gi_scene_capture::Motion()){
+   motionBytes=gi_motion::Bytes(w,h,rayCount);
+   if(!gi_motion::Addressable(w,h,rayCount,motionOffset))return E_INVALIDARG;
+  }
   if(pairBytes+weightBytes+pixelBytes+UINT64(capacity)*GIAutoTrainingStride>0xffffffffull)return E_INVALIDARG;
 #endif
-  if(!training)hr=Buffer(device,UINT64(capacity)*GIAutoTrainingStride+pixelBytes+weightBytes+pairBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
-  const UINT captureControl[]={w,h,(GIAuditStepControl(step,roiX)|(sceneAudit?8388608u:0u)|(textureMipOne?16777216u:0u)),GIAuditCapacityControl(capacity,roiY,capturePixels)};
+  if(!training)hr=Buffer(device,UINT64(capacity)*GIAutoTrainingStride+pixelBytes+weightBytes+pairBytes+motionBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
+  const UINT captureControl[]={w,h,(GIAuditStepControl(step,roiX)|(sceneAudit?8388608u:0u)|(textureMipOne?16777216u:0u)|(motionBytes?gi_motion::ControlBit:0u)),GIAuditCapacityControl(capacity,roiY,capturePixels)};
   hr=reusedScratch?record.RewriteRetired(device,state,target,training->GetGPUVirtualAddress(),captureControl):record.Initialize(device,state,target,training->GetGPUVirtualAddress(),captureControl);if(FAILED(hr))return hr;
   if(!cells)hr=Buffer(device,(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,cells);if(FAILED(hr))return hr;
   hr=Buffer(device,GIAutoPublicationBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,output.buffer);if(FAILED(hr))return hr;
   if(captureTargets){hr=Buffer(device,2*GIAutoPublicationBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,audit);if(FAILED(hr))return hr;}
   if(pixelBytes){hr=Buffer(device,pixelBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,pixelAudit);if(FAILED(hr))return hr;}
   if(pairBytes){hr=Buffer(device,pairBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,pairAudit);if(FAILED(hr))return hr;}
+  if(motionBytes){hr=Buffer(device,motionBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST,false,motionAudit);if(FAILED(hr))return hr;}
   output.frame=frame;output.epoch=epoch;pipelines=bundle;return S_OK;
  }
- UINT64 Bytes()const noexcept{return UINT64(capacity)*GIAutoTrainingStride+(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride)+GIAutoPublicationBytes+record.RetainedBytes()+target.RetainedBytes()+(audit?2*GIAutoPublicationBytes:0)+2*pixelBytes+weightBytes+2*pairBytes;}
+ UINT64 Bytes()const noexcept{return UINT64(capacity)*GIAutoTrainingStride+(4096*GIAutoCellStride+UINT64(capacity)*GIAutoLinkStride)+GIAutoPublicationBytes+record.RetainedBytes()+target.RetainedBytes()+(audit?2*GIAutoPublicationBytes:0)+2*pixelBytes+weightBytes+2*pairBytes+2*motionBytes;}
  void PrepareProducer(ID3D12GraphicsCommandList4* list)noexcept {
   if(producerPrepared)return;
   if(reusedScratch){
@@ -94,7 +103,7 @@ public:
   PrepareProducer(list);
   if(pixelBytes||weightBytes){D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;b.UAV.pResource=training.Get();list->ResourceBarrier(1,&b);}
   timing.Mark(list,2);
-  if(!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0,roiX,roiY,sceneAudit,textureMipOne_))return false;
+  if(!pipelines->evaluator.Record(list,bindings,target,training.Get(),width,height,step,capacity,pixelBytes!=0,roiX,roiY,sceneAudit,textureMipOne_,false,motionBytes!=0))return false;
   timing.Mark(list,3);
 #ifdef CONTROL_GI_REGIONAL
   if(pairBytes){
@@ -124,6 +133,7 @@ public:
   if(shaded&&pixelAudit){
    barrier.Transition={training.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
    list->CopyBufferRegion(pixelAudit.Get(),0,training.Get(),UINT64(capacity)*GIAutoTrainingStride,pixelBytes);
+   if(motionAudit)list->CopyBufferRegion(motionAudit.Get(),0,training.Get(),motionOffset,motionBytes);
    if(pairAudit)list->CopyBufferRegion(pairAudit.Get(),0,training.Get(),UINT64(capacity)*GIAutoTrainingStride+pixelBytes+weightBytes,pairBytes);
    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
   }

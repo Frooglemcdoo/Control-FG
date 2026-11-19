@@ -22,7 +22,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  GIFrozenReceiver source=GIFrozenDecodeReceiver(id.xy,g_tGBuffer1.Load(int3(id.xy,0)),
   g_tLinearDepth.Load(int3(id.xy,0)).x,g_tClipDepth.Load(int3(id.xy,0)).x,giCB0);
  if(!source.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
- GIAutoTargets frozen=targets[0];GIAutoPrepared prepared=GIAutoPrepare(source.origin,source.normal,frozen,selection);float alpha=prepared.alpha;
+ GIAutoTargets frozen=targets[0];GIAutoPrepared prepared=GIAutoPrepare(source.origin,frozen,selection);float alpha=prepared.alpha;
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
  float3 weightedSum=0;bool valid=true;
  float3 rawSum=0,peakPosition=0;float rawPeak=0,weightedPeak=0,peakWeight=0;

@@ -17,7 +17,12 @@ inline LRESULT CALLBACK LabelProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp)noexcep
   const auto phase=gi_auto_capture::phase.load();wchar_t text[240]{};
   if(gi_scene_capture::Enabled()){
    const auto state=control_rr_capture_ui::state.load();
-   if(state==control_rr_capture_ui::State::Idle)wcscpy_s(text,L"Full-screen GI + RR capture | Alt + Insert: start | Hold still for first pair");
+   if(gi_scene_capture::Motion()){
+    const auto recorded=gi_scene_capture::motionRecorded.load();
+    if(state==control_rr_capture_ui::State::Idle)wcscpy_s(text,L"Motion capture | Alt + Insert: start | Move Jesse through the problem lighting");
+    else if(control_rr_capture_ui::Busy())swprintf_s(text,L"Motion capture: %s | Frame %u / 16 | %s",control_rr_capture_ui::Label(state),recorded,recorded>=4?L"STOP moving Jesse and the camera; wait for Saved":L"Keep Jesse moving through the problem lighting");
+    else swprintf_s(text,L"Motion capture: %s | %s",control_rr_capture_ui::Label(state),control_rr_capture_ui::detail.load());
+   }else if(state==control_rr_capture_ui::State::Idle)wcscpy_s(text,L"Full-screen GI + RR capture | Alt + Insert: start | Hold still for first pair");
    else if(control_rr_capture_ui::Busy())swprintf_s(text,L"Full-screen capture: %s | Pair %u / 2 | %s",control_rr_capture_ui::Label(state),control_rr_capture_ui::completedPairs.load()+1,control_rr_capture_ui::completedPairs.load()?L"Slowly pan through the problem lighting":L"Hold still");
    else swprintf_s(text,L"Full-screen capture: %s | %s",control_rr_capture_ui::Label(state),control_rr_capture_ui::detail.load());
   }else if(!gi_auto_capture::dimensions.load())wcscpy_s(text,L"GI capture: load gameplay with 4 or 10 rays and GI FIXED.");
@@ -49,7 +54,7 @@ inline void Tick(HWND game)noexcept {
   if(capture&&!captureHeld&&w&&h&&control_rr_capture_ui::Request()){
    ++gi_auto_capture::request;gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
    gi_auto_capture::phase=gi_auto_capture::Collecting;
-   Log("GI_SCENE_R483 requested=1 pairs=2 full_resolution=1 detailed_grid=512x512");
+   Log("GI_SCENE_R484 requested=1 pairs=2 full_resolution=1 detailed_grid=512x512");
   }
   captureHeld=capture;
   RECT r{};if(!GetClientRect(game,&r))return;POINT at{};ClientToScreen(game,&at);
@@ -68,7 +73,7 @@ inline void Tick(HWND game)noexcept {
  if(capture&&!captureHeld&&editable&&w&&h){
   gi_auto_capture::frozenCenter.store(gi_auto_capture::center.load());gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
   ++gi_auto_capture::request;armedAt=GetTickCount64();gi_auto_capture::phase=gi_auto_capture::Countdown;
-  Log("GI_AUTO_R483 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
+  Log("GI_AUTO_R484 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
  }
  captureHeld=capture;
  if(gi_auto_capture::phase.load()==gi_auto_capture::Countdown&&GetTickCount64()-armedAt>=5000)gi_auto_capture::phase=gi_auto_capture::Collecting;

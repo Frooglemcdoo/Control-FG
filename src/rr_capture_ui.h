@@ -38,6 +38,7 @@ inline bool Busy() noexcept {
 inline bool ActionAllowed(bool recoveryAction) noexcept { return recoveryAction || !Busy(); }
 inline unsigned PairLimit() noexcept {
 #ifdef CONTROL_GI_AUTO_TARGETS
+ if(gi_scene_capture::Motion())return 1;
  if(gi_scene_capture::Enabled())return 2;
 #endif
  return gi_stack_capture::enabled.load()?1:kRRCapturePairs;}

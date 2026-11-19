@@ -9,8 +9,8 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
  RRInputCaptureJob* active=nullptr;
  __try {
   using P=control_rr::InputCapturePolicy;
-  const unsigned slot=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
-  if(slot>=2)__leave;
+  const unsigned slot=RRSelectCapture(frame);
+  if(slot>=kRRInputCaptureSlots)__leave;
   auto* c=&rrInputCaptures[slot];active=c;auto& capture=c->giHits;
   if(c->policy.phase!=P::Ready||!capture.enabled||!capture.readback)__leave;
   if(!constantsValid||!capture.ledger.Begin(frame,batch,batches,rays)){
@@ -77,7 +77,7 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
     DWORD fault=0;bool started=false;rawOkay=RRInputCaptureRecordGuarded(&copy,&native,&raw,&fault,&started,1,true);capture.commandsStarted|=started;
    }
    capture.detailMatched=gi_scene_capture::detailedFrame.load()==frame;
-   if(!rawOkay||!capture.detailMatched){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_SCENE_R483_FAILED frame=%llu raw=%u details=%u resources_retained=1",frame,unsigned(rawOkay),capture.detailMatched);__leave;}
+   if(!rawOkay||!capture.detailMatched){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_SCENE_R484_FAILED frame=%llu raw=%u details=%u resources_retained=1",frame,unsigned(rawOkay),capture.detailMatched);__leave;}
    capture.rawCaptured=true;end=capture.rawOffset+capture.rawBytes;
   }
 #endif

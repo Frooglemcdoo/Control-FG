@@ -15,9 +15,17 @@ cbuffer Selection : register(b0,space19) {GIAutoSelection selection;}
 #include "gi_weight_transport.hlsl"
 float GIMaterialTextureLod(){return (trainingStepPacked&16777216u)?1.0f:0.0f;}
 #include "gi_weight_read.hlsl"
+#include "gi_motion_layout.hlsl"
 [numthreads(8,16,1)]
 void main(uint3 id:SV_DispatchThreadID) {
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
+ bool motion=GIMotionEnabled(trainingStepPacked,trainingCapacityPacked);
+ if(motion){
+  [loop]for(uint r=0;r<selection.rayCount;++r){
+   uint base=GIMotionAddress(id.xy,r,trainingWidth,trainingHeight,trainingCapacityPacked,selection.rayCount)/32u+1;
+   [unroll]for(uint t=0;t<6;++t)autoTraining[base+t]=(GIAutoTraining)0;
+  }
+ }
  uint auditIndex=GIAutoAuditIndex(id.xy);
  GIAutoTraining redA=(GIAutoTraining)0,redB=(GIAutoTraining)0;float redScore=0;
  GISecondaryTerms redTerms=(GISecondaryTerms)0;
@@ -35,7 +43,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   g_tLinearDepth.Load(int3(id.xy,0)).x,g_tClipDepth.Load(int3(id.xy,0)).x,giCB0);
  if(!source.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
  GIAutoTargets frozen=(GIAutoTargets)0;GIAutoPrepared prepared=(GIAutoPrepared)0;
- if(auditIndex!=0xffffffff){frozen=GISelectRegional(source.origin,source.normal,selection);prepared=GIAutoPrepare(source.origin,source.normal,frozen,selection);}
+ if(auditIndex!=0xffffffff){frozen=GISelectRegional(source.origin,source.normal,selection);prepared=GIAutoPrepare(source.origin,frozen,selection);}
  float alpha=prepared.alpha;
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
  float3 weightedSum=0;bool valid=true;
@@ -45,12 +53,25 @@ void main(uint3 id:SV_DispatchThreadID) {
   int4 address=int4(id.xy,slice,0);GISecondaryInput hit;
   hit.material=g_tMaterialId.Load(address).x;
   hit.positionUV=asuint(g_tPosition_TexcoordY.Load(address));hit.normalUV=asuint(g_tNormal_TexcoordX.Load(address));
-  receiver.traceEnabled=auditIndex!=0xffffffff;
+  receiver.traceEnabled=motion||auditIndex!=0xffffffff;
   GIEvaluateSecondary(receiver,hit);
   float3 rgb=throughput*asfloat(receiver.r15.xyz);
   GIAutoDraw draw=(GIAutoDraw)0;draw.weight=1;
   if(auditIndex!=0xffffffff&&alpha>0)draw=GIAutoSamplePrepared(id.xy,giCB0[69].z,0,slice,source.normal,prepared,selection);
   draw.weight=GIReadWeight(id.xy,slice);
+  if(motion){
+   float4 fade=asfloat(giCB1[17]);float edge=fade.x-fade.y;
+   float t=saturate((depth-edge)*rcp((fade.y+fade.x)-edge));
+   float scale=mad(t*t*(3-2*t),fade.w-fade.z,fade.z);
+   uint base=GIMotionAddress(id.xy,slice,trainingWidth,trainingHeight,trainingCapacityPacked,selection.rayCount)/32u+1;
+   float3 pos=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
+   autoTraining[base]=GIRedPair(float4(rgb,draw.weight),float4(asfloat(receiver.r15.xyz),asfloat(hit.material)));
+   autoTraining[base+1]=GIRedPair(float4(pos,asfloat(slice|0x80000000u)),float4(throughput,scale));
+   autoTraining[base+2]=GIRedPair(receiver.terms.texture,receiver.terms.tint);
+   autoTraining[base+3]=GIRedPair(receiver.terms.volume,receiver.terms.surface);
+   autoTraining[base+4]=GIRedPair(receiver.terms.pointLight,receiver.terms.spot);
+   autoTraining[base+5]=GIRedPair(receiver.terms.fallback,receiver.terms.brdf);
+  }
   if(trainingIndex!=0xffffffff) {
    float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
    bestTraining=GIAutoKeepBrightest(bestTraining,GIAutoCandidate(selection.version,hit.material,position,rgb,draw.weight));

@@ -1,7 +1,7 @@
 #pragma once
 // Query/readback ownership follows the existing image job. Failed jobs retain
 // resources; successful jobs release only after their same-queue GPU fence.
-struct RRStageTimingTicket { unsigned slot=2,index=~0u;void* context=nullptr;UINT64 frame=0,present=0;DWORD thread=0; };
+struct RRStageTimingTicket { unsigned slot=kRRInputCaptureSlots,index=~0u;void* context=nullptr;UINT64 frame=0,present=0;DWORD thread=0; };
 static RRStageTimingTicket RRStageTimingBegin(ID3D12GraphicsCommandList* list,gi_stage_timing::Stage stage) noexcept {
  RRStageTimingTicket ticket{};
 #if defined(CONTROL_RR_GI_SEQUENCE) && defined(CONTROL_GI_BOUNDARY_CAPTURE)
@@ -14,8 +14,8 @@ static RRStageTimingTicket RRStageTimingBegin(ID3D12GraphicsCommandList* list,gi
      list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT)__leave;
   const auto frame=native.engineFrame;
   const unsigned slot=stage==gi_stage_timing::Stage::Reconstruction?rrInputCaptureRecording:
-   control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
-  if(slot>=2)__leave;
+   RRSelectCapture(frame);
+  if(slot>=kRRInputCaptureSlots)__leave;
   auto& c=rrInputCaptures[slot];
   const bool reconstruction=stage==gi_stage_timing::Stage::Reconstruction;
   if(!c.timedSequence||!c.timingQueries||!c.timingReadback||c.queue!=native.queue||
@@ -38,7 +38,7 @@ static RRStageTimingTicket RRStageTimingBegin(ID3D12GraphicsCommandList* list,gi
  return ticket;
 }
 static void RRStageTimingEnd(RRStageTimingTicket ticket,ID3D12GraphicsCommandList* list) noexcept {
- if(ticket.slot>=2||ticket.index>=gi_stage_timing::capacity||!list)return;
+ if(ticket.slot>=kRRInputCaptureSlots||ticket.index>=gi_stage_timing::capacity||!list)return;
  const DWORD saved=GetLastError();
  AcquireSRWLockExclusive(&rrInputCaptureLock);
  auto& c=rrInputCaptures[ticket.slot];
@@ -56,7 +56,7 @@ static void RRStageTimingEnd(RRStageTimingTicket ticket,ID3D12GraphicsCommandLis
 }
 
 static void RRStageTimingBatch(RRStageTimingTicket ticket,unsigned batch,unsigned total,bool valid) noexcept {
- if(ticket.slot>=2)return;
+ if(ticket.slot>=kRRInputCaptureSlots)return;
  AcquireSRWLockExclusive(&rrInputCaptureLock);
  auto& c=rrInputCaptures[ticket.slot];
  c.timing.Batch(batch,total,valid&&c.timing.frame==ticket.frame);

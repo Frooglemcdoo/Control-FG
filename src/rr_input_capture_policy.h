@@ -36,4 +36,13 @@ inline unsigned SelectInputCapturePair(InputCapturePolicy::Phase first,InputCapt
  if(second==P::Ready&&(first==P::Recorded||first==P::Submitted||first==P::Exporting||first==P::Idle)&&firstFrame&&frame>firstFrame)return 1;
  return 2;
 }
+inline unsigned SelectInputCaptureSequence(const InputCapturePolicy::Phase* phases,const std::uint64_t* frames,unsigned count,std::uint64_t frame) noexcept {
+ using P=InputCapturePolicy;
+ for(unsigned i=0;i<count;++i)if(phases[i]==P::Failed)return count;
+ for(unsigned i=0;i<count;++i)if(phases[i]==P::Requested)return i;
+ for(unsigned i=0;i<count;++i)if(phases[i]==P::Preparing)return count;
+ for(unsigned i=0;i<count;++i)if(phases[i]==P::Ready)return !i||frames[i-1]+1==frame?i:count;
+ return count;
+}
+
 }
