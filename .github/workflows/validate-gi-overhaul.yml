@@ -108,6 +108,15 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Motion verifier failed'}
           python tools/test-gi-motion-package.py
           if($LASTEXITCODE -ne 0){throw 'Motion package tests failed'}
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          & $dxc.FullName -T cs_6_0 -E main -WX -DPRODUCER tools/gi-motion-validation.hlsl -Fo motion-producer.dxil
+          if($LASTEXITCODE -ne 0){throw 'Motion producer shader failed'}
+          & $dxc.FullName -T cs_6_0 -E main -WX tools/gi-motion-validation.hlsl -Fo motion-evaluator.dxil
+          if($LASTEXITCODE -ne 0){throw 'Motion evaluator shader failed'}
+          cl /nologo /EHsc /std:c++17 /W4 /WX /DCONTROL_GI_REGIONAL tools/test-gi-motion-gpu.cpp /Fe:motion-gpu.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Motion GPU fixture compile failed'}
+          ./motion-gpu.exe
+          if($LASTEXITCODE -ne 0){throw 'Motion GPU fixture failed'}
       - name: Verify secondary translation and observation hooks
         shell: pwsh
         run: |

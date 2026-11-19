@@ -30,7 +30,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 #endif
   if(SUCCEEDED(hr))hr=bundle->builder.Initialize(device,code);
   if(SUCCEEDED(hr)){const auto& s=bundle->evaluator.materialSampler;
-   Log("GI_AUTO_R484 material_sampler static_known=%u register=5 space=1 filter=%u min_lod=%.9g max_lod=%.9g bias=%.9g address_u=%u address_v=%u",unsigned(bundle->evaluator.materialSamplerKnown),unsigned(s.Filter),double(s.MinLOD),double(s.MaxLOD),double(s.MipLODBias),unsigned(s.AddressU),unsigned(s.AddressV));}
+   Log("GI_AUTO_R484 material_sampler static_known=%u register=5 space=1 filter=%u min_lod=%.9g max_lod=%.9g bias=%.9g address_u=%u address_v=%u max_anisotropy=%u",unsigned(bundle->evaluator.materialSamplerKnown),unsigned(s.Filter),double(s.MinLOD),double(s.MaxLOD),double(s.MipLODBias),unsigned(s.AddressU),unsigned(s.AddressV),s.MaxAnisotropy);}
 
   if(SUCCEEDED(hr)){bundle->nativeRoot=desc->pRootSignature;Microsoft::WRL::ComPtr<ID3D12Object> object;hr=native->QueryInterface(IID_PPV_ARGS(&object));
    if(SUCCEEDED(hr))hr=object->SetPrivateDataInterface(key,bundle.Get());}

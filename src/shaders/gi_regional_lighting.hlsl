@@ -15,17 +15,12 @@ cbuffer Selection : register(b0,space19) {GIAutoSelection selection;}
 #include "gi_weight_transport.hlsl"
 float GIMaterialTextureLod(){return (trainingStepPacked&16777216u)?1.0f:0.0f;}
 #include "gi_weight_read.hlsl"
-#include "gi_motion_layout.hlsl"
+#include "gi_motion_evaluator.hlsl"
 [numthreads(8,16,1)]
 void main(uint3 id:SV_DispatchThreadID) {
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
  bool motion=GIMotionEnabled(trainingStepPacked,trainingCapacityPacked);
- if(motion){
-  [loop]for(uint r=0;r<selection.rayCount;++r){
-   uint base=GIMotionAddress(id.xy,r,trainingWidth,trainingHeight,trainingCapacityPacked,selection.rayCount)/32u+1;
-   [unroll]for(uint t=0;t<6;++t)autoTraining[base+t]=(GIAutoTraining)0;
-  }
- }
+ GIMotionClear(id.xy);
  uint auditIndex=GIAutoAuditIndex(id.xy);
  GIAutoTraining redA=(GIAutoTraining)0,redB=(GIAutoTraining)0;float redScore=0;
  GISecondaryTerms redTerms=(GISecondaryTerms)0;
@@ -63,14 +58,8 @@ void main(uint3 id:SV_DispatchThreadID) {
    float4 fade=asfloat(giCB1[17]);float edge=fade.x-fade.y;
    float t=saturate((depth-edge)*rcp((fade.y+fade.x)-edge));
    float scale=mad(t*t*(3-2*t),fade.w-fade.z,fade.z);
-   uint base=GIMotionAddress(id.xy,slice,trainingWidth,trainingHeight,trainingCapacityPacked,selection.rayCount)/32u+1;
    float3 pos=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
-   autoTraining[base]=GIRedPair(float4(rgb,draw.weight),float4(asfloat(receiver.r15.xyz),asfloat(hit.material)));
-   autoTraining[base+1]=GIRedPair(float4(pos,asfloat(slice|0x80000000u)),float4(throughput,scale));
-   autoTraining[base+2]=GIRedPair(receiver.terms.texture,receiver.terms.tint);
-   autoTraining[base+3]=GIRedPair(receiver.terms.volume,receiver.terms.surface);
-   autoTraining[base+4]=GIRedPair(receiver.terms.pointLight,receiver.terms.spot);
-   autoTraining[base+5]=GIRedPair(receiver.terms.fallback,receiver.terms.brdf);
+   GIMotionWrite(id.xy,slice,rgb,draw.weight,asfloat(receiver.r15.xyz),hit.material,pos,throughput,scale,receiver.terms);
   }
   if(trainingIndex!=0xffffffff) {
    float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;

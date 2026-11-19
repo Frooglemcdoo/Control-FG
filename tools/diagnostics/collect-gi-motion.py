@@ -1,7 +1,7 @@
 """Validate a complete motion session, reconstruct GI, and build a full-screen review.
 Only reads saved game data; never injects keys or alters rendering/settings.
 """
-import argparse,base64,datetime,importlib.util,json,os,pathlib,struct,subprocess,sys,traceback,zlib,zipfile
+import argparse,base64,hashlib,platform,datetime,importlib.util,json,os,pathlib,struct,subprocess,sys,traceback,zlib,zipfile
 SPEC=importlib.util.spec_from_file_location('scene',pathlib.Path(__file__).with_name('collect-gi-scene.py'))
 scene=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(scene)
 
@@ -55,6 +55,22 @@ img.onclick=e=>{const f=frames[+slider.value],r=img.getBoundingClientRect(),x=Ma
     (folder/'Review.html').write_text(html,encoding='utf-8')
     return summary
 
+def environment(game):
+    files=[]
+    for name in ('dxgi.dll','nvngx_dlss.dll','ControlFGStreamline/nvngx_dlssd.dll','ControlFGStreamline/sl.dlss_d.dll','ControlFGStreamline/sl.interposer.dll'):
+        path=game/name
+        if path.is_file():
+            digest=hashlib.sha256()
+            with path.open('rb') as f:
+                for block in iter(lambda:f.read(1024*1024),b''):digest.update(block)
+            files.append({'file':name,'bytes':path.stat().st_size,'sha256':digest.hexdigest()})
+    driver={'available':False}
+    try:
+        run=subprocess.run(['nvidia-smi','--query-gpu=name,driver_version','--format=csv,noheader'],capture_output=True,text=True,timeout=15)
+        driver={'available':run.returncode==0,'gpu_driver':run.stdout.strip(),'error':run.stderr.strip()}
+    except (OSError,subprocess.TimeoutExpired) as exc:driver['error']=str(exc)
+    return {'os':platform.platform(),'driver':driver,'runtime_files_on_disk_at_packaging':files,'loaded_runtime_identity':'see capture-session game/Streamline logs','driver_AF_override':'not queried; application sampler descriptor in game log is not proof of driver override state','cache_state':'not altered','rendering_settings':'not altered by packager'}
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--root',type=pathlib.Path,default=pathlib.Path(os.environ.get('LOCALAPPDATA','.'))/'ControlFGProbe');p.add_argument('--pid',type=int);p.add_argument('--output',type=pathlib.Path);p.add_argument('--review-only',action='store_true');a=p.parse_args()
     if not a.pid:
@@ -70,13 +86,14 @@ def main():
     if issues:raise ValueError('Incomplete capture, no success package created:\n'+'\n'.join(issues)+'\nKeep all saved files; send this log before rerunning.')
     folder=a.root/f'gi-motion-review-{a.pid}';folder.mkdir(exist_ok=True)
     verifier=pathlib.Path(__file__).with_name('validate-gi-motion.exe')
+    (folder/'environment.json').write_text(json.dumps(environment(pathlib.Path.cwd()),indent=2))
     summary=review(a.root,a.pid,records,folder,verifier)
     review_zip=folder/'Motion-Review.zip'
     with zipfile.ZipFile(review_zip,'w',zipfile.ZIP_DEFLATED,compresslevel=1) as z:
-        for name in ('Review.html','summary.json','verification.json'):z.write(folder/name,name)
+        for name in ('Review.html','summary.json','verification.json','environment.json'):z.write(folder/name,name)
     print(f'REVIEW READY: {review_zip}\nOpen Review.html to inspect the saved sequence. No new game run required.',flush=True)
     if a.review_only:return
-    files+= [folder/name for name in ('summary.json','verification.json')]
+    files+= [folder/name for name in ('summary.json','verification.json','environment.json')]
     output=a.output or pathlib.Path.cwd()/('GI-Motion-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
     manifest={'schema':'control-gi-motion-r484','pid':a.pid,'complete':True,'frames':[m['frame'] for m in records],'review':summary,'reassembly':'Concatenate chunks in listed order; verify all SHA256 values.'}
     scene.package(a.root,files,output,manifest)

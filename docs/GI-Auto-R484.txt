@@ -8,6 +8,6 @@ Records 16 consecutive evaluated frames with full-screen RR inputs/output, raw G
 
 The 16-frame window is bounded, not a multi-second video guarantee. The STOP cue occurs after frame 4; metadata records frame times. The review tells us whether the event and movement-to-rest transition were actually captured. File completeness alone is not proof that a speckle was captured. Capturing perturbs frame timing substantially; never use it to judge FPS.
 
-Large raw data: approximately 55 GiB at 2560x1440 internal / 4 rays, plus packaging space. Preflight conservatively checks RAM/disk and 32-bit shader addressing. Higher resolutions/ray counts may not fit; capture fails explicitly instead of cropping/skipping. If preflight fails, package diagnostics and send its log, not a new game run.
+Large raw data: approximately 60 GiB at 2560x1440 internal / 4 rays, plus packaging space. Preflight conservatively checks RAM/disk and 32-bit shader addressing. Higher resolutions/ray counts may not fit; capture fails explicitly instead of cropping/skipping. If preflight fails, package diagnostics and send its log, not a new game run.
 
 All files remain until you delete them. The packager validates every frame, all ray stamps/weights and GI reconstruction, creates a review, and hashes ZIP chunks. It reports numerical anomalies separately from missing/corrupt data. It does not claim to inspect RR's internal history or individual shadow-map taps.

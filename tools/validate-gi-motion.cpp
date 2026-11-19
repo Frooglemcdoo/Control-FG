@@ -1,5 +1,7 @@
 // Streaming, bounded-memory verifier for the diagnostic GPU ABI.
 #include <array>
+#include <string>
+#include <stdexcept>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
