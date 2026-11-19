@@ -77,7 +77,7 @@ static void RRInputCaptureGIBatch(unsigned long long frame,ID3D12GraphicsCommand
     DWORD fault=0;bool started=false;rawOkay=RRInputCaptureRecordGuarded(&copy,&native,&raw,&fault,&started,1,true);capture.commandsStarted|=started;
    }
    capture.detailMatched=gi_scene_capture::detailedFrame.load()==frame;
-   if(!rawOkay||!capture.detailMatched){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_SCENE_R480_FAILED frame=%llu raw=%u details=%u resources_retained=1",frame,unsigned(rawOkay),capture.detailMatched);__leave;}
+   if(!rawOkay||!capture.detailMatched){capture.ledger.failed=true;c->policy.phase=P::Failed;Log("GI_SCENE_R481_FAILED frame=%llu raw=%u details=%u resources_retained=1",frame,unsigned(rawOkay),capture.detailMatched);__leave;}
    capture.rawCaptured=true;end=capture.rawOffset+capture.rawBytes;
   }
 #endif

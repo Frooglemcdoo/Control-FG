@@ -38,7 +38,7 @@ def inspect(root, pid):
         require(db.exists() and db.stat().st_size==d['bytes'] and d['red_offset']+d['columns']*d['rows']*d['red_stride']==d['bytes'],'detailed-grid binary size mismatch')
         pair=d.get('paired',{});pb=detail/pair.get('file','missing')
         require(pair.get('same_hits_weights_and_scene') and pair.get('writes_game_outputs') is False and pair.get('before_rr'), 'paired comparison provenance missing')
-        require(pair.get('texture_probe_stride')==128 and pair.get('texture_probe_points')==min(m['width'],512)*min(m['height'],512) and pair.get('texture_probe_offset')==m['width']*m['height']*32 and pair.get('total_file_bytes')==m['width']*m['height']*32+min(m['width'],512)*min(m['height'],512)*128, 'texture probe layout missing/mismatched')
+        require(pair.get('texture_probe_stride')==192 and pair.get('texture_probe_points')==min(m['width'],512)*min(m['height'],512) and pair.get('texture_probe_offset')==m['width']*m['height']*32 and pair.get('total_file_bytes')==m['width']*m['height']*32+min(m['width'],512)*min(m['height'],512)*192, 'texture probe layout missing/mismatched')
         require(pair.get('stride')==32 and pair.get('bytes')==m['width']*m['height']*32 and pb.is_file() and pb.stat().st_size==pair.get('total_file_bytes'), 'paired comparison binary missing/size mismatch')
     for ordinal in (1,2):
         pair=sorted((m for m in records if m.get('capture_ordinal')==ordinal),key=lambda m:m['frame'])

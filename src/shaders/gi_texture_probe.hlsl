@@ -1,6 +1,7 @@
 #ifndef GI_TEXTURE_PROBE
 #define GI_TEXTURE_PROBE
-struct GITextureProbeRecord {uint4 words[8];};
+#include "gi_texture_comparison.hlsl"
+struct GITextureProbeRecord {uint4 words[12];};
 GITextureProbeRecord GIReadTextureProbe(Texture2D<float4> tex,SamplerState samp,float2 uv,uint material,uint index,uint ray,float weight){
  GITextureProbeRecord r=(GITextureProbeRecord)0;
  r.words[0]=uint4(material,index,ray,0);r.words[2]=asuint(float4(uv,weight,0));
@@ -17,6 +18,10 @@ GITextureProbeRecord GIReadTextureProbe(Texture2D<float4> tex,SamplerState samp,
   uint w1,h1,n1;tex.GetDimensions(1,w1,h1,n1);r.words[7]=uint4(w1,h1,n1,0);
   if(w1&&h1){r.words[0].w|=4;uint2 p1=min(uint2(frac(uv)*float2(w1,h1)),uint2(w1-1,h1-1));r.words[6]=asuint(tex.Load(int3(p1,1)));}
  }
+ r.words[8]=asuint(tex.SampleLevel(giDiagnosticLinearWrap,uv,0));
+ r.words[9]=asuint(tex.SampleLevel(giDiagnosticLinearWrap,uv,1));
+ r.words[10]=asuint(GILoadBilinear(tex,uv,0));
+ r.words[11]=asuint(GILoadBilinear(tex,uv,1));
  return r;
 }
 #endif

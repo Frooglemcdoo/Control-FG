@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-scene-capture-r480]
+    branches: [work/gi-scene-capture-r481]
   workflow_dispatch:
 jobs:
   validate:

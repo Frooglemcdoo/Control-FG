@@ -1,6 +1,7 @@
 // Capture-only PSO. Reads the same native resources and producer weights as Lighting.
 // Writes only its private comparison tail: no game UAV, training or guide mutation.
 #define GI_SECONDARY_LIBRARY_ONLY
+#include "gi_texture_comparison.hlsl"
 #include "gi_evaluator_secondary.generated.hlsl"
 #include "gi_frozen_receiver.hlsl"
 #include "gi_auto_sample.hlsl"

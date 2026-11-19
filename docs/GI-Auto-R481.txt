@@ -1,0 +1,12 @@
+ControlTOH GI R481 - combined 4/10 rays, capture-only mip isolation
+
+Install beside Control_DX12.exe. Run ControlTOH/Diagnostics/Start-GI-Auto-R481-4Rays.cmd (or 10Rays).
+GI FIXED, RR ON, FG OFF, RELAX OFF. Capture with Alt+Insert: hold still for the first phase, then follow the slow-pan prompt. Never use F7.
+Run ControlTOH/Diagnostics/Package-GI-Scene.cmd and send the manifest and every scene-part ZIP.
+
+This is a diagnostic build, not a claimed visual fix. Normal GI shaders are unchanged from R480.
+The same captured hits and weights are evaluated with native base-color sampling and sampler-independent bilinear mip 1. Four texel loads perform each diagnostic filtered lookup. Mip 1 falls back to the view's last available level for single-mip views.
+The texture probe additionally records native LOD 0/1, nearest Load 0/1, known linear-wrap sampler LOD 0/1, and explicit bilinear Load 0/1. This distinguishes sampler effects from exposed texture/view behavior without separate camera runs.
+Only the capture PSO has the extra static sampler. Native descriptors, native root signatures, and normal rendering are not modified. No extra rays are traced; no diagnostic result is sent to RR or the game image.
+Capture adds 16 MiB of GPU storage and 16 MiB of readback per frame versus R480 (512x512 grid). Capture speed is not gameplay performance.
+The actual native dynamic sampler descriptor is still unknown; the controlled probe tests its effect without installing per-descriptor tracking hooks.

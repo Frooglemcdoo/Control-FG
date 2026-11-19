@@ -6,6 +6,7 @@
 #include "auto_capture_region.h"
 #include <d3dcompiler.h>
 #include <vector>
+#include "d3d12_diagnostic_sampler.h"
 namespace gi_reuse {
 // Immutable pipeline shared by all in-flight frames. Preparation is outside
 // recording. This owns shaders/root only, not native descriptors/resources.
@@ -19,7 +20,7 @@ public:
  bool materialSamplerKnown=false;
  D3D12_STATIC_SAMPLER_DESC materialSampler{};
  HRESULT Initialize(ID3D12Device* device,ID3D12RootSignature* native,
-                    const void* bytes,SIZE_T size,D3D12_SHADER_BYTECODE shader) {
+                    const void* bytes,SIZE_T size,D3D12_SHADER_BYTECODE shader,bool controlledSampler=false) {
   if(root_||!device||!native||!bytes||!size||!shader.pShaderBytecode||!shader.BytecodeLength)return E_INVALIDARG;
   Microsoft::WRL::ComPtr<ID3D12VersionedRootSignatureDeserializer> decoded;
   auto hr=D3D12CreateVersionedRootSignatureDeserializer(bytes,size,IID_PPV_ARGS(&decoded));if(FAILED(hr))return hr;
@@ -48,6 +49,11 @@ public:
   }
   if(cost>64)return E_INVALIDARG;
   for(UINT i=0;i<rd.NumStaticSamplers;++i)if(rd.pStaticSamplers[i].RegisterSpace==19)return E_INVALIDARG;
+  std::vector<D3D12_STATIC_SAMPLER_DESC> samplers;
+  if(controlledSampler){
+   if(rd.NumStaticSamplers)samplers.assign(rd.pStaticSamplers,rd.pStaticSamplers+rd.NumStaticSamplers);
+   samplers.push_back(GIDiagnosticSampler());rd.NumStaticSamplers=UINT(samplers.size());rd.pStaticSamplers=samplers.data();
+  }
   const UINT first=rd.NumParameters;
   parameters.resize(first+4);
   const auto binding=D3D12AutoTargetBinding::Parameters();

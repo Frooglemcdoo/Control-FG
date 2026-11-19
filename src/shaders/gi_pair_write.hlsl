@@ -6,7 +6,7 @@ uint GIPairBase(){
  uint weights=(trainingWidth*trainingHeight*selection.rayCount*4u+31u)&~31u;
  return GIWeightBase(trainingWidth,trainingHeight,trainingCapacityPacked,selection.rayCount)+weights;
 }
-// One 32-byte record per screen pixel: mip0 RGB + uint flags, mip1 RGB + uint flags.
+// One 32-byte record per screen pixel: native SampleLevel0 RGB + flags, manual bilinear mip1 RGB + flags.
 void GIPairWrite(uint2 pixel,float3 a,uint flagsA,float3 b,uint flagsB){
  if(!GIPairEnabled())return;
  GIAutoTraining v=(GIAutoTraining)0;

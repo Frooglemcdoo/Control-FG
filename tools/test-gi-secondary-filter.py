@@ -13,7 +13,8 @@ class FilterScope(unittest.TestCase):
   self.assertEqual(len(changes),2)
   self.assertTrue(any(x=='struct GIShadingRegisters {' and 'float textureLod;' in y for x,y in changes))
   self.assertTrue(any(x.endswith('// native dword 2338') and 'state.textureLod' in y for x,y in changes))
-  self.assertEqual(a.count('SampleLevel'),b.count('SampleLevel'))
+  self.assertEqual(a.count('SampleLevel')-1,b.count('SampleLevel'))
+  self.assertIn('GISampleSecondaryDiagnostic',b)
  def test_reject_missing_duplicate_or_changed_contract(self):
   a=SOURCE.read_text();line=next(x for x in a.splitlines() if x.endswith('// native dword 2338'))
   for invalid in [a.replace(line,''),a+'\n'+line,a.replace(line,line.replace('g_sLinearWrap','g_sLinearClamp'))]:

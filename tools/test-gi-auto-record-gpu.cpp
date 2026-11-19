@@ -14,6 +14,7 @@ int main()try {
  const char* fixture="cbuffer Selection:register(b0,space19){uint version,sourceFrame,rayCount;float fraction;uint sampleFrame;} RWByteAddressBuffer result:register(u0,space19); [numthreads(8,16,1)]void main(uint3 id:SV_DispatchThreadID){if(all(id==0))result.Store4(0,uint4(rayCount,asuint(fraction),sampleFrame,1234));}";
  ComPtr<ID3DBlob> code;Check(D3DCompile(fixture,strlen(fixture),nullptr,nullptr,nullptr,"main","cs_5_1",0,0,&code,&error));
  D3D12AutoEvaluator evaluator;Check(evaluator.Initialize(d.device.Get(),root.Get(),blob->GetBufferPointer(),blob->GetBufferSize(),{code->GetBufferPointer(),code->GetBufferSize()}));
+ D3D12AutoEvaluator comparison;Check(comparison.Initialize(d.device.Get(),root.Get(),blob->GetBufferPointer(),blob->GetBufferSize(),{code->GetBufferPointer(),code->GetBufferSize()},true));
  ComputeBindingSnapshot bindings;bindings.root=root;bindings.pipeline=nativePSO;bindings.arguments.Root(reinterpret_cast<UINT64>(root.Get()));UINT marker=0;bindings.arguments.Constants(0,0,1,&marker);
  Require(evaluator.Accept(bindings),"fixture native bindings rejected");
  auto guide=d.Upload(std::vector<unsigned char>(GIAutoPublicationBytes));Require(RetainCreatedStorage(guide.Get()),"guide storage");

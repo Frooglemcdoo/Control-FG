@@ -10,7 +10,12 @@ def patch(source,paired=False):
             needle='asfloat(uint4(0x0u,0x0u,0x0u,0x0u)).x'
             if 'g_sMaterialTextureArray' not in line or 'g_sLinearWrap' not in line or line.count(needle)!=1:
                 raise ValueError('Secondary base-color sample contract changed')
-            lines[i]=line.replace(needle,'state.textureLod' if paired else 'GIMaterialTextureLod()');hits+=1
+            if paired:
+                old='g_sMaterialTextureArray[NonUniformResourceIndex((state.r10.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(state.r19.xyxx).xy,'+needle+')'
+                if line.count(old)!=1:raise ValueError('Secondary diagnostic lookup contract changed')
+                lines[i]=line.replace(old,'GISampleSecondaryDiagnostic(g_sMaterialTextureArray[NonUniformResourceIndex((state.r10.wwww).x-0u)],g_sLinearWrap,asfloat(state.r19.xyxx).xy,state.textureLod)')
+            else:lines[i]=line.replace(needle,'GIMaterialTextureLod()')
+            hits+=1
     if hits!=1:raise ValueError('Expected exactly one secondary base-color lookup')
     result='\n'.join(lines)+'\n'
     if paired:

@@ -18,8 +18,8 @@ void GIStoreTextureProbe(uint2 pixel){
    probe=GIReadTextureProbe(g_sMaterialTextureArray[NonUniformResourceIndex(index)],g_sLinearWrap,uv,material,index,ray,red.energy);
   }
  }
- uint base=GIPairBase()/32u+trainingWidth*trainingHeight+pointIndex*4u;
- [unroll]for(uint i=0;i<4;++i){
+ uint base=GIPairBase()/32u+trainingWidth*trainingHeight+pointIndex*6u;
+ [unroll]for(uint i=0;i<6;++i){
   uint4 a=probe.words[2*i],b=probe.words[2*i+1];GIAutoTraining v;
   v.position.x=asfloat(a.x);v.position.y=asfloat(a.y);v.position.z=asfloat(a.z);v.energy=asfloat(a.w);
   v.valid=b.x;v.version=b.y;v.reserved0=b.z;v.reserved1=b.w;autoTraining[base+i]=v;
