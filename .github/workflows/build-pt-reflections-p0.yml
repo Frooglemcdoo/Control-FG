@@ -1549,6 +1549,14 @@ jobs:
           build\test-gi-phase-audit.exe
           if errorlevel 1 exit /b 1
 
+      - name: Build standalone motion verifier
+        if: github.ref_name == 'work/gi-motion-capture-r484'
+        shell: cmd
+        run: |
+          call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
+          cl /nologo /std:c++17 /EHsc /O2 /MT tools\validate-gi-motion.cpp /Fe:build\validate-gi-motion.exe
+          if errorlevel 1 exit /b 1
+
       - name: Package guarded GI test
         shell: powershell
         run: |
@@ -1601,8 +1609,6 @@ jobs:
           if ($out -eq 'ControlTOH-GI-Auto-R484') {
             Copy-Item tools/diagnostics/Package-GI-Scene.cmd,tools/diagnostics/collect-gi-scene.py $diagnostics
             Copy-Item tools/diagnostics/Start-GI-Motion-R484.cmd,tools/diagnostics/Package-GI-Motion.cmd,tools/diagnostics/collect-gi-motion.py $diagnostics
-            cl /nologo /std:c++17 /EHsc /O2 /MT tools/validate-gi-motion.cpp /Fe:build/validate-gi-motion.exe
-            if ($LASTEXITCODE -ne 0) { throw 'Motion verifier build failed' }
             Copy-Item build/validate-gi-motion.exe $diagnostics
             Copy-Item docs/GI-Auto-R484.txt "$out/ControlTOH/README.txt"
             Copy-Item tools/diagnostics/Start-GI-Auto-R484-*.cmd $diagnostics
