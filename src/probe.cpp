@@ -533,8 +533,8 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     const bool resumeGap = previousPresent != 0 && gapPresents > 2;
     const bool startupCandidate = call <= 12;
     const bool periodicCandidate = false; // r20x lean performance branch: no periodic semantic captures
-    const bool baselineSample = (startupCandidate || periodicCandidate) && baselineSampleCount.load() < 32;
-    const bool resumeSample = resumeGap && transitionSampleCount.load() < 32;
+    const bool baselineSample = !control_reblur::Enabled && (startupCandidate || periodicCandidate) && baselineSampleCount.load() < 32;
+    const bool resumeSample = !control_reblur::Enabled && resumeGap && transitionSampleCount.load() < 32;
     bool sample = baselineSample || resumeSample;
 
     if (baselineSample) ++baselineSampleCount;
@@ -600,7 +600,7 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     }
     if (resetFrame) ExtendPathTrace(currentPresent, 12);
 
-    if (resetFrame && !sample && resetTransitionAdded) {
+    if (!control_reblur::Enabled && resetFrame && !sample && resetTransitionAdded) {
         sample = true;
         ++sampleCount;
         CaptureCamera(call, "post_aa_reset");
@@ -852,7 +852,7 @@ static void HookPresent() {
     if(control_compare::enabled.load(std::memory_order_relaxed)){LARGE_INTEGER q{};QueryPerformanceCounter(&q);control_compare::Present(q.QuadPart,count);}
     const bool windowTrace = ShouldPathTrace(count);
     const bool periodicTrace = false; // r20x lean performance branch: no periodic swap capture
-    const bool captureSwap = aaCount.load() > 0 && (windowTrace || periodicTrace) && swapSamples.load() < 160;
+    const bool captureSwap = !control_reblur::Enabled && aaCount.load() > 0 && (windowTrace || periodicTrace) && swapSamples.load() < 160;
     bool enumerateAll = false;
     if (captureSwap) {
         ++swapSamples;
@@ -994,7 +994,7 @@ static void HookHUDRender(void* object) {
     const auto present = presentCount.load();
     const bool windowTrace = ShouldPathTrace(present);
     const bool trace = (windowTrace || count <= 16) && ++hudRenderTraceCount <= 96;
-    const bool targetTrace = aaCount.load() > 0 && (windowTrace || hudTargetFrameSamples.load() < 64);
+    const bool targetTrace = !control_reblur::Enabled && aaCount.load() > 0 && (windowTrace || hudTargetFrameSamples.load() < 64);
     if (targetTrace && hudTargetFrameSamples.load() < 96) ++hudTargetFrameSamples;
     unsigned long long engineFrame = 0;
     DWORD frameFault = 0;

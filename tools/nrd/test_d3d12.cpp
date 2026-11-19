@@ -304,5 +304,5 @@ int main(int argc,char** argv){try{
  unsigned errors=0;for(UINT64 i=0;i<messages->GetNumStoredMessages();++i){SIZE_T bytes=0;Check(messages->GetMessage(i,nullptr,&bytes));std::vector<unsigned char> storage(bytes);auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());Check(messages->GetMessage(i,message,&bytes));
   if(message->Severity==D3D12_MESSAGE_SEVERITY_ERROR||message->Severity==D3D12_MESSAGE_SEVERITY_CORRUPTION){++errors;std::fprintf(stderr,"D3D12: %s\n",message->pDescription);}}
  Require(errors==0,"D3D12 validation errors");
- std::puts("PASS actual RELAX_DIFFUSE D3D12 dispatch chain and independent history; clean debug layer");return 0;
+ std::puts("PASS configured NRD D3D12 dispatch chain and independent history; clean debug layer");return 0;
  }catch(const std::exception&e){std::fprintf(stderr,"%s\n",e.what());return 1;}}
