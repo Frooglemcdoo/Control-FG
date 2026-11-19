@@ -5,15 +5,15 @@ class Scene(unittest.TestCase):
   for ordinal,first in [(1,100),(2,200)]:
    for i in range(2):
     frame=first+i;p=root/f'rr-input-c1-7-{frame}';p.mkdir()
-    data=dict(scene_capture_build='R481',scene_full_resolution=True,rr_active=True,rr_result=1,output_captured=True,export_stride=1,pre_gi_captured=True,pre_gi_frame=frame,frame=frame,pid=7,width=2,height=2,capture_ordinal=ordinal,pair_index=i,previous_frame=first if i else 0,resources=[dict(file='rr.rgba16f',copied=True,width=2,height=2,pixel_bytes=8)])
+    data=dict(scene_capture_build='R482',scene_full_resolution=True,rr_active=True,rr_result=1,output_captured=True,export_stride=1,pre_gi_captured=True,pre_gi_frame=frame,frame=frame,pid=7,width=2,height=2,capture_ordinal=ordinal,pair_index=i,previous_frame=first if i else 0,resources=[dict(file='rr.rgba16f',copied=True,width=2,height=2,pixel_bytes=8)])
     (p/'metadata.json').write_text(json.dumps(data));(p/'rr.rgba16f').write_bytes(bytes(range(32)))
     hit=dict(full_screen=True,raw_gi_captured=True,detailed_frame_matched=1,frame=frame,gpu_fence_completed=True,all_batches_recorded=True,recorded_batches=1,file='gi-hit-slices.bin',bytes=64,raw_gi=dict(width=2,height=2,offset=32,bytes=32),rays_per_batch=4,batches=[dict(region_width=2,region_height=2,region_count=1,captured_slices=4,resources=[dict(offset=0,slice_region_bytes=8)])])
     (p/'gi-hit-slices.json').write_text(json.dumps(hit));(p/'gi-hit-slices.bin').write_bytes(bytes(range(64)))
-    d=root/f'gi-scene-detail-7-{frame}';d.mkdir();(d/'metadata.json').write_text(json.dumps(dict(schema='gi-scene-details-r481',frame=frame,gpu_completed=True,width=2,height=2,file='details.bin',bytes=768,red_offset=0,columns=2,rows=2,red_stride=192,paired=dict(baseline_sampling='native_samplelevel0',comparison_sampling='sampler_independent_bilinear_mip1_clamped_to_view',file='paired-mips.bin',bytes=128,total_file_bytes=896,texture_probe_offset=128,texture_probe_stride=192,texture_probe_points=4,stride=32,same_hits_weights_and_scene=True,writes_game_outputs=False,before_rr=True))));(d/'details.bin').write_bytes(b'a'*768);(d/'paired-mips.bin').write_bytes(b'p'*896)
+    d=root/f'gi-scene-detail-7-{frame}';d.mkdir();(d/'metadata.json').write_text(json.dumps(dict(schema='gi-scene-details-r482',frame=frame,gpu_completed=True,width=2,height=2,file='details.bin',bytes=768,red_offset=0,columns=2,rows=2,red_stride=192,guides=dict(file='guide-tables.bin',bytes=688128,table_bytes=344064,stride=84,slots=4096,output_offset=0,input_offset=344064,immutable_input_used_by_both_stages=True,selection=dict(version=1,sourceFrame=frame-4,rayCount=4,fraction=.25,sampleFrame=frame)),paired=dict(baseline_sampling='native_samplelevel0',comparison_sampling='sampler_independent_bilinear_mip1_clamped_to_view',file='paired-mips.bin',bytes=128,total_file_bytes=896,texture_probe_offset=128,texture_probe_stride=192,texture_probe_points=4,stride=32,same_hits_weights_and_scene=True,writes_game_outputs=False,before_rr=True))));(d/'details.bin').write_bytes(b'a'*768);(d/'paired-mips.bin').write_bytes(b'p'*896);(d/'guide-tables.bin').write_bytes(bytes(688128))
  def test_round_trip_and_bounds(self):
   with tempfile.TemporaryDirectory() as t:
    root=pathlib.Path(t);self.fixture(root);records,issues,files=m.inspect(root,7);self.assertEqual(len(records),4);self.assertEqual(issues,[])
-   manifest={};out=m.package(root,files,root/'out',manifest,chunk_bytes=100,part_bytes=250)
+   manifest={};out=m.package(root,files,root/'out',manifest,chunk_bytes=100000,part_bytes=250000)
    for f in manifest['files']:
     data=b''
     for c in f['chunks']:
@@ -21,7 +21,7 @@ class Scene(unittest.TestCase):
      self.assertEqual(hashlib.sha256(chunk).hexdigest(),c['sha256']);self.assertEqual(c['offset'],len(data));data+=chunk
     self.assertEqual(data,(root/f['path']).read_bytes());self.assertEqual(hashlib.sha256(data).hexdigest(),f['sha256'])
    for p in manifest['parts']:
-    with zipfile.ZipFile(out/p['file']) as z:self.assertLessEqual(sum(i.file_size for i in z.infolist()),250)
+    with zipfile.ZipFile(out/p['file']) as z:self.assertLessEqual(sum(i.file_size for i in z.infolist()),250000)
  def test_missing_paired_capture_rejected(self):
   with tempfile.TemporaryDirectory() as t:
    root=pathlib.Path(t);self.fixture(root);(root/'gi-scene-detail-7-100/paired-mips.bin').unlink()
@@ -37,16 +37,24 @@ class Scene(unittest.TestCase):
    root=pathlib.Path(t);self.fixture(root)
    for p in root.glob('rr-input-c1-*/metadata.json'):
     d=json.loads(p.read_text());d['scene_capture_build']='R480';p.write_text(json.dumps(d))
-   result=self.run_cli(root);self.assertNotEqual(result.returncode,0);self.assertIn('No R481',result.stderr);self.assertFalse((root/'result').exists())
- def test_cli_selects_r481_even_when_r480_is_newer(self):
+   result=self.run_cli(root);self.assertNotEqual(result.returncode,0);self.assertIn('No R482',result.stderr);self.assertFalse((root/'result').exists())
+ def test_cli_selects_r482_even_when_r480_is_newer(self):
   with tempfile.TemporaryDirectory() as t:
    root=pathlib.Path(t);self.fixture(root)
    old=root/'rr-input-c1-99-900';old.mkdir();p=old/'metadata.json';p.write_text(json.dumps(dict(scene_capture_build='R480',pid=99)));os.utime(p,(2000000000,2000000000))
    result=self.run_cli(root);self.assertEqual(result.returncode,0,result.stderr)
    with zipfile.ZipFile(root/'result/scene-manifest.zip') as z:d=json.loads(z.read('scene-manifest.json'))
-   self.assertEqual(d['pid'],7);self.assertEqual(d['schema'],'control-gi-scene-r481');self.assertTrue(d['complete']);self.assertFalse(any('99-900' in f['path'] for f in d['files']))
+   self.assertEqual(d['pid'],7);self.assertEqual(d['schema'],'control-gi-scene-r482');self.assertTrue(d['complete']);self.assertFalse(any('99-900' in f['path'] for f in d['files']))
  def test_cli_rejects_incomplete_current_capture(self):
   with tempfile.TemporaryDirectory() as t:
    root=pathlib.Path(t);self.fixture(root);(root/'gi-scene-detail-7-100/paired-mips.bin').unlink()
    result=self.run_cli(root);self.assertNotEqual(result.returncode,0);self.assertIn('no upload ZIPs were created',result.stderr);self.assertFalse((root/'result').exists())
+ def test_cli_rejects_missing_guide_table(self):
+  with tempfile.TemporaryDirectory() as t:
+   root=pathlib.Path(t);self.fixture(root);(root/'gi-scene-detail-7-100/guide-tables.bin').unlink()
+   result=self.run_cli(root);self.assertNotEqual(result.returncode,0);self.assertIn('frozen guide binary',result.stderr);self.assertFalse((root/'result').exists())
+ def test_cli_rejects_wrong_guide_selection(self):
+  with tempfile.TemporaryDirectory() as t:
+   root=pathlib.Path(t);self.fixture(root);p=root/'gi-scene-detail-7-100/metadata.json';d=json.loads(p.read_text());d['guides']['selection']['sampleFrame']=99;p.write_text(json.dumps(d))
+   result=self.run_cli(root);self.assertNotEqual(result.returncode,0);self.assertIn('frozen guide selection mismatch',result.stderr);self.assertFalse((root/'result').exists())
 if __name__=='__main__':unittest.main()

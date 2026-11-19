@@ -1,0 +1,9 @@
+ControlTOH R482: frozen guide coverage audit, combined 4/10 rays
+
+Install beside Control_DX12.exe. Run ControlTOH/Diagnostics/Start-GI-Auto-R482-4Rays.cmd. Set GI FIXED, RR ON, FG OFF, RELAX OFF. Press Alt+Insert and follow the still/pan prompts. Never F7.
+After Saved, run ControlTOH/Diagnostics/Package-GI-Scene.cmd. Send the NEW manifest and all parts. This collector accepts R482 only and refuses incomplete captures.
+
+This is a diagnostic build. Rendering and all GI shaders are unchanged from R481.
+R481 analysis confirmed correct captured cosine directions, bounded weights, and hit positions compatible with half-float quantization. Most selected head-region red candidates have weights consistent with no targeted proposal coverage. The exact guide tables are required to independently verify that inference and the full mixture PDF.
+R482 saves the input/output guide tables that were already copied by the existing capture path, plus the immutable selection constants used by the producer/evaluator. No new GPU copy, allocation, ray, dispatch, or shader is introduced. The exporter retains the existing completed readback buffer until its file write finishes.
+Additional uncompressed disk data: 688128 bytes per frame, about 2.63 MiB for four frames. Normal gameplay has no new work. The table is not a replacement light source or a visual fix.
