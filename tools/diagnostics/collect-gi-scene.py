@@ -73,7 +73,7 @@ def inspect(root, pid, motion=False):
     return records,issues,sorted(files)
 
 
-def package(root,files,output,manifest,chunk_bytes=64*1024*1024,part_bytes=256*1024*1024):
+def package(root,files,output,manifest,chunk_bytes=64*1024*1024,part_bytes=256*1024*1024,compresslevel=6,compressed_limit=False):
     total=sum(path.stat().st_size for path in files)
     output.mkdir(parents=True,exist_ok=False)
     print(f"Output: {output.resolve()}",flush=True)
@@ -89,12 +89,12 @@ def package(root,files,output,manifest,chunk_bytes=64*1024*1024,part_bytes=256*1
                 while True:
                     data=source.read(chunk_bytes)
                     if not data:break
-                    if archive is None or part_size+len(data)>part_bytes:
+                    if archive is None or part_size+len(data)+(1048576 if compressed_limit else 0)>part_bytes:
                         if archive:archive.close()
                         number+=1;name=f'scene-part-{number:03d}.zip';manifest['parts'].append({'file':name})
-                        archive=zipfile.ZipFile(output/name,'w',zipfile.ZIP_DEFLATED,compresslevel=6,allowZip64=True);part_size=0
+                        archive=zipfile.ZipFile(output/name,'w',zipfile.ZIP_DEFLATED,compresslevel=compresslevel,allowZip64=True);part_size=0
                     name=f'payload/{len(manifest["files"]):05d}-{len(entry["chunks"]):05d}.bin'
-                    archive.writestr(name,data);part_size+=len(data);digest.update(data)
+                    archive.writestr(name,data);part_size=archive.fp.tell() if compressed_limit else part_size+len(data);digest.update(data)
                     print(f'  Part {number:03d}: {offset+len(data)}/{entry["bytes"]} source bytes',flush=True)
                     entry['chunks'].append({'part':number,'entry':name,'offset':offset,'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()});offset+=len(data)
             if offset!=entry['bytes']:raise ValueError(f'File changed while packaging: {rel}')

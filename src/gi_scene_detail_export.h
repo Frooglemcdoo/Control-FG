@@ -1,5 +1,6 @@
 #pragma once
 namespace gi_scene_capture {
+inline SRWLOCK motionDiskLock=SRWLOCK_INIT;
 struct DetailExport {
  Microsoft::WRL::ComPtr<ID3D12Resource> buffer,paired,guides,motion;
  gi_reuse::GIAutoSelection selection{};
@@ -14,6 +15,7 @@ inline bool WriteCompletedBuffer(ID3D12Resource* buffer,UINT64 bytes,const std::
 }
 inline DWORD WINAPI ExportDetail(void* context) noexcept {
  std::unique_ptr<DetailExport> job(static_cast<DetailExport*>(context));bool okay=false;
+ struct DiskGuard {bool held;explicit DiskGuard(bool active):held(active){if(held)AcquireSRWLockExclusive(&motionDiskLock);}~DiskGuard(){if(held)ReleaseSRWLockExclusive(&motionDiskLock);}} guard(job->motionBytes!=0);
  try {
   wchar_t env[32768]{};const auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",env,32768);
   if(n&&n<32768){

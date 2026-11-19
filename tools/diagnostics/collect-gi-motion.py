@@ -1,7 +1,7 @@
 """Validate a complete motion session, reconstruct GI, and build a full-screen review.
 Only reads saved game data; never injects keys or alters rendering/settings.
 """
-import argparse,base64,hashlib,platform,datetime,importlib.util,json,os,pathlib,struct,subprocess,sys,traceback,zlib,zipfile
+import argparse,base64,hashlib,platform,tempfile,datetime,importlib.util,json,os,pathlib,struct,subprocess,sys,traceback,zlib,zipfile
 SPEC=importlib.util.spec_from_file_location('scene',pathlib.Path(__file__).with_name('collect-gi-scene.py'))
 scene=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(scene)
 
@@ -96,9 +96,18 @@ def main():
     files+= [folder/name for name in ('summary.json','verification.json','environment.json')]
     output=a.output or pathlib.Path.cwd()/('GI-Motion-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
     manifest={'schema':'control-gi-motion-r484','pid':a.pid,'complete':True,'frames':[m['frame'] for m in records],'review':summary,'reassembly':'Concatenate chunks in listed order; verify all SHA256 values.'}
-    scene.package(a.root,files,output,manifest)
+    scene.package(a.root,files,output,manifest,part_bytes=400*1024*1024,compresslevel=1,compressed_limit=True)
     print(f'COMPLETE: {output}\nSend Motion-Review.zip first. Full data stays available in the scene-manifest.zip and scene-part ZIPs. Do not delete the originals.',flush=True)
+class Tee:
+    def __init__(self,console,log):self.console,self.log=console,log
+    def write(self,text):self.console.write(text);self.log.write(text);self.flush();return len(text)
+    def flush(self):self.console.flush();self.log.flush()
 if __name__=='__main__':
-    try:main()
-    except Exception:
-        traceback.print_exc();sys.exit(1)
+    log=pathlib.Path(tempfile.gettempdir())/'ControlTOH-GI-Motion-Packager.log'
+    with log.open('w',encoding='utf-8') as handle:
+        sys.stdout=Tee(sys.stdout,handle);sys.stderr=Tee(sys.stderr,handle)
+        try:main()
+        except Exception:
+            traceback.print_exc();sys.exit(1)
+        finally:
+            sys.stdout=sys.stdout.console;sys.stderr=sys.stderr.console

@@ -17,13 +17,13 @@ echo %PACKLOG%
 echo You can open that log while packaging is running.
 where py >nul 2>nul
 if errorlevel 1 goto python
-py -3 -u "%~dp0collect-gi-motion.py" %PACKARGS% >"%PACKLOG%" 2>&1
+py -3 -u "%~dp0collect-gi-motion.py" %PACKARGS%
 goto result
 :python
-python -u "%~dp0collect-gi-motion.py" %PACKARGS% >"%PACKLOG%" 2>&1
+python -u "%~dp0collect-gi-motion.py" %PACKARGS%
 :result
 set "PACKRESULT=%ERRORLEVEL%"
-type "%PACKLOG%"
+rem Live progress was displayed and saved by the Python collector.
 echo.
 echo Packager exit code: %PACKRESULT%
 echo Log: %PACKLOG%
