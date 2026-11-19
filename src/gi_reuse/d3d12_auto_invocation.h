@@ -61,7 +61,7 @@ public:
 
   pixelBytes=capturePixels?UINT64(GIAuditWidth(w))*GIAuditHeight(h)*sizeof(GIAutoPixelAudit):0;
 #ifdef CONTROL_GI_REGIONAL
-  if(capturePixels)pixelBytes+=GIAuditProducerBytes(w,h,rayCount);
+  if(capturePixels)pixelBytes+=GIAuditProducerBytes(w,h,rayCount)+GIAuditRedBytes(w,h);
 #endif
   if(!training)hr=Buffer(device,UINT64(capacity)*GIAutoTrainingStride+pixelBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true,training);if(FAILED(hr))return hr;
   const UINT captureControl[]={w,h,GIAuditStepControl(step,roiX),GIAuditCapacityControl(capacity,roiY,capturePixels)};

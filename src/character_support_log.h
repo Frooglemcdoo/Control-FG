@@ -13,7 +13,7 @@ inline bool IsLifecycleEvent(const char* format) noexcept {
         "GI_FROZEN_R426",
         "GI_FROZEN_R428",
         "GI_FROZEN_R429",
-        "PROBE", "GI_FAULT_R467", "GI_AUTO_R467", "GI_AUTO_R473",
+        "PROBE", "GI_FAULT_R467", "GI_AUTO_R467", "GI_AUTO_R474",
         "GI_TOGGLE_R308",
         "GI_RAYS_R439",
         "GI_COST_R440A",

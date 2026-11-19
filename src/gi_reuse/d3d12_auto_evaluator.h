@@ -102,7 +102,7 @@ public:
      !(training->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
      training->GetDesc().Width<UINT64(capacity)*GIAutoTrainingStride+(pixels?(UINT64(GIAuditWidth(width))*GIAuditHeight(height)*sizeof(GIAutoPixelAudit)
 #ifdef CONTROL_GI_REGIONAL
-       +GIAuditProducerBytes(width,height,target.Selection().rayCount)
+       +GIAuditProducerBytes(width,height,target.Selection().rayCount)+GIAuditRedBytes(width,height)
 #endif
        ):0)||
      !training->GetGPUVirtualAddress()||training->GetGPUVirtualAddress()%8||

@@ -1,0 +1,30 @@
+R474 - Red contribution source trace (diagnostic build)
+
+Install beside Control_DX12.exe preserving folders. One DLL, two launchers:
+ControlTOH/Diagnostics/Start-GI-Auto-R474-4Rays.cmd
+ControlTOH/Diagnostics/Start-GI-Auto-R474-10Rays.cmd
+Keep GI FIXED, RR ON, RELAX OFF, FG OFF. Start with four rays.
+
+Rendering equations, sampling allocation and source guide construction remain
+R473. This build is for evidence, not another attempted visual fix.
+Alt+arrows moves the box; Alt+Insert starts the 5-second countdown.
+Keep the affected face/hair area inside the box and reproduce the speckles
+until Capture complete. Send the compact logs. Never press F7.
+
+The capture independently ranks locally isolated red pixels, rather than
+only the brightest luminance peaks. For each selected pixel it records the
+ray contributing the most weighted red excess, actual producer direction,
+hit material ID/position, secondary-shading RGB, receiver throughput RGB,
+raw ray RGB, sampling weight, fade, raw mean RGB and final GI RGB.
+A red candidate may be real red scene content; this does not classify errors.
+The selected red ray may differ from the separately logged luminance peak.
+
+Scope: source/evaluator GI only. These records are not the bound RR inputs
+or reconstructed output and must not be represented as an end-to-end RR
+trace. They determine whether red outliers originate in this GI stage; a
+matched RR-boundary capture remains necessary to attribute reconstruction.
+
+Capture adds a 64-byte record per ROI pixel and matching readback (~32MiB
+extra at 512x512 per in-flight capture). No such allocation/readback outside
+capture; no extra rays/passes. Shader register cost remains to be measured.
+Normal rendering is not intentionally changed; no FPS gain is claimed.
