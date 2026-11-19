@@ -24,7 +24,7 @@ void giAutoRaygen() {
  uint packet=GIPacketAddress(pixel);
  if(packet!=0xffffffff)producerPackets.Store4(packet,uint4(asuint(receiver.origin),receiver.valid?selection.sampleFrame:0));
  if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i){materials[uint3(pixel,i)]=65534;GIStoreWeight(pixel,i,0);}return;}
- GIAutoTargets frozen=GISelectRegional(receiver.origin,receiver.normal,selection);GIAutoPrepared prepared=GIAutoPrepare(receiver.origin,frozen,selection);
+ GIAutoTargets frozen=GISelectRegional(receiver.origin,receiver.normal,selection);GIAutoPrepared prepared=GIAutoPrepare(receiver.origin,receiver.normal,frozen,selection);
  [loop]for(uint rayIndex=0;rayIndex<selection.rayCount;++rayIndex) {
   GIAutoDraw draw=GIAutoSamplePrepared(pixel,system[69].z,0,rayIndex,receiver.normal,prepared,selection);
   GIStoreWeight(pixel,rayIndex,draw.weight);

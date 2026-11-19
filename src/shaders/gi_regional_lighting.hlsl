@@ -35,7 +35,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   g_tLinearDepth.Load(int3(id.xy,0)).x,g_tClipDepth.Load(int3(id.xy,0)).x,giCB0);
  if(!source.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
  GIAutoTargets frozen=(GIAutoTargets)0;GIAutoPrepared prepared=(GIAutoPrepared)0;
- if(auditIndex!=0xffffffff){frozen=GISelectRegional(source.origin,source.normal,selection);prepared=GIAutoPrepare(source.origin,frozen,selection);}
+ if(auditIndex!=0xffffffff){frozen=GISelectRegional(source.origin,source.normal,selection);prepared=GIAutoPrepare(source.origin,source.normal,frozen,selection);}
  float alpha=prepared.alpha;
  float3 throughput=asfloat(receiver.r3.xyz);float depth=asfloat(receiver.r1.w);
  float3 weightedSum=0;bool valid=true;

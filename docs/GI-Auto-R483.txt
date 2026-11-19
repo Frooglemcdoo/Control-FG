@@ -1,0 +1,9 @@
+ControlTOH R483: receiver-facing proposal eligibility, combined 4/10 rays
+
+Extract beside Control_DX12.exe. Use ControlTOH/Diagnostics/Start-GI-Auto-R483-4Rays.cmd (or 10Rays). GI FIXED, RR ON, FG OFF, RELAX OFF. Never F7. Alt+Insert still/pan capture remains available; Package-GI-Scene.cmd accepts R483 only.
+
+R482 confirmed neck speckle: frame 5620, output (557,1137), nearby peak (558,1139), internal GI spike (372,759). The reconstructed receiver normal faces away from both selected guide centers. The bright hit lies outside both guide cones. This does not establish every reported speckle has the same cause.
+R483 filters proposals per receiver BEFORE tracing. Back-centered or enclosing bounds are ineligible. One eligible bound fills both guide components; no eligible bounds selects the existing full cosine fallback. Both tracing and evaluation use the same preparation, and the actual producer weight is transported unchanged.
+No post-hit color clamp, retained radiance, extra rays, dispatches, buffers or scene-specific material IDs are introduced. No visual or FPS improvement is claimed before an in-game test. Genuine lighting still has full sampling support.
+
+Check the neck spot and movement, then other previously noisy areas. Judge FPS outside capture. If an artifact remains, the full-screen capture can help trace it; saved files remain in place.

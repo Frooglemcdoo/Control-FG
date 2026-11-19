@@ -26,7 +26,7 @@ float2 GIAutoOwned10(uint2 pixel,uint frame,uint batch,uint ray,uint seed) {
 }
 // Receiver/guide invariants are prepared once outside the per-ray loop.
 struct GIAutoPrepared {GTCone a,b;float alpha;};
-GIAutoPrepared GIAutoPrepare(float3 origin,GIAutoTargets targets,GIAutoSelection selection) {
+GIAutoPrepared GIAutoPrepare(float3 origin,float3 normal,GIAutoTargets targets,GIAutoSelection selection) {
  GIAutoPrepared p=(GIAutoPrepared)0;p.alpha=GIAutoAlpha(targets,selection);
  if(p.alpha>0){
   uint first=(targets.validMask&1)?0:1;
@@ -35,6 +35,15 @@ GIAutoPrepared GIAutoPrepare(float3 origin,GIAutoTargets targets,GIAutoSelection
   a.center=float3(targets.bounds[first].center.x,targets.bounds[first].center.y,targets.bounds[first].center.z);a.radius=targets.bounds[first].radius;
   b.center=float3(targets.bounds[second].center.x,targets.bounds[second].center.y,targets.bounds[second].center.z);b.radius=targets.bounds[second].radius;
   p.a=GTMakeCone(origin,a);p.b=GTMakeCone(origin,b);
+  // Receiver-specific proposal eligibility, decided before any ray is drawn.
+  // Shared regional keys do not guarantee that targets face this exact normal.
+  // Keep only front-centered bounds outside the receiver; retain full cosine
+  // support for every rejected direction. Never reject or clamp a shaded hit.
+  bool useA=p.a.oneMinusCos<1&&dot(normal,p.a.axis)>0;
+  bool useB=p.b.oneMinusCos<1&&dot(normal,p.b.axis)>0;
+  if(!useA&&!useB)p.alpha=0;
+  else if(!useA)p.a=p.b;
+  else if(!useB)p.b=p.a;
  }
  return p;
 }
@@ -72,6 +81,6 @@ GIAutoDraw GIAutoSamplePrepared(uint2 pixel,uint frame,uint batch,uint ray,
 }
 GIAutoDraw GIAutoSample(uint2 pixel,uint frame,uint batch,uint ray,float3 origin,
                       float3 normal,GIAutoTargets targets,GIAutoSelection selection) {
- return GIAutoSamplePrepared(pixel,frame,batch,ray,normal,GIAutoPrepare(origin,targets,selection),selection);
+ return GIAutoSamplePrepared(pixel,frame,batch,ray,normal,GIAutoPrepare(origin,normal,targets,selection),selection);
 }
 #endif

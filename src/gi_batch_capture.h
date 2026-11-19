@@ -63,7 +63,7 @@ static bool GIBatchCaptureExport(const GIBatchCapture& c,const std::wstring& dir
  D3D12_RANGE written{0,0};c.readback->Unmap(0,&written);
  if(!okay)return false;
  std::ostringstream out;
- out<<"{\"schema\":\""<<(c.fullScreen?"gi-hit-slices-r482":"gi-hit-slices-r271")<<"\",\"full_screen\":"<<(c.fullScreen?"true":"false")<<",\"raw_gi_captured\":"<<(c.rawCaptured?"true":"false")<<",\"detailed_frame_matched\":"<<c.detailMatched<<",\"frame\":"<<c.ledger.frame
+ out<<"{\"schema\":\""<<(c.fullScreen?"gi-hit-slices-r483":"gi-hit-slices-r271")<<"\",\"full_screen\":"<<(c.fullScreen?"true":"false")<<",\"raw_gi_captured\":"<<(c.rawCaptured?"true":"false")<<",\"detailed_frame_matched\":"<<c.detailMatched<<",\"frame\":"<<c.ledger.frame
     <<",\"expected_batches\":"<<c.ledger.expected<<",\"recorded_batches\":"<<c.ledger.recorded
     <<",\"rays_per_batch\":"<<c.ledger.rays<<",\"gpu_fence_completed\":true,\"all_batches_recorded\":true"
     <<",\"physical_array_slices\":true,\"srv_view_mapping_verified\":false,\"light_operands_captured\":false"

@@ -19,7 +19,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
  if(!gi_auto_dispatch::Enabled()||!device||!desc||!desc->pRootSignature||!native)return;
  try {
   unsigned char bytes[16384]{};UINT n=sizeof(bytes);
-  auto hr=desc->pRootSignature->GetPrivateData(rt_spot_capture_audit::kRootBytes,&n,bytes);if(FAILED(hr)||n>sizeof(bytes)||!n){static std::atomic<bool> reported{false};if(!reported.exchange(true))Log("GI_AUTO_R482 pipeline_ready=0 reason=root_metadata hr=0x%08lX",static_cast<unsigned long>(hr));return;}
+  auto hr=desc->pRootSignature->GetPrivateData(rt_spot_capture_audit::kRootBytes,&n,bytes);if(FAILED(hr)||n>sizeof(bytes)||!n){static std::atomic<bool> reported{false};if(!reported.exchange(true))Log("GI_AUTO_R483 pipeline_ready=0 reason=root_metadata hr=0x%08lX",static_cast<unsigned long>(hr));return;}
   Microsoft::WRL::ComPtr<gi_reuse::D3D12AutoPipelineBundle> bundle;bundle.Attach(new(std::nothrow) gi_reuse::D3D12AutoPipelineBundle);if(!bundle)return;
   hr=bundle->evaluator.Initialize(device,desc->pRootSignature,bytes,n,{gi_auto_shader::kLighting,sizeof(gi_auto_shader::kLighting)});
 #ifdef CONTROL_GI_REGIONAL
@@ -30,13 +30,13 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 #endif
   if(SUCCEEDED(hr))hr=bundle->builder.Initialize(device,code);
   if(SUCCEEDED(hr)){const auto& s=bundle->evaluator.materialSampler;
-   Log("GI_AUTO_R482 material_sampler static_known=%u register=5 space=1 filter=%u min_lod=%.9g max_lod=%.9g bias=%.9g address_u=%u address_v=%u",unsigned(bundle->evaluator.materialSamplerKnown),unsigned(s.Filter),double(s.MinLOD),double(s.MaxLOD),double(s.MipLODBias),unsigned(s.AddressU),unsigned(s.AddressV));}
+   Log("GI_AUTO_R483 material_sampler static_known=%u register=5 space=1 filter=%u min_lod=%.9g max_lod=%.9g bias=%.9g address_u=%u address_v=%u",unsigned(bundle->evaluator.materialSamplerKnown),unsigned(s.Filter),double(s.MinLOD),double(s.MaxLOD),double(s.MipLODBias),unsigned(s.AddressU),unsigned(s.AddressV));}
 
   if(SUCCEEDED(hr)){bundle->nativeRoot=desc->pRootSignature;Microsoft::WRL::ComPtr<ID3D12Object> object;hr=native->QueryInterface(IID_PPV_ARGS(&object));
    if(SUCCEEDED(hr))hr=object->SetPrivateDataInterface(key,bundle.Get());}
   if(SUCCEEDED(hr)){std::lock_guard<std::mutex> lock(mutex);latest=bundle;gi_auto_dispatch::rootReady=&RootReady;}
-  Log("GI_AUTO_R482 pipeline_ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
- }catch(...){Log("GI_AUTO_R482 pipeline_ready=0 reason=exception");}
+  Log("GI_AUTO_R483 pipeline_ready=%u hr=0x%08lX",unsigned(SUCCEEDED(hr)),static_cast<unsigned long>(hr));
+ }catch(...){Log("GI_AUTO_R483 pipeline_ready=0 reason=exception");}
 #else
  (void)device;(void)desc;(void)native;
 #endif

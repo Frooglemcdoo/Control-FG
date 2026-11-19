@@ -4,15 +4,15 @@ RWStructuredBuffer<float4> output:register(u0);
 static const uint count=262144;
 [numthreads(64,1,1)]
 void main(uint3 id:SV_DispatchThreadID) {
- uint testCase=id.y,scenario=testCase%14,index=id.x;
- if(testCase>=28||index>=count)return;
+ uint testCase=id.y,scenario=testCase%18,index=id.x;
+ if(testCase>=36||index>=count)return;
  GIAutoTargets targets=(GIAutoTargets)0;
  targets.schema=0x41544731;targets.version=7;targets.frame=12;targets.validMask=3;
  targets.bounds[0].center.z=3;targets.bounds[0].radius=.5;
  targets.bounds[1].center.x=1;targets.bounds[1].center.z=2;targets.bounds[1].radius=.3;
  targets.counts[0]=targets.counts[1]=42;targets.scores[0]=targets.scores[1]=123;
  GIAutoSelection selection;selection.version=7;selection.sourceFrame=12;selection.rayCount=10;selection.fraction=.2;selection.sampleFrame=897;
- if(testCase>=14){selection.rayCount=4;selection.fraction=.25;}
+ if(testCase>=18){selection.rayCount=4;selection.fraction=.25;}
  if(scenario==1){targets.bounds[0].center.z=-3;targets.bounds[1].center.z=-2;}
  if(scenario==2)targets.validMask=0;
  if(scenario==3)selection.sourceFrame=13;
@@ -20,7 +20,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  if(scenario==5)targets.bounds[1].radius=asfloat(0x7fc00000);
  // Narrow source has cosine probability .0001. Cases 6/8 align the guide,
  // case 7 moves the guide away, and case 9 blocks the source completely.
- if(scenario>=6){
+ if(scenario>=6&&scenario<14){
   float3 axis=scenario==8?float3(.6,0,.8):float3(0,0,1);
   if(scenario==7)axis=float3(.6,0,.8);
   targets.bounds[0].center.x=axis.x*3;targets.bounds[0].center.z=axis.z*3;targets.bounds[0].radius=.03;
@@ -30,20 +30,26 @@ void main(uint3 id:SV_DispatchThreadID) {
   targets.bounds[1]=targets.bounds[0];
   if(scenario==8)targets.bounds[1].center.x=-targets.bounds[0].center.x;
  }
- float alpha=GIAutoAlpha(targets,selection);
+ // Back-facing/sliver, one surviving target, and enclosing-bound cases.
+ if(scenario==14){targets.bounds[0].center.x=2.7;targets.bounds[0].center.z=-1.35;targets.bounds[1].center.x=-2.9;targets.bounds[1].center.z=-.62;targets.bounds[0].radius=targets.bounds[1].radius=.75;}
+ if(scenario==15)targets.bounds[1].center.z=-2;
+ if(scenario==16)targets.bounds[0].radius=4;
+ if(scenario==17)targets.bounds[0].radius=targets.bounds[1].radius=4;
  float3 sum=0;float oldSum=0;uint valid=1;
  GIAutoSelection oldSelection=selection;oldSelection.fraction=selection.rayCount==4?.5f:.4f;
- GIAutoPrepared prepared=GIAutoPrepare(0,targets,selection);
+ GIAutoPrepared prepared=GIAutoPrepare(0,float3(0,0,1),targets,selection);
+ float alpha=prepared.alpha;
+ GIAutoTargets referenceTargets=targets;if(alpha==0)referenceTargets.validMask=0;
  [loop]for(uint i=0;i<selection.rayCount;++i){
   GIAutoDraw draw=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,float3(0,0,1),prepared,selection);
-  R462GIAutoDraw reference=R462GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),targets,oldSelection);
+  R462GIAutoDraw reference=R462GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),referenceTargets,oldSelection);
   if(alpha==0&&(any(draw.direction!=reference.direction)||draw.weight!=reference.weight||draw.range!=reference.range||draw.traceRay!=reference.traceRay))valid=0;
-  if(alpha==0&&index<4096){
+  if((scenario==2||scenario==3||scenario==5)&&index<4096){
    float3 origin=float3(-82+(index%17)*.11,24+(index%13)*.07,106+(index%19)*.09);
    if(index%8==0)origin=float3(targets.bounds[0].center.x,targets.bounds[0].center.y,targets.bounds[0].center.z);
    float3 normal=normalize(float3(float(index%11)-5,float(index%7)-3,1));
-   GIAutoDraw spatial=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,normal,GIAutoPrepare(origin,targets,selection),selection);
-   R462GIAutoDraw oldSpatial=R462GIAutoSample(uint2(index%256,index/256),897,0,i,origin,normal,targets,oldSelection);
+   GIAutoDraw spatial=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,normal,GIAutoPrepare(origin,normal,targets,selection),selection);
+   R462GIAutoDraw oldSpatial=R462GIAutoSample(uint2(index%256,index/256),897,0,i,origin,normal,referenceTargets,oldSelection);
    if(any(spatial.direction!=oldSpatial.direction)||spatial.weight!=oldSpatial.weight||spatial.range!=oldSpatial.range||spatial.traceRay!=oldSpatial.traceRay)valid=0;
   }
   GIAutoDraw other=GIAutoSample(uint2(index%256,index/256),901,0,i,0,float3(0,0,1),targets,selection);
@@ -53,7 +59,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(all(draw.direction==fresh.direction)&&draw.range==fresh.range)valid=0;
   // Closed-form cosine integrals: constant 4, E[z^2]=1/2, P[z>.8]=.36.
   GIPoint rgb;rgb.x=4;rgb.y=draw.direction.z*draw.direction.z;rgb.z=draw.direction.z>.8?1:0;
-  if(scenario>=6){
+  if(scenario>=6&&scenario<14){
    float3 lightAxis=scenario==8?float3(.6,0,.8):float3(0,0,1);
    rgb.y=dot(draw.direction,lightAxis)>=sqrt(1-.0001)?10000:0;
    if(scenario==8)rgb.y+=(dot(draw.direction,float3(-.6,0,.8))>=sqrt(1-.0001)?10000:0);
@@ -66,10 +72,10 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(!all(isfinite(draw.direction))||abs(dot(draw.direction,draw.direction)-1)>.00001||
      draw.weight<0||draw.weight>(selection.rayCount==4?1.33334:1.25001)||draw.range<0||draw.range>=1||
      (!draw.traceRay&&draw.weight!=0))valid=0;
-  if(index==0){output[28*count+testCase*20+i*2]=float4(draw.direction,draw.weight);
-   output[28*count+testCase*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
+  if(index==0){output[36*count+testCase*20+i*2]=float4(draw.direction,draw.weight);
+   output[36*count+testCase*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
  }
  float3 result=sum/float(selection.rayCount);
  output[testCase*count+index]=float4(result,valid);
- if(scenario==7)output[28*count+28*20+(testCase>=14?count:0)+index]=float4(oldSum/selection.rayCount,0,0,0);
+ if(scenario==7)output[36*count+36*20+(testCase>=18?count:0)+index]=float4(oldSum/selection.rayCount,0,0,0);
 }
