@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include "settings_schema.generated.h"
 #include "visual_settings_policy.h"
+#include "reblur_mode.h"
 
 // Renderer adapters only. UI metadata and the shared validation contract are
 // defined in settings_schema.json. Callers serialize access with fgSettingsMutex.
@@ -57,7 +58,8 @@ inline unsigned Read(Key key) {
         if (current) manualTarget = current;
         return manualTarget;
     }
-    case Key::RayReconstruction: return unsigned(control_rr::RRUserRequested());
+    case Key::RayReconstruction: return control_reblur::Mode();
+    case Key::ReblurSharpening: return control_reblur::sharpening.load();
     case Key::GlobalIlluminationSamples: return control_rr::GISampleRequested();
     case Key::GlassReflections: return unsigned(PTReflectionUserRequested());
     case Key::TextureStreamingBudget: return GetFGTextureStreamingBudgetMs();
@@ -81,6 +83,7 @@ inline std::array<unsigned, kOptionCount> Snapshot(bool defaults = false) {
 }
 inline bool Enabled(const Option& option) {
     if (!Visible(option)) return false;
+    if(option.key==Key::ReblurSharpening && control_reblur::Mode()==2)return false;
     if (option.key == Key::DirectStorage && !IsFGDirectStorageSupported()) return false;
     for (const auto& dependency : option.dependencies)
         if (Read(dependency.key) != dependency.value) return false;
@@ -107,8 +110,10 @@ inline bool Write(const Option& option, int value, WriteReason reason = WriteRea
         break;
     case Key::RayReconstruction:
         control_rr::RRUserMarkPresetRestartRequired(false);
+        control_reblur::Select(requested);
         control_rr::RRUserRequest(requested != 0);
         break;
+    case Key::ReblurSharpening: control_reblur::Sharpen(requested); break;
     case Key::GlobalIlluminationSamples: control_rr::GISampleSelect(requested); break;
     case Key::GlassReflections: PTReflectionUserRequest(requested != 0); break;
     case Key::TextureStreamingBudget:

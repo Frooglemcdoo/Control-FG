@@ -25,14 +25,14 @@ using Microsoft::WRL::ComPtr;
 namespace hooks=native_lighting::gi_compute_hooks;
 struct Epoch {
  UINT width=0,height=0;bool poisoned=false;
- bool rrRequested=false;
+ bool rrRequested=false;unsigned modeRevision=0;
  ComPtr<ID3D12RootSignature> root;
  std::unique_ptr<control_nrd::NativeReceiver> receiver;
  std::unique_ptr<control_nrd::DiffusePipeline> filter;
 };
 #ifdef CONTROL_REBLUR_ONLY
 struct SpecularEpoch {
- UINT width=0,height=0;bool poisoned=false,rrRequested=false;
+ UINT width=0,height=0;bool poisoned=false,rrRequested=false;unsigned modeRevision=0;
  std::unique_ptr<control_nrd::SpecularGuides> guides;
  std::unique_ptr<control_nrd::DiffusePipeline> filter;
 };
@@ -87,7 +87,7 @@ static void Reason(const char* reason) noexcept {
 }
 static bool Requested() noexcept {
 #ifdef CONTROL_REBLUR_ONLY
- return !control_rr::RRUserRuntimePaused();
+ return control_reblur::Active()&&!control_rr::RRUserRuntimePaused();
 #else
  if(!control_rr::RRUserRuntimeWorkRequested())return false;
  const auto request=rt_surface_source::EffectiveRequest();
@@ -242,10 +242,10 @@ static void ProducerDispatch() noexcept {
   // Never overwrite guides/history referenced by an unsubmitted earlier list.
   for(auto& r:recordings)if(!r->reset&&!r->submitted&&((r->list.Get()!=c.list&&(r->exported||r->filtered))||r->filtered)){Reason("producer_submission_pending");return;}
   if(!epoch||epoch->poisoned||epoch->width!=w||epoch->height!=h||epoch->root.Get()!=b.root.Get()||
-     (control_reblur::Enabled&&epoch->rrRequested!=control_rr::RRUserRequested())){
+     (control_reblur::Enabled&&(epoch->rrRequested!=control_rr::RRUserRequested()||epoch->modeRevision!=control_reblur::revision.load()))){
    std::vector<Epoch*> held;for(auto& r:recordings)if(r->epoch&&std::find(held.begin(),held.end(),r->epoch.get())==held.end())held.push_back(r->epoch.get());
    if(held.size()>=3){Reason("epoch_retirement_pending");return;}
-   auto e=std::make_shared<Epoch>();e->width=w;e->height=h;e->root=b.root;e->rrRequested=control_rr::RRUserRequested();
+   auto e=std::make_shared<Epoch>();e->width=w;e->height=h;e->root=b.root;e->rrRequested=control_rr::RRUserRequested();e->modeRevision=control_reblur::revision.load();
    e->receiver=std::make_unique<control_nrd::NativeReceiver>(PTGlassRuntime::device.Get(),b.root.Get(),D3D12_SHADER_BYTECODE{kNrd_receiver,sizeof(kNrd_receiver)},w,h);
    e->filter=std::make_unique<control_nrd::DiffusePipeline>(PTGlassRuntime::device.Get(),w,h,D3D12_SHADER_BYTECODE{kNrd_prepare,sizeof(kNrd_prepare)},D3D12_SHADER_BYTECODE{kNrd_finish,sizeof(kNrd_finish)});retiredWork.clear();epoch=e;
   }
@@ -331,8 +331,9 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
    };
    detail.end=[](void*,unsigned ticket) noexcept {native_lighting::performance::End(ticket);};
   }
+  control_nrd::DiffusePipeline::Constants conversion;conversion.sharpening=control_reblur::Sharpness();
   epoch->filter->BeginAttempt();
-  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,{}, {c.table.heap,0,0},*record->work,reserve,&reservation,&graphics,details?&detail:nullptr)){
+  if(!control_nrd::NativeTransaction::Record(*epoch->filter,c.rays,b,f,reinterpret_cast<UINT64>(c.queue),inputs,conversion, {c.table.heap,0,0},*record->work,reserve,&reservation,&graphics,details?&detail:nullptr)){
    if(record->work->diffuse.commandsRecorded){epoch->poisoned=true;guideFrame=0;}
    else record->work.reset();
    Reason(epoch->filter->LastFailure());return false;

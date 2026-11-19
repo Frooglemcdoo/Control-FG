@@ -86,6 +86,7 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
 }
 static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
 #ifdef CONTROL_REBLUR_ONLY
+ if(control_reblur::Active()){
  // Reuse the native filter's resources/copies, but replace its temporal dispatch
  // and request zero native spatial passes in both reconstruction modes.
  const auto nrd=control_nrd_bridge::producer.load();
@@ -102,7 +103,9 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;
   control_rr_gi::ownedDenoise=previousOwned;control_rr_gi::rawBypass=previousRaw;control_rr_gi::spatialSteady=previousSteady;
  }
-#else
+ return;
+ }
+#endif
  const unsigned capture=rt_surface_source::EffectiveRequest();
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEntry);
  const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&
@@ -181,7 +184,6 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   lastMode=mode;lastOutlier=outlier;lastView=view;
   SetLastError(saved);
  }
-#endif
 }
 
 #if defined(CONTROL_RR_GI_SEQUENCE) || defined(CONTROL_NRD_GI)

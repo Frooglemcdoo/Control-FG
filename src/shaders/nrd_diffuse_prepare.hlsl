@@ -19,6 +19,7 @@ cbuffer Conversion : register(b0) {
  float RadianceScale; // fixed across an accumulation epoch; inverse on output
  float DenoisingRange;
  uint InputContractValid;
+ float Sharpening;
 };
 [numthreads(8,8,1)]
 void main(uint3 tid:SV_DispatchThreadID) {

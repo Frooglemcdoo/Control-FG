@@ -34,9 +34,9 @@ public:
  struct Bindings {std::array<External,6> input;External output;};
  struct Constants {
   UINT extent[2]{};float motionScale[2]{1,1};float motionBias[2]{};
-  float radianceScale=1,denoisingRange=500000;UINT valid=1;
+  float radianceScale=1,denoisingRange=500000;UINT valid=1;float sharpening=0;
  };
- static_assert(sizeof(Constants)==36);
+ static_assert(sizeof(Constants)==40);
  struct Work {
   D3D12Backend::Recording relax;
   bool commandsRecorded=false,heapSwitched=false;
@@ -76,7 +76,7 @@ public:
  UINT MaxDescriptors()const noexcept{return 22+backend->MaxDescriptors();}
  bool Record(ID3D12GraphicsCommandList* list,const Frame& frame,std::uint64_t queue,Bindings& bindings,Constants conversion,Work& work,D3D12Backend::Arena arena={nullptr,0,0},ReserveArena reserve=nullptr,const void* reserveContext=nullptr,bool allowHeapSwitch=false,const Timing* timing=nullptr){
   auto* originalHeap=arena.heap;
-  if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1)return Reject("filter_owner_or_extent_contract");
+  if(failed||!list||work.heap||frame.width!=width||frame.height!=height||!std::isfinite(conversion.radianceScale)||conversion.radianceScale<=0||conversion.valid!=1||!std::isfinite(conversion.sharpening)||conversion.sharpening<0||conversion.sharpening>1)return Reject("filter_owner_or_extent_contract");
   if(!reserve&&arena.heap&&(arena.count<22||arena.first>UINT32_MAX-22))return Reject("filter_descriptor_arena_bounds");
   for(float v:conversion.motionScale)if(!std::isfinite(v))return Reject("filter_conversion_motion_scale");
   for(float v:conversion.motionBias)if(!std::isfinite(v))return Reject("filter_conversion_motion_bias");
@@ -145,7 +145,7 @@ public:
    for(UINT i=0;i<6;++i)srv(bindings.input[i].resource,i);
    for(UINT i=0;i<5;++i)uav(textures[i].Get(),6+i);
    srv(textures[5].Get(),11);srv(textures[4].Get(),12);srv(bindings.input[RawGI].resource,13);
-   for(UINT i=14;i<17;++i)srv(nullptr,i);uav(bindings.output.resource,17);for(UINT i=18;i<22;++i)uav(nullptr,i);
+   srv(bindings.input[NormalRoughness].resource,14);srv(bindings.input[ViewZ].resource,15);srv(nullptr,16);uav(bindings.output.resource,17);for(UINT i=18;i<22;++i)uav(nullptr,i);
    auto bind=[&](ID3D12PipelineState* ps,UINT base){auto* heap=work.heap.Get();if(!arena.heap)list->SetDescriptorHeaps(1,&heap);list->SetComputeRootSignature(root.Get());list->SetPipelineState(ps);list->SetComputeRootConstantBufferView(0,work.constants->GetGPUVirtualAddress());list->SetComputeRootDescriptorTable(1,gh(base));list->SetComputeRootDescriptorTable(2,gh(base+6));};
    commands=true;work.commandsRecorded=true;
    if(arena.heap&&arena.heap!=originalHeap){auto* h=arena.heap;list->SetDescriptorHeaps(1,&h);work.heapSwitched=true;}

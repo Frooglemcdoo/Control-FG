@@ -166,6 +166,7 @@ int main(int argc,char** argv){try{
 #ifdef CONTROL_NRD_PIPELINE_TEST
   auto& recording=transaction.diffuse;
   control_nrd::DiffusePipeline::Constants conversion;
+  conversion.sharpening=frame>1?1.f:0.f; // full strength must preserve flat light, finite output and silhouettes
   // Mimic the native renderer's already-bound heap with a reserved prefix.
   ComPtr<ID3D12DescriptorHeap> nativeHeap;D3D12_DESCRIPTOR_HEAP_DESC arenaDesc{};
   arenaDesc.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;arenaDesc.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;

@@ -2,10 +2,17 @@
 #include "../../src/nrd_diffuse_session.h"
 #include "../../src/nrd_diffuse_camera.h"
 #include "../../src/nrd_specular_handoff.h"
+#include "../../src/reblur_mode.h"
 #include <cstdio>
 #include <cstdlib>
 static void Require(bool good,const char* what){if(!good){std::fprintf(stderr,"FAIL %s\n",what);std::exit(1);}}
 int main(){
+ control_reblur::Select(1);auto revision=control_reblur::revision.load();
+ control_reblur::Select(2);Require(control_reblur::Mode()==2&&!control_reblur::Active(),"native RR excludes REBLUR");
+ Require(control_reblur::revision.load()==revision+1,"mode transition resets history even when RR stays on");
+ control_reblur::Sharpen(100);Require(control_reblur::Sharpness()==0,"native RR bypasses sharpening");
+ control_reblur::Select(0);control_reblur::Sharpen(0);
+
  control_nrd::SpecularHandoff handoff;
  control_rr_reflection::Context context{10,20,30,40,50};
  handoff.Arm(99,context);Require(handoff.Take(context)==99,"reflection handoff after lighting dispatch");

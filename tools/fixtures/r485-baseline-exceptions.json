@@ -42,5 +42,41 @@
       "#else\n    if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);\n#endif\n    const double perfNativeCpu=RRPerfElapsed(perfNativeStart);\n    RRPerfEnd(perf);\n    RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,\n",
       "#else\n    if(rrAttempt)RRInputCaptureAfterEvaluation(list,in.frame,in.output,result);\n#endif\n#ifdef CONTROL_REBLUR_ONLY\n    // State changes only: confirm actual RR evaluation, not just menu intent.\n    {static unsigned last=~0u;static const char* lastReason=nullptr;\n     const bool success=(result&0xFFF00000u)!=0xBAD00000u;\n     const unsigned status=unsigned(control_rr::RRUserRequested())|(unsigned(rrAttempt)<<1)|(unsigned(success)<<2)|(unsigned(rrNativeFrame.Stopped())<<3);\n     const char* reason=rrNativeFrame.StopReason();\n     if(status!=last||reason!=lastReason){last=status;lastReason=reason;\n      Log(\"REBLUR_RR requested=%u evaluated=%u success=%u stopped=%u reason=%s frame=%llu\",unsigned(control_rr::RRUserRequested()),unsigned(rrAttempt),unsigned(rrAttempt&&success),unsigned(rrNativeFrame.Stopped()),reason?reason:\"none\",in.frame);}\n    }\n#endif\n    const double perfNativeCpu=RRPerfElapsed(perfNativeStart);\n    RRPerfEnd(perf);\n    RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,\n"
     ]
+  ],
+  "src/rr_native_frame.h": [
+    [
+      "}\nstatic bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height,\n bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {\n rrNativeSpecularSamplePatch.BeginFrame(0);\n if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);\n const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;\n",
+      "}\nstatic bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height,\n bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {\n#ifdef CONTROL_REBLUR_ONLY\n static unsigned revision=~0u;const unsigned currentRevision=control_reblur::revision.load();\n if(revision!=currentRevision){revision=currentRevision;reset=true;}\n#endif\n rrNativeSpecularSamplePatch.BeginFrame(0);\n if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);\n const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;\n"
+    ],
+    [
+      " auto* scope=rrNativeSpecularScope;\n if(!rrNativeFrameEnabled||!scope){rrNativeTemporalBindOriginal(technique);return;}\n#ifdef CONTROL_REBLUR_ONLY\n rrNativeTemporalBindOriginal(technique);scope->nativeFilterBound=true;return;\n#endif\n if(scope->preserveNativeFiltering){\n  rrNativeTemporalBindOriginal(technique);\n",
+      " auto* scope=rrNativeSpecularScope;\n if(!rrNativeFrameEnabled||!scope){rrNativeTemporalBindOriginal(technique);return;}\n#ifdef CONTROL_REBLUR_ONLY\n if(control_reblur::Active()){rrNativeTemporalBindOriginal(technique);scope->nativeFilterBound=true;return;}\n#endif\n if(scope->preserveNativeFiltering){\n  rrNativeTemporalBindOriginal(technique);\n"
+    ],
+    [
+      " if(!rrNativeFrameEnabled||!scope){rrNativeDispatchOriginal(state,groups);return;}\n const DWORD saved=GetLastError();\n#ifdef CONTROL_REBLUR_ONLY\n const auto callbacks=control_nrd_bridge::specular.load();\n scope->attempted=true;\n scope->recorded=scope->nativeFilterBound&&rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&callbacks&&callbacks->filter();\n scope->failed=!scope->recorded;\n if(!scope->recorded)rrNativeDispatchOriginal(state,groups);\n SetLastError(saved);return;\n#endif\n auto access=rrReflectionAccess;access.current=&RRReflectionCurrent;access.user=nullptr;\n if(scope->preserveNativeFiltering){\n",
+      " if(!rrNativeFrameEnabled||!scope){rrNativeDispatchOriginal(state,groups);return;}\n const DWORD saved=GetLastError();\n#ifdef CONTROL_REBLUR_ONLY\n if(control_reblur::Active()){\n const auto callbacks=control_nrd_bridge::specular.load();\n scope->attempted=true;\n scope->recorded=scope->nativeFilterBound&&rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&callbacks&&callbacks->filter();\n scope->failed=!scope->recorded;\n if(!scope->recorded)rrNativeDispatchOriginal(state,groups);\n SetLastError(saved);return;\n }\n#endif\n auto access=rrReflectionAccess;access.current=&RRReflectionCurrent;access.user=nullptr;\n if(scope->preserveNativeFiltering){\n"
+    ],
+    [
+      "}\nstatic void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {\n#ifdef CONTROL_REBLUR_ONLY\n const auto callbacks=control_nrd_bridge::specular.load();\n control_rr_specular::Scope reblurScope{};\n auto reblurAccess=rrReflectionAccess;reblurAccess.current=&RRReflectionCurrent;reblurAccess.user=nullptr;\n",
+      "}\nstatic void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {\n#ifdef CONTROL_REBLUR_ONLY\n if(control_reblur::Active()){\n const auto callbacks=control_nrd_bridge::specular.load();\n control_rr_specular::Scope reblurScope{};\n auto reblurAccess=rrReflectionAccess;reblurAccess.current=&RRReflectionCurrent;reblurAccess.user=nullptr;\n"
+    ],
+    [
+      " rrNativeLightingComplete=reblurScope.recorded&&!reblurScope.failed;\n if(!rrNativeLightingComplete&&rrNativeFrame.Selected())rrNativeFrame.Fail(\"reblur_specular_failed\");\n return;\n#endif\n control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);\n if(!rrNativeFrameEnabled){\n",
+      " rrNativeLightingComplete=reblurScope.recorded&&!reblurScope.failed;\n if(!rrNativeLightingComplete&&rrNativeFrame.Selected())rrNativeFrame.Fail(\"reblur_specular_failed\");\n return;\n }\n#endif\n control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);\n if(!rrNativeFrameEnabled){\n"
+    ]
+  ],
+  "src/rr_gi_temporal_native.h": [
+    [
+      "}\nstatic void RRNativeRunGIFilter(void* color,void* history,unsigned passes){\n#ifdef CONTROL_REBLUR_ONLY\n // Reuse the native filter's resources/copies, but replace its temporal dispatch\n // and request zero native spatial passes in both reconstruction modes.\n const auto nrd=control_nrd_bridge::producer.load();\n",
+      "}\nstatic void RRNativeRunGIFilter(void* color,void* history,unsigned passes){\n#ifdef CONTROL_REBLUR_ONLY\n if(control_reblur::Active()){\n // Reuse the native filter's resources/copies, but replace its temporal dispatch\n // and request zero native spatial passes in both reconstruction modes.\n const auto nrd=control_nrd_bridge::producer.load();\n"
+    ],
+    [
+      "  rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;\n  control_rr_gi::ownedDenoise=previousOwned;control_rr_gi::rawBypass=previousRaw;control_rr_gi::spatialSteady=previousSteady;\n }\n#else\n const unsigned capture=rt_surface_source::EffectiveRequest();\n rt_surface_source::Record(capture,rt_surface_source::Event::GIEntry);\n const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&\n",
+      "  rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;\n  control_rr_gi::ownedDenoise=previousOwned;control_rr_gi::rawBypass=previousRaw;control_rr_gi::spatialSteady=previousSteady;\n }\n return;\n }\n#endif\n const unsigned capture=rt_surface_source::EffectiveRequest();\n rt_surface_source::Record(capture,rt_surface_source::Event::GIEntry);\n const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&\n"
+    ],
+    [
+      "  lastMode=mode;lastOutlier=outlier;lastView=view;\n  SetLastError(saved);\n }\n#endif\n}\n\n#if defined(CONTROL_RR_GI_SEQUENCE) || defined(CONTROL_NRD_GI)\n",
+      "  lastMode=mode;lastOutlier=outlier;lastView=view;\n  SetLastError(saved);\n }\n}\n\n#if defined(CONTROL_RR_GI_SEQUENCE) || defined(CONTROL_NRD_GI)\n"
+    ]
   ]
 }

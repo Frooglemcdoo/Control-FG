@@ -417,6 +417,10 @@ static bool RRNativeReady(unsigned width,unsigned height) noexcept {
 }
 static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigned width,unsigned height,
  bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {
+#ifdef CONTROL_REBLUR_ONLY
+ static unsigned revision=~0u;const unsigned currentRevision=control_reblur::revision.load();
+ if(revision!=currentRevision){revision=currentRevision;reset=true;}
+#endif
  rrNativeSpecularSamplePatch.BeginFrame(0);
  if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);
  const DWORD saved=GetLastError();unsigned long long frame=0;DWORD fault=0;bool supported=false,active=false;
@@ -562,7 +566,7 @@ static void RRNativeHookTemporalBind(void* technique) {
  auto* scope=rrNativeSpecularScope;
  if(!rrNativeFrameEnabled||!scope){rrNativeTemporalBindOriginal(technique);return;}
 #ifdef CONTROL_REBLUR_ONLY
- rrNativeTemporalBindOriginal(technique);scope->nativeFilterBound=true;return;
+ if(control_reblur::Active()){rrNativeTemporalBindOriginal(technique);scope->nativeFilterBound=true;return;}
 #endif
  if(scope->preserveNativeFiltering){
   rrNativeTemporalBindOriginal(technique);
@@ -611,12 +615,14 @@ static void RRNativeHookDispatch(void* state,const void* groups) {
  if(!rrNativeFrameEnabled||!scope){rrNativeDispatchOriginal(state,groups);return;}
  const DWORD saved=GetLastError();
 #ifdef CONTROL_REBLUR_ONLY
+ if(control_reblur::Active()){
  const auto callbacks=control_nrd_bridge::specular.load();
  scope->attempted=true;
  scope->recorded=scope->nativeFilterBound&&rrNativeCopy.StateMatches(reinterpret_cast<std::uintptr_t>(state))&&callbacks&&callbacks->filter();
  scope->failed=!scope->recorded;
  if(!scope->recorded)rrNativeDispatchOriginal(state,groups);
  SetLastError(saved);return;
+ }
 #endif
  auto access=rrReflectionAccess;access.current=&RRReflectionCurrent;access.user=nullptr;
  if(scope->preserveNativeFiltering){
@@ -846,6 +852,7 @@ static void RRReportSpecularProducer() noexcept {
 }
 static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {
 #ifdef CONTROL_REBLUR_ONLY
+ if(control_reblur::Active()){
  const auto callbacks=control_nrd_bridge::specular.load();
  control_rr_specular::Scope reblurScope{};
  auto reblurAccess=rrReflectionAccess;reblurAccess.current=&RRReflectionCurrent;reblurAccess.user=nullptr;
@@ -863,6 +870,7 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
  rrNativeLightingComplete=reblurScope.recorded&&!reblurScope.failed;
  if(!rrNativeLightingComplete&&rrNativeFrame.Selected())rrNativeFrame.Fail("reblur_specular_failed");
  return;
+ }
 #endif
  control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);
  if(!rrNativeFrameEnabled){

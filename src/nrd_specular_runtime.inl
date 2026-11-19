@@ -38,10 +38,10 @@ static void SpecularProducer(void* owner) noexcept {
   const UINT w=UINT(source.material.shape.width),h=source.material.shape.height;
   // Guides cannot be overwritten while a prior list has not been submitted.
   for(auto& r:recordings)if(!r->reset&&!r->submitted&&r->specularEpoch&&r->specularGuides){SpecularReason("specular_submission_pending");return;}
-  if(!specularEpoch||specularEpoch->poisoned||specularEpoch->width!=w||specularEpoch->height!=h||specularEpoch->rrRequested!=control_rr::RRUserRequested()){
+  if(!specularEpoch||specularEpoch->poisoned||specularEpoch->width!=w||specularEpoch->height!=h||specularEpoch->rrRequested!=control_rr::RRUserRequested()||specularEpoch->modeRevision!=control_reblur::revision.load()){
    std::vector<SpecularEpoch*> held;for(auto& r:recordings)if(r->specularEpoch&&std::find(held.begin(),held.end(),r->specularEpoch.get())==held.end())held.push_back(r->specularEpoch.get());
    if(held.size()>=3){SpecularReason("specular_epoch_retirement");return;}
-   auto next=std::make_shared<SpecularEpoch>();next->width=w;next->height=h;next->rrRequested=control_rr::RRUserRequested();
+   auto next=std::make_shared<SpecularEpoch>();next->width=w;next->height=h;next->rrRequested=control_rr::RRUserRequested();next->modeRevision=control_reblur::revision.load();
    next->guides=std::make_unique<control_nrd::SpecularGuides>(PTGlassRuntime::device.Get(),w,h,D3D12_SHADER_BYTECODE{kNrd_specular_guides,sizeof(kNrd_specular_guides)});
    next->filter=std::make_unique<control_nrd::DiffusePipeline>(PTGlassRuntime::device.Get(),w,h,D3D12_SHADER_BYTECODE{kNrd_specular_native_prepare,sizeof(kNrd_specular_native_prepare)},D3D12_SHADER_BYTECODE{kNrd_finish,sizeof(kNrd_finish)},control_nrd::Signal::Specular);
    specularEpoch=next;
@@ -94,7 +94,8 @@ static bool SpecularDispatch()noexcept {
    if(FAILED(PTGlassRuntime::device->CreateDescriptorHeap(&desc,IID_PPV_ARGS(&r.work->privateHeap))))return "specular_descriptor_allocation";
    arena={r.work->privateHeap.Get(),0,r.maximum};return nullptr;
   };
-  if(!control_nrd::NativeTransaction::Record(*specularEpoch->filter,nativeList.Get(),binding,frame,current.queue,inputs,{}, {binding.heaps[0].Get(),0,0},*record->specularWork,reserve,&reservation,&graphics)){
+  control_nrd::DiffusePipeline::Constants conversion;conversion.sharpening=control_reblur::Sharpness();
+  if(!control_nrd::NativeTransaction::Record(*specularEpoch->filter,nativeList.Get(),binding,frame,current.queue,inputs,conversion, {binding.heaps[0].Get(),0,0},*record->specularWork,reserve,&reservation,&graphics)){
    if(record->specularWork->diffuse.commandsRecorded)specularEpoch->poisoned=true;SpecularReason("specular_filter_record");return false;
   }
   record->specularFiltered=true;specularGuideFrame=0;specularLastTicks=now.QuadPart;specularLastFrame=frame.frame;
