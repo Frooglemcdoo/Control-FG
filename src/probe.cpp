@@ -576,9 +576,13 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
         Log("AA_SHARPNESS_OVERRIDE call=%llu present=%llu input=%.9g applied=%.9g scope=native_sr_dlaa rr_requested=0",
             call,currentPresent,double(f3),double(appliedF3));
     }
+#ifndef CONTROL_REBLUR_ONLY
     RRInputCaptureSetNativeTextures(textures,9,engineFrame);
+#endif
     const bool result = argumentsReady&&originalAA(t1,t2,t3,t4,t5,t6,t7,t8,t9,flag,d1,d2,f1,f2,appliedF3);
+#ifndef CONTROL_REBLUR_ONLY
     RRInputCaptureSetNativeTextures(nullptr,0,0);
+#endif
     MarkControlDLSSReady(call, result);
 
     // Reset is an NGX input populated inside the original DLSS wrapper, so read
@@ -878,7 +882,9 @@ static void HookPresent() {
     RRReflectionAfterPresent(count); // Owner stays null in this VRAM build; temporal access remains active.
     RRDistanceAfterPresent();
     RRVramLifecycleAfterPresent(count);
+#ifndef CONTROL_REBLUR_ONLY
     RRInputCaptureAfterPresent(count);
+#endif
     RRDiffuseAfterPresent(count);
     RRPerfAfterPresent(count);
     NativeCpuPoll(count);
@@ -1549,7 +1555,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
             return TRUE;
         }
         Log("HOOK_INSTALLED label=CONTROL_COMMAND_QUEUE_CTOR");
+#ifndef CONTROL_REBLUR_ONLY
         gi_scene_audit::Install(renderer,d3d);
+#endif
 #ifdef CONTROL_GI_AUTO_TARGETS
         Log("GI_AUTO_R484 startup=1 requested=%u guided_live=%u diagnostics=%u",unsigned(gi_auto_dispatch::Enabled()),unsigned(gi_reuse::GuidedLiveEnabled()),unsigned(control_diagnostics::Active()));
         Log("GI_AUTO_R484 weights=producer_fp32 secondary_texture_mip=%u weight_bytes_per_pixel_4=16 weight_bytes_per_pixel_10=40",unsigned(gi_scene_capture::TextureMipOne()));

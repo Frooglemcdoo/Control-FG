@@ -9,7 +9,9 @@ inline void PublishCaptureActivity(bool otherCapture,bool rrCapture,bool ownedSc
  captureActive.store(otherCapture||rrCapture);
 }
 inline bool Active() noexcept {
-#ifdef CONTROL_ON_DEMAND_DIAGNOSTICS
+#ifdef CONTROL_REBLUR_ONLY
+ return false;
+#elif defined(CONTROL_ON_DEMAND_DIAGNOSTICS)
  return captureActive.load(std::memory_order_relaxed);
 #else
  return true;

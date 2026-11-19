@@ -85,11 +85,25 @@ int main(){
  Require(cameras.PreparedFrame()->settings.accumulationMode==nrd::AccumulationMode::CLEAR_AND_RESTART,"original return must reset history");
  Require(cameras.Submitted(7,6),"original reset submitted");
  moving.frame=7;Require(cameras.Prepare(moving,7),"original continuous");
+#ifdef CONTROL_REBLUR_ONLY
+ Require(cameras.Plan().size()==balancedCount,"RELAX profile must not change REBLUR dispatch count");
+ control_nrd::Session specular(control_nrd::Signal::Specular);
+ Require(specular.Prepare(moving,7),"specular independent history");
+ bool specIn=false,specOut=false;
+ for(const auto& dispatch:specular.Plan())for(const auto& resource:dispatch.resources){
+  specIn|=resource.type==nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST;
+  specOut|=resource.type==nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST;
+  Require(resource.type!=nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,"specular must not bind diffuse radiance");
+ }
+ Require(specIn&&specOut,"specular input and output bindings");
+ Require(specular.Submitted(7,1),"specular independent submission");
+#else
  Require(cameras.Plan().size()==balancedCount+1,"balanced must remove exactly one spatial dispatch");
+#endif
  gi_reuse::GraphicsTableState graphics;Require(!graphics.known,"graphics admission before reset");
  graphics.Reset();graphics.Root(7);graphics.Table(3,99);graphics.Root(7);unsigned replayed=0;
  graphics.Replay([&](unsigned slot,std::uint64_t address){Require(slot==3&&address==99,"graphics table mismatch");++replayed;});Require(replayed==1,"same graphics root lost table");
  graphics.HeapChange();Require(!graphics.mask,"heap switch retained stale graphics tables");graphics.Table(3,101);graphics.Root(8);Require(!graphics.mask,"root switch retained stale graphics tables");
  graphics.Table(64,1);Require(!graphics.known,"invalid graphics table index accepted");graphics.Reset();graphics.Invalidate();graphics.Root(9);Require(!graphics.known,"unknown graphics state became trusted without reset");
- std::printf("PASS actual NRD RELAX_DIFFUSE: %u pipelines, %u permanent / %u transient textures; %zu restart / %zu continuous dispatches; input guards, submission and reset lifecycle\n",desc.pipelinesNum,desc.permanentPoolSize,desc.transientPoolSize,restartCount,continuousCount);
+ std::printf("PASS actual NRD configured denoiser: %u pipelines, %u permanent / %u transient textures; %zu restart / %zu continuous dispatches; input guards, submission and reset lifecycle\n",desc.pipelinesNum,desc.permanentPoolSize,desc.transientPoolSize,restartCount,continuousCount);
 }

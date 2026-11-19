@@ -1,0 +1,25 @@
+name: Validate REBLUR diffuse and specular
+on:
+  push:
+    branches: [work/reblur-only-r485]
+    paths: ['src/**', 'tools/nrd/**', '.github/workflows/reblur-validation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reblur:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure embedded REBLUR D3D12 shaders
+        run: cmake -S tools/nrd -B nrd-build -DCONTROL_NRD_GPU=ON -DCONTROL_REBLUR_ONLY=ON
+      - name: Build adapters and validation programs
+        run: cmake --build nrd-build --config Release --parallel 4
+      - name: Validate diffuse and specular on WARP
+        run: ctest --test-dir nrd-build -C Release --output-on-failure -V
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reblur-validation-logs
+          path: nrd-build/Testing/Temporary/

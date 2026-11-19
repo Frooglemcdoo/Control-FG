@@ -16,6 +16,7 @@ class DiffusePipeline {
  std::array<D3D12_RESOURCE_STATES,6> states{};
  std::unique_ptr<D3D12Backend> backend;
  Session session;
+ Signal signal;
  UINT width,height,increment;
  float historyScale=0;
  bool failed=false;
@@ -48,7 +49,7 @@ public:
   void RetireForReuse(){relax.RetireForReuse();commandsRecorded=heapSwitched=false;heap.Reset();root.Reset();prepare.Reset();finish.Reset();retained.clear();}
   Work()=default;Work(const Work&)=delete;Work&operator=(const Work&)=delete;
  };
- DiffusePipeline(ID3D12Device* d,UINT w,UINT h,D3D12_SHADER_BYTECODE prep,D3D12_SHADER_BYTECODE final):device(d),width(w),height(h){
+ DiffusePipeline(ID3D12Device* d,UINT w,UINT h,D3D12_SHADER_BYTECODE prep,D3D12_SHADER_BYTECODE final,Signal kind=Signal::Diffuse):device(d),session(kind),signal(kind),width(w),height(h){
   if(!d||!w||!h||w>8192||h>8192||!prep.pShaderBytecode||!final.pShaderBytecode)throw std::runtime_error("Invalid diffuse pipeline creation");
   increment=d->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
   D3D12_DESCRIPTOR_RANGE ranges[2]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,6,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,5,0,0,0}};
@@ -119,7 +120,7 @@ public:
     session.CancelAfterReset();return Reject("filter_descriptor_arena_bounds");
    }
    D3D12Backend::Inputs inputs;
-   const nrd::ResourceType kinds[]={nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,nrd::ResourceType::IN_NORMAL_ROUGHNESS,nrd::ResourceType::IN_VIEWZ,nrd::ResourceType::IN_MV,nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST};
+   const nrd::ResourceType kinds[]={signal==Signal::Specular?nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST:nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,nrd::ResourceType::IN_NORMAL_ROUGHNESS,nrd::ResourceType::IN_VIEWZ,nrd::ResourceType::IN_MV,signal==Signal::Specular?nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST:nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST};
    const unsigned slots[]={0,1,2,3,5};
    for(unsigned i=0;i<5;++i)inputs[kinds[i]]={textures[slots[i]].Get(),states[slots[i]]};
    // Every allocation precedes any command. Allocation failure can return to

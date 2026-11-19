@@ -85,6 +85,23 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
  else rrNativeGIHistoryReason="native_pipeline_fallback";
 }
 static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
+#ifdef CONTROL_REBLUR_ONLY
+ // Reuse the native filter's resources/copies, but replace its temporal dispatch
+ // and request zero native spatial passes in both reconstruction modes.
+ const bool eligible=rrNativeFrameEnabled&&color&&passes&&
+  reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
+ if(!eligible||rrNativeGIHistoryScope){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
+ const bool previousOwned=control_rr_gi::ownedDenoise;
+ const bool previousRaw=control_rr_gi::rawBypass;
+ const bool previousSteady=control_rr_gi::spatialSteady;
+ control_rr_gi::ownedDenoise=true;control_rr_gi::rawBypass=false;control_rr_gi::spatialSteady=false;
+ rrNativeGIHistoryScope=true;rrNativeGIMotionBound=false;rrNativeGIHistoryDispatches=0;
+ __try {rrNativeDiffuseFilterOriginal(color,history,0);}
+ __finally {
+  rrNativeGIHistoryScope=false;rrNativeGIMotionBound=false;
+  control_rr_gi::ownedDenoise=previousOwned;control_rr_gi::rawBypass=previousRaw;control_rr_gi::spatialSteady=previousSteady;
+ }
+#else
  const unsigned capture=rt_surface_source::EffectiveRequest();
  rt_surface_source::Record(capture,rt_surface_source::Event::GIEntry);
  const bool eligible=rrNativeFrameEnabled&&rrNativeGIKeepThisFrame&&rrNativeGIHistoryZeroThisFrame&&
@@ -163,9 +180,10 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
   lastMode=mode;lastOutlier=outlier;lastView=view;
   SetLastError(saved);
  }
+#endif
 }
 
-#ifdef CONTROL_RR_GI_SEQUENCE
+#if defined(CONTROL_RR_GI_SEQUENCE) || defined(CONTROL_NRD_GI)
 static RRIndirectCallPatch rrNativeGIProducerDispatchPatch{};
 #ifdef CONTROL_NRD_GI
 static RRAlbedoCallPatch rrNrdProducerBindPatch{};
@@ -189,6 +207,7 @@ static bool RRNativeGIProducerProviders() noexcept {
  }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
+#ifdef CONTROL_RR_GI_SEQUENCE
  const DWORD incomingTimingError=GetLastError();
  RRGuideInputSnapshot timingContext{};const char* timingReason=nullptr;
  const bool time=gi_path_capture::timedSequence.load()&&control_rr_gi::boundaryRequested.load()&&RRGuideReadRendererContext(&timingContext,&timingReason);
@@ -203,6 +222,9 @@ static void RRNativeHookGIProducerDispatch(void* state,const void* groups){
   RRStageTimingBatch(stageTicket,values[0],values[1],valid);
  }
  SetLastError(outgoingTimingError);
+#else
+ rrNativeDispatchOriginal(state,groups);
+#endif
 #ifdef CONTROL_NRD_GI
  if(const auto cb=control_nrd_bridge::producer.load())cb->dispatch();
 #endif

@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # The CPU contract target deliberately has no shader binaries. It cannot be
 # loaded by the game. The GPU target must enable embedded D3D12 shaders.
+option(CONTROL_REBLUR_ONLY "Use REBLUR instead of RELAX" OFF)
+set(CONTROL_NRD_SHADER_DEFINES)
+if(CONTROL_REBLUR_ONLY)
+ add_compile_definitions(CONTROL_REBLUR_ONLY)
+ list(APPEND CONTROL_NRD_SHADER_DEFINES -D CONTROL_REBLUR_ONLY=1)
+endif()
 option(CONTROL_NRD_GPU "Build embedded D3D12 NRD shaders" OFF)
 if(CONTROL_NRD_GPU AND NOT WIN32)
   message(FATAL_ERROR "D3D12 validation requires Windows")
@@ -50,7 +56,7 @@ if(CONTROL_NRD_GPU)
  foreach(shader prepare finish receiver)
   set(header "${CMAKE_CURRENT_BINARY_DIR}/nrd_${shader}.h")
   add_custom_command(OUTPUT "${header}"
-   COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -HV 2018 -E main -WX
+   COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -HV 2018 -E main -WX ${CONTROL_NRD_SHADER_DEFINES}
     -I "${nrd_SOURCE_DIR}/Shaders"
     -Fh "${header}" -Vn "kNrd_${shader}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_${shader}.hlsl"
@@ -60,6 +66,18 @@ if(CONTROL_NRD_GPU)
    VERBATIM)
   list(APPEND conversion_headers "${header}")
  endforeach()
+ if(CONTROL_REBLUR_ONLY)
+  set(specular_header "${CMAKE_CURRENT_BINARY_DIR}/nrd_specular_prepare.h")
+  add_custom_command(OUTPUT "${specular_header}"
+   COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -HV 2018 -E main -WX
+    ${CONTROL_NRD_SHADER_DEFINES} -D CONTROL_NRD_SPECULAR=1
+    -I "${nrd_SOURCE_DIR}/Shaders"
+    -Fh "${specular_header}" -Vn kNrd_specular_prepare
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_prepare.hlsl"
+   DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/../../src/shaders/nrd_diffuse_prepare.hlsl"
+   VERBATIM)
+  list(APPEND conversion_headers "${specular_header}")
+ endif()
  add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h"
   COMMAND "${SHADERMAKE_DXC_PATH}" -T cs_6_0 -E main -WX
    -Fh "${CMAKE_CURRENT_BINARY_DIR}/nrd_restore_probe.h" -Vn kNrd_restore_probe
@@ -81,5 +99,10 @@ if(CONTROL_NRD_GPU)
  target_link_libraries(control_nrd_pipeline PRIVATE NRD d3d12 dxgi)
  target_compile_options(control_nrd_pipeline PRIVATE /W4)
  add_test(NAME control_nrd_pipeline COMMAND control_nrd_pipeline)
- add_test(NAME control_nrd_pipeline_balanced COMMAND control_nrd_pipeline --balanced)
+ if(CONTROL_REBLUR_ONLY)
+  add_test(NAME control_nrd_specular COMMAND control_nrd_d3d12 --specular)
+  add_test(NAME control_nrd_pipeline_specular COMMAND control_nrd_pipeline --specular)
+ else()
+  add_test(NAME control_nrd_pipeline_balanced COMMAND control_nrd_pipeline --balanced)
+ endif()
 endif()

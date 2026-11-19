@@ -35,7 +35,16 @@ inline std::atomic<unsigned long long> revision{0},lastReported{~0ull};
 #endif
 #endif
 inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC* desc,IUnknown* native,CreateCompute create) noexcept {
-#ifdef CONTROL_GI_LONG_SEQUENCE
+#ifdef CONTROL_REBLUR_ONLY
+ // Authenticate and label the original GI producer only. No alternate ray or
+ // evaluator pipeline, audit buffer, or scene capture is created here.
+ (void)device;(void)create;
+ if(!desc||!native||!desc->CS.pShaderBytecode)return;
+ char sha[65]{};
+ if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de"))return;
+ ID3D12PipelineState* owner=nullptr;
+ if(SUCCEEDED(native->QueryInterface(IID_PPV_ARGS(&owner)))){const UINT mode=1;owner->SetPrivateData(kMode,sizeof(mode),&mode);owner->Release();}
+#elif defined(CONTROL_GI_LONG_SEQUENCE)
  if((!Enabled()&&!GIOwnedPipeline::Enabled())||!device||!desc||!native||!create||!desc->CS.pShaderBytecode||desc->CS.BytecodeLength!=kNativeEvaluatorSize)return;
  char sha[65]{};
  if(!PTReflectionSha256(static_cast<const unsigned char*>(desc->CS.pShaderBytecode),desc->CS.BytecodeLength,sha)||strcmp(sha,"1dfb4c9b054037e030ff9eed6ed5e482c8c32f9f301bb02c89eb0084c52842de"))return;

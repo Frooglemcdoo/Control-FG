@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include "settings_check_state.h"
+#include "reblur_mode.h"
 #include "performance_compare_state.h"
 #include <cstring>
 #include "rr_compact_distance_policy.h"
@@ -91,6 +92,9 @@ inline void RRSetDiagnosticBypass(bool bypass) noexcept { rrDiagnosticBypass.sto
 inline bool RRUserRuntimeWorkRequested() noexcept {return RRUserModeValue()==RRUserMode::Full&&!RRUserRuntimePaused()&&!RRDiagnosticBypassed();}
 inline void RRUserSetMode(RRUserMode mode) noexcept {rrUserMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
 inline void RRUserRequest(bool enabled) noexcept {
+ // In the REBLUR build this selects REBLUR alone or REBLUR before RR.
+ // Do not enable the legacy owned-GI/RELAX bundle when changing modes.
+ if(control_reblur::Enabled){RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);return;}
 #ifdef CONTROL_NRD_GI
  if(enabled!=(RRUserModeValue()==RRUserMode::Full))ApplyRRBundleDefaults(enabled);
 #endif

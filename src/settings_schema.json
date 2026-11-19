@@ -110,26 +110,25 @@
       "key": "RayReconstruction",
       "id": 10003,
       "localizationKey": "RR",
-      "label": "Ray Reconstruction",
-      "description": "Use NVIDIA DLSS Ray Reconstruction with Owned indirect lighting, RELAX diffuse denoising, and native GI and reflection sample counts. Reflection clamp is fixed at 60%. Requires native ray tracing.",
+      "label": "REBLUR Reconstruction",
+      "description": "Choose REBLUR with Ray Reconstruction off, or REBLUR before Ray Reconstruction. Both modes apply across the scene. Ray Reconstruction still processes characters in the second mode.",
       "type": "choice",
       "default": 0,
       "choices": [
         {
           "value": 0,
-          "label": "Off"
+          "label": "REBLUR (RR off)"
         },
         {
           "value": 1,
-          "label": "On"
+          "label": "REBLUR before RR"
         }
       ],
       "storage": {
         "section": "RayReconstruction",
         "key": "Enabled"
       },
-      "group": "rayTracing",
-      "presentation": "checkbox"
+      "group": "rayTracing"
     },
     {
       "key": "GlobalIlluminationSamples",

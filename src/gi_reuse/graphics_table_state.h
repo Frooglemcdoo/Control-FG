@@ -15,7 +15,8 @@ struct GraphicsTableState {
  }
  void HeapChange()noexcept{mask=0;}
  template<class F> void Replay(F&& bind)const noexcept{
-  if(!known)return;for(unsigned i=0;i<64;++i)if(mask&(std::uint64_t(1)<<i))bind(i,tables[i]);
+  if(!known)return;
+  for(unsigned i=0;i<64;++i)if(mask&(std::uint64_t(1)<<i))bind(i,tables[i]);
  }
 };
 }

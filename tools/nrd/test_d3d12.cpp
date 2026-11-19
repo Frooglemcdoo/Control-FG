@@ -9,6 +9,9 @@
 #include "nrd_graphics_ps.h"
 #include "../../src/nrd_diffuse_receiver_d3d12.h"
 #include "nrd_prepare.h"
+#ifdef CONTROL_REBLUR_ONLY
+#include "nrd_specular_prepare.h"
+#endif
 #include "nrd_finish.h"
 #include "nrd_receiver.h"
 #include "../pt-glass-native-root-fixture.h"
@@ -26,6 +29,8 @@ constexpr UINT InputCount=4,OutputIndex=4;
 #endif
 int main(int argc,char** argv){try{
  const auto profile=(argc>1&&std::strcmp(argv[1],"--balanced")==0)?control_relax::Profile::Balanced:control_relax::Profile::Original;
+ const bool specular=argc>1&&std::strcmp(argv[1],"--specular")==0;
+ const auto signal=specular?control_nrd::Signal::Specular:control_nrd::Signal::Diffuse;
  ComPtr<ID3D12Debug> debug;Check(D3D12GetDebugInterface(IID_PPV_ARGS(&debug)));debug->EnableDebugLayer();
  ComPtr<IDXGIFactory4> factory;Check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));ComPtr<IDXGIAdapter> adapter;Check(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter)));
  ComPtr<ID3D12Device> device;Check(D3D12CreateDevice(adapter.Get(),D3D_FEATURE_LEVEL_12_0,IID_PPV_ARGS(&device)));
@@ -46,7 +51,13 @@ int main(int argc,char** argv){try{
  // This checks PSO compatibility, not in-game receiver values.
  ComPtr<ID3D12RootSignature> nativeRoot;Check(CreateGlassNativeRootFixture(device.Get(),&nativeRoot));
  control_nrd::NativeReceiver receiver(device.Get(),nativeRoot.Get(),{kNrd_receiver,sizeof(kNrd_receiver)},W,H);
- control_nrd::DiffusePipeline pipeline(device.Get(),W,H,{kNrd_prepare,sizeof(kNrd_prepare)},{kNrd_finish,sizeof(kNrd_finish)});
+ D3D12_SHADER_BYTECODE prepareShader{kNrd_prepare,sizeof(kNrd_prepare)};
+#ifdef CONTROL_REBLUR_ONLY
+ if(specular)prepareShader={kNrd_specular_prepare,sizeof(kNrd_specular_prepare)};
+#else
+ Require(!specular,"specular conversion requires REBLUR build");
+#endif
+ control_nrd::DiffusePipeline pipeline(device.Get(),W,H,prepareShader,{kNrd_finish,sizeof(kNrd_finish)},signal);
  D3D12_ROOT_PARAMETER probeParameters[2]{};
  probeParameters[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;probeParameters[0].Constants={0,0,4};
  probeParameters[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;probeParameters[1].Descriptor={0,0};
@@ -89,9 +100,9 @@ int main(int argc,char** argv){try{
  auto input=[&](UINT i)->control_nrd::D3D12Backend::External&{return bindings.input[i];};
  auto& output=bindings.output;
 #else
- control_nrd::Session session;control_nrd::D3D12Backend backend(device.Get(),session.Description(),W,H);
+ control_nrd::Session session(signal);control_nrd::D3D12Backend backend(device.Get(),session.Description(),W,H);
  control_nrd::D3D12Backend::Inputs inputs;
- const nrd::ResourceType names[]={nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,nrd::ResourceType::IN_NORMAL_ROUGHNESS,nrd::ResourceType::IN_VIEWZ,nrd::ResourceType::IN_MV,nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST};
+ const nrd::ResourceType names[]={specular?nrd::ResourceType::IN_SPEC_RADIANCE_HITDIST:nrd::ResourceType::IN_DIFF_RADIANCE_HITDIST,nrd::ResourceType::IN_NORMAL_ROUGHNESS,nrd::ResourceType::IN_VIEWZ,nrd::ResourceType::IN_MV,specular?nrd::ResourceType::OUT_SPEC_RADIANCE_HITDIST:nrd::ResourceType::OUT_DIFF_RADIANCE_HITDIST};
  for(UINT i=0;i<InputCount+1;++i)inputs[names[i]]={textures[i].Get(),D3D12_RESOURCE_STATE_COMMON};
  auto input=[&](UINT i)->control_nrd::D3D12Backend::External&{return inputs[names[i]];};
  auto& output=inputs[names[OutputIndex]];
@@ -136,6 +147,16 @@ int main(int argc,char** argv){try{
     if(i==1&&x<4)value={0,0,0,1}; // rejected guide must preserve raw energy
     if(i==4)value={2,0,0,0};
     if(i==5)value={material,.5f,.8f,1};
+#endif
+#if defined(CONTROL_REBLUR_ONLY) && !defined(CONTROL_NRD_PIPELINE_TEST)
+    // This raw-backend fixture uses achromatic radiance and roughness 1.
+    // REBLUR consumes YCoCg plus normalized distance, unlike RELAX RGB.
+    if(i==0){
+     const UINT left=frame>96?16+2*(frame-97):0;
+     const bool foreground=frame>96&&x>=left&&x<left+24&&y>=16&&y<48;
+     value[1]=value[2]=0;
+     value[3]=2.f/(3.f+(foreground?9.f:10.f)*.1f);
+    }
 #endif
     std::memcpy(pixel,value.data(),16);
    }upload->Unmap(0,nullptr);transition(input(i),D3D12_RESOURCE_STATE_COPY_DEST);
@@ -245,6 +266,9 @@ int main(int argc,char** argv){try{
   void* probeData=nullptr;Check(probeReadback->Map(0,nullptr,&probeData));Require(std::memcmp(probeData,expected,16)==0,"native bindings were not restored");probeReadback->Unmap(0,nullptr);
 #endif
   void*p=nullptr;Check(readback->Map(0,nullptr,&p));double sum=0,center=0,trail=0,movingCenter=0;unsigned centerCount=0,trailCount=0,movingCount=0;for(UINT y=0;y<H;++y)for(UINT x=0;x<W;++x){const auto*pixel=reinterpret_cast<const float*>(static_cast<unsigned char*>(p)+footprint.Offset+y*footprint.Footprint.RowPitch)+x*4;Require(std::isfinite(pixel[0])&&std::isfinite(pixel[1])&&std::isfinite(pixel[2]),"nonfinite RELAX output");float light=pixel[0];
+#if defined(CONTROL_REBLUR_ONLY) && !defined(CONTROL_NRD_PIPELINE_TEST)
+  light=pixel[0]+pixel[1]-pixel[2]; // YCoCg -> red
+#endif
 #ifdef CONTROL_NRD_PIPELINE_TEST
   const float factor=x<W/2?.25f:.75f;light/=factor;
   Require(pixel[3]==pixel[0],"native alpha contract changed");

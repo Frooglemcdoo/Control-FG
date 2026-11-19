@@ -51,7 +51,18 @@ void main(uint3 tid:SV_DispatchThreadID) {
   RadianceHitDistance[p]=0;WorldNormalRoughness[p]=NRD_FrontEnd_PackNormalAndRoughness(float3(0,0,1),1,0);
   LinearViewDepth[p]=DenoisingRange+1;SurfaceMotion[p]=0;RemodulationFactor[p]=0;return;
  }
+#ifdef CONTROL_REBLUR_ONLY
+ // Diffuse hit normalization uses roughness 1, independent of the material's specular lobe.
+ #ifdef CONTROL_NRD_SPECULAR
+ float hitRoughness=nr.w;
+#else
+ float hitRoughness=1.0;
+#endif
+ float normHit=REBLUR_FrontEnd_GetNormHitDist(hit,depth,float3(3.0,0.1,20.0),hitRoughness);
+ RadianceHitDistance[p]=REBLUR_FrontEnd_PackRadianceAndNormHitDist(signal,normHit,true);
+#else
  RadianceHitDistance[p]=RELAX_FrontEnd_PackRadianceAndHitDist(signal,hit,true);
+#endif
  WorldNormalRoughness[p]=NRD_FrontEnd_PackNormalAndRoughness(n/nl,nr.w,0);
  LinearViewDepth[p]=depth;
  SurfaceMotion[p]=float4(motion*MotionScale+MotionBias,0,0);

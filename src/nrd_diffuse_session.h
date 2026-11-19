@@ -14,6 +14,7 @@
 // No live renderer hooks are installed by this header.
 namespace control_nrd {
 constexpr nrd::Identifier DiffuseId=1;
+enum class Signal { Diffuse, Specular };
 struct Dispatch {
  std::uint16_t pipeline=0,width=0,height=0;
  std::vector<nrd::ResourceDesc> resources;
@@ -65,8 +66,14 @@ class Session {
  std::vector<Dispatch> plan;
  static void Check(nrd::Result result){if(result!=nrd::Result::SUCCESS)throw std::runtime_error("NRD API rejected the diffuse contract");}
 public:
- Session(){
-  const nrd::DenoiserDesc d{DiffuseId,nrd::Denoiser::RELAX_DIFFUSE};
+ explicit Session(Signal signal=Signal::Diffuse){
+  const nrd::DenoiserDesc d{DiffuseId,
+#ifdef CONTROL_REBLUR_ONLY
+   signal==Signal::Specular?nrd::Denoiser::REBLUR_SPECULAR:nrd::Denoiser::REBLUR_DIFFUSE
+#else
+   signal==Signal::Specular?nrd::Denoiser::RELAX_SPECULAR:nrd::Denoiser::RELAX_DIFFUSE
+#endif
+  };
   nrd::InstanceCreationDesc c{};c.denoisers=&d;c.denoisersNum=1;
   Check(nrd::CreateInstance(c,instance));
  }
@@ -96,6 +103,13 @@ public:
   s.resourceSizePrev[1]=s.rectSizePrev[1]=hasLast?last.height:f.height;
   if(restart)s.accumulationMode=nrd::AccumulationMode::CLEAR_AND_RESTART;
   s.frameIndex=index;
+#ifdef CONTROL_REBLUR_ONLY
+  nrd::ReblurSettings reblur{};
+  // Defaults match the shader's normalization contract (3, .1, 20).
+  // Keep NRD's standard spatial/detail settings for this first comparison.
+  reblur.enableAntiFirefly=true;
+  Check(nrd::SetCommonSettings(*instance,s));Check(nrd::SetDenoiserSettings(*instance,DiffuseId,&reblur));
+#else
   nrd::RelaxSettings relax{};
   control_relax::Spatial(relax,f.profile);
   // Fixed accumulation time avoids frame-rate-dependent temporal lag.
@@ -105,6 +119,7 @@ public:
   relax.historyFixFrameNum=(std::min)(3u,relax.diffuseMaxFastAccumulatedFrameNum);
   relax.enableAntiFirefly=true;
   Check(nrd::SetCommonSettings(*instance,s));Check(nrd::SetDenoiserSettings(*instance,DiffuseId,&relax));
+#endif
   const nrd::DispatchDesc* ds=nullptr;std::uint32_t count=0;
   Check(nrd::GetComputeDispatches(*instance,&DiffuseId,1,ds,count));
   plan.clear();plan.reserve(count);
