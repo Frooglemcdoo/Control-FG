@@ -63,6 +63,14 @@
     [
       " rrNativeLightingComplete=reblurScope.recorded&&!reblurScope.failed;\n if(!rrNativeLightingComplete&&rrNativeFrame.Selected())rrNativeFrame.Fail(\"reblur_specular_failed\");\n return;\n#endif\n control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);\n if(!rrNativeFrameEnabled){\n",
       " rrNativeLightingComplete=reblurScope.recorded&&!reblurScope.failed;\n if(!rrNativeLightingComplete&&rrNativeFrame.Selected())rrNativeFrame.Fail(\"reblur_specular_failed\");\n return;\n }\n#endif\n control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionEntry);\n if(!rrNativeFrameEnabled){\n"
+    ],
+    [
+      " bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {\n#ifdef CONTROL_REBLUR_ONLY\n static unsigned revision=~0u;const unsigned currentRevision=control_reblur::revision.load();\n if(revision!=currentRevision){revision=currentRevision;reset=true;}\n#endif\n rrNativeSpecularSamplePatch.BeginFrame(0);\n if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);\n",
+      " bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {\n#ifdef CONTROL_REBLUR_ONLY\n static unsigned revision=~0u;const unsigned currentRevision=control_reblur::revision.load();\n const bool reblurModeChanged=revision!=currentRevision;\n if(reblurModeChanged){revision=currentRevision;reset=true;}\n#endif\n rrNativeSpecularSamplePatch.BeginFrame(0);\n if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);\n"
+    ],
+    [
+      " const auto previousKey=rrNativeFrame.Key();const auto previousStage=rrNativeFrame.Stage();\n const bool wasRecovering=rrNativeFrame.Recovering(),wasStopped=rrNativeFrame.Stopped();\n const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);\n#ifdef CONTROL_RR_F9_SUITE\n if(rr_suite::Latch(frame))rrNativeFrame.ResetForSignalChange();\n#endif\n",
+      " const auto previousKey=rrNativeFrame.Key();const auto previousStage=rrNativeFrame.Stage();\n const bool wasRecovering=rrNativeFrame.Recovering(),wasStopped=rrNativeFrame.Stopped();\n const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);\n#ifdef CONTROL_REBLUR_ONLY\n if(reblurModeChanged){rrNativeFrame.ResetForSignalChange();\n  Log(\"REBLUR_MODE mode=%u reblur=%u rr=%u sharpening=%u\",control_reblur::Mode(),unsigned(control_reblur::Active()),unsigned(requested),control_reblur::sharpening.load());}\n#endif\n#ifdef CONTROL_RR_F9_SUITE\n if(rr_suite::Latch(frame))rrNativeFrame.ResetForSignalChange();\n#endif\n"
     ]
   ],
   "src/rr_gi_temporal_native.h": [

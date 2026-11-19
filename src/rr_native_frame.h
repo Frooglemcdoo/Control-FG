@@ -419,7 +419,8 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  bool flag0,bool flag1,bool nativeRequest,bool flag3,bool& reset) {
 #ifdef CONTROL_REBLUR_ONLY
  static unsigned revision=~0u;const unsigned currentRevision=control_reblur::revision.load();
- if(revision!=currentRevision){revision=currentRevision;reset=true;}
+ const bool reblurModeChanged=revision!=currentRevision;
+ if(reblurModeChanged){revision=currentRevision;reset=true;}
 #endif
  rrNativeSpecularSamplePatch.BeginFrame(0);
  if(!rrNativeFrameEnabled)return rrNativeResetOriginal(outputWidth,outputHeight,width,height,flag0,flag1,nativeRequest,flag3,reset);
@@ -446,6 +447,10 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const auto previousKey=rrNativeFrame.Key();const auto previousStage=rrNativeFrame.Stage();
  const bool wasRecovering=rrNativeFrame.Recovering(),wasStopped=rrNativeFrame.Stopped();
  const bool selected=rrNativeFrame.Begin({frame,outputWidth,outputHeight,width,height,effects},runtimeRequested,ready);
+#ifdef CONTROL_REBLUR_ONLY
+ if(reblurModeChanged){rrNativeFrame.ResetForSignalChange();
+  Log("REBLUR_MODE mode=%u reblur=%u rr=%u sharpening=%u",control_reblur::Mode(),unsigned(control_reblur::Active()),unsigned(requested),control_reblur::sharpening.load());}
+#endif
 #ifdef CONTROL_RR_F9_SUITE
  if(rr_suite::Latch(frame))rrNativeFrame.ResetForSignalChange();
 #endif
