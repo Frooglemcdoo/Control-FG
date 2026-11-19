@@ -18,6 +18,6 @@ void GIRedTermsWrite(uint index,GISecondaryTerms t,uint rays){
  if(index==0xffffffff)return;uint base=GIRedIndex(index,rays)+2;
  autoTraining[base]=GIRedPair(t.texture,t.tint);
  autoTraining[base+1]=GIRedPair(t.volume,t.surface);
- autoTraining[base+2]=GIRedPair(t.point,t.spot);
+ autoTraining[base+2]=GIRedPair(t.pointLight,t.spot);
  autoTraining[base+3]=GIRedPair(t.fallback,t.brdf);
 }

@@ -49,8 +49,8 @@ def generate(source):
         2377:'terms.texture.w=2;terms.surface.w=asfloat(state.r10.w);',
         2582:'terms.brdf.xyz=asfloat(state.r14.xyz);',
         2589:'terms.surface.xyz=asfloat(state.r4.xyz)*asfloat(0x3ea2f983u);',
-        3774:'terms.point=float4(asfloat(state.r14.xyz),float(state.r13.w));',
-        4998:'terms.spot=float4(asfloat(state.r9.xyz)-terms.point.xyz,float(state.r6.x));',
+        3774:'terms.pointLight=float4(asfloat(state.r14.xyz),float(state.r13.w));',
+        4998:'terms.spot=float4(asfloat(state.r9.xyz)-terms.pointLight.xyz,float(state.r6.x));',
     }
     declarations += ['#ifdef GI_SECONDARY_TERMS', '    state.terms=(GISecondaryTerms)0;', '#endif']
     for line in body:

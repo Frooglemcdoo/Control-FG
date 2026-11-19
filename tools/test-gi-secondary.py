@@ -47,7 +47,7 @@ class Secondary(unittest.TestCase):
         for hook in hooks:
             self.assertNotRegex(hook,r'state\.r\d+(?:\.[xyzw]+)?\s*(?:\+=|-=|\*=|=(?!=))')
         self.assertIn('state.terms=(GISecondaryTerms)0;',self.text)
-        self.assertIn('state.terms.spot=float4(asfloat(state.r9.xyz)-state.terms.point.xyz',self.text)
+        self.assertIn('state.terms.spot=float4(asfloat(state.r9.xyz)-state.terms.pointLight.xyz',self.text)
         self.assertIn('if(state.r23.x==0xffffffffu)',self.text)
 
     def test_changed_translation_rejected(self):

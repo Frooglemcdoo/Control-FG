@@ -507,7 +507,7 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r14.w=(g_tRaytracingLightCellPointLights.Load(asint(state.r6.xwzz).xyw)).yzwx.w; // native dword 3766
     } // native dword 3774
 #ifdef GI_SECONDARY_TERMS
-    if(state.traceEnabled){state.terms.point=float4(asfloat(state.r14.xyz),float(state.r13.w));}
+    if(state.traceEnabled){state.terms.pointLight=float4(asfloat(state.r14.xyz),float(state.r13.w));}
 #endif
     state.r6.w=(g_tRaytracingLightCellSpotLights.Load(asint(state.r6.xyzz).xyw)).yzwx.w; // native dword 3775
     state.r9.xyz=(asuint((asfloat(state.r12.zzzz)*asfloat(state.r13.xyzx)))).xyz; // native dword 3783
@@ -683,7 +683,7 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r10.w=(state.r13.wwww).w; // native dword 4993
     } // native dword 4998
 #ifdef GI_SECONDARY_TERMS
-    if(state.traceEnabled){state.terms.spot=float4(asfloat(state.r9.xyz)-state.terms.point.xyz,float(state.r6.x));}
+    if(state.traceEnabled){state.terms.spot=float4(asfloat(state.r9.xyz)-state.terms.pointLight.xyz,float(state.r6.x));}
 #endif
     state.r4.xyz=(asuint(mad(asfloat(state.r4.xyzx),asfloat(uint4(0x3ea2f983u,0x3ea2f983u,0x3ea2f983u,0x0u)),asfloat(state.r9.xyzx)))).xyz; // native dword 4999
     state.r15.xyz=(asuint((asfloat(state.r17.xyzx)*asfloat(state.r4.xyzx)))).xyz; // native dword 5011
