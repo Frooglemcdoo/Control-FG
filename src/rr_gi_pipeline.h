@@ -152,7 +152,11 @@ template<class Set,class DispatchFn> void Dispatch(ID3D12PipelineState* observed
    used=true;rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GIStableTemporal);return;
   }
 #ifdef CONTROL_NRD_GI
+#ifdef CONTROL_REBLUR_ONLY
+  replacement=nullptr; // Unexpected admission failure retains native temporal filtering.
+#else
   replacement=b->bypass; // Preserve RAW if RELAX admission fails; no old filter.
+#endif
 #endif
  }
  }

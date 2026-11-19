@@ -72,6 +72,9 @@ static bool ReleaseLogSuppressed(const char* body) noexcept {
 }
 
 static void Log(const char* format, ...) noexcept {
+#ifdef CONTROL_REBLUR_ONLY
+ if(!format||strncmp(format,"REBLUR_",7))return;
+#else
  if(!control_diagnostics::Active() && !control_character_support::IsLifecycleEvent(format)) {
 #if defined(CONTROL_RT_OWNED_ASSEMBLY)
   if(!format||(std::strncmp(format,"RT_MODE_R411",sizeof("RT_MODE_R411")-1)!=0&&std::strncmp(format,"RT_ALLOC_R411",sizeof("RT_ALLOC_R411")-1)!=0&&std::strncmp(format,"RT_HEAP_R411",sizeof("RT_HEAP_R411")-1)!=0&&std::strncmp(format,"RT_SETUP_R411",sizeof("RT_SETUP_R411")-1)!=0&&std::strncmp(format,"RT_FRAME_R411",sizeof("RT_FRAME_R411")-1)!=0&&std::strncmp(format,"RT_LEASE_R411",sizeof("RT_LEASE_R411")-1)!=0&&std::strncmp(format,"RT_ASSEMBLY_R411",sizeof("RT_ASSEMBLY_R411")-1)!=0&&std::strncmp(format,"RT_SELECTION_R411",sizeof("RT_SELECTION_R411")-1)!=0&&std::strncmp(format,"RT_PREPARE_R411",sizeof("RT_PREPARE_R411")-1)!=0&&std::strncmp(format,"RT_CACHE_R411",sizeof("RT_CACHE_R411")-1)!=0&&std::strncmp(format,"RT_RECORD_R411",sizeof("RT_RECORD_R411")-1)!=0&&std::strncmp(format,"RT_BIND_R411",sizeof("RT_BIND_R411")-1)!=0))return;
@@ -81,9 +84,8 @@ static void Log(const char* format, ...) noexcept {
   return;
 #endif
  }
-#if defined(CONTROL_REBLUR_ONLY)
-    if(strncmp(format,"REBLUR_",7))return;
-#elif defined(CONTROL_PERFORMANCE_BUILD)
+#endif
+#if defined(CONTROL_PERFORMANCE_BUILD) && !defined(CONTROL_REBLUR_ONLY)
  return;
 #else
     DWORD savedError = GetLastError();

@@ -43,7 +43,7 @@ struct Recording {
  bool submitted=false,reset=false,filtered=false,exported=false,checkCompleted=false;
  UINT64 checkGeneration=0;
 #ifdef CONTROL_REBLUR_ONLY
- bool specularFiltered=false;
+ bool specularFiltered=false,specularCompleted=false;
  std::shared_ptr<SpecularEpoch> specularEpoch;
  std::unique_ptr<control_nrd::SpecularGuides::Work> specularGuides;
  std::unique_ptr<control_nrd::NativeTransaction::Work> specularWork;
@@ -77,7 +77,13 @@ static void Reason(const char* reason) noexcept {
   settings_check::RecordFailure(reason,pass.frame,presentCount.load(),guideFrame,unsigned(recordings.size()),pending,pass.view==guideView);
  }
  gi_dual_bridge::status=2;
- static const char* last=nullptr;if(last!=reason){last=reason;Log("NRD_R384 admission=%s",reason);}
+ static const char* last=nullptr;if(last!=reason){last=reason;
+#ifdef CONTROL_REBLUR_ONLY
+ Log("REBLUR_GI admission=%s",reason);
+#else
+ Log("NRD_R384 admission=%s",reason);
+#endif
+ }
 }
 static bool Requested() noexcept {
 #ifdef CONTROL_REBLUR_ONLY
@@ -100,6 +106,13 @@ static void Poll() {
 #endif
  Invalidate(epoch);Reason("device_removed");return;}
  for(auto i=recordings.begin();i!=recordings.end();){auto& r=**i;
+#ifdef CONTROL_REBLUR_ONLY
+  if(r.submitted&&r.specularFiltered&&!r.specularCompleted&&r.fence<=complete){
+   r.specularCompleted=true;
+   if(r.specularEpoch&&!r.specularEpoch->poisoned){control_reblur::status=control_reblur::Status::Active;
+    static int completedMode=-1;const int mode=int(r.specularEpoch->rrRequested);if(completedMode!=mode){completedMode=mode;Log("REBLUR_SPECULAR gpu_completed=1 rr=%u",unsigned(mode));}}
+  }
+#endif
   if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}
   if(r.reset&&(!r.submitted||r.fence<=complete)){
    #ifdef CONTROL_REBLUR_ONLY
@@ -334,7 +347,8 @@ static bool Dispatch(ID3D12GraphicsCommandList* list,ID3D12PipelineState*,ID3D12
 #include "nrd_specular_runtime.inl"
 #endif
 static const gi_dual_bridge::Callbacks callbacks{&Begin,&End,&Copy,&Constant,&Dispatch,&Reset,&Before,&After};
-static const control_nrd_bridge::Producer producer{&ProducerBegin,&End,&ProducerDispatch};
+static bool DiffuseReady(UINT64 frame)noexcept{std::lock_guard<std::recursive_mutex> lock(mutex);return Requested()&&epoch&&!epoch->poisoned&&guideFrame==frame&&epoch->rrRequested==control_rr::RRUserRequested();}
+static const control_nrd_bridge::Producer producer{&ProducerBegin,&End,&ProducerDispatch,&DiffuseReady};
 static const bool registered=[] {hooks::EnableForDenoiser();gi_dual_bridge::callbacks=&callbacks;control_nrd_bridge::producer=&producer;return true;}();
 }
 #endif

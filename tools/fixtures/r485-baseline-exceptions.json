@@ -1,0 +1,16 @@
+{
+  "src/rr_reflection_hooks.h": [
+    [
+      " const auto result=rrReflectionOriginalBind(owner); // exactly once; native exceptions propagate\n const DWORD saved=GetLastError();\n if(rrReflectionCaptureEnabled&&control_rr::RRUserRuntimeWorkRequested()&&control_rr::RRUserPresetValue()==control_rr::RRPresetF)RRReflectionAfterBind(owner);\n SetLastError(saved);return result;\n}\n",
+      " const auto result=rrReflectionOriginalBind(owner); // exactly once; native exceptions propagate\n const DWORD saved=GetLastError();\n#ifdef CONTROL_REBLUR_ONLY\n if(const auto callbacks=control_nrd_bridge::specular.load())callbacks->produce(owner);\n#else\n if(rrReflectionCaptureEnabled&&control_rr::RRUserRuntimeWorkRequested()&&control_rr::RRUserPresetValue()==control_rr::RRPresetF)RRReflectionAfterBind(owner);\n#endif\n SetLastError(saved);return result;\n}\n"
+    ],
+    [
+      "  return false;\n }\n if(!RRReflectionInstallPrimaryAppend(d3d)){\n  if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,false))Log(\"RR_REFLECTION_HOOK_ROLLBACK_FAILED\");\n",
+      "  return false;\n }\n#ifndef CONTROL_REBLUR_ONLY\n if(!RRReflectionInstallPrimaryAppend(d3d)){\n  if(!RRAlbedoExchangeCall(&rrReflectionCallPatch,false))Log(\"RR_REFLECTION_HOOK_ROLLBACK_FAILED\");\n"
+    ],
+    [
+      " }\n rrReflectionCaptureEnabled=true;\n Log(\"RR_REFLECTION_HOOK_INSTALLED callsite=0x129662 helper=0xA3940 copy_only=1 rr_eval=disabled\");return true;\n}\n",
+      " }\n rrReflectionCaptureEnabled=true;\n#endif\n Log(\"RR_REFLECTION_HOOK_INSTALLED callsite=0x129662 helper=0xA3940 copy_only=1 rr_eval=disabled\");return true;\n}\n"
+    ]
+  ]
+}

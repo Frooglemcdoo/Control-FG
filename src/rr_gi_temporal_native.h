@@ -88,7 +88,8 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
 #ifdef CONTROL_REBLUR_ONLY
  // Reuse the native filter's resources/copies, but replace its temporal dispatch
  // and request zero native spatial passes in both reconstruction modes.
- const bool eligible=rrNativeFrameEnabled&&color&&passes&&
+ const auto nrd=control_nrd_bridge::producer.load();
+ const bool eligible=rrNativeFrameEnabled&&nrd&&nrd->ready&&nrd->ready(rrNativeFrame.Key().frame)&&color&&passes&&
   reinterpret_cast<std::uintptr_t>(history)==reinterpret_cast<std::uintptr_t>(verifiedRenderer)+0x90eac8;
  if(!eligible||rrNativeGIHistoryScope){rrNativeDiffuseFilterOriginal(color,history,passes);return;}
  const bool previousOwned=control_rr_gi::ownedDenoise;

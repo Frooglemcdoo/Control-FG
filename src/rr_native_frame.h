@@ -289,6 +289,9 @@ static bool RRNativeGIBypassOption(void* option) noexcept {
 // Never mutate the registered option or the shader constant independently.
 static unsigned RRNativeGISampleCount(void* option) {
  const unsigned nativeCount=rrNativeGISampleOriginal(option);
+#ifdef CONTROL_REBLUR_ONLY
+ return nativeCount; // Both modes use the same game-controlled ray budget.
+#endif
  const DWORD saved=GetLastError();
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
  const unsigned launchRays=gi_auto_dispatch::LaunchRays();
@@ -451,7 +454,7 @@ static bool RRNativeHookReset(unsigned outputWidth,unsigned outputHeight,unsigne
  const auto giStage=rt_surface_source::Stage(giPhase,control_rr_gi::stageMode.load());
  if(giSignalHistory.Update(selected,gi_reuse::ownedRequested.load(),giPhase,unsigned(giStage),unsigned(lightingMode)))
   rrNativeFrame.ResetForSignalChange();
- const unsigned specularRequest=selected&&rrNativeSpecularSamplesAvailable?
+ const unsigned specularRequest=!control_reblur::Enabled&&selected&&rrNativeSpecularSamplesAvailable?
 #ifdef CONTROL_RR_F9_SUITE
  (rr_suite::Current()?rr_suite::Current()->samples:native_lighting::SpecularSampleRequest(lightingMode))
 #else

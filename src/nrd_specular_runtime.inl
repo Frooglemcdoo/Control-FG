@@ -1,7 +1,9 @@
 // Included inside ControlNrdRuntime: shares the native queue/fence owner with GI.
 static UINT64 specularGuideFrame=0,specularGuideView=0,specularGuideGeneration=0;
 static ID3D12GraphicsCommandList* specularGuideList=nullptr;
+static LONGLONG specularLastTicks=0;static UINT64 specularLastFrame=0;
 static bool SpecularReady(UINT64 frame) noexcept {
+ std::lock_guard<std::recursive_mutex> lock(mutex);
  return Requested()&&specularEpoch&&!specularEpoch->poisoned&&specularGuideFrame==frame&&
   specularEpoch->rrRequested==control_rr::RRUserRequested();
 }
@@ -77,6 +79,8 @@ static bool SpecularDispatch()noexcept {
   frame.sameFrameGuides=frame.worldNormals=frame.linearViewDepth=frame.unjitteredMotion=frame.radianceContract=frame.hitDistanceContract=true;
   std::memcpy(frame.settings.worldToViewMatrix,matrices.worldToView.data(),64);std::memcpy(frame.settings.viewToClipMatrix,matrices.viewToClip.data(),64);
   frame.settings.cameraJitter[0]=jitter[0];frame.settings.cameraJitter[1]=jitter[1];frame.settings.timeDeltaBetweenFrames=16.6667f;
+  LARGE_INTEGER now{},frequency{};QueryPerformanceCounter(&now);QueryPerformanceFrequency(&frequency);
+  if(specularLastTicks&&specularLastFrame+1==frame.frame&&frequency.QuadPart>0&&now.QuadPart>specularLastTicks)frame.settings.timeDeltaBetweenFrames=float(std::fmax(1.0,std::fmin(250.0,1000.0*(now.QuadPart-specularLastTicks)/frequency.QuadPart)));
   using E=control_nrd::D3D12Backend::External;auto& guides=*specularEpoch->guides;
   control_nrd::DiffusePipeline::Bindings inputs;inputs.input={E{raw.resource,raw.state},E{guides.Resource(0),guides.State(0)},E{guides.Resource(1),guides.State(1)},E{motion.resource,motion.state},E{guides.Resource(2),guides.State(2)},E{guides.Resource(3),guides.State(3)}};inputs.output={target.resource,target.state};
   auto* record=GetRecording(nativeList.Get(),generation);if(!record||record->specularWork||(record->specularEpoch&&record->specularEpoch!=specularEpoch))return false;
@@ -91,7 +95,7 @@ static bool SpecularDispatch()noexcept {
   if(!control_nrd::NativeTransaction::Record(*specularEpoch->filter,nativeList.Get(),binding,frame,current.queue,inputs,{}, {binding.heaps[0].Get(),0,0},*record->specularWork,reserve,&reservation,&graphics)){
    if(record->specularWork->diffuse.commandsRecorded)specularEpoch->poisoned=true;SpecularReason("specular_filter_record");return false;
   }
-  record->specularFiltered=true;specularGuideFrame=0;
+  record->specularFiltered=true;specularGuideFrame=0;specularLastTicks=now.QuadPart;specularLastFrame=frame.frame;
   static int reportedMode=-1;const int mode=int(control_rr::RRUserRequested());if(reportedMode!=mode){reportedMode=mode;Log("REBLUR_SPECULAR recorded=1 rr=%u native_temporal=0 native_spatial=0",unsigned(mode));}
   control_reblur::status=control_reblur::Status::Recorded;control_reblur::reason="specular_recorded";return true;
  }catch(...){if(specularEpoch)specularEpoch->poisoned=true;SpecularReason("specular_dispatch_exception");return false;}

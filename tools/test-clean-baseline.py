@@ -5,6 +5,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 manifest = json.loads((root / 'tools/fixtures/clean-baseline-world.json').read_text())
+reblur_exceptions=json.loads((root/'tools/fixtures/r485-baseline-exceptions.json').read_text())
 perf_exceptions = json.loads((root/'tools/fixtures/r32-baseline-exceptions.json').read_text())
 live_exceptions = json.loads((root/'tools/fixtures/r31-baseline-exceptions.json').read_text())
 exceptions = json.loads((root/'tools/fixtures/r28-baseline-exceptions.json').read_text())
@@ -41,6 +42,12 @@ for name, expected in manifest['files'].items():
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name in reblur_exceptions:
+        text=data.decode()
+        for before,after in reversed(reblur_exceptions[name]):
+            assert text.count(after)==1, (name, 'REBLUR-only insertion changed or duplicated')
+            text=text.replace(after,before,1)
+        data=text.encode()
     # R419 changes only guide-mode reset triggers, never the rendering signals.
     history_exceptions = json.loads((root/'tools/fixtures/r419-baseline-exceptions.json').read_text())
     if name in history_exceptions:
