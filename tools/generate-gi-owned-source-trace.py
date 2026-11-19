@@ -1,7 +1,7 @@
 """Instrument the pinned owned evaluator without replacing its lighting arithmetic."""
 import argparse, hashlib, pathlib, re
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-PINS={'gi_evaluator_secondary.generated.hlsl':'20f8d07d5ba8383ef4b211da7af9d6c7e2d776c7dcd3b60f32d8705346557eab',
+PINS={'gi_evaluator_secondary.generated.hlsl':'d9a85a6a67f643d584f8c87f42a235dac39b37c5aedf760de0dc119ec51572fc',
       'gi_owned_lighting.hlsl':'c208beb15a32855be5506f9d1c9a586b38e5f44d00fe1c8e832c841ce244174f'}
 BEGIN='// OGI_TRACE_BEGIN\n'; END='// OGI_TRACE_END\n'
 def block(s): return BEGIN+s.rstrip()+'\n'+END
