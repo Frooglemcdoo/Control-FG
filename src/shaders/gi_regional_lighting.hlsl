@@ -1,5 +1,6 @@
 #define CONTROL_GI_REGIONAL 1
 // R449 paired evaluator: stratified mixture with balance weights on every ray.
+#define GI_SECONDARY_TERMS
 #define GI_SECONDARY_LIBRARY_ONLY
 #include "gi_evaluator_secondary.generated.hlsl"
 #include "gi_frozen_receiver.hlsl"
@@ -15,7 +16,9 @@ void main(uint3 id:SV_DispatchThreadID) {
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
  uint auditIndex=GIAutoAuditIndex(id.xy);
  GIAutoTraining redA=(GIAutoTraining)0,redB=(GIAutoTraining)0;float redScore=0;
+ GISecondaryTerms redTerms=(GISecondaryTerms)0;
  GIRedWrite(auditIndex,redA,redB,0,selection.rayCount);
+ GIRedTermsWrite(auditIndex,redTerms,selection.rayCount);
  GIAutoAuditWrite(auditIndex,0,0,0,0,0,0,65534,0,0,0);
  uint trainingIndex=GIAutoTrainingIndex(id.xy,giCB0[69].z);
  if(trainingIndex!=0xffffffff){autoTraining[2*trainingIndex]=(GIAutoTraining)0;autoTraining[2*trainingIndex+1]=(GIAutoTraining)0;}
@@ -36,6 +39,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   int4 address=int4(id.xy,slice,0);GISecondaryInput hit;
   hit.material=g_tMaterialId.Load(address).x;
   hit.positionUV=asuint(g_tPosition_TexcoordY.Load(address));hit.normalUV=asuint(g_tNormal_TexcoordX.Load(address));
+  receiver.traceEnabled=auditIndex!=0xffffffff;
   GIEvaluateSecondary(receiver,hit);
   float3 rgb=throughput*asfloat(receiver.r15.xyz);
   GIAutoDraw draw=(GIAutoDraw)0;draw.weight=1;
@@ -49,7 +53,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(auditIndex!=0xffffffff){
    float score=rgb.r*draw.weight;
    if(all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&draw.weight>0&&score>redScore){
-    redScore=score;float3 secondary=asfloat(receiver.r15.xyz);
+    redScore=score;redTerms=receiver.terms;float3 secondary=asfloat(receiver.r15.xyz);
     redA.position.x=rgb.x;redA.position.y=rgb.y;redA.position.z=rgb.z;redA.energy=draw.weight;
     redA.valid=asuint(secondary.x);redA.version=asuint(secondary.y);redA.reserved0=asuint(secondary.z);redA.reserved1=hit.material;
     float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
@@ -103,6 +107,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  float scale=mad(t*t*(3-2*t),fade.w-fade.z,fade.z);
  GIAutoAuditWrite(auditIndex,scale*rawSum/float(selection.rayCount),scale*rawPeak/float(selection.rayCount),scale*radiance,scale*weightedPeak/float(selection.rayCount),peakPosition,peakWeight,peakMaterial,5|(alpha>0?2:0)|peakFlags,peakRay,covered);
  GIRedWrite(auditIndex,redA,redB,scale,selection.rayCount);
+ GIRedTermsWrite(auditIndex,redTerms,selection.rayCount);
  g_rwtDiffuseGIColorTarget[id.xy]=float4(scale*radiance,1);
  g_rwtHitInfo[id.xy]=asfloat(receiver.r5.w)/float(selection.rayCount);
 }

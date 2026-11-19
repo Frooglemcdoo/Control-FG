@@ -33,14 +33,31 @@ def generate(source):
     # Each original branch and nested light/volume loop remains in order.
     if sum(x.count('{')-x.count('}') for x in body)!=0:raise ValueError('Unbalanced secondary block')
     resources='\n'.join(lines[:lines.index('[numthreads(8,16,1)]')])
-    declarations=['struct GIShadingRegisters {']+['    uint4 r'+str(i)+';' for i in range(30)]+['};']
+    declarations=['#ifdef GI_SECONDARY_TERMS', '#include "gi_secondary_terms.hlsl"', '#endif', 'struct GIShadingRegisters {', '#ifdef GI_SECONDARY_TERMS', '    bool traceEnabled; GISecondaryTerms terms;', '#endif']+['    uint4 r'+str(i)+';' for i in range(30)]+['};']
     declarations+=['struct GISecondaryInput { uint material; uint4 positionUV; uint4 normalUV; };',
         '// Receiver registers must be initialized by the target primary shading.',
         '// The input normal is a shading normal, never a geometric PDF normal.',
         'void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sample,',
         '                             bool useWorldPosition,float3 worldPosition) {']
+    hooks={
+        1086:'terms.texture.w=state.r10.w!=0u?1:3;',
+        2193:'if(state.r23.x==0xffffffffu){terms.tint.w+=1;terms.fallback.xyz+=asfloat(state.r17.xyz)*asfloat(state.r17.w);terms.fallback.w+=asfloat(state.r17.w);}',
+        2250:'terms.volume=float4(asfloat(state.r4.xyz),asfloat(state.r12.w));',
+        2302:'terms.brdf.w=asfloat(state.r3.w);',
+        2310:'terms.tint.xyz=asfloat(state.r17.xyz);',
+        2338:'terms.texture.xyz=asfloat(state.r20.xyz);',
+        2377:'terms.texture.w=2;terms.surface.w=asfloat(state.r10.w);',
+        2582:'terms.brdf.xyz=asfloat(state.r14.xyz);',
+        2589:'terms.surface.xyz=asfloat(state.r4.xyz)*asfloat(0x3ea2f983u);',
+        3774:'terms.point=float4(asfloat(state.r14.xyz),float(state.r13.w));',
+        4998:'terms.spot=float4(asfloat(state.r9.xyz)-terms.point.xyz,float(state.r6.x));',
+    }
+    declarations += ['#ifdef GI_SECONDARY_TERMS', '    state.terms=(GISecondaryTerms)0;', '#endif']
     for line in body:
         declarations.append(registers(line))
+        at=int(re.search(r'native dword (\d+)$',line)[1])
+        if at in hooks:
+            declarations += ['#ifdef GI_SECONDARY_TERMS', '    if(state.traceEnabled){'+hooks[at].replace('terms.', 'state.terms.')+'}', '#endif']
         if line.endswith('// native dword 1042'):
             declarations.append('    if(useWorldPosition) state.r12.xyz=asuint(worldPosition);')
     declarations += ['}',

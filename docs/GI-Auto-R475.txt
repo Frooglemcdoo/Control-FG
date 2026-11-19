@@ -1,0 +1,39 @@
+R475 - Secondary shading terms (diagnostic build)
+
+Combined four/ten-ray package. Start with:
+ControlTOH/Diagnostics/Start-GI-Auto-R475-4Rays.cmd
+GI FIXED, RR ON, RELAX OFF, FG OFF.
+Alt+arrows moves the capture box; Alt+Insert starts the five-second countdown.
+Keep Jesse's affected face/hair inside the box, reproduce the speckles until
+Capture complete, and send compact logs. Never press F7.
+Ten-ray launcher is included; one four-ray run first is enough.
+
+Sampling, guides and native shading instructions remain R473/R474.
+This is a diagnostic, not a proposed visual fix. It adds no rays/passes.
+For the same ray selected by R474's largest weighted red contribution,
+red_term records material texture/tint, volume, surface volume after BRDF,
+point and spot light contributions, and the native orange volume branch.
+There is no separately added emission term in this native evaluator block;
+emissive content may be represented in upstream/baked lighting. These records
+do not establish scene-material names or identify a defective term by color.
+The volume sentinel (volume info x = 0xffffffff) selects RGB (1,.35,0).
+Its intended meaning is not established; no fallback color has been changed.
+
+Term RGB / aux definitions:
+texture: material RGB texture / branch (1 miss, 2 shaded surface, 3 negligible material)
+tint: material coefficient / number of participating sentinel-volume branches
+volume: normalized volume lighting plus ambient / total volume blend weight
+surface: volume after distance fade, BRDF and 1/pi / distance fade
+point: point-light sum before material / number of visited point entries
+spot: total direct minus point sum / number of visited spot entries
+sentinel: weighted orange contribution before normalization / sentinel weight sum
+brdf: volume BRDF multiplier / miss multiplier (branch 1 only)
+Surface secondary ~= texture*tint*(surface+point+spot); miss secondary = volume*brdf.aux.
+Spot subtraction and reconstruction may have float-rounding differences.
+
+Red candidates can be legitimate red scene content. RR inputs/output are not
+captured; this is not an end-to-end RR trace or proof that RR is uninvolved.
+Capture records now use 192 bytes/pixel (64 original + 128 term bytes), with
+matching readback: 96MiB per 512x512 ROI for this tail alone. No extra capture
+allocation/readback outside capture. Diagnostic shader register overhead is
+unmeasured. Use non-capture timing separately; no FPS improvement is claimed.

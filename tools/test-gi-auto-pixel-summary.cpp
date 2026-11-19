@@ -18,6 +18,6 @@ int main(){using namespace gi_reuse;
  auto& red=p[10*19+12];red.weighted[0]=.002f;red.weighted[1]=red.weighted[2]=.0001f;
  s=GIAuditSummarize(p.data(),19,17);assert(s.examples[0].index==5*19+5);assert(s.redOutliers==1&&s.redExamples[0].index==10*19+12);
  red.flags=0;s=GIAuditSummarize(p.data(),19,17);assert(s.redOutliers==0);
- assert(GIAuditRedBytes(512,512)==16777216);assert(GIAuditProducerBytes(19,17,4)%32==0);
+ assert(GIAuditRedBytes(512,512)==50331648);assert(GIAuditProducerBytes(19,17,4)%32==0);
  std::cout<<"PASS full ROI coordinates, post-weight spike detection, surviving downweighted spike, invalid clearing.\n";
 }

@@ -14,8 +14,9 @@ static_assert(sizeof(GIAutoPixelAudit)==64,"pixel audit GPU ABI");
 struct GIAutoRedAudit {
  float raw[3],weight,secondary[3];uint material;
  float position[3];uint ray;float throughput[3],scale;
+ float terms[8][4]; // texture, tint, volume, surface, point, spot, fallback, BRDF
 };
-static_assert(sizeof(GIAutoRedAudit)==64,"red audit GPU ABI");
+static_assert(sizeof(GIAutoRedAudit)==192,"red audit GPU ABI");
 inline uint GIAuditWidth(uint w){return std::min(w,512u);}
 inline uint GIAuditHeight(uint h){return std::min(h,512u);}
 inline std::uint64_t GIAuditProducerBytes(uint w,uint h,uint rays){return ((std::uint64_t(GIAuditWidth(w))*GIAuditHeight(h)*(rays+1)+1)/2)*32;}

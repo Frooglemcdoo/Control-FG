@@ -14,7 +14,7 @@ int main()try{
   d.Transition(output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);d.list->CopyResource(read.Get(),output.Get());d.Submit();
   unsigned char* data=nullptr;Check(read->Map(0,nullptr,reinterpret_cast<void**>(&data)));Require(std::memcmp(data,sentinel.data(),size_t(prefix))==0,"red trace overwrote training/pixel/producer prefix");Require(std::memcmp(data+bytes-32,sentinel.data(),32)==0,"red trace overflow");
   const auto* records=reinterpret_cast<const GIAutoRedAudit*>(data+prefix);
-  for(UINT i=0;i<w*h;++i){const auto& r=records[i];Require(r.raw[0]==2&&r.raw[1]==3&&r.raw[2]==4&&r.weight==1.25f&&r.secondary[0]==5&&r.secondary[2]==7&&r.material==123&&r.position[0]==8&&r.position[2]==10&&r.ray==rays-1&&r.throughput[0]==11&&r.throughput[2]==13&&r.scale==.5f,"red trace CPU/GPU layout mismatch");}
+  for(UINT i=0;i<w*h;++i){const auto& r=records[i];Require(r.raw[0]==2&&r.raw[1]==3&&r.raw[2]==4&&r.weight==1.25f&&r.secondary[0]==5&&r.secondary[2]==7&&r.material==123&&r.position[0]==8&&r.position[2]==10&&r.ray==rays-1&&r.throughput[0]==11&&r.throughput[2]==13&&r.scale==.5f,"red trace CPU/GPU layout mismatch");for(UINT j=0;j<8;++j)for(UINT k=0;k<4;++k)Require(r.terms[j][k]==float(j*4+k+1),"secondary terms layout mismatch");}
   D3D12_RANGE empty{};read->Unmap(0,&empty);
  }
  std::cout<<"PASS red trace ABI, odd/even ROI, 4/10 rays, disabled write and protected prefix/tail.\n";return 0;

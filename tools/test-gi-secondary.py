@@ -41,6 +41,15 @@ class Secondary(unittest.TestCase):
         self.assertIn('sample.positionUV=asuint(float4(viewPosition,uv.y))',self.text)
         self.assertIn('sample.normalUV=asuint(float4(shadingNormal,uv.x))',self.text)
         self.assertIn('GIEvaluateSecondaryCore(state,sample,true,position);',self.text)
+    def test_trace_hooks_are_observations_only(self):
+        hooks=re.findall(r'    if\(state.traceEnabled\)\{(.*)\}',self.text)
+        self.assertEqual(len(hooks),11)
+        for hook in hooks:
+            self.assertNotRegex(hook,r'state\.r\d+(?:\.[xyzw]+)?\s*(?:\+=|-=|\*=|=(?!=))')
+        self.assertIn('state.terms=(GISecondaryTerms)0;',self.text)
+        self.assertIn('state.terms.spot=float4(asfloat(state.r9.xyz)-state.terms.point.xyz',self.text)
+        self.assertIn('if(state.r23.x==0xffffffffu)',self.text)
+
     def test_changed_translation_rejected(self):
         with self.assertRaises(ValueError):m.generate(self.reference.replace('uint4 r29=0u','uint4 r29=1u'))
 if __name__=='__main__':unittest.main()

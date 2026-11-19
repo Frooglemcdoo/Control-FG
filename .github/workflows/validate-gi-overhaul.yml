@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-red-trace-r474]
+    branches: [work/gi-secondary-terms-r475]
   workflow_dispatch:
 jobs:
   validate:
@@ -54,6 +54,11 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Sampler fixture compile failed'}
           ./auto-sample.exe
           if($LASTEXITCODE -ne 0){throw 'Sampler validation failed'}
+      - name: Verify secondary translation and observation hooks
+        shell: pwsh
+        run: |
+          python tools/test-gi-secondary.py
+          if($LASTEXITCODE -ne 0){throw 'Secondary instruction preservation failed'}
       - name: Validate red trace packing and independent red selection
         shell: pwsh
         run: |

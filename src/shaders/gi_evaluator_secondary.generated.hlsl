@@ -54,7 +54,13 @@ uint4 GIBitInsert(uint4 width,uint4 offset,uint4 value,uint4 target) {
     return (target&~mask)|((value<<offset)&mask);
 }
 
+#ifdef GI_SECONDARY_TERMS
+#include "gi_secondary_terms.hlsl"
+#endif
 struct GIShadingRegisters {
+#ifdef GI_SECONDARY_TERMS
+    bool traceEnabled; GISecondaryTerms terms;
+#endif
     uint4 r0;
     uint4 r1;
     uint4 r2;
@@ -91,6 +97,9 @@ struct GISecondaryInput { uint material; uint4 positionUV; uint4 normalUV; };
 // The input normal is a shading normal, never a geometric PDF normal.
 void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sample,
                              bool useWorldPosition,float3 worldPosition) {
+#ifdef GI_SECONDARY_TERMS
+    state.terms=(GISecondaryTerms)0;
+#endif
     state.r7.w=sample.material; // native dword 995
     state.r11=sample.positionUV; // native dword 1003
     state.r12.xyz=(asuint((asfloat(state.r11.yyyy)*asfloat(giCB0[7u].xyzx)))).xyz; // native dword 1011
@@ -104,6 +113,9 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r10.w=(asuint(rsqrt(asfloat(state.r10.wwww)))).w; // native dword 1074
     state.r14.xyz=(asuint((asfloat(state.r10.wwww)*asfloat(state.r14.xyzx)))).xyz; // native dword 1079
     state.r10.w=((uint4(state.r7.wwww==uint4(0xffffu,0xffffu,0xffffu,0xffffu))*0xffffffffu)).w; // native dword 1086
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.texture.w=state.r10.w!=0u?1:3;}
+#endif
     state.r15.xyz=(asuint(mad(asfloat(giCB4[0u].yyyy),asfloat(state.r14.xyzx),asfloat(state.r5.xyzx)))).xyz; // native dword 1093
     state.r4.xyz=((state.r10.wwww!=0u?state.r15.xyzx:state.r12.xyzx)).xyz; // native dword 1104
     state.r15.xyz=((state.r10.wwww!=0u?state.r7.xyzx:state.r13.xyzx)).xyz; // native dword 1113
@@ -265,6 +277,9 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r17.w=(asuint((asfloat(state.r23.zzzz)+asfloat(uint4(0xbf800000u,0xbf800000u,0xbf800000u,0xbf800000u))))).w; // native dword 2177
     state.r15.w=(asuint(mad(asfloat(state.r15.wwww),asfloat(state.r17.wwww),asfloat(uint4(0x3f800000u,0x3f800000u,0x3f800000u,0x3f800000u))))).w; // native dword 2184
     state.r17.w=(asuint((asfloat(state.r15.wwww)*asfloat(state.r16.wwww)))).w; // native dword 2193
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){if(state.r23.x==0xffffffffu){state.terms.tint.w+=1;state.terms.fallback.xyz+=asfloat(state.r17.xyz)*asfloat(state.r17.w);state.terms.fallback.w+=asfloat(state.r17.w);}}
+#endif
     state.r16.xyz=(asuint(mad(asfloat(state.r17.xyzx),asfloat(state.r17.wwww),asfloat(state.r16.xyzx)))).xyz; // native dword 2200
     state.r12.w=(asuint(mad(asfloat(state.r16.wwww),asfloat(state.r15.wwww),asfloat(state.r12.wwww)))).w; // native dword 2209
     } // native dword 2218
@@ -274,6 +289,9 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r15.xyz=(asuint((asfloat(state.r16.xyzx)/asfloat(state.r12.wwww)))).xyz; // native dword 2234
     state.r4.xyz=((state.r4.xxxx!=0u?state.r15.xyzx:state.r16.xyzx)).xyz; // native dword 2241
     state.r4.xyz=(asuint((asfloat(state.r4.xyzx)+asfloat(giCB2[1u].xyzx)))).xyz; // native dword 2250
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.volume=float4(asfloat(state.r4.xyz),asfloat(state.r12.w));}
+#endif
     state.r15.xyz=(asuint(mad(asfloat(state.r2.xyzx),asfloat(state.r2.wwww),asfloat(asuint(-asfloat(state.r11.xyzx)))))).xyz; // native dword 2259
     state.r14.w=(asuint(dot(asfloat(state.r15.xyzx).xyz,asfloat(state.r15.xyzx).xyz).xxxx)).w; // native dword 2269
     state.r14.w=(asuint(sqrt(asfloat(state.r14.wwww)))).w; // native dword 2276
@@ -281,17 +299,29 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r5.w=(asuint((asfloat(state.r5.wwww)+asfloat(state.r14.wwww)))).w; // native dword 2292
     if((state.r10.wwww).x != 0u) { // native dword 2299
     state.r15.xyz=(asuint((asfloat(state.r3.wwww)*asfloat(state.r4.xyzx)))).xyz; // native dword 2302
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.brdf.w=asfloat(state.r3.w);}
+#endif
     } else { // native dword 2309
     state.r17.xyz=uint3(g_sbMaterialDataPart3[(state.r7.wwww).x].d[(uint4(0x34u,0x34u,0x34u,0x34u)).x/4u+0u],g_sbMaterialDataPart3[(state.r7.wwww).x].d[(uint4(0x34u,0x34u,0x34u,0x34u)).x/4u+1u],g_sbMaterialDataPart3[(state.r7.wwww).x].d[(uint4(0x34u,0x34u,0x34u,0x34u)).x/4u+2u]); // native dword 2310
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.tint.xyz=asfloat(state.r17.xyz);}
+#endif
     state.r10.w=((state.r7.wwww*uint4(0x23u,0x23u,0x23u,0x23u))).w; // native dword 2320
     state.r19.x=(state.r13.wwww).x; // native dword 2328
     state.r19.y=(state.r11.wwww).y; // native dword 2333
     state.r20.xyz=(asuint(g_sMaterialTextureArray[NonUniformResourceIndex((state.r10.wwww).x-0u)].SampleLevel(g_sLinearWrap,asfloat(state.r19.xyxx).xy,asfloat(uint4(0x0u,0x0u,0x0u,0x0u)).x))).xyzw.xyz; // native dword 2338
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.texture.xyz=asfloat(state.r20.xyz);}
+#endif
     state.r17.xyz=(asuint((asfloat(state.r17.xyzx)*asfloat(state.r20.xyzx)))).xyz; // native dword 2353
     state.r10.w=(asuint(dot(asfloat(state.r17.xyzx).xyz,asfloat(state.r17.xyzx).xyz).xxxx)).w; // native dword 2360
     state.r10.w=((uint4(asfloat(state.r10.wwww)>=asfloat(uint4(0x38d1b717u,0x38d1b717u,0x38d1b717u,0x38d1b717u)))*0xffffffffu)).w; // native dword 2367
     if((state.r10.wwww).x != 0u) { // native dword 2374
     state.r10.w=(asuint(saturate((asfloat(state.r14.wwww)*asfloat(uint4(0x42480000u,0x42480000u,0x42480000u,0x42480000u)))))).w; // native dword 2377
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.texture.w=2;state.terms.surface.w=asfloat(state.r10.w);}
+#endif
     state.r4.xyz=(asuint((asfloat(state.r4.xyzx)*asfloat(state.r10.wwww)))).xyz; // native dword 2384
     state.r19.zw=uint2(g_sbMaterialDataPart3[(state.r7.wwww).x].d[(uint4(0x44u,0x44u,0x44u,0x44u)).x/4u+0u],g_sbMaterialDataPart3[(state.r7.wwww).x].d[(uint4(0x44u,0x44u,0x44u,0x44u)).x/4u+1u]); // native dword 2391
     state.r20.xy=((state.r7.wwww*uint4(0x23u,0x23u,0x0u,0x0u)+uint4(0x2u,0x4u,0x0u,0x0u))).xy; // native dword 2401
@@ -313,7 +343,13 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r14.xyw=(asuint((asfloat(asuint(-asfloat(state.r14.xyxw)))+asfloat(uint4(0x3f800000u,0x3f800000u,0x0u,0x3f800000u))))).xyw; // native dword 2562
     state.r14.xyw=(asuint((asfloat(state.r14.xyxw)*asfloat(giCB1[15u].wwww)))).xyw; // native dword 2573
     state.r14.xyz=(asuint((asfloat(state.r14.zzzz)*asfloat(state.r14.xywx)))).xyz; // native dword 2582
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.brdf.xyz=asfloat(state.r14.xyz);}
+#endif
     state.r4.xyz=(asuint((asfloat(state.r4.xyzx)*asfloat(state.r14.xyzx)))).xyz; // native dword 2589
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.surface.xyz=asfloat(state.r4.xyz)*asfloat(0x3ea2f983u);}
+#endif
     state.r14.xyz=(asuint((asfloat(state.r12.yyyy)*asfloat(giCB0[3u].xyzx)))).xyz; // native dword 2596
     state.r14.xyz=(asuint(mad(asfloat(giCB0[2u].xyzx),asfloat(state.r12.xxxx),asfloat(state.r14.xyzx)))).xyz; // native dword 2605
     state.r12.xyz=(asuint(mad(asfloat(giCB0[4u].xyzx),asfloat(state.r12.zzzz),asfloat(state.r14.xyzx)))).xyz; // native dword 2616
@@ -470,6 +506,9 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     state.r6.w=((state.r6.yyyy+state.r13.wwww)).w; // native dword 3759
     state.r14.w=(g_tRaytracingLightCellPointLights.Load(asint(state.r6.xwzz).xyw)).yzwx.w; // native dword 3766
     } // native dword 3774
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.point=float4(asfloat(state.r14.xyz),float(state.r13.w));}
+#endif
     state.r6.w=(g_tRaytracingLightCellSpotLights.Load(asint(state.r6.xyzz).xyw)).yzwx.w; // native dword 3775
     state.r9.xyz=(asuint((asfloat(state.r12.zzzz)*asfloat(state.r13.xyzx)))).xyz; // native dword 3783
     state.r8.xyz=(asuint(mad(asfloat(state.r9.xyzx),asfloat(uint4(0x399d4952u,0x399d4952u,0x399d4952u,0x0u)),asfloat(state.r12.xyzx)))).xyz; // native dword 3790
@@ -643,6 +682,9 @@ void GIEvaluateSecondaryCore(inout GIShadingRegisters state,GISecondaryInput sam
     } // native dword 4992
     state.r10.w=(state.r13.wwww).w; // native dword 4993
     } // native dword 4998
+#ifdef GI_SECONDARY_TERMS
+    if(state.traceEnabled){state.terms.spot=float4(asfloat(state.r9.xyz)-state.terms.point.xyz,float(state.r6.x));}
+#endif
     state.r4.xyz=(asuint(mad(asfloat(state.r4.xyzx),asfloat(uint4(0x3ea2f983u,0x3ea2f983u,0x3ea2f983u,0x0u)),asfloat(state.r9.xyzx)))).xyz; // native dword 4999
     state.r15.xyz=(asuint((asfloat(state.r17.xyzx)*asfloat(state.r4.xyzx)))).xyz; // native dword 5011
     } else { // native dword 5018
