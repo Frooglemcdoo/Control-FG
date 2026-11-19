@@ -24,7 +24,11 @@ struct RRInputCaptureJob {
  bool preGICaptured=false;
 };
 static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
-static RRInputCaptureJob rrInputCaptures[2];
+static constexpr unsigned kRRInputCaptureSlots=2;
+static RRInputCaptureJob rrInputCaptures[kRRInputCaptureSlots];
+static unsigned RRSelectCapture(unsigned long long frame) noexcept {
+ return control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
+}
 static unsigned long long rrInputCaptureSettledFrame=99;
 static RRGuideInputSnapshot current{};
 static RRGuideInputTexture source{};
