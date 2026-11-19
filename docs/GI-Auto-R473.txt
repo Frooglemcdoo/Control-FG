@@ -1,0 +1,24 @@
+R473 - Observed primary-source footprint candidate
+
+Install beside Control_DX12.exe, preserving folders. One DLL, two launchers:
+ControlTOH/Diagnostics/Start-GI-Auto-R473-4Rays.cmd
+ControlTOH/Diagnostics/Start-GI-Auto-R473-10Rays.cmd
+Use GI FIXED, RR ON, RELAX OFF, FG OFF for comparison.
+
+Retains R472 allocation: 1 guided + 3 cosine rays at four rays; 2 + 8 at ten.
+R473 fits the primary guide radius to nearby observed hit positions instead
+of always using 0.433m. At least four observations are required; every observed
+point inside the original sphere stays covered, with 3cm slack and a 5cm
+minimum radius. Sparse evidence keeps the old radius. The secondary guide,
+source ranking, guide centers, PDF correction and shaded radiance are unchanged.
+
+This can concentrate samples on compact sources, but incomplete observations
+can still miss their true extent. It is not a proven whole-game speckle fix.
+No radiance clamp or temporal light history. No additional rays, GPU passes,
+buffers or list traversals. Some arithmetic is added to existing guide passes;
+in-game quality and performance require verification. Native bypass retained.
+
+Test the known noise area and another area, including moving light/occlusion.
+Alt+arrows moves the box; Alt+Insert starts capture after a 5-second countdown.
+Collect compact logs after Capture complete. Do not press F7.
+Compare FPS outside capture; forced DRED remains off.

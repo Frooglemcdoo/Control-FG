@@ -47,37 +47,50 @@ uint Find(GIWorldGuideKey receiver){
 [numthreads(64,1,1)]void Second(uint3 id:SV_DispatchThreadID){
  if(id.x>=capacity*GIRegionalStripes)return;
  uint region=id.x/GIRegionalStripes,stripe=capacity+id.x;
+ cells[stripe].first=0;cells[stripe].count=0;
  GIRegionalCell c=cells[region];uint winner=0;
  if(c.first==0){cells[stripe].second=0;return;}
  uint first=RecordIndex(c.first);
  if(first>=recordCount){cells[stripe].second=0;return;}
  GIAutoBound primary=records[first].source;
- uint link=cells[stripe].owner,visited=0;
+ uint link=cells[stripe].owner,visited=0,nearCount=0;float extent2=0;
  // One writer per stripe, 32 parallel lists per receiver region. No atomic
  // operations or polling here. Each accepted record is still visited once.
  [loop]while(link!=0&&visited<recordCount){
   uint index=link-1;
-  if(index>=recordCount){winner=0;break;}
+  if(index>=recordCount){winner=0;nearCount=0;break;}
   GIRegionalTraining r=records[index];
   float3 delta=float3(r.source.center.x-primary.center.x,r.source.center.y-primary.center.y,r.source.center.z-primary.center.z);
-  if(index!=first&&dot(delta,delta)>primary.radius*primary.radius)winner=max(winner,Priority(index));
+  float distance2=dot(delta,delta);
+  if(distance2<=primary.radius*primary.radius){extent2=max(extent2,distance2);++nearCount;}
+  else if(index!=first)winner=max(winner,Priority(index));
   link=cells[capacity*(1+GIRegionalStripes)+index].owner;++visited;
  }
- if(link!=0&&visited==recordCount)winner=0; // Corrupt/cyclic list never spins.
+ if(link!=0&&visited==recordCount){winner=0;nearCount=0;} // Corrupt/cyclic list never spins.
  cells[stripe].second=winner;
+ // Reuse spare stripe fields; no new buffer, traversal, pass or atomics.
+ cells[stripe].first=asuint(extent2);cells[stripe].count=nearCount;
 }
 [numthreads(64,1,1)]void Freeze(uint3 id:SV_DispatchThreadID){
  if(id.x>=capacity)return;GIRegionalTarget outValue=(GIRegionalTarget)0;
  GIRegionalCell c=cells[id.x];
- uint secondary=0;
- [unroll]for(uint stripe=0;stripe<GIRegionalStripes;++stripe)
-  secondary=max(secondary,cells[capacity+id.x*GIRegionalStripes+stripe].second);
+ uint secondary=0,nearCount=0;float extent2=0;
+ [unroll]for(uint stripe=0;stripe<GIRegionalStripes;++stripe){
+  GIRegionalCell part=cells[capacity+id.x*GIRegionalStripes+stripe];
+  secondary=max(secondary,part.second);nearCount+=part.count;
+  extent2=max(extent2,asfloat(part.first));
+ }
  if(c.owner>0&&c.owner<=recordCount&&c.first>0){
   outValue.receiver=records[c.owner-1].receiver;outValue.targets.schema=0x41544731;
   outValue.targets.frame=frame;outValue.targets.version=version;
   [unroll]for(uint rank=0;rank<2;++rank){
    uint priority=rank==0?c.first:secondary;if(priority==0)continue;
    outValue.targets.bounds[rank]=records[RecordIndex(priority)].source;
+   // Fit only the primary, and only with at least four observations. Cover
+   // every observed point inside its original sphere, plus 3cm slack. Sparse
+   // or extended evidence retains the broad bound. Radiance is never reused.
+   if(rank==0&&nearCount>=4)
+    outValue.targets.bounds[rank].radius=min(outValue.targets.bounds[rank].radius,max(.05f,sqrt(extent2)+.03f));
    outValue.targets.counts[rank]=c.count;outValue.targets.scores[rank]=priority>>16;
    outValue.targets.validMask|=1u<<rank;
   }

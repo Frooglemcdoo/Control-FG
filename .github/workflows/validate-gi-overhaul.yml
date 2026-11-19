@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-coverage-budget-r472]
+    branches: [work/gi-primary-fit-r473]
   workflow_dispatch:
 jobs:
   validate:
