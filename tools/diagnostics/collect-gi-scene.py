@@ -46,7 +46,7 @@ def inspect(root, pid, motion=False):
             require(trace.get('full_screen') is True and trace.get('all_rays') is True and trace.get('float_precision')==32 and trace.get('rays')==h['rays_per_batch'], 'full-precision all-pixel/ray trace missing')
             require(trace.get('header_bytes')==2048 and trace.get('ray_stride')==224 and trace.get('bytes')==2048+m['width']*m['height']*h['rays_per_batch']*224, 'motion trace layout mismatch')
             require(tp.is_file() and tp.stat().st_size==trace.get('bytes'), 'motion trace binary missing/truncated')
-            require(m.get('projection_valid') and m.get('motion_scale_valid') and m.get('reset')==0, 'RR transform/motion scale unknown or history reset')
+            require(m.get('projection_valid') and m.get('rr_world_to_view_valid') and m.get('jitter_valid') and m.get('motion_scale_valid') and m.get('reset')==0, 'RR transform/motion scale unknown or history reset')
             names={r['file'] for r in m.get('resources',[])}
             required={'normal-roughness.rgba16f','specular.rgba16f','diffuse.rgba16f','raw-albedo.rgba16f','input-depth.r32f','native-gbuffer1.rgba8','native-gbuffer2.rgba8','gi-at-rr-input.rgba16f','pre-filter-gi.rgba16f','native-reconstruction-map.r32u'}
             require(required<=names, 'required RR/GI guides missing: '+str(sorted(required-names)))

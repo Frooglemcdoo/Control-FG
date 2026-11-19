@@ -2,6 +2,7 @@
 Only reads saved game data; never injects keys or alters rendering/settings.
 """
 import argparse,base64,hashlib,platform,tempfile,datetime,importlib.util,json,os,pathlib,struct,subprocess,sys,traceback,zlib,zipfile
+ACTIVE_PID=None
 SPEC=importlib.util.spec_from_file_location('scene',pathlib.Path(__file__).with_name('collect-gi-scene.py'))
 scene=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(scene)
 
@@ -72,6 +73,7 @@ def environment(game):
     return {'os':platform.platform(),'driver':driver,'runtime_files_on_disk_at_packaging':files,'loaded_runtime_identity':'see capture-session game/Streamline logs','driver_AF_override':'not queried; application sampler descriptor in game log is not proof of driver override state','cache_state':'not altered','rendering_settings':'not altered by packager'}
 
 def main():
+    global ACTIVE_PID
     p=argparse.ArgumentParser();p.add_argument('--root',type=pathlib.Path,default=pathlib.Path(os.environ.get('LOCALAPPDATA','.'))/'ControlFGProbe');p.add_argument('--pid',type=int);p.add_argument('--output',type=pathlib.Path);p.add_argument('--review-only',action='store_true');a=p.parse_args()
     if not a.pid:
         candidates=[]
@@ -82,6 +84,7 @@ def main():
             except (ValueError,OSError):pass
         if not candidates:raise ValueError('No completed R484 motion frame metadata. Send the packager log and compact game logs; do not repeat the run.')
         a.pid=max(candidates)[1]
+    ACTIVE_PID=a.pid
     records,issues,files=scene.inspect(a.root,a.pid,motion=True)
     if issues:raise ValueError('Incomplete capture, no success package created:\n'+'\n'.join(issues)+'\nKeep all saved files; send this log before rerunning.')
     folder=a.root/f'gi-motion-review-{a.pid}';folder.mkdir(exist_ok=True)
@@ -91,6 +94,9 @@ def main():
     review_zip=folder/'Motion-Review.zip'
     with zipfile.ZipFile(review_zip,'w',zipfile.ZIP_DEFLATED,compresslevel=1) as z:
         for name in ('Review.html','summary.json','verification.json','environment.json'):z.write(folder/name,name)
+    if hasattr(os,'startfile'):
+        try:os.startfile(str(folder))
+        except OSError:pass
     print(f'REVIEW READY: {review_zip}\nOpen Review.html to inspect the saved sequence. No new game run required.',flush=True)
     if a.review_only:return
     files+= [folder/name for name in ('summary.json','verification.json','environment.json')]
@@ -98,6 +104,24 @@ def main():
     manifest={'schema':'control-gi-motion-r484','pid':a.pid,'complete':True,'frames':[m['frame'] for m in records],'review':summary,'reassembly':'Concatenate chunks in listed order; verify all SHA256 values.'}
     scene.package(a.root,files,output,manifest,part_bytes=400*1024*1024,compresslevel=1,compressed_limit=True)
     print(f'COMPLETE: {output}\nSend Motion-Review.zip first. Full data stays available in the scene-manifest.zip and scene-part ZIPs. Do not delete the originals.',flush=True)
+def failure_bundle(log):
+    root=pathlib.Path(os.environ.get('LOCALAPPDATA','.'))/'ControlFGProbe'
+    output=pathlib.Path(tempfile.gettempdir())/'ControlTOH-GI-Motion-Failure.zip'
+    with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED,compresslevel=1) as z:
+        if log.exists():z.write(log,log.name)
+        logs=sorted(root.glob(f'probe-*-{ACTIVE_PID}.log' if ACTIVE_PID else 'probe-*.log'),key=lambda p:p.stat().st_mtime,reverse=True)[:3]
+        for path in logs:
+            with path.open('rb') as f:
+                f.seek(max(0,path.stat().st_size-2*1024*1024));z.writestr(path.name+'.tail.txt',f.read())
+        if ACTIVE_PID:
+            for pattern in (f'rr-input-c1-{ACTIVE_PID}-*/metadata.json',f'rr-input-c1-{ACTIVE_PID}-*/gi-hit-slices.json',f'gi-scene-detail-{ACTIVE_PID}-*/metadata.json',f'gi-motion-review-{ACTIVE_PID}/verification.json',f'gi-motion-review-{ACTIVE_PID}/environment.json'):
+                for path in root.glob(pattern):z.write(path,path.relative_to(root).as_posix())
+        z.writestr('status.json',json.dumps({'complete':False,'pid':ACTIVE_PID,'original_capture_files_preserved':True,'next_step':'Send this failure ZIP; do not repeat gameplay yet.'}))
+    print(f'DIAGNOSTICS READY: {output} — send this ZIP; no new game run requested.',flush=True)
+    if hasattr(os,'startfile'):
+        try:os.startfile(str(output.parent))
+        except OSError:pass
+
 class Tee:
     def __init__(self,console,log):self.console,self.log=console,log
     def write(self,text):self.console.write(text);self.log.write(text);self.flush();return len(text)
@@ -108,6 +132,9 @@ if __name__=='__main__':
         sys.stdout=Tee(sys.stdout,handle);sys.stderr=Tee(sys.stderr,handle)
         try:main()
         except Exception:
-            traceback.print_exc();sys.exit(1)
+            traceback.print_exc()
+            try:failure_bundle(log)
+            except Exception:traceback.print_exc()
+            sys.exit(1)
         finally:
             sys.stdout=sys.stdout.console;sys.stderr=sys.stderr.console

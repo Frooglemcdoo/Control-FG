@@ -101,7 +101,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
 #endif
 #if !defined(CONTROL_CAPTURE_DIAGNOSTIC) || defined(CONTROL_RR_MATERIAL_CAPTURE)
         RRInputCaptureBeforeEvaluation(list,in.frame,activePreset,bindings.normal,bindings.specular,bindings.diffuse,
-            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters);
+            hitDistance,hitDistance?rrDistanceLastStatus:nullptr,bindings.viewToClip,bindings.projectionValid,bindings.rawAlbedo,in.color,in.depth,in.motion,in.output,bindings.responsivity,parameters,false,"rr",bindings.worldToView);
 #endif
         rrAttempt=true;
         if(call<=4||(call%240)==0||distanceReset)

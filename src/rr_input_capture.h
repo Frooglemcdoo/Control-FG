@@ -45,7 +45,9 @@ struct RRInputCaptureJob {
  unsigned pairIndex=0,outputIndex=kRRInputCaptureMaxResources;bool outputCaptured=false;unsigned long long previousFrame=0;
  float preExposure=0,exposureScale=0;bool preExposureValid=false,exposureScaleValid=false;
  int reset=0;unsigned evaluationResult=0;UINT width=0,height=0;unsigned long long frame=0;
- float projection[16]{};bool projectionValid=false;
+ float projection[16]{},rrWorldToView[16]{};bool projectionValid=false,rrWorldToViewValid=false,jitterValid=false;
+ float frameTimeMs=0;bool frameTimeValid=false;
+ int featureFlags=0,roughnessMode=0,hardwareDepth=0;bool featureFlagsValid=false,roughnessModeValid=false,hardwareDepthValid=false;
 };
 static SRWLOCK rrInputCaptureLock=SRWLOCK_INIT;
 // Serialize large disk exports without blocking render-side capture progress.
@@ -212,6 +214,11 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    out<<"\"path_capture_condition\":"<<c->pathCondition<<",\"export_stride\":"<<c->exportStride<<",\"point_samples_not_filtered\":true,";
    if(c->timedSequence)out<<"\"stage_capture_build\":\"R432\",\"sequence_phase\":\""<<(c->sequencePhase?"moving":"stationary")<<"\",\"gpu_timings_valid\":"<<(timingValid?"true":"false")<<",\"timestamp_frequency\":"<<c->timingFrequency<<",\"timing_frame\":"<<c->timing.frame<<",\"gi_evaluator_expected_batches\":"<<c->timing.expectedBatches<<",\"gi_evaluator_observed_batches\":"<<c->timing.observedBatches<<",\"timing_overflow\":"<<(c->timing.overflow?"true":"false")<<",\"gpu_stage_timings\":"<<timingJSON<<",\"timing_scope\":\"captured_frame_dispatches_not_steady_state_fps\",\"intermediate_temporal_image_captured\":false,";
 #ifdef CONTROL_GI_AUTO_TARGETS
+   if(RRMotionCapture()){
+    out<<"\"rr_world_to_view_valid\":"<<(c->rrWorldToViewValid?"true":"false")<<",\"rr_world_to_view\":[";
+    for(unsigned i=0;i<16;++i){if(i)out<<',';out<<(std::isfinite(c->rrWorldToView[i])?c->rrWorldToView[i]:0);}
+    out<<"],\"jitter_valid\":"<<(c->jitterValid?"true":"false")<<",\"frame_time_ms_valid\":"<<(c->frameTimeValid?"true":"false")<<",\"frame_time_ms\":"<<c->frameTimeMs<<",\"feature_flags_valid\":"<<(c->featureFlagsValid?"true":"false")<<",\"feature_flags\":"<<c->featureFlags<<",\"roughness_mode_valid\":"<<(c->roughnessModeValid?"true":"false")<<",\"roughness_mode\":"<<c->roughnessMode<<",\"hardware_depth_valid\":"<<(c->hardwareDepthValid?"true":"false")<<",\"hardware_depth\":"<<c->hardwareDepth<<",";
+   }
    if(RRMotionCapture())out<<"\"motion_sequence\":true,\"motion_frames\":16,\"motion_index\":"<<c->pairIndex<<",\"stop_cue_index\":4,\"capture_tick_ms\":"<<c->evaluationTick<<",\"movement_key_bits\":"<<c->movementKeys<<",\"rr_internal_history_available\":false,";
    if(c->giHits.fullScreen)out<<"\"secondary_texture_mip\":"<<(gi_scene_capture::TextureMipOne()?1:0)<<",\"producer_weight_transport\":true,\"paired_mip_capture_expected\":"<<(RRMotionCapture()?"false":"true")<<",";
    if(c->giHits.fullScreen)out<<"\"scene_capture_build\":\"R484\",\"scene_pairs\":"<<(RRMotionCapture()?0:2)<<",\"scene_full_resolution\":true,\"texture_resources_dumped\":false,\"individual_light_operands_captured\":false,\"instance_primitive_ids_captured\":false,";
@@ -271,7 +278,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
 #include "rr_input_capture_early_gi.h"
 #endif
 static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr") noexcept {
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr",const float* worldToView=nullptr) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
  __try {
   using Policy=control_rr::InputCapturePolicy;
@@ -419,7 +426,14 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
   for(unsigned i=0;i<count;++i){ID3D12Device* device=nullptr;const HRESULT hr=resources[i]->GetDevice(IID_PPV_ARGS(&device));const bool same=SUCCEEDED(hr)&&device==c->device;if(device)device->Release();if(!same)__leave;}
   for(unsigned i=0;i<=outputIndex;++i){c->sources[i]=resources[i];resources[i]->AddRef();c->states[i]=i>=nativeIndex&&i<nativeIndex+kRRInputCaptureNativeCount?static_cast<D3D12_RESOURCE_STATES>(nativeInputs[i-nativeIndex].trackedState):i==outputIndex?D3D12_RESOURCE_STATE_UNORDERED_ACCESS:D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;}
   c->jitterX=c->jitterY=c->mvScaleX=c->mvScaleY=0;
-  if(ngxGetFloat){ngxGetFloat(parameters,"Jitter.Offset.X",&c->jitterX);ngxGetFloat(parameters,"Jitter.Offset.Y",&c->jitterY);}
+  c->jitterValid=ngxGetFloat&&ngxGetFloat(parameters,"Jitter.Offset.X",&c->jitterX)==1&&ngxGetFloat(parameters,"Jitter.Offset.Y",&c->jitterY)==1&&std::isfinite(c->jitterX)&&std::isfinite(c->jitterY);
+  c->rrWorldToViewValid=worldToView!=nullptr;
+  if(worldToView)for(unsigned i=0;i<16;++i){c->rrWorldToView[i]=worldToView[i];c->rrWorldToViewValid=c->rrWorldToViewValid&&std::isfinite(worldToView[i]);}
+  c->frameTimeMs=0;c->frameTimeValid=ngxGetFloat&&ngxGetFloat(parameters,"FrameTimeDeltaInMsec",&c->frameTimeMs)==1&&std::isfinite(c->frameTimeMs);if(!c->frameTimeValid)c->frameTimeMs=0;
+  c->featureFlags=c->roughnessMode=c->hardwareDepth=0;
+  c->featureFlagsValid=ngxGetInt&&ngxGetInt(parameters,"DLSS.Feature.Create.Flags",&c->featureFlags)==1;
+  c->roughnessModeValid=ngxGetInt&&ngxGetInt(parameters,"DLSS.Roughness.Mode",&c->roughnessMode)==1;
+  c->hardwareDepthValid=ngxGetInt&&ngxGetInt(parameters,"DLSS.Use.HW.Depth",&c->hardwareDepth)==1;
   c->motionScaleValid=ngxGetFloat&&ngxGetFloat(parameters,"MV.Scale.X",&c->mvScaleX)==1&&ngxGetFloat(parameters,"MV.Scale.Y",&c->mvScaleY)==1;
   c->preExposure=c->exposureScale=0;
   c->preExposureValid=ngxGetFloat&&ngxGetFloat(parameters,"DLSS.Pre.Exposure",&c->preExposure)==1&&std::isfinite(c->preExposure);
@@ -486,7 +500,7 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
 }
 
 static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,unsigned preset,
- ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr") noexcept {
+ ID3D12Resource* normal,ID3D12Resource* specular,ID3D12Resource* diffuse,ID3D12Resource* distance,ID3D12Resource* status,const float* projection,bool projectionValid,ID3D12Resource* rawAlbedo,ID3D12Resource* color,ID3D12Resource* depth,ID3D12Resource* motion,ID3D12Resource* output,ID3D12Resource* responsivity,void* parameters,bool nativeLighting=false,const char* lightingMode="rr",const float* worldToView=nullptr) noexcept {
 #ifdef CONTROL_RR_F9_SUITE
  if(rr_suite::cancelled.load())return;
 #endif
@@ -517,7 +531,7 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
     (!rrInputCaptures[select].preGICaptured||rrInputCaptures[select].preGIFrame!=frame))select=kRRInputCaptureSlots;
 #endif
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
- if(select<kRRInputCaptureSlots)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting,lightingMode);
+ if(select<kRRInputCaptureSlots)RRInputCaptureOneBeforeEvaluation(&rrInputCaptures[select],list,frame,preset,normal,specular,diffuse,distance,status,projection,projectionValid,rawAlbedo,color,depth,motion,output,responsivity,parameters,nativeLighting,lightingMode,worldToView);
 }
 static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsigned long long frame,ID3D12Resource* output,unsigned result) noexcept {
  if(!TryAcquireSRWLockExclusive(&rrInputCaptureLock))return;
