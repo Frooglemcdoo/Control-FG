@@ -563,13 +563,18 @@ inline LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM wParam, LPA
 inline void UpdateCaptureActivity() noexcept {
  const auto tracePhase=gi_spot_trace::phase.load();
  const bool traceActive=tracePhase!=gi_spot_trace::Phase::Idle && tracePhase!=gi_spot_trace::Phase::Complete && tracePhase!=gi_spot_trace::Phase::Failed;
- const bool active=path_capture::active||traceActive||capture_suite::active||performance_capture::Active()||control_gi_button::Active()||control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load()
+ const bool otherCapture=path_capture::active||traceActive||capture_suite::active||performance_capture::Active()||control_gi_button::Active()
 #ifdef CONTROL_RR_F9_SUITE
  ||reflection_suite::active
 #endif
  ;
- if(!active&&control_diagnostics::captureActive.load())DrainDiagnosticLog(true);
- control_diagnostics::captureActive.store(active,std::memory_order_relaxed);
+ const bool rrCapture=control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load();
+ bool scene=false;
+#ifdef CONTROL_GI_AUTO_TARGETS
+ scene=gi_scene_capture::Enabled();
+#endif
+ if(!otherCapture&&!rrCapture&&control_diagnostics::captureActive.load())DrainDiagnosticLog(true);
+ control_diagnostics::PublishCaptureActivity(otherCapture,rrCapture,scene);
 }
 inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
     const HRESULT comResult=CoInitializeEx(nullptr,COINIT_MULTITHREADED);

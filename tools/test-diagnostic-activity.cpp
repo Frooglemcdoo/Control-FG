@@ -4,6 +4,12 @@
 #include <cassert>
 int main(){
  using namespace rt_surface_source;
+ for(bool scene:{false,true})for(bool rr:{false,true})for(bool other:{false,true}){
+  control_diagnostics::PublishCaptureActivity(other,rr,scene);
+  assert(control_diagnostics::Active()==(other||rr));
+  assert(control_diagnostics::BlocksOwnedGI(scene)==(other||(rr&&!scene)));
+ }
+ control_diagnostics::PublishCaptureActivity(false,false,false);
  assert(!control_diagnostics::Active());assert(EffectiveRequest()==0);
  Record(7,Event::GIEntry);assert(Read(7)[unsigned(Event::GIEntry)]==0);
  control_rr_diagnostic::Record(control_rr_diagnostic::Event::RRAttempt);

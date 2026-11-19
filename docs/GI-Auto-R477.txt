@@ -1,0 +1,40 @@
+R477 fixes capture activation disabling owned GI (zero-batch failure in R476).
+Unrelated diagnostic workflows still block owned GI. Capture failure status and
+scene lifecycle logging are also corrected. Rendering shaders are unchanged.
+
+R477 - Full-screen GI/RR scene diagnostic. No proposed visual fix.
+
+Install the contents beside Control_DX12.exe. Start-GI-Auto-R477-4Rays.cmd
+and Start-GI-Auto-R477-10Rays.cmd share one DLL. Begin with four rays.
+GI FIXED, RR ON, FG OFF, RELAX OFF. Close other capture workflows.
+Alt+Insert starts the sequence; never press F7. No box placement is needed.
+Hold still for the first consecutive pair. When the label reports the next
+pair is queued, slowly pan through the lighting that produces the speckles.
+Wait for Saved, then run ControlTOH/Diagnostics/Package-GI-Scene.cmd.
+Send scene-manifest.zip and every scene-part ZIP. Compact logs alone omit images.
+A new sequence requires restarting the game after the two pairs are saved.
+
+Captured at full resolution, not resized/cropped: hit material/normal/UV/position
+for each active physical ray slice; raw owned GI immediately after evaluation;
+temporal-filter source before composition; GI at RR input; accumulated diffuse
+and specular lighting; bound RR color/depth/motion/normal/albedo/specular/distance
+where available; reconstruction map; hair mask where bound; RR output. Exposure,
+jitter, projection and frame metadata accompany each frame.
+Detailed R475 terms and actual producer directions/weights use a uniform grid
+of up to 512x512 points across the entire screen, matched to those frames.
+Local-red candidate ratios on this grid describe grid neighbours, not adjacent
+full-resolution pixels. Full images remain available for dense pixel analysis.
+
+Two consecutive pairs are captured. There is a settling/export gap between
+pairs; they are not a continuous four-frame video. Timing outside capture is
+logged separately. Large readbacks and disk writes can cause temporary stalls;
+do not use capture FPS as a performance measurement. Full-resolution capture
+can consume several GB; the packager streams bounded ZIP parts without deleting
+source captures. Never bypass a game fence or force resource-state guesses.
+
+Limits explicitly recorded: physical hit slices are captured but SRV view
+mapping is not independently proved; per-light operands, full texture mip
+contents, and instance/primitive IDs are not exported. Hit UVs and sampled RGB
+are available, but this alone does not prove texture binding correctness.
+RR output is captured before final display processing, not a desktop screenshot.
+A capture must pass frame/output/completeness checks before being called complete.

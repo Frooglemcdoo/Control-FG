@@ -192,7 +192,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
    out<<"\"path_capture_condition\":"<<c->pathCondition<<",\"export_stride\":"<<c->exportStride<<",\"point_samples_not_filtered\":true,";
    if(c->timedSequence)out<<"\"stage_capture_build\":\"R432\",\"sequence_phase\":\""<<(c->sequencePhase?"moving":"stationary")<<"\",\"gpu_timings_valid\":"<<(timingValid?"true":"false")<<",\"timestamp_frequency\":"<<c->timingFrequency<<",\"timing_frame\":"<<c->timing.frame<<",\"gi_evaluator_expected_batches\":"<<c->timing.expectedBatches<<",\"gi_evaluator_observed_batches\":"<<c->timing.observedBatches<<",\"timing_overflow\":"<<(c->timing.overflow?"true":"false")<<",\"gpu_stage_timings\":"<<timingJSON<<",\"timing_scope\":\"captured_frame_dispatches_not_steady_state_fps\",\"intermediate_temporal_image_captured\":false,";
 #ifdef CONTROL_GI_AUTO_TARGETS
-   if(c->giHits.fullScreen)out<<"\"scene_capture_build\":\"R476\",\"scene_pairs\":2,\"scene_full_resolution\":true,\"texture_resources_dumped\":false,\"individual_light_operands_captured\":false,\"instance_primitive_ids_captured\":false,";
+   if(c->giHits.fullScreen)out<<"\"scene_capture_build\":\"R477\",\"scene_pairs\":2,\"scene_full_resolution\":true,\"texture_resources_dumped\":false,\"individual_light_operands_captured\":false,\"instance_primitive_ids_captured\":false,";
 #endif
    out<<"\"gi_hit_capture_requested\":"<<(c->giHits.enabled?"true":"false")<<",";
 #ifdef CONTROL_RR_GI_SEQUENCE

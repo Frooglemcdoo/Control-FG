@@ -63,7 +63,7 @@ inline void Publish(control_rr::InputCapturePolicy::Phase first,control_rr::Inpu
 #endif
     ))control_rr_gi::boundaryRequested.store(false);
 #endif
-    if(first==P::Failed || second==P::Failed){state.store(State::Failed);return;}
+    if(first==P::Failed || second==P::Failed){detail.store(L"Capture failed. Collect compact logs; restart before retrying.");state.store(State::Failed);return;}
     if(first==P::Idle && second==P::Idle){
         if(outputsValid){completedPairs.store(requests);
 #ifdef CONTROL_RR_GI_SEQUENCE
