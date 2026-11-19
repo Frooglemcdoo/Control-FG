@@ -13,7 +13,7 @@ until Capture complete. Send the compact logs. Never press F7.
 
 The capture independently ranks locally isolated red pixels, rather than
 only the brightest luminance peaks. For each selected pixel it records the
-ray contributing the most weighted red excess, actual producer direction,
+ray contributing the largest weighted red-channel contribution, actual producer direction,
 hit material ID/position, secondary-shading RGB, receiver throughput RGB,
 raw ray RGB, sampling weight, fade, raw mean RGB and final GI RGB.
 A red candidate may be real red scene content; this does not classify errors.

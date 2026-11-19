@@ -47,7 +47,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   valid=valid&&all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&
         draw.weight>=0&&draw.weight<=(selection.rayCount==4?2.00001:1.66667);
   if(auditIndex!=0xffffffff){
-   float score=(rgb.r-max(rgb.g,rgb.b))*draw.weight;
+   float score=rgb.r*draw.weight;
    if(all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&draw.weight>0&&score>redScore){
     redScore=score;float3 secondary=asfloat(receiver.r15.xyz);
     redA.position.x=rgb.x;redA.position.y=rgb.y;redA.position.z=rgb.z;redA.energy=draw.weight;
