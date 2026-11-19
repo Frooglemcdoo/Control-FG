@@ -1,0 +1,25 @@
+R472 - Broad-coverage ray allocation candidate
+
+Install beside Control_DX12.exe, preserving folders. One DLL, two launchers:
+ControlTOH/Diagnostics/Start-GI-Auto-R472-4Rays.cmd
+ControlTOH/Diagnostics/Start-GI-Auto-R472-10Rays.cmd
+Use GI FIXED, RR ON, RELAX OFF, FG OFF for comparison.
+
+R471 made selected bright outliers worse in the submitted run. Its source-cell
+placement change is removed; guide construction returns to R470 behavior.
+R472 changes allocation: four rays use one guided and three cosine rays;
+ten rays use two guided and eight cosine rays. At four rays the guide sample
+chooses either guide equally, rather than permanently neglecting one guide.
+The producer and evaluator share the same mixture PDF and frozen selection.
+Maximum uncovered-direction weights become 4/3 and 5/4 instead of 2 and 5/3.
+This is a sampling-density change, not a brightness clamp or history filter.
+It trades some sampling of accurately guided sources for broader coverage.
+
+No extra rays or GPU passes. Replaced native dispatches remain bypassed;
+R469 parallel guide construction and disabled forced DRED are retained.
+This does not solve guide selection completely or prove whole-game quality
+or FPS improvement. Test the known speckle area and a second area.
+
+Alt+arrows moves the box. Alt+Insert starts the 5-second capture countdown.
+Reproduce the noise until Capture complete, then collect compact logs.
+Do not press F7. Compare FPS outside capture.

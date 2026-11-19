@@ -6,7 +6,7 @@
 // Paired ten-ray baseline and four-ray candidate, both single-batch.
 // The caller must freeze one target resource for producer AND evaluator.
 float GIAutoAlpha(GIAutoTargets targets,GIAutoSelection selection) {
- return ((selection.rayCount==10&&selection.fraction==.4f)||(selection.rayCount==4&&selection.fraction==.5f))&&GIAutoUsable(targets,selection)?selection.fraction:0;
+ return ((selection.rayCount==10&&selection.fraction==.2f)||(selection.rayCount==4&&selection.fraction==.25f))&&GIAutoUsable(targets,selection)?selection.fraction:0;
 }
 uint GIAutoSeed(uint2 pixel,uint frame,uint batch,uint ray) {
  return pixel.x*73856093u^pixel.y*19349663u^frame*83492791u^
@@ -54,23 +54,18 @@ GIAutoDraw GIAutoSamplePrepared(uint2 pixel,uint frame,uint batch,uint ray,
   result.direction=GTLocal(normal,sqrt(uv.y),2*GT_PI*uv.x);
   result.weight=1;result.traceRay=1;return result;
  }
- // Stratify the mixture selector over the selected ray count. At alpha=.4 this gives
- // two samples per target cone and six cosine samples; four rays use 1+1+2.
- // Each stratum has a fresh independent range draw and within-stratum jitter.
+ // Reserve most rays for full-hemisphere coverage: 1 guided + 3 cosine at
+ // four rays, 2 guided + 8 cosine at ten. The single four-ray guide sample
+ // selects either cone with equal probability; never always pick one cone.
  float u=min((float(ray)+GIProducerUnit(seed,0x68bc21ebu))/float(selection.rayCount),.9999999403953552f);
  float v=GIProducerUnit(seed,0x02e5be93u);
- // Latin stratification within each fixed component preserves the component's
- // full radial marginal while avoiding six independent cosine elevations.
- // The shared random rotation is independent of per-ray angular/range jitter.
- if(alpha==.4f||alpha==.5f){
-  uint perGuide=selection.rayCount==4?1:2;
-  uint component=ray<perGuide?0:(ray<2*perGuide?1:2);
-  uint size=component==2?selection.rayCount-2*perGuide:perGuide;
-  uint local=component==2?ray-2*perGuide:ray-component*perGuide;
-  uint rotation=GIProducerHash(pixel.x*0x8da6b343u^pixel.y*0xd8163841u^
-                    frame*0xcb1ab31fu^batch*0x165667b1u^component*0x9e3779b9u)%size;
-  v=(float((local+rotation)%size)+v)/float(size);
- }
+ uint guidedCount=selection.rayCount==4?1:2;
+ uint component=ray<guidedCount?ray:2;
+ uint size=ray<guidedCount?1:selection.rayCount-guidedCount;
+ uint local=ray<guidedCount?0:ray-guidedCount;
+ uint rotation=GIProducerHash(pixel.x*0x8da6b343u^pixel.y*0xd8163841u^
+                   frame*0xcb1ab31fu^batch*0x165667b1u^component*0x9e3779b9u)%size;
+ v=(float((local+rotation)%size)+v)/float(size);
 
  GTDraw draw=GTSamplePrepared(normal,prepared.a,prepared.b,alpha,u,v);
  result.direction=draw.direction;result.weight=draw.radianceWeight;result.traceRay=draw.traceRay;return result;

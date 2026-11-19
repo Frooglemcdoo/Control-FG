@@ -11,8 +11,8 @@ void main(uint3 id:SV_DispatchThreadID) {
  targets.bounds[0].center.z=3;targets.bounds[0].radius=.5;
  targets.bounds[1].center.x=1;targets.bounds[1].center.z=2;targets.bounds[1].radius=.3;
  targets.counts[0]=targets.counts[1]=42;targets.scores[0]=targets.scores[1]=123;
- GIAutoSelection selection;selection.version=7;selection.sourceFrame=12;selection.rayCount=10;selection.fraction=.4;selection.sampleFrame=897;
- if(testCase>=14){selection.rayCount=4;selection.fraction=.5;}
+ GIAutoSelection selection;selection.version=7;selection.sourceFrame=12;selection.rayCount=10;selection.fraction=.2;selection.sampleFrame=897;
+ if(testCase>=14){selection.rayCount=4;selection.fraction=.25;}
  if(scenario==1){targets.bounds[0].center.z=-3;targets.bounds[1].center.z=-2;}
  if(scenario==2)targets.validMask=0;
  if(scenario==3)selection.sourceFrame=13;
@@ -28,20 +28,22 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(scenario==11||scenario==12)targets.bounds[0].radius=.25;
   if(scenario==13)targets.bounds[0].radius=.55;
   targets.bounds[1]=targets.bounds[0];
+  if(scenario==8)targets.bounds[1].center.x=-targets.bounds[0].center.x;
  }
  float alpha=GIAutoAlpha(targets,selection);
- float3 sum=0;uint valid=1;
+ float3 sum=0;float oldSum=0;uint valid=1;
+ GIAutoSelection oldSelection=selection;oldSelection.fraction=selection.rayCount==4?.5f:.4f;
  GIAutoPrepared prepared=GIAutoPrepare(0,targets,selection);
  [loop]for(uint i=0;i<selection.rayCount;++i){
   GIAutoDraw draw=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,float3(0,0,1),prepared,selection);
-  R462GIAutoDraw reference=R462GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),targets,selection);
-  if(any(draw.direction!=reference.direction)||draw.weight!=reference.weight||draw.range!=reference.range||draw.traceRay!=reference.traceRay)valid=0;
-  if(index<4096){
+  R462GIAutoDraw reference=R462GIAutoSample(uint2(index%256,index/256),897,0,i,0,float3(0,0,1),targets,oldSelection);
+  if(alpha==0&&(any(draw.direction!=reference.direction)||draw.weight!=reference.weight||draw.range!=reference.range||draw.traceRay!=reference.traceRay))valid=0;
+  if(alpha==0&&index<4096){
    float3 origin=float3(-82+(index%17)*.11,24+(index%13)*.07,106+(index%19)*.09);
    if(index%8==0)origin=float3(targets.bounds[0].center.x,targets.bounds[0].center.y,targets.bounds[0].center.z);
    float3 normal=normalize(float3(float(index%11)-5,float(index%7)-3,1));
    GIAutoDraw spatial=GIAutoSamplePrepared(uint2(index%256,index/256),897,0,i,normal,GIAutoPrepare(origin,targets,selection),selection);
-   R462GIAutoDraw oldSpatial=R462GIAutoSample(uint2(index%256,index/256),897,0,i,origin,normal,targets,selection);
+   R462GIAutoDraw oldSpatial=R462GIAutoSample(uint2(index%256,index/256),897,0,i,origin,normal,targets,oldSelection);
    if(any(spatial.direction!=oldSpatial.direction)||spatial.weight!=oldSpatial.weight||spatial.range!=oldSpatial.range||spatial.traceRay!=oldSpatial.traceRay)valid=0;
   }
   GIAutoDraw other=GIAutoSample(uint2(index%256,index/256),901,0,i,0,float3(0,0,1),targets,selection);
@@ -54,17 +56,20 @@ void main(uint3 id:SV_DispatchThreadID) {
   if(scenario>=6){
    float3 lightAxis=scenario==8?float3(.6,0,.8):float3(0,0,1);
    rgb.y=dot(draw.direction,lightAxis)>=sqrt(1-.0001)?10000:0;
+   if(scenario==8)rgb.y+=(dot(draw.direction,float3(-.6,0,.8))>=sqrt(1-.0001)?10000:0);
    if(scenario>=12){float3 edgeAxis=normalize(float3(.15,0,1));rgb.y+=(dot(draw.direction,edgeAxis)>=sqrt(1-.0001)?10000:0);}
    if(scenario==9)rgb.y=0; // fresh visibility: no retained lighting
    rgb.z=draw.traceRay?1:0;
   }
   sum+=float3(rgb.x,rgb.y,rgb.z)*draw.weight;
+  if(scenario==7)oldSum+=(reference.direction.z>=sqrt(1-.0001)?10000:0)*reference.weight;
   if(!all(isfinite(draw.direction))||abs(dot(draw.direction,draw.direction)-1)>.00001||
-     draw.weight<0||draw.weight>(selection.rayCount==4?2.00001:1.66667)||draw.range<0||draw.range>=1||
+     draw.weight<0||draw.weight>(selection.rayCount==4?1.33334:1.25001)||draw.range<0||draw.range>=1||
      (!draw.traceRay&&draw.weight!=0))valid=0;
   if(index==0){output[28*count+testCase*20+i*2]=float4(draw.direction,draw.weight);
    output[28*count+testCase*20+i*2+1]=float4(draw.range,draw.traceRay,alpha,0);}
  }
  float3 result=sum/float(selection.rayCount);
  output[testCase*count+index]=float4(result,valid);
+ if(scenario==7)output[28*count+28*20+(testCase>=14?count:0)+index]=float4(oldSum/selection.rayCount,0,0,0);
 }

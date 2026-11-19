@@ -1,7 +1,7 @@
 #include "gpu_test_device.h"
 #include "../src/gi_reuse/producer_sampling.h"
 int main()try {
- Device d(false);constexpr UINT count=262144,scenarios=28,total=count*scenarios+scenarios*20;
+ Device d(false);constexpr UINT count=262144,scenarios=28,total=count*scenarios+scenarios*20+2*count;
  struct V{float x,y,z,w;};
  auto output=d.Buffer(UINT64(total)*sizeof(V),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto read=d.Buffer(UINT64(total)*sizeof(V),D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -19,10 +19,18 @@ int main()try {
   constant/=count;z2/=count;cap/=count;moment/=count;
   Require(std::abs(constant-4)<.035,"constant expectation mismatch");
   if(c<6)Require(std::abs(z2-.5)<.008&&std::abs(cap-.36)<.008,"cosine integral mismatch");
-  if(c==6||c==8){double expected=c==6?1:.8;
+  if(c==6||c==8){double expected=c==6?1:1.6;
    Require(std::abs(z2-expected)<.015,"narrow-source energy mismatch");
    Require(moment-z2*z2<.01&&peak<2,"narrow-source speckle regression");}
-  if(c==7)Require(std::abs(z2-1)<.55,"stale guide support/energy mismatch");
+  if(c==7){
+   Require(std::abs(z2-1)<.55,"stale guide support/energy mismatch");
+   double oldMean=0,oldMoment=0,oldPeak=0;
+   for(UINT i=0;i<count;++i){double x=values[count*scenarios+scenarios*20+(rayCount==4?count:0)+i].x;oldMean+=x;oldMoment+=x*x;oldPeak=std::max(oldPeak,x);}
+   oldMean/=count;oldMoment/=count;
+   Require(moment-z2*z2<(oldMoment-oldMean*oldMean)*.85,"uncovered-source variance not reduced against prior allocation");
+   Require(peak<oldPeak*.81,"uncovered-source peak not reduced against prior allocation");
+   std::cout<<"uncovered comparison old_mean="<<oldMean<<" new_mean="<<z2<<" old_variance="<<(oldMoment-oldMean*oldMean)<<" new_variance="<<(moment-z2*z2)<<" old_peak="<<oldPeak<<" new_peak="<<peak<<'\n';
+  }
   if(c==10||c==11){
    Require(std::abs(z2-1)<.12,"footprint fit changed source mean energy");
    if(c==10)broadVariance=moment-z2*z2;
@@ -42,5 +50,5 @@ int main()try {
   }
  }
  D3D12_RANGE empty{};read->Unmap(0,&empty);
- std::cout<<"PASS exact prepared sampling parity with frozen R462 reference; frozen invocation seed despite differing native clocks, fresh invocation changes draw; paired sampler/resolve: twenty-eight proposal/source states including neighboring bright-patch coverage at ten and four rays, fitted versus broad source variance, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.\n";return 0;
+ std::cout<<"PASS unchanged fallback sampling against frozen R462 reference; uncovered-source variance and peak reduced against old allocation; frozen invocation seed despite differing native clocks, fresh invocation changes draw; paired sampler/resolve: twenty-eight proposal/source states including neighboring bright-patch coverage at ten and four rays, fitted versus broad source variance, distinct rays, range parity, mean energy, narrow-source tails and blocked source. Not native DXR execution.\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

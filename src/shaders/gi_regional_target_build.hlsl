@@ -60,9 +60,7 @@ uint Find(GIWorldGuideKey receiver){
   if(index>=recordCount){winner=0;break;}
   GIRegionalTraining r=records[index];
   float3 delta=float3(r.source.center.x-primary.center.x,r.source.center.y-primary.center.y,r.source.center.z-primary.center.z);
-  // Canonical centers identify source cells. Adjacent cells remain distinct;
-  // multiple hits at opposite corners of one cell cannot consume both guides.
-  if(index!=first&&any(delta!=0))winner=max(winner,Priority(index));
+  if(index!=first&&dot(delta,delta)>primary.radius*primary.radius)winner=max(winner,Priority(index));
   link=cells[capacity*(1+GIRegionalStripes)+index].owner;++visited;
  }
  if(link!=0&&visited==recordCount)winner=0; // Corrupt/cyclic list never spins.
