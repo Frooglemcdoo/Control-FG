@@ -10,7 +10,7 @@ def inspect(root, pid):
         meta=directory/'metadata.json'
         if not meta.exists():continue
         m=json.loads(meta.read_text(encoding='utf-8-sig'))
-        if m.get('scene_capture_build')!='R477':continue
+        if m.get('scene_capture_build')!='R478':continue
         frame=m['frame'];records.append(m);files.update(p for p in directory.iterdir() if p.is_file())
         def require(ok,reason):
             if not ok:issues.append(f'frame {frame}: {reason}')
@@ -81,14 +81,14 @@ def main():
         for meta in a.root.glob('rr-input-c1-*/metadata.json'):
             try:
                 m=json.loads(meta.read_text(encoding='utf-8-sig'))
-                if m.get('scene_capture_build')=='R477':candidates.append((meta.stat().st_mtime,m['pid']))
+                if m.get('scene_capture_build')=='R478':candidates.append((meta.stat().st_mtime,m['pid']))
             except (ValueError,OSError):pass
-        if not candidates:raise SystemExit('No R477 scene frames saved. Wait for Saved, or send compact logs if capture failed.')
+        if not candidates:raise SystemExit('No R478 scene frames saved. Wait for Saved, or send compact logs if capture failed.')
         a.pid=max(candidates)[1]
     records,issues,files=inspect(a.root,a.pid)
     if not files:raise SystemExit('No files found for that scene session.')
     output=a.output or pathlib.Path.cwd()/('GI-Scene-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
-    manifest={'schema':'control-gi-scene-r477','pid':a.pid,'complete':not issues,'issues':issues,'frames':[m['frame'] for m in records],
+    manifest={'schema':'control-gi-scene-r478','pid':a.pid,'complete':not issues,'issues':issues,'frames':[m['frame'] for m in records],
               'limitations':['physical SRV slice mapping not independently verified','individual light operands and full texture mip contents not exported','instance/primitive IDs not exported','RR output precedes final display processing'],'reassembly':'Concatenate each file chunks in listed order; verify chunk and whole-file SHA256.'}
     print('Packaging full-screen data. This may take several minutes.',flush=True)
     package(a.root,files,output,manifest)

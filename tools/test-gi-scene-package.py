@@ -5,7 +5,7 @@ class Scene(unittest.TestCase):
   for ordinal,first in [(1,100),(2,200)]:
    for i in range(2):
     frame=first+i;p=root/f'rr-input-c1-7-{frame}';p.mkdir()
-    data=dict(scene_capture_build='R477',scene_full_resolution=True,rr_active=True,rr_result=1,output_captured=True,export_stride=1,pre_gi_captured=True,pre_gi_frame=frame,frame=frame,pid=7,width=2,height=2,capture_ordinal=ordinal,pair_index=i,previous_frame=first if i else 0,resources=[dict(file='rr.rgba16f',copied=True,width=2,height=2,pixel_bytes=8)])
+    data=dict(scene_capture_build='R478',scene_full_resolution=True,rr_active=True,rr_result=1,output_captured=True,export_stride=1,pre_gi_captured=True,pre_gi_frame=frame,frame=frame,pid=7,width=2,height=2,capture_ordinal=ordinal,pair_index=i,previous_frame=first if i else 0,resources=[dict(file='rr.rgba16f',copied=True,width=2,height=2,pixel_bytes=8)])
     (p/'metadata.json').write_text(json.dumps(data));(p/'rr.rgba16f').write_bytes(bytes(range(32)))
     hit=dict(full_screen=True,raw_gi_captured=True,detailed_frame_matched=1,frame=frame,gpu_fence_completed=True,all_batches_recorded=True,recorded_batches=1,file='gi-hit-slices.bin',bytes=64,raw_gi=dict(width=2,height=2,offset=32,bytes=32),rays_per_batch=4,batches=[dict(region_width=2,region_height=2,region_count=1,captured_slices=4,resources=[dict(offset=0,slice_region_bytes=8)])])
     (p/'gi-hit-slices.json').write_text(json.dumps(hit));(p/'gi-hit-slices.bin').write_bytes(bytes(range(64)))

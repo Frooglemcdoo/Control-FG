@@ -4,8 +4,8 @@
 
 int main() {
     const char* const admitted[] = {
-        "GI_SCENE_R477 requested=1",
-        "GI_SCENE_R477_FAILED frame=1 raw=0",
+        "GI_SCENE_R478 requested=1",
+        "GI_SCENE_R478_FAILED frame=1 raw=0",
         "RR_CHARACTER_SUPPORT_R418 build=R418",
         "RR_CHARACTER_BASE_ALBEDO_R417 original=%p",
         "RR_HAIR_OPACITY_READY original=%p",

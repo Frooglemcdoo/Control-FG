@@ -49,7 +49,7 @@ inline void Tick(HWND game)noexcept {
   if(capture&&!captureHeld&&w&&h&&control_rr_capture_ui::Request()){
    ++gi_auto_capture::request;gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
    gi_auto_capture::phase=gi_auto_capture::Collecting;
-   Log("GI_SCENE_R477 requested=1 pairs=2 full_resolution=1 detailed_grid=512x512");
+   Log("GI_SCENE_R478 requested=1 pairs=2 full_resolution=1 detailed_grid=512x512");
   }
   captureHeld=capture;
   RECT r{};if(!GetClientRect(game,&r))return;POINT at{};ClientToScreen(game,&at);
@@ -68,7 +68,7 @@ inline void Tick(HWND game)noexcept {
  if(capture&&!captureHeld&&editable&&w&&h){
   gi_auto_capture::frozenCenter.store(gi_auto_capture::center.load());gi_auto_capture::completed=0;gi_auto_capture::recorded=0;
   ++gi_auto_capture::request;armedAt=GetTickCount64();gi_auto_capture::phase=gi_auto_capture::Countdown;
-  Log("GI_AUTO_R477 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
+  Log("GI_AUTO_R478 box_armed=1 request=%llu",static_cast<unsigned long long>(gi_auto_capture::request.load()));
  }
  captureHeld=capture;
  if(gi_auto_capture::phase.load()==gi_auto_capture::Countdown&&GetTickCount64()-armedAt>=5000)gi_auto_capture::phase=gi_auto_capture::Collecting;

@@ -19,7 +19,7 @@ inline DWORD WINAPI ExportDetail(void* context) noexcept {
     if(okay){
      const unsigned w=(std::min)(job->width,512u),h=(std::min)(job->height,512u);
      const UINT64 pixels=UINT64(w)*h,producer=((pixels*(job->rays+1)+1)/2)*32;
-     std::ostringstream out;out<<"{\"schema\":\"gi-scene-details-r477\",\"frame\":"<<job->frame<<",\"width\":"<<job->width<<",\"height\":"<<job->height<<",\"columns\":"<<w<<",\"rows\":"<<h<<",\"rays\":"<<job->rays<<",\"file\":\"details.bin\",\"bytes\":"<<job->bytes<<",\"summary_offset\":0,\"summary_stride\":64,\"producer_offset\":"<<pixels*64<<",\"producer_stride\":16,\"red_offset\":"<<pixels*64+producer<<",\"red_stride\":192,\"mapping\":\"pixel_x=floor(column*width/columns); pixel_y=floor(row*height/rows)\",\"gpu_completed\":true}\n";
+     std::ostringstream out;out<<"{\"schema\":\"gi-scene-details-r478\",\"frame\":"<<job->frame<<",\"width\":"<<job->width<<",\"height\":"<<job->height<<",\"columns\":"<<w<<",\"rows\":"<<h<<",\"rays\":"<<job->rays<<",\"file\":\"details.bin\",\"bytes\":"<<job->bytes<<",\"summary_offset\":0,\"summary_stride\":64,\"producer_offset\":"<<pixels*64<<",\"producer_stride\":16,\"red_offset\":"<<pixels*64+producer<<",\"red_stride\":192,\"mapping\":\"pixel_x=floor(column*width/columns); pixel_y=floor(row*height/rows)\",\"gpu_completed\":true}\n";
      const auto text=out.str();RRGuideExportDetail::File meta(directory+L"\\metadata.pending");okay=meta.Write(text.data(),text.size())&&meta.Finish();
      if(okay)okay=MoveFileExW((directory+L"\\metadata.pending").c_str(),(directory+L"\\metadata.json").c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
     }
@@ -27,11 +27,11 @@ inline DWORD WINAPI ExportDetail(void* context) noexcept {
   }
  }catch(...){okay=false;}
  if(data){D3D12_RANGE empty{};job->buffer->Unmap(0,&empty);}
- Log("GI_SCENE_R477 detail_export frame=%u success=%u bytes=%llu",job->frame,unsigned(okay),job->bytes);return 0;
+ Log("GI_SCENE_R478 detail_export frame=%u success=%u bytes=%llu",job->frame,unsigned(okay),job->bytes);return 0;
 }
 inline void QueueDetail(ID3D12Resource* buffer,UINT64 bytes,unsigned frame,unsigned width,unsigned height,unsigned rays) noexcept {
- auto* job=new(std::nothrow) DetailExport;if(!job){Log("GI_SCENE_R477 detail_export frame=%u success=0 allocation=0",frame);return;}
+ auto* job=new(std::nothrow) DetailExport;if(!job){Log("GI_SCENE_R478 detail_export frame=%u success=0 allocation=0",frame);return;}
  job->buffer=buffer;job->bytes=bytes;job->frame=frame;job->width=width;job->height=height;job->rays=rays;
- if(!QueueUserWorkItem(&ExportDetail,job,WT_EXECUTEDEFAULT)){delete job;Log("GI_SCENE_R477 detail_export frame=%u success=0 queue=0",frame);}
+ if(!QueueUserWorkItem(&ExportDetail,job,WT_EXECUTEDEFAULT)){delete job;Log("GI_SCENE_R478 detail_export frame=%u success=0 queue=0",frame);}
 }
 }

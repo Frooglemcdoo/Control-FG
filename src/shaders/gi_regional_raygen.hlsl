@@ -23,10 +23,11 @@ void giAutoRaygen() {
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
  uint packet=GIPacketAddress(pixel);
  if(packet!=0xffffffff)producerPackets.Store4(packet,uint4(asuint(receiver.origin),receiver.valid?selection.sampleFrame:0));
- if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i)materials[uint3(pixel,i)]=65534;return;}
+ if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i){materials[uint3(pixel,i)]=65534;GIStoreWeight(pixel,i,0);}return;}
  GIAutoTargets frozen=GISelectRegional(receiver.origin,receiver.normal,selection);GIAutoPrepared prepared=GIAutoPrepare(receiver.origin,frozen,selection);
  [loop]for(uint rayIndex=0;rayIndex<selection.rayCount;++rayIndex) {
   GIAutoDraw draw=GIAutoSamplePrepared(pixel,system[69].z,0,rayIndex,receiver.normal,prepared,selection);
+  GIStoreWeight(pixel,rayIndex,draw.weight);
   if(packet!=0xffffffff)producerPackets.Store4(packet+16*(rayIndex+1),asuint(float4(draw.direction,draw.weight)));
   RayDesc ray;ray.Origin=receiver.origin;ray.Direction=draw.direction;ray.TMin=0;
   ray.TMax=asfloat(controls.x)*(.8f+.4f*draw.range);

@@ -1,7 +1,7 @@
 name: Validate GI overhaul foundation
 on:
   push:
-    branches: [work/gi-scene-capture-r477]
+    branches: [work/gi-scene-capture-r478]
   workflow_dispatch:
 jobs:
   validate:
@@ -61,6 +61,21 @@ jobs:
           if errorlevel 1 exit /b 1
           scene-activity.exe
           if errorlevel 1 exit /b 1
+      - name: Validate secondary filter patch scope
+        shell: cmd
+        run: python tools/test-gi-secondary-filter.py
+      - name: Validate exact producer weight transport
+        shell: pwsh
+        run: |
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter dxc.exe -Recurse | Where-Object { $_.FullName -match '\\x64\\' } | Sort-Object FullName -Descending | Select-Object -First 1
+          & $dxc.FullName -T cs_6_0 -E main -D PRODUCER=1 -WX tools/gi-weight-transport-validation.hlsl -Fo weight-write.dxil
+          if($LASTEXITCODE -ne 0){throw 'Producer compile failed'}
+          & $dxc.FullName -T cs_6_0 -E main -WX tools/gi-weight-transport-validation.hlsl -Fo weight-read.dxil
+          if($LASTEXITCODE -ne 0){throw 'Consumer compile failed'}
+          cl /nologo /EHsc /std:c++17 /W4 /WX /O2 /DCONTROL_GI_REGIONAL tools/test-gi-weight-transport.cpp /Fe:weight-transport.exe /link d3d12.lib dxgi.lib d3dcompiler.lib
+          if($LASTEXITCODE -ne 0){throw 'Weight fixture compile failed'}
+          ./weight-transport.exe
+          if($LASTEXITCODE -ne 0){throw 'Weight fixture failed'}
       - name: Validate full-screen grid and lossless split packaging
         shell: pwsh
         run: |

@@ -17,7 +17,7 @@ int main()try {
  ComputeBindingSnapshot bindings;bindings.root=root;bindings.pipeline=nativePSO;bindings.arguments.Root(reinterpret_cast<UINT64>(root.Get()));UINT marker=0;bindings.arguments.Constants(0,0,1,&marker);
  Require(evaluator.Accept(bindings),"fixture native bindings rejected");
  auto guide=d.Upload(std::vector<unsigned char>(GIAutoPublicationBytes));Require(RetainCreatedStorage(guide.Get()),"guide storage");
- auto training=d.Buffer(4*GIAutoTrainingStride,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
+ auto training=d.Buffer(4*GIAutoTrainingStride+GIAutoWeightBytes(16,16,10),D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,true);
  auto read=d.Buffer(32,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_STATE_COPY_DEST);
  std::array<D3D12AutoTargetBinding,3> targets;std::array<D3D12AutoTiming,2> timing;
  for(UINT i=0;i<3;++i){const UINT rays=i==0?4u:(i==1?10u:8u);Require(targets[i].Initialize(guide.Get(),{1,1,rays,i==0?.5f:.4f,77}),"selection binding");

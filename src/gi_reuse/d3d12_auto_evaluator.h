@@ -2,6 +2,7 @@
 #include "d3d12_compute_bindings.h"
 #include "d3d12_auto_target_binding.h"
 #include "auto_pixel_audit.h"
+#include "auto_weight_layout.h"
 #include "auto_capture_region.h"
 #include <d3dcompiler.h>
 #include <vector>
@@ -94,7 +95,7 @@ public:
  // mutes hook observers. No allocations, heap switch, readback or wait here.
  bool Record(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings,
              const D3D12AutoTargetBinding& target,ID3D12Resource* training,
-             UINT width,UINT height,UINT step,UINT capacity,bool pixels=false,UINT roiX=0,UINT roiY=0,bool fullScreenAudit=false)const noexcept {
+             UINT width,UINT height,UINT step,UINT capacity,bool pixels=false,UINT roiX=0,UINT roiY=0,bool fullScreenAudit=false,bool textureMipOne=false)const noexcept {
   if((pixels&&(roiX>width-GIAuditWidth(width)||roiY>height-GIAuditHeight(height)))||!list||!Accept(bindings)||!target.Resource()||!training||!width||!height||
      width>16384||height>16384||step<8||step>256||!capacity||capacity>65535||
      UINT64((width+step-1)/step)*((height+step-1)/step)!=capacity||
@@ -104,7 +105,11 @@ public:
 #ifdef CONTROL_GI_REGIONAL
        +GIAuditProducerBytes(width,height,target.Selection().rayCount)+GIAuditRedBytes(width,height)
 #endif
-       ):0)||
+       ):0)
+#ifdef CONTROL_GI_REGIONAL
+       +GIAutoWeightBytes(width,height,target.Selection().rayCount)
+#endif
+       ||
      !training->GetGPUVirtualAddress()||training->GetGPUVirtualAddress()%8||
      (target.Selection().rayCount!=10&&target.Selection().rayCount!=4)||
      (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
@@ -124,7 +129,7 @@ public:
   list->SetComputeRootSignature(root_.Get());bindings.arguments.Replay(replay);list->SetPipelineState(pipeline_.Get());
   target.BindEvaluator(list,first_,first_+1);
   list->SetComputeRootUnorderedAccessView(first_+2,training->GetGPUVirtualAddress());
-  const UINT control[]={width,height,(GIAuditStepControl(step,roiX)|(fullScreenAudit?8388608u:0u)),GIAuditCapacityControl(capacity,roiY,pixels)};
+  const UINT control[]={width,height,(GIAuditStepControl(step,roiX)|(fullScreenAudit?8388608u:0u)|(textureMipOne?16777216u:0u)),GIAuditCapacityControl(capacity,roiY,pixels)};
   list->SetComputeRoot32BitConstants(first_+3,4,control,0);
   list->Dispatch((width+7)/8,(height+15)/16,1);
   return bindings.Restore(list);

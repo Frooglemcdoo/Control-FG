@@ -1,0 +1,37 @@
+R478 - Producer-weight correction and secondary-albedo filtering comparison.
+One DLL supports 4 and 10 rays. Native GI ray/evaluator bypass remains in place.
+
+Close the game; extract beside Control_DX12.exe, keeping folders intact.
+ControlTOH/Diagnostics/Start-GI-Auto-R478-4Rays.cmd is the corrected mip-0 baseline.
+Start-GI-Auto-R478-4Rays-Mip1.cmd selects a fixed mip-1 secondary-albedo comparison.
+Equivalent 10Rays launchers are included. Restart between modes. The ordinary
+launchers explicitly clear the mip-1 environment switch.
+GI FIXED, RR ON, FG OFF, RELAX OFF. Keep camera/settings comparable between runs.
+
+The evaluator now reads the original producer's FP32 weight for every ray. It
+no longer independently regenerates production weights. A UAV barrier separates
+producer writes from evaluator reads. Buffers follow existing submission/fence
+retirement and scratch reuse; no game fences are bypassed.
+
+Mip1 only changes the secondary hit's base-color texture lookup. It does not
+alter primary material detail, projection lights, shadows, BRDF lookup, or the
+native reference translation used elsewhere. This is a diagnostic comparison,
+not a validated ray-cone/footprint filter and not a claim of a speckle fix.
+A texture without coarser mip levels may show no difference. Mip0 is the default.
+Both modes include the weight correction so their visual difference isolates
+secondary albedo mip selection.
+
+Measure FPS outside capture. The new full-resolution weight allocation costs
+16 bytes/pixel at four rays or 40 bytes/pixel at ten rays for each in-flight
+invocation (about 56/141 MiB at 2560x1440 or 127/316 MiB at 3840x2160).
+The evaluator avoids repeated production sampling calculations; net frame-time
+impact is unmeasured in the game. At most two retired scratch allocations are
+cached; the invocation retention guard is 4 GiB, not a reservation.
+
+Full-screen capture remains Alt+Insert: hold still for pair 1, slowly pan for
+pair 2, wait for Saved. Never press F7. Run Package-GI-Scene.cmd and send the
+manifest plus every part ZIP. Each session records the mip mode in metadata.
+Captures can stall briefly and consume several GB. Restart for another sequence.
+Full-resolution GI/RR images and active hit slices are saved; detailed terms
+use a 512x512 grid. Per-light operands, full texture mip contents and instance/
+primitive IDs are not exported. Use compact logs if capture fails.
