@@ -95,8 +95,8 @@ public:
  // mutes hook observers. No allocations, heap switch, readback or wait here.
  bool Record(ID3D12GraphicsCommandList4* list,const ComputeBindingSnapshot& bindings,
              const D3D12AutoTargetBinding& target,ID3D12Resource* training,
-             UINT width,UINT height,UINT step,UINT capacity,bool pixels=false,UINT roiX=0,UINT roiY=0,bool fullScreenAudit=false,bool textureMipOne=false)const noexcept {
-  if((pixels&&(roiX>width-GIAuditWidth(width)||roiY>height-GIAuditHeight(height)))||!list||!Accept(bindings)||!target.Resource()||!training||!width||!height||
+             UINT width,UINT height,UINT step,UINT capacity,bool pixels=false,UINT roiX=0,UINT roiY=0,bool fullScreenAudit=false,bool textureMipOne=false,bool paired=false)const noexcept {
+  if((paired&&(!pixels||!fullScreenAudit))||(pixels&&(roiX>width-GIAuditWidth(width)||roiY>height-GIAuditHeight(height)))||!list||!Accept(bindings)||!target.Resource()||!training||!width||!height||
      width>16384||height>16384||step<8||step>256||!capacity||capacity>65535||
      UINT64((width+step-1)/step)*((height+step-1)/step)!=capacity||
      training==target.Resource()||training->GetDesc().Dimension!=D3D12_RESOURCE_DIMENSION_BUFFER||
@@ -107,7 +107,7 @@ public:
 #endif
        ):0)
 #ifdef CONTROL_GI_REGIONAL
-       +GIAutoWeightBytes(width,height,target.Selection().rayCount)
+       +GIAutoWeightBytes(width,height,target.Selection().rayCount)+(paired?GIAutoPairBytes(width,height):0)
 #endif
        ||
      !training->GetGPUVirtualAddress()||training->GetGPUVirtualAddress()%8||

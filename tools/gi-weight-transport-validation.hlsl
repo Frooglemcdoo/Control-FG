@@ -14,9 +14,11 @@ cbuffer Selection:register(b0,space19){GIAutoSelection selection;}
 #else
 #include "../src/shaders/gi_auto_training.hlsl"
 #include "../src/shaders/gi_weight_read.hlsl"
+#include "../src/shaders/gi_pair_write.hlsl"
 RWByteAddressBuffer verification:register(u1,space19);
 [numthreads(8,8,1)]void main(uint3 id:SV_DispatchThreadID){
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
+ GIPairWrite(id.xy,float3(GIReadWeight(id.xy,0),asfloat(0x3f800001u),0),3,float3(0,asfloat(0x3f000001u),GIReadWeight(id.xy,selection.rayCount-1)),3);
  for(uint ray=0;ray<selection.rayCount;++ray)
   verification.Store(((id.y*trainingWidth+id.x)*selection.rayCount+ray)*4,asuint(GIReadWeight(id.xy,ray)));
 }

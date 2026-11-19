@@ -1,0 +1,33 @@
+R479 - One-run, same-hit secondary texture comparison.
+One DLL supports 4 and 10 rays. Production GI shaders are unchanged from R478.
+
+Close the game; extract beside Control_DX12.exe, keeping folders intact.
+Run ControlTOH/Diagnostics/Start-GI-Auto-R479-4Rays.cmd (or 10Rays).
+Use GI FIXED, RR ON, FG OFF, RELAX OFF. Both launchers select the mip-0 gameplay
+baseline. You do not need to match two runs or switch texture modes.
+
+At the problem scene, press Alt+Insert once. Hold still for pair 1; slowly pan
+for pair 2; wait for Saved. Never press F7. Then run Package-GI-Scene.cmd and
+send scene-manifest.zip plus EVERY scene-part ZIP. Send compact logs if failed.
+
+On each captured frame a separate compute shader evaluates BOTH mip 0 and mip 1
+using identical ray hits, producer FP32 weights, receiver, textures and lights.
+It does not trace extra rays, publish guides, or write game GI/hit-distance outputs.
+The two full-resolution FP32 RGB results and validity flags are saved together in
+paired-mips.bin with the frame metadata. The capture packager requires this file.
+The ordinary R478 shader continues to provide the game's GI and RR input.
+There is one live RR output: this does NOT compare two independent RR histories.
+
+The comparison shader dispatches only on the four captured frames. Its buffers
+are allocated only for those captures and read after GPU fence completion.
+Each captured frame adds 32 bytes per internal pixel on GPU plus an equally sized
+readback buffer (about 225 MiB total at 2560x1440, 506 MiB at 3840x2160).
+Capturing can stall and produces large files. Measure gameplay FPS outside capture.
+R478's existing per-ray weight buffer remains (16/40 bytes per pixel at 4/10 rays).
+
+This is a controlled diagnostic, not a validated speckle fix. Mip1 changes only
+secondary base color and is a fixed level, not a footprint-aware ray-cone filter.
+Material/light buffers and native replacement bypass behavior remain unchanged.
+Full texture mip contents, per-light operands and instance/primitive IDs are not
+exported. Detailed term records still use a 512x512 grid; paired RGB covers every
+screen pixel at the internal GI resolution.

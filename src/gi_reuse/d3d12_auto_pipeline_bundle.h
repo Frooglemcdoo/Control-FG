@@ -12,6 +12,7 @@ class D3D12AutoPipelineBundle final:public IUnknown {
 public:
  D3D12AutoEvaluator evaluator;
 #ifdef CONTROL_GI_REGIONAL
+ D3D12AutoEvaluator comparison;
  D3D12RegionalTargetBuild builder;
 #else
  D3D12AutoTargetBuild builder;

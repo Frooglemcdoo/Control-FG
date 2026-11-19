@@ -11,6 +11,10 @@ if a.regional:
 (out/'gi_auto_secondary.generated.hlsl').write_text(secondary)
 lighting=out/'gi-auto-lighting.hlsl';lighting.write_text((ROOT/('src/shaders/gi_regional_lighting.hlsl' if a.regional else 'src/shaders/gi_auto_lighting.hlsl')).read_text().replace('"gi_evaluator_secondary.generated.hlsl"','"gi_auto_secondary.generated.hlsl"'))
 stages=[('Raygen',ROOT/('src/shaders/gi_regional_raygen.hlsl' if a.regional else 'src/shaders/gi_auto_raygen.hlsl'),'lib_6_3',None),('Lighting',lighting,'cs_6_0','main')]+[(n,ROOT/('src/shaders/gi_regional_target_build.hlsl' if a.regional else 'src/shaders/gi_auto_target_build.hlsl'),'cs_6_0',n) for n in (['Clear','Claim','First','Second','Freeze'] if a.regional else ['Clear','Claim','Accumulate','Freeze'])]
+if a.regional:
+ (out/'gi_compare_secondary.generated.hlsl').write_text(patch((ROOT/'src/shaders/gi_evaluator_secondary.generated.hlsl').read_text(),paired=True))
+ compare=out/'gi-paired-compare.hlsl';compare.write_text((ROOT/'src/shaders/gi_paired_compare.hlsl').read_text().replace('"gi_evaluator_secondary.generated.hlsl"','"gi_compare_secondary.generated.hlsl"'))
+ stages.append(('Compare',compare,'cs_6_0','main'))
 arrays=[];manifest={}
 for name,source,target,entry in stages:
  binary=out/('gi-auto-'+name.lower()+'.dxil');command=[a.dxc,'-T',target,'-HV','2018','-O3','-WX','-I',str(ROOT/'src/shaders'),str(source),'-Fo',str(binary)]
@@ -19,6 +23,10 @@ for name,source,target,entry in stages:
  if name=='Lighting' and a.assembler:
   reference=binary.with_name('gi-auto-lighting-reference.dxil');reference.write_bytes(binary.read_bytes())
   subprocess.run([sys.executable,str(ROOT/'tools/gi_evaluator_loads.py'),'--dxc',a.dxc,'--assembler',a.assembler,'--input',str(reference),'--output',str(binary)],check=True)
+ if name=='Compare':
+  dump=subprocess.check_output([a.dxc,'-dumpbin',str(binary)],text=True)
+  for forbidden in ('dx.op.textureStore','dx.op.traceRay','dx.op.atomicBinOp','dx.op.atomicCompareExchange'):
+   if forbidden in dump:raise RuntimeError('Comparison shader contains forbidden side effect: '+forbidden)
  data=binary.read_bytes();assert data[:4]==b'DXBC'
  arrays.append('inline constexpr unsigned char k'+name+'[]={'+','.join(map(str,data))+'};')
  manifest[name]={'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}

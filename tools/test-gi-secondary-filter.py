@@ -8,6 +8,12 @@ class FilterScope(unittest.TestCase):
   self.assertIn('GIMaterialTextureLod()',changed[0][1])
   # All other texture/light/projection/shadow operations must remain identical.
   self.assertEqual(a.count('SampleLevel'),b.count('SampleLevel'))
+ def test_paired_scope(self):
+  a=SOURCE.read_text();b=patch(a,paired=True);changes=[(x,y) for x,y in zip(a.splitlines(),b.splitlines()) if x!=y]
+  self.assertEqual(len(changes),2)
+  self.assertTrue(any(x=='struct GIShadingRegisters {' and 'float textureLod;' in y for x,y in changes))
+  self.assertTrue(any(x.endswith('// native dword 2338') and 'state.textureLod' in y for x,y in changes))
+  self.assertEqual(a.count('SampleLevel'),b.count('SampleLevel'))
  def test_reject_missing_duplicate_or_changed_contract(self):
   a=SOURCE.read_text();line=next(x for x in a.splitlines() if x.endswith('// native dword 2338'))
   for invalid in [a.replace(line,''),a+'\n'+line,a.replace(line,line.replace('g_sLinearWrap','g_sLinearClamp'))]:
