@@ -106,7 +106,12 @@ public:
 #ifdef CONTROL_REBLUR_ONLY
   nrd::ReblurSettings reblur{};
   // Defaults match the shader's normalization contract (3, .1, 20).
-  // Keep NRD's standard spatial/detail settings for this first comparison.
+  // Bound history by elapsed time. NRD's default 63-frame stabilization
+  // retained removed lighting in the moving-light GPU regression.
+  const auto historyFrames=[&](float ms){return std::uint32_t(std::fmax(1.f,std::fmin(30.f,ms/s.timeDeltaBetweenFrames)));};
+  reblur.maxAccumulatedFrameNum=historyFrames(250.f);
+  reblur.maxFastAccumulatedFrameNum=historyFrames(50.f);
+  reblur.maxStabilizedFrameNum=historyFrames(100.f);
   reblur.enableAntiFirefly=true;
   Check(nrd::SetCommonSettings(*instance,s));Check(nrd::SetDenoiserSettings(*instance,DiffuseId,&reblur));
 #else

@@ -116,7 +116,7 @@ int main(int argc,char** argv){try{
  control_nrd::NativeTransaction::Work transaction;
  ID3D12Resource* previousRelax=nullptr;ID3D12Resource* previousConversion=nullptr;
  UINT restartDescriptors=0,normalDescriptors=0;
- control_nrd::Session descriptorContract;
+ control_nrd::Session descriptorContract(signal);
 #endif
  for(UINT frame=1;frame<=128;++frame){
   Check(allocator->Reset());Check(list->Reset(allocator.Get(),nullptr));
