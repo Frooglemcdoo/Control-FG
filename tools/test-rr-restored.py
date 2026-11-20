@@ -5,6 +5,7 @@ m=json.loads((root/'tools/fixtures/r489-approved-rendering.json').read_text())
 for name,digest in m['files'].items():
  assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest,name
 ui=(root/'src/ui/rr_controls.h').read_text()
+assert 'render_fps::Tick(game,now)' in ui
 assert 'VK_F10' in ui and 'VK_F7' not in ui and 'VK_CONTROL' not in ui
 assert 'control_rr::RRUserLabel()' in ui and 'control_rr_capture_ui::Request()' in ui
 assert 'gi_scene_capture::Motion()' in ui and 'PublishCaptureActivity' in ui

@@ -1,6 +1,7 @@
 #pragma once
 // R489: approved rendering controls and the existing explicitly armed motion capture.
 #include "theme.h"
+#include "render_fps.h"
 #include <shellapi.h>
 #pragma comment(lib,"shell32.lib")
 #include "gi_auto_capture_box.h"
@@ -100,6 +101,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
   control_diagnostics::PublishCaptureActivity(false,capturing,gi_scene_capture::Enabled());
   if(capturing){gi_phase_audit::Poll();DrainDiagnosticLog();}
   gi_auto_box::Tick(game);
+  render_fps::Tick(game,now);
   if(!panel)continue;
   if(!foreground){Close(panel);continue;}
   if(open){Refresh(panel);RECT r{};GetClientRect(game,&r);POINT p{r.right>432?r.right-432:0,16};ClientToScreen(game,&p);RECT previous{};GetWindowRect(panel,&previous);const bool visible=IsWindowVisible(panel)!=FALSE;if(!visible||previous.left!=p.x||previous.top!=p.y)SetWindowPos(panel,HWND_TOP,p.x,p.y,416,250,SWP_NOACTIVATE|SWP_SHOWWINDOW|(visible?SWP_NOZORDER:0));if(GetForegroundWindow()==game||GetForegroundWindow()==panel)ClipCursor(nullptr);}
