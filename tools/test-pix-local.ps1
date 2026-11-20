@@ -55,6 +55,48 @@ $global:LASTEXITCODE=-1
  try{Invoke-Pix $fake @('fail') (Join-Path $tmp 'failure.log')}catch{$failed=$true}
  Assert $failed 'Nonzero PIX exit ignored'
  Assert ((Get-Content (Join-Path $tmp 'failure.log') -Raw) -match 'simulated PIX failure') 'Failure log lost'
+ # Verify manifest-derived Steam identity and ownership-safe temporary cleanup.
+ $gameDir=Join-Path $tmp 'steamapps\common\Control'
+ New-Item -ItemType Directory -Path $gameDir -Force | Out-Null
+ $gameExe=Join-Path $gameDir 'Control_DX12.exe'
+ $manifest=Join-Path $tmp 'steamapps\appmanifest_12345.acf'
+ '"AppState" { "appid" "12345" "installdir" "Control" }' | Set-Content $manifest
+ $module=Get-Module PIX-Common
+ & $module {function script:Get-Process {param($Name,$ErrorAction) if($Name -eq 'steam'){[pscustomobject]@{Id=123}}}}
+ $state=Initialize-SteamDebugLaunch $gameExe
+ Assert ($state.created -and $state.appId -eq '12345') 'Steam ID was not derived from matching manifest'
+ Assert ((Get-Content $state.path -Raw) -eq '12345') 'Steam App ID contents incorrect'
+ Restore-SteamDebugLaunch $state
+ Assert (!(Test-Path $state.path)) 'Owned temporary Steam file not removed'
+ '12345' | Set-Content $state.path
+ $existing=Initialize-SteamDebugLaunch $gameExe
+ Assert (!$existing.created) 'Existing Steam file claimed by helper'
+ Restore-SteamDebugLaunch $existing
+ Assert (Test-Path $existing.path) 'Existing Steam file removed'
+ '99999' | Set-Content $state.path
+ $conflict=$false
+ try{Initialize-SteamDebugLaunch $gameExe}catch{$conflict=$true}
+ Assert $conflict 'Conflicting Steam App ID accepted'
+ Assert ((Get-Content $state.path -Raw).Trim() -eq '99999') 'Conflicting Steam file overwritten'
+ Remove-Item $state.path
+ $owned=Initialize-SteamDebugLaunch $gameExe
+ 'changed' | Set-Content $owned.path
+ Restore-SteamDebugLaunch $owned
+ Assert ((Get-Content $owned.path -Raw).Trim() -eq 'changed') 'Modified temporary file deleted'
+ & $module {
+  $script:testGame=$args[0];$script:testTool=$args[1];$script:testStart=Get-Date
+  function script:Get-Process {
+   param($Name,$ErrorAction)
+   [pscustomobject]@{Id=55;Path=$script:testGame;MainWindowHandle=1;StartTime=$script:testStart;Modules=@([pscustomobject]@{ModuleName='WinPixGpuCapturer.dll';FileName=(Join-Path (Split-Path $script:testTool) 'WinPixGpuCapturer.dll')})}
+  }
+ } $gameExe $native
+ $ready=Wait-PixGame $gameExe $native (Join-Path $tmp 'startup.log') 5
+ Assert ($ready.Id -eq 55) 'Instrumented startup was not recognized'
+ & $module {Remove-Item Function:Get-Process}
+
+ $timedOut=$false
+ try{Wait-PixGame $gameExe $native (Join-Path $tmp 'startup.log') 0}catch{$timedOut=$_.Exception.Message -match 'no capture was attempted'}
+ Assert $timedOut 'Startup timeout did not fail closed'
  Write-Host 'PASS Windows parsing, argument paths, capture frames, supported-option checks, independent analysis stages, nonzero exit preservation'
 } finally {Remove-Item -LiteralPath $tmp -Recurse -Force}
 

@@ -72,3 +72,22 @@ Revision 3: launches the DX12 executable without unnecessary working-directory
 or command-line options. Capture uses separate --frames and count arguments.
 Windows CI checks the actual native argv with a compiled executable, including
 Program Files (x86) paths. This is not a claim of real PIX replay validation.
+
+## Revision 4: Steam debug launch and startup verification
+Keep Steam open and signed in, with Control closed. Run Capture-PIX.cmd.
+For a Steam installation under steamapps/common, the helper derives the App ID
+from its matching installed appmanifest, temporarily creates steam_appid.txt
+only if absent, and removes its own unchanged file after startup or on handled
+failure. Existing matching files are preserved; mismatches stop without changes.
+This uses Valve's documented direct executable/debugger launch mechanism:
+https://partner.steamgames.com/doc/api/steam_api
+If the console is forcibly closed before cleanup, remove steam_appid.txt only
+if this run created it. The helper never changes Steam ownership or login.
+
+The launcher now waits up to 45 seconds for a Control window and the selected
+PIX version's WinPixGpuCapturer.dll. A process restart before capture is rejected.
+Failed startup saves startup.log and relevant Windows Application events in
+startup-events.txt. These diagnostics distinguish missing instrumentation from
+no surviving process; they do not alone prove Steam or a GPU driver is at fault.
+The Steam debug-launch change addresses a plausible cause, not a confirmed
+root cause of the supplied logs. Real Control startup still needs verification.

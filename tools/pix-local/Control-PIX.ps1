@@ -4,6 +4,8 @@ param([ValidateSet('Capture','Analyze')][string]$Mode='Capture',
  [ValidateRange(1,32)][int]$Frames=16)
 $ErrorActionPreference='Stop'
 Import-Module (Join-Path $PSScriptRoot 'PIX-Common.psm1') -Force
+$steamState=$null
+$started=Get-Date
 try {
  $tool=Find-PixTool $PixTool
  if(!$OutputRoot){$OutputRoot=Read-Host 'Output folder on a drive with free space (all data stays here)'}
@@ -29,12 +31,21 @@ try {
   $meta['game']=$GameExe
   $dll=Join-Path (Split-Path $GameExe) 'dxgi.dll'
   if(Test-Path -LiteralPath $dll){$meta['modSha256']=(Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash}
+  $steamState=Initialize-SteamDebugLaunch $GameExe
+  if($steamState){$meta['steamAppId']=$steamState.appId;Write-Host "Steam debugger launch: App ID $($steamState.appId) from installed manifest."}
   Write-Host 'Launching through PIX. Use RR ON and FG OFF; keep your normal GI settings.'
   Write-Host 'Do NOT start the F10 custom capture or the old motion launcher.'
   Invoke-Pix $tool (New-LaunchArgs $GameExe) (Join-Path $folder 'launch.log') | Out-Host
+  Write-Host 'Checking game startup and PIX instrumentation (up to 45 seconds)...'
+  $launched=Wait-PixGame $GameExe $tool (Join-Path $folder 'startup.log')
+  $meta['launchedPid']=$launched.Id
+  $meta | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $folder 'manifest.json') -Encoding UTF8
+  Restore-SteamDebugLaunch $steamState
+  $steamState=$null
   Read-Host 'Load the scene. When ready, return here and press Enter to arm a 7-second countdown' | Out-Null
   $game=@(Get-Process -Name Control_DX12 -ErrorAction SilentlyContinue)
   if($game.Count -ne 1){throw 'Expected exactly one running Control_DX12 process.'}
+  if($game[0].Id -ne $launched.Id -or $game[0].StartTime -ne $launched.StartTime){throw 'Control restarted after PIX startup. Capture cancelled to avoid using an uninstrumented process.'}
   if([IO.Path]::GetFullPath($game[0].Path) -ne $GameExe){throw 'Running Control path differs from the selected game.'}
   Write-Host 'Return to the game and keep Jesse moving through the affected light. No keys are injected.'
   for($n=7;$n -ge 1;$n--){Write-Host "Capture in $n...";Start-Sleep -Seconds 1}
@@ -74,6 +85,16 @@ try {
  exit 0
 } catch {
  Write-Host "FAILED: $($_.Exception.Message)" -ForegroundColor Red
+ if($folder){
+  try {
+   Get-WinEvent -FilterHashtable @{LogName='Application';StartTime=$started;Id=1000,1001,1002} -ErrorAction Stop |
+    Where-Object {$_.Message -match 'Control_DX12|WinPix|pixtool'} |
+    Format-List TimeCreated,ProviderName,Id,Message | Out-File (Join-Path $folder 'startup-events.txt') -Encoding UTF8
+  }catch{"No matching Application events available: $($_.Exception.Message)" | Set-Content (Join-Path $folder 'startup-events.txt')}
+  Write-Host "Startup diagnostics: $folder"
+ }
  try{Stop-Transcript | Out-Null}catch{}
  exit 1
+} finally {
+ try{Restore-SteamDebugLaunch $steamState}catch{Write-Warning "Could not remove temporary Steam App ID file: $($_.Exception.Message)"}
 }
