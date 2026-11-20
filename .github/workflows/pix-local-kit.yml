@@ -15,8 +15,8 @@ jobs:
       - name: Package local PIX tools
         shell: powershell
         run: |
-          Compress-Archive -Path tools/pix-local/* -DestinationPath Control-PIX-Local-Kit.zip
+          Compress-Archive -Path tools/pix-local/* -DestinationPath Control-PIX-Local-Kit-v2.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: Control-PIX-Local-Kit
-          path: Control-PIX-Local-Kit.zip
+          name: Control-PIX-Local-Kit-v2
+          path: Control-PIX-Local-Kit-v2.zip

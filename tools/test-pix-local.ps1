@@ -21,13 +21,19 @@ try {
  @'
 param([Parameter(ValueFromRemainingArguments=$true)][string[]]$Values)
 if($Values -contains 'fail'){ $global:LASTEXITCODE=7; 'simulated PIX failure'; return }
-$global:LASTEXITCODE=0
+$global:LASTEXITCODE=-1
 'launch --working-directory --command-line take-capture --frames --open save-capture attach'
 '@ | Set-Content $fake
  Assert-PixCommand $fake 'take-capture' @('--frames','--open') $tmp
  $rejected=$false
  try{Assert-PixCommand $fake 'take-capture' @('--invented') $tmp}catch{$rejected=$true}
  Assert $rejected 'Unsupported option was accepted'
+ $guarded=$false
+ try{Invoke-Pix $fake @('launch','game.exe') (Join-Path $tmp 'unsafe-help.log') -HelpQuery}catch{$guarded=$true}
+ Assert $guarded 'Help exception leaked into launch'
+ $negativeFailed=$false
+ try{Invoke-Pix $fake @('launch') (Join-Path $tmp 'negative.log')}catch{$negativeFailed=$_.Exception.Message -match 'launch --working-directory'}
+ Assert $negativeFailed 'Operational -1 ignored or underlying output hidden'
  $failed=$false
  try{Invoke-Pix $fake @('fail') (Join-Path $tmp 'failure.log')}catch{$failed=$true}
  Assert $failed 'Nonzero PIX exit ignored'

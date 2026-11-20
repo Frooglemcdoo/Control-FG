@@ -63,3 +63,7 @@ Implementation references:
 Validation: Windows PowerShell parsing and mocked command/error handling are tested.
 Real Control + RTX 5090 capture and DLSS RR replay cannot be validated by this kit's
 CI. The first run must establish that compatibility, not assume it.
+
+Revision 2: accepts PIX help exit -1 only when the command/options are present.
+Capture, launch and replay still require exit 0. Actual PIX error output is shown
+in the console and saved, including the selected executable and exit code.
