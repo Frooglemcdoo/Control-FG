@@ -34,3 +34,5 @@ $global:LASTEXITCODE=0
  Assert ((Get-Content (Join-Path $tmp 'failure.log') -Raw) -match 'simulated PIX failure') 'Failure log lost'
  Write-Host 'PASS Windows parsing, argument paths, capture frames, supported-option checks, independent analysis stages, nonzero exit preservation'
 } finally {Remove-Item -LiteralPath $tmp -Recurse -Force}
+
+exit 0
