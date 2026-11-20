@@ -20,13 +20,15 @@ inline void Refresh(HWND panel) noexcept {
  SetWindowTextW(GetDlgItem(panel,2),gi_evaluator::Enabled()?gi_evaluator::Label():gi_live_toggle::Label());
  const auto clamp=control_rr_clamp::requestedMode.load();
  SetWindowTextW(GetDlgItem(panel,3),clamp==control_rr_clamp::Mode::Native?L"REF CLAMP: NATIVE":clamp==control_rr_clamp::Mode::Bypass?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%");
- wchar_t text[64]{};const unsigned rays=control_rr::GISampleRequested();
- if(rays)swprintf_s(text,L"GI RAYS: %u",rays);else wcscpy_s(text,L"GI RAYS: NATIVE");SetWindowTextW(GetDlgItem(panel,4),text);
+ wchar_t text[64]{};const unsigned fixedRays=gi_auto_dispatch::LaunchRays();
+ const unsigned rays=fixedRays?fixedRays:control_rr::GISampleRequested();
+ if(fixedRays)swprintf_s(text,L"GI RAYS: %u (CAPTURE)",rays);
+ else if(rays)swprintf_s(text,L"GI RAYS: %u",rays);else wcscpy_s(text,L"GI RAYS: NATIVE");SetWindowTextW(GetDlgItem(panel,4),text);
  SetWindowTextW(GetDlgItem(panel,5),control_rr_capture_ui::Busy()?L"CAPTURE: RECORDING":L"CAPTURE MOTION");
  SetWindowTextW(GetDlgItem(panel,6),L"PACKAGE CAPTURE");
  SetWindowTextW(GetDlgItem(panel,9),control_rr::RRUserLabel());
  SetWindowTextW(GetDlgItem(panel,10),gi_scene_capture::Motion()?L"16 full-screen frames. Move until STOP appears.":L"Capture: launch Start-GI-Motion-R489.cmd first.");
- for(int i=1;i<=5;++i)EnableWindow(GetDlgItem(panel,i),!control_rr_capture_ui::Busy());
+ for(int i=1;i<=5;++i)EnableWindow(GetDlgItem(panel,i),!control_rr_capture_ui::Busy()&&(i!=4||!fixedRays));
 }
 inline void Package(HWND panel) noexcept {
  wchar_t path[32768]{};if(!GetModuleFileNameW(selfModule,path,32768))return;
@@ -66,7 +68,7 @@ inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
   if(id==1){std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);if(control_settings::Write(control_settings::Definition(control_settings::Key::RayReconstruction),!control_rr::RRUserRequested()))FGSettingsMarkSettingsDirty();}
   else if(id==2){if(gi_evaluator::Enabled())gi_evaluator::Toggle();else if(gi_live_toggle::ready.load())gi_live_toggle::Toggle();}
   else if(id==3)control_rr_clamp::requestedMode.store(control_rr_clamp::Next(control_rr_clamp::requestedMode.load()));
-  else if(id==4){std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);if(control_settings::Write(control_settings::Definition(control_settings::Key::GlobalIlluminationSamples),control_rr::NextGISampleRequest(control_rr::GISampleRequested())))FGSettingsMarkSettingsDirty();}
+  else if(id==4&&!gi_auto_dispatch::LaunchRays()){std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);if(control_settings::Write(control_settings::Definition(control_settings::Key::GlobalIlluminationSamples),control_rr::NextGISampleRequest(control_rr::GISampleRequested())))FGSettingsMarkSettingsDirty();}
   else if(id==5)Capture(window);
   else if(id==6)Package(window);
   Refresh(window);return 0;
