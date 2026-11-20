@@ -30,7 +30,13 @@ inline LRESULT CALLBACK LabelProc(HWND hwnd,UINT msg,WPARAM wp,LPARAM lp)noexcep
   else if(phase==gi_auto_capture::Countdown)swprintf_s(text,L"Box locked. Capture starts in %llu seconds.",(5000-(std::min)(5000ull,GetTickCount64()-armedAt)+999)/1000);
   else if(phase==gi_auto_capture::Collecting)swprintf_s(text,L"Capturing: %u / 10 snapshots saved. Box locked.",gi_auto_capture::completed.load());
   else wcscpy_s(text,L"Capture complete. Collect compact logs. Alt + arrows / Alt + Insert to repeat.");
-  DrawLabel(dc,detailFont,text,{12,8,r.right-12,r.bottom-8},control_ui::theme::kText);EndPaint(hwnd,&ps);return 0;}
+  // This status window is also used by the compact controls, without the
+  // legacy diagnostic panel's shared font or DrawLabel helper.
+  RECT textBounds{12,8,r.right-12,r.bottom-8};
+  const auto font=control_ui::theme::CreateFontForStyle(control_ui::theme::kDetailFont);
+  const auto previous=SelectObject(dc,font);SetTextColor(dc,control_ui::theme::kText);SetBkMode(dc,TRANSPARENT);
+  DrawTextW(dc,text,-1,&textBounds,DT_LEFT|DT_VCENTER|DT_SINGLELINE);
+  SelectObject(dc,previous);DeleteObject(font);EndPaint(hwnd,&ps);return 0;}
  return DefWindowProcW(hwnd,msg,wp,lp);
 }
 inline void Close()noexcept {if(box)DestroyWindow(box);if(label)DestroyWindow(label);box=label=owner=nullptr;}
