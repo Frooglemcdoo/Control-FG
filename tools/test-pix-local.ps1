@@ -12,8 +12,25 @@ $tmp=Join-Path $env:TEMP ('PIX tests '+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory $tmp | Out-Null
 try {
  $a=@(New-CaptureArgs 123 16 'D:\captures with spaces\motion.wpix')
- Assert ($a.Count -eq 7 -and $a[0] -eq 'attach' -and $a[3] -eq '--frames=16' -and $a[6] -eq 'D:\captures with spaces\motion.wpix') 'Capture argv split or changed'
+ Assert ($a.Count -eq 8 -and $a[0] -eq 'attach' -and $a[3] -eq '--frames' -and $a[4] -eq '16' -and $a[7] -eq 'D:\captures with spaces\motion.wpix') 'Capture argv split or changed'
  Assert (($a -join ' ') -notmatch 'F7|Control_L|SendKeys') 'Unexpected input injection'
+ # Exercise Windows PowerShell -> native executable argument serialization,
+ # including the user's exact Program Files (x86) path. No mocked PS binding.
+ $native=Join-Path $tmp 'argv probe.exe'
+ Add-Type -TypeDefinition @'
+using System;
+public class PixArgumentProbe {
+ public static int Main(string[] args) {
+  foreach(string arg in args) Console.WriteLine(arg);
+  if(args.Length==2 && args[0]=="launch" && args[1]==@"C:\Program Files (x86)\Steam\steamapps\common\Control\Control_DX12.exe") return 0;
+  if(args.Length==8 && args[0]=="attach" && args[1]=="123" && args[2]=="take-capture" && args[3]=="--frames" && args[4]=="16" && args[5]=="--open" && args[6]=="save-capture" && args[7]==@"D:\captures with spaces\motion.wpix") return 0;
+  return 23;
+ }
+}
+'@ -OutputAssembly $native -OutputType ConsoleApplication
+ $launchArgs=New-LaunchArgs 'C:\Program Files (x86)\Steam\steamapps\common\Control\Control_DX12.exe'
+ Invoke-Pix $native $launchArgs (Join-Path $tmp 'native-launch.log') | Out-Null
+ Invoke-Pix $native $a (Join-Path $tmp 'native-capture.log') | Out-Null
  $steps=@(Get-AnalysisSteps 'D:\captures with spaces\motion.wpix' $tmp)
  Assert ($steps.Count -eq 4) 'Missing independent analysis phases'
  foreach($s in $steps){Assert ($s.args[1] -eq 'D:\captures with spaces\motion.wpix') 'Lost source path'}

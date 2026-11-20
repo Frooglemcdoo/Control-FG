@@ -67,3 +67,8 @@ CI. The first run must establish that compatibility, not assume it.
 Revision 2: accepts PIX help exit -1 only when the command/options are present.
 Capture, launch and replay still require exit 0. Actual PIX error output is shown
 in the console and saved, including the selected executable and exit code.
+
+Revision 3: launches the DX12 executable without unnecessary working-directory
+or command-line options. Capture uses separate --frames and count arguments.
+Windows CI checks the actual native argv with a compiled executable, including
+Program Files (x86) paths. This is not a claim of real PIX replay validation.

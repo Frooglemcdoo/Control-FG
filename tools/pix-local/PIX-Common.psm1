@@ -28,9 +28,14 @@ function Assert-PixCommand([string]$Tool,[string]$Command,[string[]]$Options,[st
  if($help -notmatch [regex]::Escape($Command)){throw "PIX help did not confirm $Command. See $log`n$help"}
  foreach($option in $Options){if($help -notmatch [regex]::Escape($option)){throw "PIX help did not confirm $option for $Command. See $log`n$help"}}
 }
+function New-LaunchArgs([string]$GameExe) {
+ # Control_DX12.exe selects DX12 directly. PIX defaults the working directory
+ # to the executable directory; no version-specific option syntax is needed.
+ return @('launch',$GameExe)
+}
 function New-CaptureArgs([int]$ProcessId,[int]$Frames,[string]$Path) {
  if($ProcessId -le 0 -or $Frames -lt 1 -or $Frames -gt 32){throw 'Invalid capture process/frame count.'}
- return @('attach',"$ProcessId",'take-capture',"--frames=$Frames",'--open','save-capture',$Path)
+ return @('attach',"$ProcessId",'take-capture','--frames',"$Frames",'--open','save-capture',$Path)
 }
 function Get-AnalysisSteps([string]$Capture,[string]$Folder) {
  return @(

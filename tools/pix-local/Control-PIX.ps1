@@ -18,7 +18,7 @@ try {
   $GameExe=(Resolve-Path -LiteralPath $GameExe).Path
   if([IO.Path]::GetFileName($GameExe) -ne 'Control_DX12.exe'){throw 'Select Control_DX12.exe.'}
   if(Get-Process -Name Control_DX12 -ErrorAction SilentlyContinue){throw 'Close Control before launching this workflow. PIX must instrument startup.'}
-  Assert-PixCommand $tool 'launch' @('--working-directory','--command-line') $folder
+  Assert-PixCommand $tool 'launch' @() $folder
   Assert-PixCommand $tool 'attach' @() $folder
   Assert-PixCommand $tool 'take-capture' @('--frames','--open') $folder
   Assert-PixCommand $tool 'save-capture' @() $folder
@@ -31,7 +31,7 @@ try {
   if(Test-Path -LiteralPath $dll){$meta['modSha256']=(Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash}
   Write-Host 'Launching through PIX. Use RR ON and FG OFF; keep your normal GI settings.'
   Write-Host 'Do NOT start the F10 custom capture or the old motion launcher.'
-  Invoke-Pix $tool @('launch',$GameExe,"--working-directory=$(Split-Path $GameExe)",'--command-line=-dx12') (Join-Path $folder 'launch.log') | Out-Host
+  Invoke-Pix $tool (New-LaunchArgs $GameExe) (Join-Path $folder 'launch.log') | Out-Host
   Read-Host 'Load the scene. When ready, return here and press Enter to arm a 7-second countdown' | Out-Null
   $game=@(Get-Process -Name Control_DX12 -ErrorAction SilentlyContinue)
   if($game.Count -ne 1){throw 'Expected exactly one running Control_DX12 process.'}
