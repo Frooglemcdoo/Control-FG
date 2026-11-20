@@ -1561,7 +1561,7 @@ jobs:
           if errorlevel 1 exit /b 1
 
       - name: Build standalone motion verifier
-        if: github.ref_name == 'work/gi-motion-capture-r484'
+        if: github.ref_name == 'work/gi-motion-capture-r484' || github.ref_name == 'work/rr-restored-r489'
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
