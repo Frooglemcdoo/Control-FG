@@ -1,0 +1,22 @@
+name: Validate PIX local kit
+on:
+  push:
+    branches: [work/rr-restored-r489]
+    paths: ['tools/pix-local/**', 'tools/test-pix-local.ps1', '.github/workflows/pix-local-kit.yml']
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test Windows PowerShell launcher and errors
+        shell: powershell
+        run: ./tools/test-pix-local.ps1
+      - name: Package local PIX tools
+        shell: powershell
+        run: |
+          Compress-Archive -Path tools/pix-local/* -DestinationPath Control-PIX-Local-Kit.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Control-PIX-Local-Kit
+          path: Control-PIX-Local-Kit.zip
