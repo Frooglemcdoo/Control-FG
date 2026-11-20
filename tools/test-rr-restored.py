@@ -3,7 +3,7 @@ import hashlib,json
 root=Path(__file__).resolve().parents[1]
 m=json.loads((root/'tools/fixtures/r489-approved-rendering.json').read_text())
 for name,digest in m['files'].items():
- assert hashlib.sha256((root/name).read_bytes()).hexdigest()==digest,name
+ assert hashlib.sha256((root/name).read_text(encoding='utf-8').encode('utf-8')).hexdigest()==digest,name
 ui=(root/'src/ui/rr_controls.h').read_text()
 assert 'render_fps::Tick(game,now)' in ui
 assert 'VK_F10' in ui and 'VK_F7' not in ui and 'VK_CONTROL' not in ui
