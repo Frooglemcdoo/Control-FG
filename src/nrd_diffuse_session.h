@@ -56,6 +56,22 @@ inline bool Valid(const Frame& f) {
  return std::isfinite(s.timeDeltaBetweenFrames)&&s.timeDeltaBetweenFrames>0&&
         std::isfinite(s.denoisingRange)&&s.denoisingRange>0;
 }
+#ifdef CONTROL_REBLUR_ONLY
+inline nrd::ReblurSettings ReblurHistorySettings(float timeDeltaMs) {
+ nrd::ReblurSettings reblur{};
+ const auto historyFrames=[&](float ms){return std::uint32_t(std::fmax(1.f,std::fmin(30.f,ms/timeDeltaMs)));};
+ reblur.maxAccumulatedFrameNum=historyFrames(250.f);
+ reblur.maxFastAccumulatedFrameNum=historyFrames(50.f);
+ reblur.maxStabilizedFrameNum=historyFrames(100.f);
+ // NRD requires historyFixFrameNum < maxFastAccumulatedFrameNum. A fixed
+ // default of 3 violated that contract at ordinary gameplay frame rates.
+ reblur.historyFixFrameNum=(std::min)(reblur.historyFixFrameNum,reblur.maxFastAccumulatedFrameNum-1);
+ reblur.responsiveAccumulationSettings.minAccumulatedFrameNum=(std::min)(
+  reblur.responsiveAccumulationSettings.minAccumulatedFrameNum,reblur.historyFixFrameNum);
+ reblur.enableAntiFirefly=true;
+ return reblur;
+}
+#endif
 class Session {
  nrd::Instance* instance=nullptr;
  Frame last{},candidate{};
@@ -104,15 +120,7 @@ public:
   if(restart)s.accumulationMode=nrd::AccumulationMode::CLEAR_AND_RESTART;
   s.frameIndex=index;
 #ifdef CONTROL_REBLUR_ONLY
-  nrd::ReblurSettings reblur{};
-  // Defaults match the shader's normalization contract (3, .1, 20).
-  // Bound history by elapsed time. NRD's default 63-frame stabilization
-  // retained removed lighting in the moving-light GPU regression.
-  const auto historyFrames=[&](float ms){return std::uint32_t(std::fmax(1.f,std::fmin(30.f,ms/s.timeDeltaBetweenFrames)));};
-  reblur.maxAccumulatedFrameNum=historyFrames(250.f);
-  reblur.maxFastAccumulatedFrameNum=historyFrames(50.f);
-  reblur.maxStabilizedFrameNum=historyFrames(100.f);
-  reblur.enableAntiFirefly=true;
+  const auto reblur=ReblurHistorySettings(s.timeDeltaBetweenFrames);
   Check(nrd::SetCommonSettings(*instance,s));Check(nrd::SetDenoiserSettings(*instance,DiffuseId,&reblur));
 #else
   nrd::RelaxSettings relax{};

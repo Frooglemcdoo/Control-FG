@@ -1026,6 +1026,8 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           build\test-gi-samples.exe
           if not "%errorlevel%"=="0" exit /b 1
+          python tools/test-reblur-recovery-routing.py
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-perf-r32.cpp /Febuild\test-perf-r32.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-perf-r32.exe
@@ -1564,7 +1566,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/reblur-only-r485') { 'ControlTOH-REBLUR-R487' } elseif ('${{ github.ref_name }}' -eq 'work/gi-motion-capture-r484') { 'ControlTOH-GI-Auto-R484' } elseif ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Source10-R447' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/reblur-only-r485') { 'ControlTOH-REBLUR-R488' } elseif ('${{ github.ref_name }}' -eq 'work/gi-motion-capture-r484') { 'ControlTOH-GI-Auto-R484' } elseif ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Source10-R447' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1639,11 +1641,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
-          if ($out -eq 'ControlTOH-REBLUR-R487') {
+          if ($out -eq 'ControlTOH-REBLUR-R488') {
             Remove-Item "$out/ControlTOH/Diagnostics" -Recurse -Force
             Get-ChildItem "$out/ControlTOH/Tools" -File | Where-Object Name -notin @('ControlFG-Restart.exe','Collect-ControlFG-Compact-Logs.cmd','Collect-ControlFG-Compact-Logs.ps1') | Remove-Item -Force
             Remove-Item "$out/ControlTOH/GI-GUIDED-R434.md","$out/ControlTOH/RENDERING-WORK-AUDIT.md" -Force
-            Copy-Item docs/REBLUR-R487.txt "$out/ControlTOH/README.txt" -Force
+            Copy-Item docs/REBLUR-R488.txt "$out/ControlTOH/README.txt" -Force
           }
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -1652,10 +1654,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/reblur-only-r485' && 'ControlTOH-REBLUR-R487' || github.ref_name == 'work/gi-motion-capture-r484' && 'ControlTOH-GI-Auto-R484' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/reblur-only-r485' && 'ControlTOH-REBLUR-R488' || github.ref_name == 'work/gi-motion-capture-r484' && 'ControlTOH-GI-Auto-R484' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
-            ControlTOH-REBLUR-R487.zip
-            ControlTOH-REBLUR-R487.sha256
+            ControlTOH-REBLUR-R488.zip
+            ControlTOH-REBLUR-R488.sha256
             ControlTOH-GI-Auto-R484.zip
             ControlTOH-GI-Auto-R484.sha256
             ControlTOH-GI-Source10-R447.zip

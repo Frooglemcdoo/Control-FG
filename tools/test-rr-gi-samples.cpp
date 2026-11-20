@@ -4,7 +4,40 @@
 #include <cassert>
 #include "../src/native_lighting_live_state.h"
 #include <cstdio>
+static void TestFilterRecovery(){
+ using namespace control_rr;
+ struct History {unsigned calls=0;bool success=true;bool ResetBeforeFilter() noexcept {++calls;return success;}};
+ for(unsigned route=0;route<3;++route){ // REBLUR off, REBLUR+RR, native RR
+  RRFrameCoordinator frame;History history;
+  assert(frame.Begin({1,3840,2160,2560,1440,0},true,true));
+  assert(frame.FeatureResult(true,true));
+  assert(ResetHistoryBeforeFilter(frame,history)&&history.calls==0);
+  assert(frame.BeginLighting(1)&&frame.BeginEvaluation(1,true,true)&&frame.EvaluationResult(true));
+  assert(frame.Begin({2,3840,2160,2560,1440,0},true,true));
+  assert(frame.FeatureResult(true,true)); // menu skips lighting/evaluation
+  const bool requested=route!=0;
+  assert(!frame.Begin({3,3840,2160,2560,1440,0},requested,true));
+  assert(frame.Recovering()&&frame.FeatureResult(true,false)&&frame.NeedsHistoryReset());
+  assert(ResetHistoryBeforeFilter(frame,history)&&history.calls==1);
+  assert(ResetHistoryBeforeFilter(frame,history)&&history.calls==1); // once, before either filter route
+  assert(frame.CompleteSR()&&!frame.Stopped());
+  assert(frame.Begin({4,3840,2160,2560,1440,0},true,true));
+  assert(frame.FeatureResult(true,true)&&frame.BeginLighting(4)&&frame.BeginEvaluation(4,true,true)&&frame.EvaluationResult(true));
+  assert(!frame.Begin({5,3840,2160,1920,1080,0},true,true));
+  assert(frame.FeatureResult(true,false)&&ResetHistoryBeforeFilter(frame,history)&&history.calls==2);
+  assert(frame.CompleteSR()&&!frame.Stopped());
+ }
+ // Failure must remain terminal; no fake acknowledgement or automatic unstop.
+ RRFrameCoordinator failure;History history;history.success=false;
+ assert(failure.Begin({1,1920,1080,1920,1080,0},true,true));
+ assert(failure.FeatureResult(true,true)&&failure.BeginLighting(1)&&failure.BeginEvaluation(1,true,true)&&failure.EvaluationResult(true));
+ assert(!failure.Begin({2,1920,1080,1920,1080,0},false,true));
+ assert(failure.FeatureResult(true,false));
+ assert(!ResetHistoryBeforeFilter(failure,history)&&failure.Stopped()&&failure.NeedsHistoryReset());
+}
 int main(){
+ TestFilterRecovery();
+
  using namespace control_rr;
  assert(GISampleRequested()==0); // R392 startup preserves the native count.
  for(unsigned requested: {0u,1u,2u,3u,4u,5u,6u,7u,8u,9u,10u,11u,12u,13u,14u,15u,16u,17u,32u,0xffffffffu}){

@@ -856,6 +856,14 @@ static void RRReportSpecularProducer() noexcept {
  }
 }
 static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool evaluateColor) {
+ // All routes use the native wrapper/history pool, including REBLUR's early
+ // return. Recover the pool before any route enters that wrapper.
+ if(rrNativeFrameEnabled&&rrNativeFrame.NeedsHistoryReset()){
+  const DWORD error=GetLastError();
+  const bool reset=control_rr::ResetHistoryBeforeFilter(rrNativeFrame,rrNativeHistory);
+  Log("REBLUR_HISTORY_RESET success=%u frame=%llu",unsigned(reset),static_cast<unsigned long long>(rrNativeFrame.Key().frame));
+  SetLastError(error);
+ }
 #ifdef CONTROL_REBLUR_ONLY
  if(control_reblur::Active()){
  const auto callbacks=control_nrd_bridge::specular.load();
@@ -886,10 +894,6 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
  RRReportSpecularProducer();
  const auto perfStart=RRPerfClock();
  if(RRNativePartialActive()){
-  if(rrNativeFrame.NeedsHistoryReset()){
-   const bool historyReset=rrNativeHistory.ResetBeforeFilter();rrNativeFrame.HistoryResetResult(historyReset);
-   Log("RR_NATIVE_HISTORY_RESET success=%u reason=enter_partial",unsigned(historyReset));
-  }
   SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
   control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);
   const DWORD nativeError=GetLastError();RRPerfFilter(rrNativeFrame.Key().frame,RRPerfElapsed(perfStart));
@@ -898,10 +902,6 @@ static void RRNativeHookFilter(void* color,void* history,unsigned passes,bool ev
   SetLastError(nativeError);return;
  }
  if(!rrNativeFrame.Selected()){
-  if(rrNativeFrame.NeedsHistoryReset()){
-   const bool reset=rrNativeHistory.ResetBeforeFilter();rrNativeFrame.HistoryResetResult(reset);
-   Log("RR_NATIVE_HISTORY_RESET success=%u",unsigned(reset));
-  }
   SetLastError(saved);rrNativeFilterOriginal(color,history,passes,evaluateColor);
   control_rr_diagnostic::Record(control_rr_diagnostic::Event::ReflectionNative);
   const DWORD nativeError=GetLastError();RRPerfFilter(rrNativeFrame.Key().frame,RRPerfElapsed(perfStart));SetLastError(nativeError);return;

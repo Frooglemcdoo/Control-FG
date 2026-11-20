@@ -1,0 +1,36 @@
+CONTROL: THE OLDEST HOUSE - REBLUR R488 TEST BUILD
+
+Close Control and extract over your existing installation beside Control_DX12.exe.
+Keep the existing Streamline runtime files.
+
+Graphics > Reconstruction Mode:
+  REBLUR (RR off)
+  REBLUR + RR (RR on)
+  Native RR (REBLUR off): existing mod RR path, with no REBLUR guide/filter dispatches.
+
+All modes keep the game's ray budget. Changes reset reconstruction history.
+REBLUR Sharpening: 0-100%, default 0. Applies to denoised lighting before material
+composition and RR, with depth/normal edge rejection and bounded contrast gain.
+It does not restore texture information removed by denoising. Native RR bypasses
+this sharpening; its value is retained when switching back to REBLUR.
+
+REBLUR still applies across the scene. Jesse-only selection is not implemented:
+the current character mask identifies material families, not Jesse's actor.
+Native shadow-mask denoising remains in place.
+
+No scene capture is enabled. The compact log collector is in ControlTOH/Tools.
+REBLUR_RR reports actual RR evaluation. In-game quality and FPS need verification.
+
+R488 fixes:
+- Run the required native history reset before every reflection filter route,
+  including REBLUR. Recovery/menu transitions no longer skip this reset and
+  permanently disable RR with recovery_history_not_reset.
+- Bound REBLUR history reconstruction to its actual fast-history length at
+  every frame rate, per the NRD contract. The previous fixed 3-frame value
+  exceeded that length at common gameplay frame rates.
+
+Restart the game after installing. Select Native RR, then REBLUR + RR, and
+compare the same running/movement case. No scene capture or extra GPU pass
+was added. REBLUR_HISTORY_RESET and REBLUR_RR report recovery and evaluation
+in the compact log. The history correction is not proof that all Jesse ghosting
+is eliminated; motion quality still needs in-game verification.

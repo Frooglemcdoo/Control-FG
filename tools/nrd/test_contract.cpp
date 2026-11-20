@@ -7,6 +7,15 @@
 #include <cstdlib>
 static void Require(bool good,const char* what){if(!good){std::fprintf(stderr,"FAIL %s\n",what);std::exit(1);}}
 int main(){
+#ifdef CONTROL_REBLUR_ONLY
+ for(float ms:{1.f,4.1667f,8.3333f,16.6667f,25.f,33.3333f,50.f,100.f,250.f}){
+  const auto settings=control_nrd::ReblurHistorySettings(ms);
+  Require(settings.historyFixFrameNum<settings.maxFastAccumulatedFrameNum,"history reconstruction must fit fast history at every frame rate");
+  Require(settings.responsiveAccumulationSettings.minAccumulatedFrameNum<=settings.historyFixFrameNum,"responsive minimum must fit reconstruction history");
+  Require(settings.maxFastAccumulatedFrameNum<=settings.maxAccumulatedFrameNum&&settings.maxStabilizedFrameNum<=settings.maxAccumulatedFrameNum,"history bounds");
+ }
+#endif
+
  control_reblur::Select(1);auto revision=control_reblur::revision.load();
  control_reblur::Select(2);Require(control_reblur::Mode()==2&&!control_reblur::Active(),"native RR excludes REBLUR");
  Require(control_reblur::revision.load()==revision+1,"mode transition resets history even when RR stays on");

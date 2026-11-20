@@ -93,4 +93,11 @@ public:
  RRFrameStage Stage() const noexcept {return stage_;}
  const RRFrameKey& Key() const noexcept {return key_;}
 };
+// Shared by every filter route. Acknowledgement follows the real native reset;
+// a failed reset remains terminal and must never be retried as a flag clear.
+template<class NativeHistory> bool ResetHistoryBeforeFilter(RRFrameCoordinator& frame,NativeHistory& history) noexcept {
+ if(!frame.NeedsHistoryReset())return !frame.Stopped();
+ return frame.HistoryResetResult(history.ResetBeforeFilter());
+}
+
 }
