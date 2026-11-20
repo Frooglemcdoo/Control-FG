@@ -150,7 +150,7 @@ inline bool Dispatch(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_
     if(!gi_reuse::GuidedLiveEnabled())if(const auto frozen=gi_frozen_dispatch::ray.load())if(frozen(list,desc,state.Get()))return true;
     gi_phase_bindings::Record(list,1,desc->Width,desc->Height,desc->Depth);
     const auto version=revision.load();const bool single=gi_reuse::SingleProducerEnabled();
-    const bool useNew=gi_reuse::GuidedLiveEnabled()?gi_reuse::singleEvaluatorReady.load():single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
+    const bool useNew=single?(gi_reuse::ownedRequested.load()&&gi_reuse::singleEvaluatorReady.load()):requested.load();
     const bool useGuide=gi_reuse::guidedScopeActive&&useNew&&gi_reuse::GuidedLiveEnabled()&&gi_reuse::guidedEvaluatorReady.load()&&gi_reuse::guidedRequested.load()&&record->GetDesc().Width==128;
     gi_reuse::guidedScopeDraw=useGuide;gi_reuse::guidedRayApplied.store(useGuide);
     const bool useCompact=CompactRequested()&&useNew&&record->GetDesc().Width==192&&desc->Width>=2&&(desc->Width&1)==0&&desc->Height>0&&

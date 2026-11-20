@@ -2,13 +2,15 @@
 #include <atomic>
 #include "settings_check_state.h"
 #include "reblur_mode.h"
+#include "gi_reuse/owned_request.h"
 #include "performance_compare_state.h"
 #include <cstring>
 #include "rr_compact_distance_policy.h"
 namespace control_rr {
-#ifdef CONTROL_NRD_GI
-inline void ApplyRRBundleDefaults(bool enabled) noexcept;
-#endif
+// Approved GI ownership belongs to RR, not to an optional denoiser backend.
+// Ray budget and clamp preferences retain their own defaults and user choices.
+inline void ApplyRRBundleDefaults(bool enabled) noexcept {gi_reuse::ownedRequested.store(enabled);}
+
 // r21y production: native Control energy clamp is fixed in the public runtime.
 // The r21w ReShade reference enum/helper remains only for archived source comparison; the
 // public overlay does not expose it and the production temporal hooks do not request it.
@@ -92,14 +94,10 @@ inline void RRSetDiagnosticBypass(bool bypass) noexcept { rrDiagnosticBypass.sto
 inline bool RRUserRuntimeWorkRequested() noexcept {return RRUserModeValue()==RRUserMode::Full&&!RRUserRuntimePaused()&&!RRDiagnosticBypassed();}
 inline void RRUserSetMode(RRUserMode mode) noexcept {rrUserMode.store(static_cast<unsigned int>(mode),std::memory_order_release);}
 inline void RRUserRequest(bool enabled) noexcept {
- // In the REBLUR build this selects REBLUR alone or REBLUR before RR.
- // Do not enable the legacy owned-GI/RELAX bundle when changing modes.
- if(control_reblur::Enabled){RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);return;}
-#ifdef CONTROL_NRD_GI
  if(enabled!=(RRUserModeValue()==RRUserMode::Full))ApplyRRBundleDefaults(enabled);
-#endif
  RRUserSetMode(enabled?RRUserMode::Full:RRUserMode::Off);
 }
+
 inline RRSpecularSignalMode RRUserSpecularSignalModeValue() noexcept {return static_cast<RRSpecularSignalMode>(rrUserSpecularSignalMode.load(std::memory_order_acquire));}
 inline bool RRUserSpecularReferenceRequested() noexcept {return RRUserSpecularSignalModeValue()==RRSpecularSignalMode::ReferenceClamp;}
 inline bool RRUserSpecularNativeClampRequested() noexcept {return RRUserSpecularSignalModeValue()==RRSpecularSignalMode::NativeClamp;}

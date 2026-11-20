@@ -1,0 +1,17 @@
+{
+  "baseline": "57bcc53",
+  "files": {
+    "src/rr_character_base_albedo.h": "c229b52c0b511212b2916ca23da13f931f6c21cb6e973cca75402033a85bc594",
+    "src/rr_character_base_albedo_runtime.h": "eb380ad7760b998fe204dcfae5963194eae845c97d8ec2ead3c43c5640d27659",
+    "src/rr_hair_opacity.h": "4e4ef7bfbd0064fa66bf5d9d9db8cf805114222b3edd49b50d9248724a362d27",
+    "src/rr_hair_opacity_runtime.h": "5f50c4ef0c22867a1075cf083c12a9389a59cf998780fa3b4a7234bbc9a101ed",
+    "src/rr_live_guides.h": "3444a5f90c208c3316d410c5bd9934c809b796e7e78926aa7414b37799716a65",
+    "src/rr_guide_shader.h": "4d888e565c7442a8f5f15565d40da270e4023f5a97f74a95f3b406631ae9a904",
+    "src/rr_clamp_strength.h": "c17c2fb88c25e49c73f82428589fefe2b6717e6369a6a1077cf8c5fc91fdb1c8",
+    "src/rr_clamp_strength_policy.h": "fb64d6e3a33d7b8207c11c69ca463d00e015896c92c29dad43280bf05d6763ed",
+    "src/shaders/rr_live_guides.hlsl": "52d37fb103dc28239903864a28e494a886ee3ea527cd9ca49835393640da5c4c",
+    "src/shaders/rr_character_base_albedo.hlsl": "71a68d9d225154568bcc2c8b5fa5cb6d65c2c18448ca84be74cc9ab14f4dcb96",
+    "src/shaders/rr_hair_opacity.hlsl": "64eb30164c0a28c238e897947a1d994411fd34edf5090b155ce78d28a26301a1",
+    "src/directstorage_game_runtime.h": "17067a89aec37a652b63b7b495a362d058f1f8cbaffd33f2920fa237053498e1"
+  }
+}

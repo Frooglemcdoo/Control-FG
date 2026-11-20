@@ -12,14 +12,6 @@
 #include "nrd_specular_guides_shader.h"
 #include "nrd_specular_native_prepare.h"
 #endif
-namespace control_rr {
-inline void ApplyRRBundleDefaults(bool enabled) noexcept {
- gi_reuse::ownedRequested=enabled;GISampleSelect(0);
- native_lighting::specularSampleChoice=0;
- rt_surface_source::ResetManual();
- control_rr_clamp::requestedMode=control_rr_clamp::Mode::Override60;
-}
-}
 namespace ControlNrdRuntime {
 using Microsoft::WRL::ComPtr;
 namespace hooks=native_lighting::gi_compute_hooks;
@@ -86,7 +78,9 @@ static void Reason(const char* reason) noexcept {
  }
 }
 static bool Requested() noexcept {
-#ifdef CONTROL_REBLUR_ONLY
+#ifdef CONTROL_RR_RESTORED
+ return false;
+#elif defined(CONTROL_REBLUR_ONLY
  return control_reblur::Active()&&!control_rr::RRUserRuntimePaused();
 #else
  if(!control_rr::RRUserRuntimeWorkRequested())return false;

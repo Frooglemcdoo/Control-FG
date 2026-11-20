@@ -537,8 +537,8 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     const bool resumeGap = previousPresent != 0 && gapPresents > 2;
     const bool startupCandidate = call <= 12;
     const bool periodicCandidate = false; // r20x lean performance branch: no periodic semantic captures
-    const bool baselineSample = !control_reblur::Enabled && (startupCandidate || periodicCandidate) && baselineSampleCount.load() < 32;
-    const bool resumeSample = !control_reblur::Enabled && resumeGap && transitionSampleCount.load() < 32;
+    const bool baselineSample = control_diagnostics::Active() && !control_reblur::Enabled && (startupCandidate || periodicCandidate) && baselineSampleCount.load() < 32;
+    const bool resumeSample = control_diagnostics::Active() && !control_reblur::Enabled && resumeGap && transitionSampleCount.load() < 32;
     bool sample = baselineSample || resumeSample;
 
     if (baselineSample) ++baselineSampleCount;
@@ -598,7 +598,7 @@ static bool HookAA(void* t1, void* t2, void* t3, void* t4, void* t5, void* t6,
     const bool resetKnown = resetQueried && resetStatus == 1;
     const bool resetFrame = resetKnown && resetValue != 0;
     bool resetTransitionAdded = false;
-    if (resetFrame && !resumeSample && transitionSampleCount.load() < 32) {
+    if (control_diagnostics::Active() && resetFrame && !resumeSample && transitionSampleCount.load() < 32) {
         ++transitionSampleCount;
         resetTransitionAdded = true;
     }
@@ -765,7 +765,7 @@ static void HookRRSetHitGroup(int rayType,int geometryType,const char* intersect
 
 static void HookRRRaytrace(int a, int b) {
     const auto call = ++rrRaytraceDispatchCount;
-    const bool sample = call <= 32 || (call % 240) == 0;
+    const bool sample = control_diagnostics::Active() && (call <= 32 || (call % 240) == 0);
     LARGE_INTEGER before{}, after{};
     unsigned long long engineFrame = 0;
     DWORD frameFault = 0;

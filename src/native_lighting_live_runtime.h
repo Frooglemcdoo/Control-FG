@@ -794,7 +794,9 @@ inline void InstallLiveDiagnostic(ID3D12Device* device) noexcept {
     StartOverlay();
 }
 } // namespace native_lighting
-#if defined(CONTROL_REBLUR_ONLY)
+#if defined(CONTROL_RR_RESTORED)
+#include "ui/rr_controls.h"
+#elif defined(CONTROL_REBLUR_ONLY)
 namespace native_lighting { inline void StartOverlay() noexcept {} }
 #elif defined(CONTROL_PERFORMANCE_BUILD)
 #include "ui/lighting_controls.h"

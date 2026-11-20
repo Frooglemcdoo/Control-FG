@@ -156,10 +156,7 @@ static void FGSettingsLoadSettings() noexcept {
         const unsigned stored=FGSettingsReadStored(key);
         control_settings::Write(option,control_settings::Valid(option,int(stored))?stored:control_settings::Default(option),control_settings::WriteReason::Reset);
     }
-    const unsigned reconstruction=FGSettingsReadStored(control_settings::Key::RayReconstruction);
-    control_reblur::Select(reconstruction);
-    control_reblur::Sharpen(FGSettingsReadStored(control_settings::Key::ReblurSharpening));
-    const bool rrEnabled = control_reblur::Mode() != 0;
+    const bool rrEnabled = FGSettingsReadStored(control_settings::Key::RayReconstruction) != 0;
     // Retired menu setting: old explicit budgets must not override the accepted baseline.
     const unsigned int textureStreamingMs = 0;
     const bool vramMonitorEnabled = FGSettingsReadStored(control_settings::Key::VideoMemoryMonitor) != 0;

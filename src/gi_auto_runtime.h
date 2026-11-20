@@ -157,6 +157,7 @@ inline void Leave(const gi_native_render_scope::Scope& scope,bool)noexcept {
 inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC* desc,ID3D12StateObject* state)noexcept {
  if(control_diagnostics::BlocksOwnedGI(gi_scene_capture::Enabled()))return Skip(0,"diagnostics_active");
  if(halted.load())return false;
+ if(!gi_reuse::ownedRequested.load())return Skip(1,"owned_gi_not_selected");
  if(!gi_reuse::guidedRequested.load())return Skip(1,"gi_fixed_not_selected");
  if(!gi_reuse::singleEvaluatorReady.load())return Skip(2,"owned_evaluator_not_ready");
  if(!list||!desc||!state||native_lighting::gi_compute_hooks::Muted()||desc->Depth!=1)return false;

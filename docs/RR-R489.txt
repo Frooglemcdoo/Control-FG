@@ -1,0 +1,42 @@
+CONTROL: THE OLDEST HOUSE - RR RESTORED R489
+
+Install: close Control and extract beside Control_DX12.exe, replacing the previous
+mod files. Keep existing Streamline runtime files. Restart the game.
+
+Normal gameplay: launch Control normally. Enable Ray Reconstruction in Graphics.
+REBLUR is removed from this build's menu and runtime path. RELAX is also inactive.
+Owned GI belongs to RR activation itself; both ray and evaluator substitutions
+respect the same ownership selection. Native work remains the fallback when the
+replacement cannot run. RR mode changes preserve the selected GI ray count.
+Reflection clamping defaults to the approved 60%; material/hair guide fixes,
+lighting enhancements and DirectStorage remain. R488's history-reset fix remains.
+This restores the working feature set; it does not claim to fix the speckles yet.
+
+F10 opens/closes a compact panel:
+- RR on/off, with the actual runtime status shown below the buttons.
+- Owned fixed GI / native GI comparison.
+- Reflection clamp: native / 60% / bypass.
+- GI rays: native or 2 through 16 (including 4 and 10 in the same build).
+- Capture Motion and Package Capture.
+No F7 or Control-key movement bindings are used by this panel.
+
+Motion capture (restored pre-REBLUR R484 protocol):
+1. Close Control. Run ControlTOH/Diagnostics/Start-GI-Motion-R489.cmd.
+2. Use RR ON, FG OFF and GI OWNED (FIXED). The capture launcher uses 4 rays.
+3. Move Jesse through the problematic GI lighting. Use F10 > CAPTURE MOTION,
+   or Alt+Insert. Keep moving until STOP appears, then release movement/camera.
+4. Wait for Saved. Close the game and run Package-GI-Motion.cmd, or use F10's
+   Package Capture button after saving. The packager keeps all originals.
+
+Captures retain 16 consecutive full-screen frames: RR input/output and guides,
+raw GI, hit data, ray origin/direction/weight, individual ray contributions,
+secondary lighting, throughput/fade and eight full-precision material/light terms.
+The exported capture-schema revision remains R484 for the validated collector.
+Memory/disk preflight and completeness checks remain; no cropping or subsampling
+is used to fit a budget. A 2560x1440 4-ray sequence can require about 60 GiB raw
+plus packaging space. The packager accepts a different output drive.
+
+Normal launches do not initialize the full-scene capture path. Even in the
+capture launch, recording begins only when explicitly requested. Capture changes
+frame timing; do not use it to measure gameplay FPS. A complete recording does
+not by itself prove that a transient speckle was caught.

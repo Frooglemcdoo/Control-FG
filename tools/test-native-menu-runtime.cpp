@@ -115,10 +115,6 @@ int main(int argc,char** argv){
     mode=4;target=0;control_settings::manualTarget=144;
     originalEnum=originalInt=Native;originalReset=originalSave=NativeReset;
     EnumHook(nullptr,10003,1);assert(control_rr::rr && nativeCalls==0);
-    EnumHook(nullptr,10015,50);assert(control_settings::Read(control_settings::Key::ReblurSharpening)==50);
-    EnumHook(nullptr,10003,2);assert(control_rr::rr && control_settings::Read(control_settings::Key::RayReconstruction)==2);
-    assert(!control_settings::Enabled(control_settings::Definition(control_settings::Key::ReblurSharpening)));
-    EnumHook(nullptr,10003,1);assert(control_settings::Read(control_settings::Key::ReblurSharpening)==50);
     IntHook(nullptr,10005,75);assert(control_rr_clamp::value==60);
     IntHook(nullptr,10005,76);assert(control_rr_clamp::value==60);
     EnumHook(nullptr,10998,1);assert(nativeCalls==0);

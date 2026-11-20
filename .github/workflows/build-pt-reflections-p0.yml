@@ -8,7 +8,7 @@ on:
       - work/gi-guided-live-r434
       - work/rr-r434-rays-r439
       - work/gi-cost-r440
-      - work/reblur-only-r485
+      - work/rr-restored-r489
       - work/gi-motion-capture-r484
       - work/gi-stage-diagnostic-r432
       - work/gi-replacement-binding-r426
@@ -153,7 +153,7 @@ jobs:
       - name: Build embedded RELAX diffuse backend
         shell: pwsh
         run: |
-          cmake -S tools/nrd -B nrd-build -DCONTROL_NRD_GPU=ON -DCONTROL_REBLUR_ONLY=${{ github.ref_name == 'work/reblur-only-r485' && 'ON' || 'OFF' }}
+          cmake -S tools/nrd -B nrd-build -DCONTROL_NRD_GPU=ON -DCONTROL_REBLUR_ONLY=OFF
           if ($LASTEXITCODE -ne 0) { throw 'NRD configure failed' }
           cmake --build nrd-build --config Release --parallel 4
           if ($LASTEXITCODE -ne 0) { throw 'NRD build failed' }
@@ -1028,6 +1028,12 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
           python tools/test-reblur-recovery-routing.py
           if not "%errorlevel%"=="0" exit /b 1
+          python tools/test-rr-restored.py
+          if not "%errorlevel%"=="0" exit /b 1
+          cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-approved-defaults.cpp /Febuild\test-rr-approved.exe
+          if not "%errorlevel%"=="0" exit /b 1
+          build\test-rr-approved.exe
+          if not "%errorlevel%"=="0" exit /b 1
           cl /nologo /std:c++17 /EHsc /W4 /WX tools\test-rr-perf-r32.cpp /Febuild\test-perf-r32.exe
           if not "%errorlevel%"=="0" exit /b 1
           build\test-perf-r32.exe
@@ -1377,7 +1383,7 @@ jobs:
           python tools\rt-scene-probe\analyze-instances.py RT-instances-fixture.bin > build\rt-instance-fixture.json
           if errorlevel 1 exit /b 1
           set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE"
-          if "${{ github.ref_name }}"=="work/reblur-only-r485" set "RENDER_FLAGS=/DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_REBLUR_ONLY /DCONTROL_PERFORMANCE_BUILD"
+          if "${{ github.ref_name }}"=="work/rr-restored-r489" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 %RENDER_FLAGS% /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
@@ -1566,7 +1572,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $out=if ('${{ github.ref_name }}' -eq 'work/reblur-only-r485') { 'ControlTOH-REBLUR-R488' } elseif ('${{ github.ref_name }}' -eq 'work/gi-motion-capture-r484') { 'ControlTOH-GI-Auto-R484' } elseif ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Source10-R447' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
+          $out=if ('${{ github.ref_name }}' -eq 'work/rr-restored-r489') { 'ControlTOH-RR-R489' } elseif ('${{ github.ref_name }}' -eq 'work/gi-motion-capture-r484') { 'ControlTOH-GI-Auto-R484' } elseif ('${{ github.ref_name }}' -eq 'work/gi-cost-r440') { 'ControlTOH-GI-Source10-R447' } elseif ('${{ github.ref_name }}' -eq 'work/rr-r434-rays-r439') { 'ControlTOH-R434-Rays-R439' } elseif ('${{ github.ref_name }}' -eq 'work/gi-guided-live-r434') { 'ControlTOH-GI-Guided-Live-R434' } elseif ('${{ github.ref_name }}' -eq 'work/gi-stage-diagnostic-r432') { 'ControlTOH-GI-Stages-R432' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-binding-r426') { 'ControlTOH-GI-Frozen-R431' } elseif ('${{ github.ref_name }}' -eq 'work/gi-replacement-core-r425') { 'ControlTOH-GI-Compact-Preview' } else { 'ControlTOH-R425' }
           $shader="$out/ControlTOH/Shaders"
           $tools="$out/ControlTOH/Tools"
           $diagnostics="$out/ControlTOH/Diagnostics"
@@ -1611,7 +1617,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instance capture parser tests failed' }
           Copy-Item tools/diagnostics/Start-GI-Owned-Source.cmd,tools/analyze-gi-owned-source.py $diagnostics
           Copy-Item tools/diagnostics/Start-GI-Phase-Check.cmd,tools/diagnostics/Collect-GI-Phase-Check.ps1 $diagnostics
-          if ($out -eq 'ControlTOH-GI-Auto-R484') {
+          if ($out -eq 'ControlTOH-GI-Auto-R484' -or $out -eq 'ControlTOH-RR-R489') {
             Copy-Item tools/diagnostics/Package-GI-Scene.cmd,tools/diagnostics/collect-gi-scene.py $diagnostics
             Copy-Item tools/diagnostics/Start-GI-Motion-R484.cmd,tools/diagnostics/Package-GI-Motion.cmd,tools/diagnostics/collect-gi-motion.py $diagnostics
             Copy-Item build/validate-gi-motion.exe $diagnostics
@@ -1641,11 +1647,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Package layout validation failed' }
           & build/TestStorageRestart.exe "$((Resolve-Path $tools).Path)/ControlFG-Restart.exe"
           if ($LASTEXITCODE -ne 0) { throw 'Relocated restart helper failed' }
-          if ($out -eq 'ControlTOH-REBLUR-R488') {
-            Remove-Item "$out/ControlTOH/Diagnostics" -Recurse -Force
+          if ($out -eq 'ControlTOH-RR-R489') {
+            $keepDiagnostics=@('Start-GI-Motion-R489.cmd','Package-GI-Motion.cmd','collect-gi-motion.py','collect-gi-scene.py','collect-rr-boundary.py','validate-gi-motion.exe','Capture-RR-Boundary.ps1')
+            Copy-Item tools/diagnostics/Start-GI-Motion-R489.cmd $diagnostics
+            Get-ChildItem $diagnostics | Where-Object Name -notin $keepDiagnostics | Remove-Item -Recurse -Force
             Get-ChildItem "$out/ControlTOH/Tools" -File | Where-Object Name -notin @('ControlFG-Restart.exe','Collect-ControlFG-Compact-Logs.cmd','Collect-ControlFG-Compact-Logs.ps1') | Remove-Item -Force
             Remove-Item "$out/ControlTOH/GI-GUIDED-R434.md","$out/ControlTOH/RENDERING-WORK-AUDIT.md" -Force
-            Copy-Item docs/REBLUR-R488.txt "$out/ControlTOH/README.txt" -Force
+            Copy-Item docs/RR-R489.txt "$out/ControlTOH/README.txt" -Force
           }
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
@@ -1654,10 +1662,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ github.ref_name == 'work/reblur-only-r485' && 'ControlTOH-REBLUR-R488' || github.ref_name == 'work/gi-motion-capture-r484' && 'ControlTOH-GI-Auto-R484' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
+          name: ${{ github.ref_name == 'work/rr-restored-r489' && 'ControlTOH-RR-R489' || github.ref_name == 'work/gi-motion-capture-r484' && 'ControlTOH-GI-Auto-R484' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
-            ControlTOH-REBLUR-R488.zip
-            ControlTOH-REBLUR-R488.sha256
+            ControlTOH-RR-R489.zip
+            ControlTOH-RR-R489.sha256
             ControlTOH-GI-Auto-R484.zip
             ControlTOH-GI-Auto-R484.sha256
             ControlTOH-GI-Source10-R447.zip

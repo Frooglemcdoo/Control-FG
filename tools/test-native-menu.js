@@ -48,9 +48,9 @@ function exercise(rtx40) {
     ]};
     const menu=context.window.__controlFG, rows=menu.rows(requireModule,nativeModel);
     const byId=Object.fromEntries(rows.map(row=>[row.m_iPropertyID,row]));
-    assert.equal(rows.length,rtx40?12:11);
+    assert.equal(rows.length,rtx40?11:10);
     assert(!byId[10004] && !byId[10005]);
-    [10007,10009,10012,10013,10014].concat(rtx40?[10010]:[]).forEach(id=>{
+    [10003,10007,10009,10012,10013,10014].concat(rtx40?[10010]:[]).forEach(id=>{
         assert.equal(byId[id].m_eDataType,0);
         const next=!byId[id].m_value;
         engine.trigger('OnBoolGraphicsPropertySet',id,next);
@@ -76,14 +76,9 @@ function exercise(rtx40) {
     });
     engine.trigger('OnEnumGraphicsPropertySet',10000,99);
     assert.equal(events.length,1);
-    engine.trigger('OnEnumGraphicsPropertySet',10003,1);
+    engine.trigger('OnBoolGraphicsPropertySet',10003,true);
     assert.deepEqual(events.at(-1),['OnEnumGraphicsPropertySet',10003,1]);
-    assert.equal(byId[10003].m_eDataType,3);
-    assert.equal(menu.translate(byId[10003].m_vecPossibleValues[0].m_strLabelLocID),'REBLUR (RR off)');
-    assert.equal(menu.translate(byId[10003].m_vecPossibleValues[1].m_strLabelLocID),'REBLUR + RR (RR on)');
-    assert.equal(byId[10003].m_vecPossibleValues.length,3);
-    assert.equal(menu.translate(byId[10003].m_vecPossibleValues[2].m_strLabelLocID),'Native RR (REBLUR off)');
-    assert(byId[10015]);
+    assert.equal(byId[10003].m_eDataType,0);
     assert.equal(byId[10003].m_value,1);
     engine.trigger('OnIntGraphicsPropertySet',10005,75);
     assert(!byId[10005]);
@@ -181,7 +176,7 @@ if(process.argv[2] && process.argv[2] !== '--config') {
     assert.equal(rendered[0].props.label,'CFG_FG');
     assert.equal(rendered[0].props.valueDataType,3);
     const toggle=rendered.find(element=>element.props.eventType==='Bool');
-    assert.equal(toggle.props.property.m_strNameLocID,'CFG_GLASS');
+    assert.equal(toggle.props.property.m_strNameLocID,'CFG_RR');
     assert.equal(rendered[4].props.max,6); // GI choice slider.
     const storageToggle=rendered.find(e=>e.props.property&&e.props.property.m_iPropertyID===10011);
     assert.equal(storageToggle.type,'./northlight/LinkComponents/Toggle/Toggle.tsx');

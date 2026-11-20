@@ -110,7 +110,7 @@ inline void Observe(ID3D12Device* device,const D3D12_COMPUTE_PIPELINE_STATE_DESC
 #endif
 }
 inline ID3D12PipelineState* Select(ID3D12PipelineState* native) noexcept {
- if(!Enabled()||(!requested.load()&&!gi_reuse::GuidedLiveEnabled())||!native)return nullptr;
+ if(!Enabled()||!requested.load()||!native)return nullptr;
  ID3D12PipelineState* result=nullptr;UINT size=sizeof(result);
  const bool guided=gi_reuse::GuidedLiveEnabled()&&gi_reuse::guidedScopeActive&&gi_reuse::guidedScopeDraw;
  const GUID* key=guided?&kGuided:&kVariant;
@@ -146,10 +146,10 @@ inline void Dispatch(ID3D12GraphicsCommandList* list) noexcept {
  if(lastReported.exchange(key)!=key)Trace("GI_EVALUATOR_R309 dispatch_recorded=1 mode=%s revision=%llu gpu_completion=0",mode==2?"translated":"native",rev);
 }
 inline void Toggle() noexcept {
- if(gi_reuse::GuidedLiveEnabled()) {gi_reuse::guidedRequested.store(!gi_reuse::guidedRequested.load());++revision;Trace("GI_GUIDED_R434 requested=%u fixed_scene=1",unsigned(gi_reuse::guidedRequested.load()));return;}
+ if(gi_reuse::GuidedLiveEnabled()) {requested.store(!requested.load());gi_reuse::guidedRequested.store(true);++revision;Trace("GI_GUIDED_R434 requested=%u fixed_scene=1",unsigned(gi_reuse::guidedRequested.load()));return;}
 if(!ready.load()&&!gi_reuse::SingleProducerEnabled())return;GIOwnedPipeline::active=false;const bool value=!requested.load();gi_reuse::singleRayApplied=false;requested.store(value);const auto rev=++revision;Trace("GI_EVALUATOR_R309 requested=%s revision=%llu",value?"translated":"native",rev);}
 inline const wchar_t* Label() noexcept {
- if(gi_reuse::GuidedLiveEnabled())return (!gi_reuse::guidedEvaluatorReady.load()||!gi_reuse::guidedScopeReady.load())?L"GI GUIDE: WAIT":gi_reuse::guidedRequested.load()?L"GI GUIDE: ON (FIXED)":L"GI GUIDE: OFF";
+ if(gi_reuse::GuidedLiveEnabled())return !requested.load()?L"GI: NATIVE":(!gi_reuse::guidedEvaluatorReady.load()||!gi_reuse::guidedScopeReady.load())?L"GI GUIDE: WAIT":gi_reuse::guidedRequested.load()?L"GI: OWNED (FIXED)":L"GI GUIDE: OFF";
 
  if(gi_reuse::SingleProducerEnabled()){
   if(!requested.load())return L"GI: NATIVE";
