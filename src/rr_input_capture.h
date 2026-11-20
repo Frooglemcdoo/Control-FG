@@ -362,7 +362,9 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
     MEMORYSTATUSEX memory{};memory.dwLength=sizeof(memory);ULARGE_INTEGER free{};wchar_t root[32768]{};
     const auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",root,32768);
     const bool addressable=gi_motion::Addressable(UINT(width),height,gi_scene_capture::Rays(),256ull*1024*1024);
-    const bool enough=addressable&&GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve&&n&&n<32768&&GetDiskFreeSpaceExW(root,&free,nullptr,nullptr)&&free.QuadPart>=reserve;
+    const bool poolFits=gi_motion::OwnerBudget(UINT(width),height,gi_scene_capture::Rays())<=gi_motion::MaxOwnerBudget;
+    Log("GI_CAPTURE_R490 preflight inflight=%u owner_allowance=%llu pool_budget=%llu pool_fits=%u",gi_motion::InFlight,gi_motion::OwnerAllowance(UINT(width),height,gi_scene_capture::Rays()),gi_motion::OwnerBudget(UINT(width),height,gi_scene_capture::Rays()),unsigned(poolFits));
+    const bool enough=poolFits&&addressable&&GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve&&n&&n<32768&&GetDiskFreeSpaceExW(root,&free,nullptr,nullptr)&&free.QuadPart>=reserve;
     Log("GI_MOTION_R484 preflight width=%llu height=%u rays=%u reserve=%llu available_ram=%llu free_disk=%llu addressable=%u okay=%u",width,height,gi_scene_capture::Rays(),reserve,memory.ullAvailPhys,free.QuadPart,unsigned(addressable),unsigned(enough));
     if(!enough){for(auto& job:rrInputCaptures)job.policy.phase=Policy::Failed;
      control_rr_capture_ui::detail.store(L"Motion preflight failed: memory, disk, or buffer limit. Package diagnostics; do not rerun.");__leave;}

@@ -27,8 +27,11 @@ public:
   hr=device->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&next->fence));if(FAILED(hr))return hr;
   next->queue=queue;state_=std::move(next);return S_OK;
  }
- UINT64 Admit(UINT64 frame,Recording producer,UINT64 bytes,std::unique_ptr<Owner>& owner)noexcept {
-  return state_?state_->owners.Admit(frame,producer,bytes,owner):0;
+ using Admission=typename Policy::Admission;
+ Admission CheckAdmission(UINT64 frame,Recording producer,UINT64 bytes,bool hasOwner,UINT64 limit=Budget)const noexcept {return state_?state_->owners.CheckAdmission(frame,producer,bytes,hasOwner,limit):Admission::Invalid;}
+ unsigned RetainedOwners()const noexcept{return state_?state_->owners.RetainedOwners():0;}
+ UINT64 Admit(UINT64 frame,Recording producer,UINT64 bytes,std::unique_ptr<Owner>& owner,UINT64 limit=Budget)noexcept {
+  return state_?state_->owners.Admit(frame,producer,bytes,owner,limit):0;
  }
  bool Attach(UINT64 id,UINT64 frame,Recording consumer)noexcept{return state_&&state_->owners.Attach(id,frame,consumer);}
  bool AttachAndClaimConsumer(UINT64 id,UINT64 frame,ID3D12CommandQueue* queue,Recording consumer)noexcept {

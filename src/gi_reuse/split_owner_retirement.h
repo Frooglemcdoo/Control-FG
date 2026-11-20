@@ -35,9 +35,18 @@ public:
   // admission and intentionally pins state until process/device teardown.
   if(state_)for(auto& e:state_->entries)if(e.owner&&!e.lease.Retirable()){(void)state_.release();break;}
  }
- U64 Admit(U64 frame,Recording producer,U64 bytes,std::unique_ptr<Owner>& owner)noexcept {
-  if(!state_||!frame||!producer.list||!producer.generation||!owner||!bytes||
-     bytes>Budget||state_->bytes>Budget-bytes||state_->next==UINT64_MAX)return 0;
+ enum class Admission { Ready, Invalid, SingleOwnerBudget, RetainedBudget, Slots, Exhausted };
+ Admission CheckAdmission(U64 frame,Recording producer,U64 bytes,bool hasOwner,U64 limit=Budget)const noexcept {
+  if(!state_||!frame||!producer.list||!producer.generation||!hasOwner||!bytes||!limit||limit>Budget)return Admission::Invalid;
+  if(bytes>limit)return Admission::SingleOwnerBudget;
+  if(state_->bytes>limit-bytes)return Admission::RetainedBudget;
+  if(state_->next==UINT64_MAX)return Admission::Exhausted;
+  for(const auto& e:state_->entries)if(!e.owner)return Admission::Ready;
+  return Admission::Slots;
+ }
+ unsigned RetainedOwners()const noexcept {unsigned n=0;if(state_)for(const auto& e:state_->entries)n+=e.owner!=nullptr;return n;}
+ U64 Admit(U64 frame,Recording producer,U64 bytes,std::unique_ptr<Owner>& owner,U64 limit=Budget)noexcept {
+  if(CheckAdmission(frame,producer,bytes,bool(owner),limit)!=Admission::Ready)return 0;
   for(auto& e:state_->entries)if(!e.owner){
    Entry next;if(!next.lease.Begin(frame,producer.list,producer.generation))return 0;
    next.id=++state_->next;next.frame=frame;next.bytes=bytes;next.recordings[0]=producer;

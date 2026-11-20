@@ -8,7 +8,7 @@
 #include "gi_reuse/d3d12_native_gi_recording.h"
 namespace gi_auto_runtime {
 using Owner=gi_reuse::D3D12AutoInvocation;
-using Router=gi_reuse::D3D12SplitSubmissionRouter<Owner,8,16384ull*1024*1024>;
+using Router=gi_reuse::D3D12SplitSubmissionRouter<Owner,8,gi_motion::MaxOwnerBudget>;
 inline Router* const router=new(std::nothrow) Router;
 inline std::mutex mutex;
 inline control_rr_native_clamp::Api provider;
@@ -206,7 +206,21 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   const auto dispatch=native_lighting::rt_shadow_capture::Lookup(list).dispatch;if(!dispatch)return Skip(18,"native_ray_dispatch_missing");
   const auto selected=owner->target.Selection();
   auto* activeOwner=owner.get();
-  const auto bytes=owner->Bytes();const auto id=router->Access([&](auto& pool){return pool.Admit(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,owner);});
+  const auto bytes=owner->Bytes();
+  const auto budget=gi_scene_capture::Motion()?gi_motion::OwnerBudget(desc->Width,desc->Height,rays):gi_motion::NormalOwnerBudget;
+  const auto id=router->Access([&](auto& pool){
+   const auto reason=pool.CheckAdmission(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,bool(owner),budget);
+   using A=decltype(reason);
+   if(reason!=A::Ready){
+    Log("GI_CAPTURE_R490 admission_failed frame=%llu reason=%u owner_bytes=%llu retained_bytes=%llu retained_owners=%u budget=%llu",scope.frame,unsigned(reason),bytes,pool.RetainedBytes(),pool.RetainedOwners(),budget);
+    if(auditPair&&gi_scene_capture::Motion()){
+     gi_scene_capture::motionFailed=true;
+     control_rr_capture_ui::detail=reason==A::RetainedBudget?L"Motion capture failed: retained GI memory budget exceeded. Keep files and collect logs.":reason==A::Slots?L"Motion capture failed: GI recording slots have not retired. Keep files and collect logs.":L"Motion capture failed: GI admission rejected. Keep files and collect logs.";
+    }
+    return UINT64(0);
+   }
+   return pool.Admit(scope.frame,{reinterpret_cast<UINT64>(list),generation},bytes,owner,budget);
+  });
   if(!id)return Skip(19,"invocation_pool_full");
   pending={scope.token,id,scope.frame,desc->Width,desc->Height,false,list,generation};
   auto replacement=*desc;replacement.RayGenerationShaderRecord=record;

@@ -16,7 +16,12 @@ static void RRInputCaptureAtGI(unsigned long long frame,ID3D12GraphicsCommandLis
   auto* c=&rrInputCaptures[slot];active=c;
   if(c->policy.phase!=P::Ready||c->preGICaptured||c->preGIIndex>=c->count)__leave;
   if(c->giHits.enabled&&!c->giHits.ledger.Seal(frame)){
-   c->policy.phase=P::Failed;Log("GI_HITS_R271_FAILED reason=incomplete_batches frame=%llu recorded=%u expected=%u",frame,c->giHits.ledger.recorded,c->giHits.ledger.expected);__leave;
+   c->policy.phase=P::Failed;
+#ifdef CONTROL_GI_AUTO_TARGETS
+   if(!gi_scene_capture::motionFailed.load())
+#endif
+    control_rr_capture_ui::detail=L"Motion capture failed: GI hit batches missing or incomplete. Keep files and collect logs.";
+   Log("GI_HITS_R271_FAILED reason=incomplete_batches frame=%llu recorded=%u expected=%u",frame,c->giHits.ledger.recorded,c->giHits.ledger.expected);__leave;
   }
   RRGuideInputTexture input{};RRGuideInputSnapshot native{};const char* reason=nullptr;
   if(!RRInputCaptureReadShaderTexture(0x128f3c8,&input)||
