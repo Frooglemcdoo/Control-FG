@@ -16,8 +16,9 @@ cbuffer Selection : register(b0,space19) {GIAutoSelection selection;}
 float GIMaterialTextureLod(){return (trainingStepPacked&16777216u)?1.0f:0.0f;}
 #include "gi_weight_read.hlsl"
 #include "gi_motion_evaluator.hlsl"
-[numthreads(8,16,1)]
-void main(uint3 id:SV_DispatchThreadID) {
+void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GIWorldGuideKey key) {
+ bestTraining=(GIAutoTraining)0;
+ key=(GIWorldGuideKey)0;
  if(any(id.xy>=uint2(trainingWidth,trainingHeight)))return;
  bool motion=GIMotionEnabled(trainingStepPacked,trainingCapacityPacked);
  GIMotionClear(id.xy);
@@ -27,9 +28,6 @@ void main(uint3 id:SV_DispatchThreadID) {
  GIRedWrite(auditIndex,redA,redB,0,selection.rayCount);
  GIRedTermsWrite(auditIndex,redTerms,selection.rayCount);
  GIAutoAuditWrite(auditIndex,0,0,0,0,0,0,65534,0,0,0);
- uint trainingIndex=GIAutoTrainingIndex(id.xy,giCB0[69].z);
- if(trainingIndex!=0xffffffff){autoTraining[2*trainingIndex]=(GIAutoTraining)0;autoTraining[2*trainingIndex+1]=(GIAutoTraining)0;}
- GIAutoTraining bestTraining=(GIAutoTraining)0;
  GIShadingRegisters receiver;
  if(giCB4[0].z!=selection.rayCount||(selection.rayCount!=10&&selection.rayCount!=4)||!GIInitializeReceiver(id.xy,receiver)) {
   g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;
@@ -61,7 +59,7 @@ void main(uint3 id:SV_DispatchThreadID) {
    float3 pos=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
    GIMotionWrite(id.xy,slice,rgb,draw.weight,asfloat(receiver.r15.xyz),hit.material,pos,throughput,scale,receiver.terms);
   }
-  if(trainingIndex!=0xffffffff) {
+  if(train) {
    float3 position=GIFrozenTransform(float4(asfloat(hit.positionUV.xyz),1),6,giCB0).xyz;
    bestTraining=GIAutoKeepBrightest(bestTraining,GIAutoCandidate(selection.version,hit.material,position,rgb,draw.weight));
   }
@@ -112,10 +110,7 @@ void main(uint3 id:SV_DispatchThreadID) {
   }
   weightedSum+=rgb*draw.weight;
  }
- if(trainingIndex!=0xffffffff&&bestTraining.valid){
-  GIWorldGuideKey key=GIMakeWorldGuideKey(GIFrozenPoint(source.origin*.125f),GIFrozenPoint(source.normal));
-  GIRegionalStore(trainingIndex,key,bestTraining,selection.version);
- }
+ if(bestTraining.valid)key=GIMakeWorldGuideKey(GIFrozenPoint(source.origin*.125f),GIFrozenPoint(source.normal));
  float3 radiance=weightedSum/float(selection.rayCount);
  // Never replace a weighted result with an unweighted guided average.
  if(!valid||!all(isfinite(radiance))){GIAutoAuditWrite(auditIndex,rawSum/float(selection.rayCount),rawPeak/float(selection.rayCount),radiance,weightedPeak/float(selection.rayCount),peakPosition,peakWeight,peakMaterial,1|(alpha>0?2:0),peakRay,covered);g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
@@ -127,4 +122,37 @@ void main(uint3 id:SV_DispatchThreadID) {
  GIRedTermsWrite(auditIndex,redTerms,selection.rayCount);
  g_rwtDiffuseGIColorTarget[id.xy]=float4(scale*radiance,1);
  g_rwtHitInfo[id.xy]=asfloat(receiver.r5.w)/float(selection.rayCount);
+}
+
+// Each 8x16 dispatch group contains two independent, aligned 8x8 blocks.
+// A larger training tile still publishes one record: only the block containing
+// its original selected pixel competes. Partial blocks include inactive lanes
+// in each barrier, with zero energy.
+groupshared uint blockSlot[2], blockWinner[2], score[128];
+[numthreads(8,16,1)]
+void main(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) {
+ uint block=lane/64, first=block*64;
+ if(lane==first)blockSlot[block]=0xffffffff;
+ GroupMemoryBarrierWithGroupSync();
+ uint slot=GIAutoTrainingIndex(id.xy,giCB0[69].z);
+ if(slot!=0xffffffff)blockSlot[block]=slot;
+ GroupMemoryBarrierWithGroupSync();
+ slot=blockSlot[block];
+ GIAutoTraining candidate;
+ GIWorldGuideKey receiverKey;
+ EvaluatePixel(id,slot!=0xffffffff,candidate,receiverKey);
+ score[lane]=(candidate.valid&&receiverKey.valid)?asuint(candidate.energy):0;
+ GroupMemoryBarrierWithGroupSync();
+ if(lane==first&&slot!=0xffffffff){
+  uint winner=first;
+  [loop]for(uint i=first+1;i<first+64;i++)if(score[i]>score[winner])winner=i;
+  blockWinner[block]=winner;
+  if(score[winner]==0){
+   autoTraining[2*slot]=(GIAutoTraining)0;
+   autoTraining[2*slot+1]=(GIAutoTraining)0;
+  }
+ }
+ GroupMemoryBarrierWithGroupSync();
+ if(slot!=0xffffffff&&score[lane]>0&&blockWinner[block]==lane)
+  GIRegionalStore(slot,receiverKey,candidate,selection.version);
 }
