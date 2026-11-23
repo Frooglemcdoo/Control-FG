@@ -25,6 +25,9 @@ set(NRD_EMBEDS_DXIL_SHADERS ${CONTROL_NRD_GPU} CACHE BOOL "" FORCE)
 # NRD's optional 2-bit material classification.
 set(NRD_NORMAL_ENCODING 4 CACHE STRING "" FORCE)
 set(NRD_ROUGHNESS_ENCODING 1 CACHE STRING "" FORCE)
+# NRD's v11 tag moves. Use the revision that provided the R495 rounding code.
+FetchContent_Declare(mathlib
+ URL "https://github.com/NVIDIA-RTX/MathLib/archive/cb31f5483c8fbb1716d120e4eeae2869a5e773db.zip")
 FetchContent_Declare(nrd
  GIT_REPOSITORY https://github.com/NVIDIA-RTX/NRD.git
  GIT_TAG c862a54f4ed845378eeebd832491eebdc203c537

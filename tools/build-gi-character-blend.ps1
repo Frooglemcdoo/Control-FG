@@ -7,5 +7,7 @@ New-Item -ItemType Directory -Force build | Out-Null
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 & $fxc /nologo /WX /T ps_5_1 /E OpaqueMask /enable_unbounded_descriptor_tables /Fh build/character_mask_opaque.h /Vn kCharacterMaskOpaque src/shaders/gi_character_mask.hlsl
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-& $fxc /nologo /WX /T ps_5_1 /E HairMask /enable_unbounded_descriptor_tables /Fh build/character_mask_hair.h /Vn kCharacterMaskHair src/shaders/gi_character_mask.hlsl
+& $fxc /nologo /WX /T ps_5_1 /D AMBIENT_MASK=1 /E OpaqueMask /enable_unbounded_descriptor_tables /Fh build/character_mask_ambient.h /Vn kCharacterMaskAmbient src/shaders/gi_character_mask.hlsl
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
+& $fxc /nologo /WX /T ps_5_1 /D HAIR_MASK=1 /E HairMask /enable_unbounded_descriptor_tables /Fh build/character_mask_hair.h /Vn kCharacterMaskHair src/shaders/gi_character_mask.hlsl
 exit $LASTEXITCODE

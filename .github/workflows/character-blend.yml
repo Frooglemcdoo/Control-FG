@@ -20,5 +20,11 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-blend.cpp /Fe:build/test-gi-character-blend.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python tools/character_surface.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /std:c++17 /EHsc /DTEST_CHARACTER_MASK tools/test-character-surface-gpu.cpp /Fe:build/mask-linkage.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./build/mask-linkage.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./build/test-gi-character-blend.exe
           exit $LASTEXITCODE

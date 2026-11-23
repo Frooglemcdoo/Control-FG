@@ -5,6 +5,11 @@
 #include <d3d12sdklayers.h>
 #include <cstdarg>
 #include <sstream>
+#ifdef TEST_CHARACTER_MASK
+#include "../build/character_mask_opaque.h"
+#include "../build/character_mask_ambient.h"
+#include "../build/character_mask_hair.h"
+#endif
 namespace native_lighting {
 inline constexpr GUID kKindGuid{0x72134610,0x3213,0x4321,{1,2,3,4,5,6,7,8}};
 static void Trace(const char* format,...){va_list args;va_start(args,format);vprintf(format,args);va_end(args);puts("");}
@@ -77,6 +82,16 @@ int main(){try{
             for(UINT64 i=0;i<queue->GetNumStoredMessages();++i){SIZE_T length=0;queue->GetMessage(i,nullptr,&length);std::vector<unsigned char> bytes(length);auto* msg=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());if(SUCCEEDED(queue->GetMessage(i,msg,&length)))std::cerr<<msg->pDescription<<'\n';}
         }
     }Check(createHr);
+#ifdef TEST_CHARACTER_MASK
+    if(surface::kCharacterGroups[family]!=2 || family==8){
+        auto mask=desc;
+        if(surface::kCharacterGroups[family]==2)mask.PS={kCharacterMaskHair,sizeof(kCharacterMaskHair)};
+        else if(family<2)mask.PS={kCharacterMaskAmbient,sizeof(kCharacterMaskAmbient)};
+        else mask.PS={kCharacterMaskOpaque,sizeof(kCharacterMaskOpaque)};
+        ComPtr<ID3D12PipelineState> maskPipeline;
+        Check(gpu.device->CreateGraphicsPipelineState(&mask,IID_PPV_ARGS(&maskPipeline)));
+    }
+#endif
     surface::Observe(gpu.device.Get(),&desc,original.Get(),&Create);
     Require(surface::matched.load()==before+1 && surface::ready.load()==before+1,"Surface variants not admitted");
     unsigned tag=0;UINT size=sizeof(tag);Check(original->GetPrivateData(kKindGuid,&size,&tag));Require(tag==surface::kind,"Surface tag mismatch");

@@ -488,6 +488,7 @@ static const char* PTReflectionHookShaderStorageGet(int id) {
 #ifdef CONTROL_CHARACTER_GI_BLEND
     if(rrHairOpacityStorageReady.load(std::memory_order_acquire)){
         if(id==kCharacterMaskOpaqueId)return reinterpret_cast<const char*>(kCharacterMaskOpaque);
+        if(id==kCharacterMaskAmbientId)return reinterpret_cast<const char*>(kCharacterMaskAmbient);
         if(id==kCharacterMaskHairId)return reinterpret_cast<const char*>(kCharacterMaskHair);
     }
 #endif
