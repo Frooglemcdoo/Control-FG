@@ -86,7 +86,7 @@ int main(){try{
     if(surface::kCharacterGroups[family]!=2 || family==8){
         auto mask=desc;
         if(surface::kCharacterGroups[family]==2)mask.PS={kCharacterMaskHair,sizeof(kCharacterMaskHair)};
-        else if(family<2)mask.PS={kCharacterMaskAmbient,sizeof(kCharacterMaskAmbient)};
+        else if(surface::HasAmbientInput(family))mask.PS={kCharacterMaskAmbient,sizeof(kCharacterMaskAmbient)};
         else mask.PS={kCharacterMaskOpaque,sizeof(kCharacterMaskOpaque)};
         ComPtr<ID3D12PipelineState> maskPipeline;
         Check(gpu.device->CreateGraphicsPipelineState(&mask,IID_PPV_ARGS(&maskPipeline)));

@@ -42,6 +42,11 @@ for name, expected in manifest['files'].items():
         assert not (root / name).exists(), 'Legacy settings popup must remain removed'
         continue # R42 replaces UI-only code with fg_settings.h; renderer hashes remain enforced.
     data = (root / name).read_bytes().replace(b'\r\n', b'\n')
+    if name == 'src/rr_diffuse_draw.h':
+        permitted=json.loads((root/'tools/fixtures/r496-character-replay-exceptions.json').read_text())[name]
+        for before,after in reversed(permitted):
+            assert data.count(after.encode())==1, (name,'R496 dedicated character draw changed')
+            data=data.replace(after.encode(),before.encode(),1)
     if name in reblur_exceptions:
         text=data.decode()
         for before,after in reversed(reblur_exceptions[name]):

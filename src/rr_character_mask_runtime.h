@@ -41,8 +41,8 @@ static std::uintptr_t RRCharacterMaskShader(std::uintptr_t original, std::uintpt
         char sha[65]{};
         if(hair && (!PTReflectionSha256(bytes.data(),bytes.size(),sha) ||
             strcmp(sha,"33fde7037525c2b9aa6cca58bd45d3151ecc8f1f91bfa4ff6529909179dc41ca"))) return 0;
-        // The first two audited skin variants include AMBIENT_LIGHT0 at v5.
-        const bool ambient=known==0 || known==1;
+        // AMBIENT_LIGHT0 shifts the downstream position register by one.
+        const bool ambient=native_lighting::character_surface::HasAmbientInput(unsigned(known));
         r.matched=PTReflectionCloneShaderRecord(reinterpret_cast<void*>(selected),0x50,4,
             hair?kCharacterMaskHairId:ambient?kCharacterMaskAmbientId:kCharacterMaskOpaqueId,
             hair?sizeof(kCharacterMaskHair):ambient?sizeof(kCharacterMaskAmbient):sizeof(kCharacterMaskOpaque),

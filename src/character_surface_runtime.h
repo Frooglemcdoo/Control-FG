@@ -43,6 +43,15 @@ inline bool Equivalent(const D3D12_SHADER_BYTECODE& b,const D3D12_SHADER_BYTECOD
     }
     return true;
 }
+inline bool HasAmbientInput(unsigned family) noexcept {
+    if(family>=kCharacterFamilyCount)return false;
+    const auto signature=Chunk(kCharacterOriginals[family],"ISGN");
+    if(!signature.pShaderBytecode)return false;
+    const auto* first=static_cast<const unsigned char*>(signature.pShaderBytecode);
+    const auto* end=first+signature.BytecodeLength;
+    constexpr char ambient[]="AMBIENT_LIGHT";
+    return std::search(first,end,ambient,ambient+sizeof(ambient))!=end;
+}
 inline int Family(const D3D12_SHADER_BYTECODE& b) noexcept {
     for(unsigned i=0;i<kCharacterFamilyCount;++i)if(Equivalent(b,kCharacterOriginals[i]))return int(i);
     return -1;
