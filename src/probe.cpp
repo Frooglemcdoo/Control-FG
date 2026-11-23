@@ -260,6 +260,9 @@ static void OpenLog() {
     QueryPerformanceFrequency(&frequency);
     char frozenPrepare[4]{};
     const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    Log("GI_CHARACTER_BLEND_R497 startup=1 spatial_only=1 measurement_period=240");
+#endif
     Log("GI_FROZEN_R426 startup=1 check_revision=2 requested=%u diagnostics=%u",unsigned(frozenRequested),unsigned(control_diagnostics::Active()));
     Log("RR_CHARACTER_SUPPORT_R418 build=R425 lifecycle_logging=1 diagnostics=%u skin_record_limit=32 hair_record_limit=32 rendering=R424 guide_history=mode_changes_only character_coverage_guard=valid_sample_zero character_diffuse=r421_radiance_rejection_restored",unsigned(control_diagnostics::Active()));
     Log("PROBE v2.1.2 internal_build=pt-reflections-p0 source_revision=pt-reflections-p0 supported_targets=steam_21225456,epic_0.0.518.2177,gog_57a8912f frequency=%lld log_profile=%s",frequency.QuadPart,verboseAuditLogging?"verbose_audit":"release_support");
@@ -1154,6 +1157,7 @@ static const bool sceneRawRegistered=[] {gi_scene_capture::rawTexture.store(&Rea
 
 #ifdef CONTROL_CHARACTER_GI_BLEND
 #include "../build/gi_character_blend.h"
+#include "../build/gi_character_measured.h"
 #endif
 #include "nrd_diffuse_runtime.h"
 #ifdef CONTROL_CHARACTER_GI_BLEND
@@ -1162,9 +1166,10 @@ static void RRRecordCharacterBlend(const control_rr_reflection::Context& ctx) no
  const char* status="exception";
  if(!rrCharacterBlendRequested.load())return;
  try {status=ControlNrdRuntime::RecordCharacterBlend(ctx);}catch(...){}
+ rrCharacterBlendReason.store(status);
+ rrCharacterBlendAttemptFrame.store(ctx.frame);
  rrCharacterBlendStatus.store(strcmp(status,"recorded")==0?L"GI pass recorded":L"Bypassed this frame");
- static unsigned long long calls=0;
- if(++calls<=5 || ctx.frame%240==0) Log("GI_CHARACTER_BLEND_R496 frame=%llu result=%s",ctx.frame,status);
+
  SetLastError(saved);
 }
 #endif

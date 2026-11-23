@@ -14,8 +14,9 @@ static const char* RecordCharacterBlend(const control_rr_reflection::Context& ct
        reinterpret_cast<UINT64>(c.queue)!=ctx.queue) return "command_bindings";
     Poll();
     control_nrd_native::Texture raw{},out{},depth{};
-    if(!NamedTexture("g_DLF_rwtColorSource",raw) || !NamedTexture("g_DLF_rwtColorTarget",out) ||
-       !NamedTexture("g_tClipDepth",depth,true)) return "gi_or_depth_provider";
+    if(!NamedTexture("g_DLF_rwtColorSource",raw))return "gi_source";
+    if(!NamedTexture("g_DLF_rwtColorTarget",out))return "gi_target";
+    if(!NamedTexture("g_tClipDepth",depth,true))return "clip_depth";
     if(raw.desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT || out.desc.Format!=raw.desc.Format ||
        (depth.desc.Format!=DXGI_FORMAT_R32_TYPELESS && depth.desc.Format!=DXGI_FORMAT_R32_FLOAT) ||
        (depth.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) ||
@@ -23,7 +24,7 @@ static const char* RecordCharacterBlend(const control_rr_reflection::Context& ct
         return "gi_or_depth_format";
     RRGuideInputTexture g1{},g2{};const char* reason=nullptr;DWORD fault=0;
     if(!RRGuideReadTexture(kRRGuideGBuffer1ShaderRva,&g1,&reason,&fault) ||
-       !RRGuideReadTexture(kRRGuideGBuffer2ShaderRva,&g2,&reason,&fault)) return "primary_gbuffer";
+       !RRGuideReadTexture(kRRGuideGBuffer2ShaderRva,&g2,&reason,&fault)) return reason?reason:"primary_gbuffer";
     ID3D12Resource* resources[]={raw.resource,mask,depth.resource,g1.resource,g2.resource,out.resource};
     const DXGI_FORMAT formats[]={raw.desc.Format,DXGI_FORMAT_R16G16B16A16_FLOAT,DXGI_FORMAT_R32_FLOAT,
                                  g1.desc.Format,g2.desc.Format,out.desc.Format};
@@ -37,11 +38,16 @@ static const char* RecordCharacterBlend(const control_rr_reflection::Context& ct
         if(FAILED(resources[i]->GetDevice(IID_PPV_ARGS(&owner))) || owner.Get()!=device)return "device";
     }
     static ComPtr<ID3D12RootSignature> root;
-    static ComPtr<ID3D12PipelineState> pipeline;
+    static ComPtr<ID3D12PipelineState> pipeline, measured;
+    static bool triedMeasured=false;
     if(!pipeline){
         D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,5,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,5}};
-        D3D12_ROOT_PARAMETER table{};table.ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;table.DescriptorTable={2,ranges};
-        D3D12_ROOT_SIGNATURE_DESC desc{1,&table,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+        D3D12_ROOT_PARAMETER params[2]{};
+        params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        params[0].DescriptorTable={2,ranges};
+        params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;
+        params[1].Descriptor.ShaderRegister=1;
+        D3D12_ROOT_SIGNATURE_DESC desc{2,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
         ComPtr<ID3DBlob> blob,error;ComPtr<ID3D12RootSignature> prepared;
         if(FAILED(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)) ||
            FAILED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&prepared))))return "root_signature";
@@ -64,6 +70,16 @@ static const char* RecordCharacterBlend(const control_rr_reflection::Context& ct
     D3D12_UNORDERED_ACCESS_VIEW_DESC ud{};ud.Format=formats[5];ud.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
     device->CreateUnorderedAccessView(out.resource,nullptr,&ud,cpu);
     for(unsigned i=0;i<6;++i)rec->characterTextures[i]=resources[i];
+    static UINT64 dispatches=0;
+    const bool sample=(dispatches++ % 240)==0;
+    if(sample && !triedMeasured){
+        triedMeasured=true;
+        D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();
+        pd.CS={kGICharacterMeasured,sizeof(kGICharacterMeasured)};
+        device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&measured));
+    }
+    const bool measuring=sample && measured && rec->characterMeasurement.Prepare(device,ctx.frame);
+    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R497 frame=%llu sample=unavailable",ctx.frame);
     const D3D12_RESOURCE_STATES states[]={raw.state,D3D12_RESOURCE_STATE_RENDER_TARGET,depth.state,
         D3D12_RESOURCE_STATES(g1.trackedState),D3D12_RESOURCE_STATES(g2.trackedState)};
     D3D12_RESOURCE_BARRIER barriers[5]{};UINT n=0;
@@ -74,8 +90,10 @@ static const char* RecordCharacterBlend(const control_rr_reflection::Context& ct
     }
     D3D12_RESOURCE_BARRIER order{};order.Type=D3D12_RESOURCE_BARRIER_TYPE_UAV;order.UAV.pResource=out.resource;
     c.list->ResourceBarrier(1,&order);if(n)c.list->ResourceBarrier(n,barriers);
-    c.list->SetComputeRootSignature(root.Get());c.list->SetPipelineState(pipeline.Get());
+    c.list->SetComputeRootSignature(root.Get());c.list->SetPipelineState(measuring?measured.Get():pipeline.Get());
+    if(measuring)rec->characterMeasurement.Begin(c.list);
     c.list->SetComputeRootDescriptorTable(0,gpu);c.list->Dispatch((w+7)/8,(h+7)/8,1);
+    if(measuring)rec->characterMeasurement.End(c.list);
     for(UINT i=0;i<n;++i)std::swap(barriers[i].Transition.StateBefore,barriers[i].Transition.StateAfter);
     if(n)c.list->ResourceBarrier(n,barriers);c.list->ResourceBarrier(1,&order);
     binding.Restore(c.rays);

@@ -168,6 +168,21 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
       Log("RR_RESTORED_R489 requested=%u evaluated=%u success=%u stopped=%u reason=%s frame=%llu",unsigned(control_rr::RRUserRequested()),unsigned(rrAttempt),unsigned(rrAttempt&&success),unsigned(rrNativeFrame.Stopped()),reason?reason:"none",in.frame);}
     }
 #endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    if(rrAttempt){
+        static UINT64 evaluations=0;
+        if(++evaluations<=4 || evaluations%240==0){
+            const bool enabled=rrCharacterBlendRequested.load();
+            const bool attempted=rrCharacterBlendAttemptFrame.load()==in.frame;
+            const char* admission=!enabled?"off":attempted?rrCharacterBlendReason.load():"gi_callback_not_reached";
+            const bool current=rrDiffuse && rrDiffuse->frame==in.frame;
+            Log("GI_CHARACTER_BLEND_R497 rr_frame=%llu admission=%s mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
+                in.frame,admission,current?UINT(rrDiffuse->characterReplay.batches.size()):0u,
+                current?rrDiffuse->characterMaskBatches.load():0u,unsigned(rrNativeGIKeepThisFrame),
+                unsigned(rrNativeGIHistoryZeroThisFrame),control_rr_gi::StageName(control_rr_gi::stageMode.load()));
+        }
+    }
+#endif
     const double perfNativeCpu=RRPerfElapsed(perfNativeStart);
     RRPerfEnd(perf);
     RRPerfEvaluation(in.frame,rrAttempt,(result&0xFFF00000u)!=0xBAD00000u,

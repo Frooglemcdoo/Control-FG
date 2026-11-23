@@ -12,6 +12,9 @@
 #include "nrd_specular_guides_shader.h"
 #include "nrd_specular_native_prepare.h"
 #endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "gi_character_measurement.h"
+#endif
 namespace ControlNrdRuntime {
 using Microsoft::WRL::ComPtr;
 namespace hooks=native_lighting::gi_compute_hooks;
@@ -33,6 +36,7 @@ static std::shared_ptr<SpecularEpoch> specularEpoch;
 struct Recording {
 #ifdef CONTROL_CHARACTER_GI_BLEND
  std::array<ComPtr<ID3D12Resource>,6> characterTextures{};
+ GICharacterMeasurement characterMeasurement;
 #endif
  ComPtr<ID3D12GraphicsCommandList4> list;UINT64 generation=0,fence=0;
  bool submitted=false,reset=false,filtered=false,exported=false,checkCompleted=false;
@@ -108,6 +112,17 @@ static void Poll() {
    r.specularCompleted=true;
    if(r.specularEpoch&&!r.specularEpoch->poisoned){control_reblur::status=control_reblur::Status::Active;
     static int completedMode=-1;const int mode=int(r.specularEpoch->rrRequested);if(completedMode!=mode){completedMode=mode;Log("REBLUR_SPECULAR gpu_completed=1 rr=%u",unsigned(mode));}}
+  }
+#endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+  if(r.submitted && r.fence<=complete && r.characterMeasurement.frame){
+   std::array<UINT,4> counts{};
+   const auto frame=r.characterMeasurement.frame;
+   if(r.characterMeasurement.Read(counts))
+    Log("GI_CHARACTER_BLEND_R497 gpu_frame=%llu drawn=%u visible=%u supported=%u corrected=%u",frame,
+        counts[0]+counts[1]+counts[2]+counts[3],counts[1]+counts[2]+counts[3],counts[2]+counts[3],counts[3]);
+   else Log("GI_CHARACTER_BLEND_R497 gpu_frame=%llu sample=read_failed",frame);
+   r.characterMeasurement.frame=0;
   }
 #endif
   if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}
