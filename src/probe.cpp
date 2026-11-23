@@ -1128,6 +1128,7 @@ static const bool giPhaseFrameReaderRegistered=[] {gi_phase_audit::frameReader=[
 #include "gi_auto_runtime.h"
 #include "gi_frozen_scene_contract.h"
 #include "rr_hair_opacity_runtime.h"
+#include "rr_character_mask_runtime.h"
 #include "rr_character_base_albedo_runtime.h"
 #include "rr_world_albedo_runtime.h"
 static bool PTReflectionBridgeDiffuseGI() noexcept;
@@ -1151,7 +1152,22 @@ static bool ReadSceneRawGI(void* out) noexcept {
 static const bool sceneRawRegistered=[] {gi_scene_capture::rawTexture.store(&ReadSceneRawGI);return true;}();
 #endif
 
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "../build/gi_character_blend.h"
+#endif
 #include "nrd_diffuse_runtime.h"
+#ifdef CONTROL_CHARACTER_GI_BLEND
+static void RRRecordCharacterBlend(const control_rr_reflection::Context& ctx) noexcept {
+ const DWORD saved=GetLastError();
+ const char* status="exception";
+ if(!rrCharacterBlendRequested.load())return;
+ try {status=ControlNrdRuntime::RecordCharacterBlend(ctx);}catch(...){}
+ rrCharacterBlendStatus.store(strcmp(status,"recorded")==0?L"GI pass recorded":L"Bypassed this frame");
+ static unsigned long long calls=0;
+ if(++calls<=5 || ctx.frame%240==0) Log("GI_CHARACTER_BLEND_R496 frame=%llu result=%s",ctx.frame,status);
+ SetLastError(saved);
+}
+#endif
 #include "pt_reflection_diffuse_bridge_runtime.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"

@@ -364,7 +364,20 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
     const bool addressable=gi_motion::Addressable(UINT(width),height,gi_scene_capture::Rays(),256ull*1024*1024);
     const bool poolFits=gi_motion::OwnerBudget(UINT(width),height,gi_scene_capture::Rays())<=gi_motion::MaxOwnerBudget;
     Log("GI_CAPTURE_R490 preflight inflight=%u owner_allowance=%llu pool_budget=%llu pool_fits=%u",gi_motion::InFlight,gi_motion::OwnerAllowance(UINT(width),height,gi_scene_capture::Rays()),gi_motion::OwnerBudget(UINT(width),height,gi_scene_capture::Rays()),unsigned(poolFits));
-    const bool enough=poolFits&&addressable&&GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve&&n&&n<32768&&GetDiskFreeSpaceExW(root,&free,nullptr,nullptr)&&free.QuadPart>=reserve;
+    const BOOL ramQuery=GlobalMemoryStatusEx(&memory);
+    // Check the capture volume independently of RAM. A fresh capture folder may
+    // not exist yet; LOCALAPPDATA and ControlFGProbe can be on different volumes.
+    BOOL diskQuery=FALSE;
+    if(n && n+16<32768){
+     wcscat_s(root,L"\\ControlFGProbe");
+     diskQuery=GetDiskFreeSpaceExW(root,&free,nullptr,nullptr);
+     if(!diskQuery && (GetLastError()==ERROR_PATH_NOT_FOUND || GetLastError()==ERROR_FILE_NOT_FOUND)){
+      root[n]=0;diskQuery=GetDiskFreeSpaceExW(root,&free,nullptr,nullptr);
+     }
+    }
+    const DWORD diskError=diskQuery?0:GetLastError();
+    Log("GI_CAPTURE_PREFLIGHT ram_query=%u disk_query=%u disk_error=%lu",unsigned(ramQuery!=0),unsigned(diskQuery!=0),diskError);
+    const bool enough=poolFits&&addressable&&ramQuery&&diskQuery&&free.QuadPart>=reserve;
     Log("GI_MOTION_R484 preflight width=%llu height=%u rays=%u reserve=%llu available_ram=%llu free_disk=%llu addressable=%u okay=%u",width,height,gi_scene_capture::Rays(),reserve,memory.ullAvailPhys,free.QuadPart,unsigned(addressable),unsigned(enough));
     if(!enough){for(auto& job:rrInputCaptures)job.policy.phase=Policy::Failed;
      control_rr_capture_ui::detail.store(L"Motion preflight failed: memory, disk, or buffer limit. Package diagnostics; do not rerun.");__leave;}

@@ -485,6 +485,12 @@ static const char* PTReflectionHookShaderStorageGet(int id) {
     if(id>=kRRWorldAlbedoStorageBase && id<kRRWorldAlbedoStorageBase+4 &&
        rrWorldAlbedoStorageReady.load(std::memory_order_acquire))
         return reinterpret_cast<const char*>(kRRWorldVariants[id-kRRWorldAlbedoStorageBase].replay);
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    if(rrHairOpacityStorageReady.load(std::memory_order_acquire)){
+        if(id==kCharacterMaskOpaqueId)return reinterpret_cast<const char*>(kCharacterMaskOpaque);
+        if(id==kCharacterMaskHairId)return reinterpret_cast<const char*>(kCharacterMaskHair);
+    }
+#endif
     if(id==kRRCharacterBaseAlbedoStorageId&&rrCharacterBaseAlbedoStorageReady.load(std::memory_order_acquire))
         return reinterpret_cast<const char*>(kRRCharacterBaseAlbedoShader);
     if(id==kRRHairOpacityStorageId&&rrHairOpacityStorageReady.load(std::memory_order_acquire))

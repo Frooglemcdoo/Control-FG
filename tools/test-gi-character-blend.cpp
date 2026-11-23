@@ -8,18 +8,18 @@ int main() try {
     constexpr auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
     std::vector<Pixel> raw(width*height, {0.0005f,0.0003f,0.0002f,0.9f});
     std::vector<Pixel> mask(width*height, {-1,-1,-1,0});
-    std::vector<Pixel> depth(width*height, {2,0,0,0});
+    std::vector<Pixel> depth(width*height, {0.5f,0,0,0});
     std::vector<Pixel> normals(width*height, {0.5f,0.5f,0,0});
     std::vector<Pixel> materials(width*height, {0,0,0,0});
     for(UINT y=1;y<height-1;++y)
-        for(UINT x=2;x<width-5;++x) mask[y*width+x]={0,0,0,0};
+        for(UINT x=2;x<width-5;++x) mask[y*width+x]={0,0,252,1}; // IEEE 0.5 = 0x3f000000
     const UINT centers[]={width*5+5,width*5+10,width*5+15};
     raw[centers[0]]={0.153931f,0.120056f,0.074219f,1};
     raw[centers[1]]={0.02f,0.19f,0.01f,1};
     raw[centers[2]]={0.2f,0.2f,0.2f,1};
     raw[width*5+20]=raw[width*5+21]=raw[width*5+36]=raw[centers[2]];
     raw[width*5+25]=raw[width*5+29]=raw[centers[0]];
-    depth[width*5+25][0]=3;
+    depth[width*5+25][0]=0.25f; // An occluder won depth after the character replay.
     materials[width*5+29][2]=1;
     std::vector<Pixel> baseline=raw;
     for(auto& p:baseline)p[3]=p[0];

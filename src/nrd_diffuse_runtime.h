@@ -31,6 +31,9 @@ struct SpecularEpoch {
 static std::shared_ptr<SpecularEpoch> specularEpoch;
 #endif
 struct Recording {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ std::array<ComPtr<ID3D12Resource>,6> characterTextures{};
+#endif
  ComPtr<ID3D12GraphicsCommandList4> list;UINT64 generation=0,fence=0;
  bool submitted=false,reset=false,filtered=false,exported=false,checkCompleted=false;
  UINT64 checkGeneration=0;
@@ -223,6 +226,9 @@ static bool Bindings(PTGlassRuntime::Context& c,gi_reuse::ComputeBindingSnapshot
  if(!PTGlassRuntime::ReadContext(&c)||!c.rays||!hooks::Capture(c.list,binding,generation)||!binding.pipeline||!binding.root||binding.heaps[0].Get()!=c.table.heap)return false;
  const auto reset=gi_dual_bridge::resetReady.load();return reset&&reset(c.list)&&Initialize(c.queue);
 }
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "gi_character_blend_runtime.inl"
+#endif
 static void ProducerDispatch() noexcept {
  if(!pass.producer||!pass.serial||pass.failed||!Requested())return;
  const auto sequence=pass.serial;pass.serial=0;

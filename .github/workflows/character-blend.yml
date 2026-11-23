@@ -16,9 +16,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
-          New-Item -ItemType Directory -Force build | Out-Null
-          & $dxc.FullName -WX -T cs_6_0 -E main src/shaders/gi_character_blend.hlsl -Fo build/gi-character-blend.dxil
+          & ./tools/build-gi-character-blend.ps1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-blend.cpp /Fe:build/test-gi-character-blend.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

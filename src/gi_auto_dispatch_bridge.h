@@ -5,14 +5,14 @@
 namespace gi_auto_dispatch {
 inline bool Enabled()noexcept {
 #ifdef CONTROL_GI_AUTO_TARGETS
- static const bool enabled=[] {char b[4]{};return GetEnvironmentVariableA("CONTROLTOH_GI_AUTO",b,4)==1&&b[0]=='1';}();return enabled;
+ static const bool enabled=[] {char b[4]{};const auto n=GetEnvironmentVariableA("CONTROLTOH_GI_AUTO",b,4);return n==0||(n==1&&b[0]=='1');}();return enabled;
 #else
  return false;
 #endif
 }
 inline UINT LaunchRays()noexcept {
  static const UINT rays=[] {char value[8]{};const auto n=GetEnvironmentVariableA("CONTROLTOH_GI_AUTO_RAYS",value,8);
-  return n==1&&value[0]=='4'?4u:(n==2&&value[0]=='1'&&value[1]=='0'?10u:0u);}();
+  return !n || (n==1&&value[0]=='4')?4u:(n==2&&value[0]=='1'&&value[1]=='0'?10u:0u);}();
  return Enabled()?rays:0;
 }
 inline std::atomic<void(*)(bool)noexcept> bypassed{nullptr};

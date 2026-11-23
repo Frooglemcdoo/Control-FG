@@ -5,6 +5,9 @@
 #include "rr_lighting_diagnostic.h"
 #include "rr_hair_opacity.h"
 #include "rr_character_base_albedo.h"
+#include "rr_character_mask.h"
+#include <set>
+#include <tuple>
 // Recurring native albedo replay. CPU draw data lives only through its join.
 // Targets resize only after native CPU join and post-Present GPU retirement.
 enum class RRDiffuseStage {Idle,Recording,Joined,Stopped};
@@ -15,6 +18,7 @@ struct RRDiffuseReplay {
     RRAlbedoNativeTarget characterTarget{};
     std::uintptr_t renderer=0,manager=0;
     void* primaryView=nullptr;
+    UINT64 cameraView=0;
     ID3D12CommandQueue* queue=nullptr; // owned reference
     ID3D12Fence* fence=nullptr;
     DWORD recordingThread=0;
@@ -116,6 +120,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         if(c->queue!=context.queue) {RRDiffuseStop("native_queue_changed");return;}
         if(!RRDiffuseResize(c,rrDiffuseExtent.width,rrDiffuseExtent.height,&fault))return;
         rrDiffuseStage.store(RRDiffuseStage::Idle,std::memory_order_release);
+        c->cameraView=reinterpret_cast<UINT64>(camera.view);
         c->frame=frame;c->renderer=preparation.renderer;c->manager=preparation.manager;c->primaryView=preparation.primaryView;
         c->replay={};c->characterReplay={};c->drawTicks.store(0);c->characterDrawTicks.store(0);c->batches.store(0);c->characterMaskBatches.store(0);c->characterMaskUsable.store(false);c->fault.store(false);
         c->familyFrame.store(0,std::memory_order_release);
@@ -143,8 +148,35 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         if(!prepared) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         std::uintptr_t source=0;memcpy(&source,c->replay.manager.data()+0x30,sizeof(source));
         size_t kept=0;UINT targets=0;unsigned foliageAccepted=0,foliageRejected=0;
+#ifdef CONTROL_CHARACTER_GI_BLEND
+        using MeshInstances=std::tuple<std::uintptr_t,unsigned,int,int>;
+        const auto identity=[](const control_rr_albedo::OpaqueBatch& b)->MeshInstances {
+            return {b.mesh,b.instanceBufferIndex,b.instanceByteOffset,b.instanceCount};
+        };
+        std::set<MeshInstances> characterMeshes;
+        for(size_t i=0;i<c->replay.batches.size();++i)
+            if(rrCharacterBlendRequested.load() && c->replay.familyKinds[i]==2 && c->replay.batches[i].mesh)
+                characterMeshes.insert(identity(c->replay.batches[i]));
+        auto& mask=c->characterReplay;
+        mask.manager=c->replay.manager;mask.sourceFirst=c->replay.sourceFirst;mask.sourceEnd=c->replay.sourceEnd;
+        RRAlbedoShader::Session clothShaders;
+#endif
         for(size_t i=0;i<c->replay.batches.size();++i) {
             const auto family=c->replay.familyKinds[i];
+#ifdef CONTROL_CHARACTER_GI_BLEND
+            if(family==3 && characterMeshes.count(identity(c->replay.batches[i]))){
+                control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
+                const unsigned index=c->replay.sourceIndices[i];
+                auto batch=c->replay.batches[i];
+                if(RRAlbedoRead(source+size_t(index)*sizeof(original),&original,sizeof(original)) &&
+                   clothShaders.ValidatePair(original.shader,batch.shader,result,&reason) && result.targetCount==1){
+                    batch.shader=RRCharacterMaskShader(original.shader,batch.shader,family);
+                    if(batch.shader){
+                        mask.batches.push_back(batch);mask.sourceIndices.push_back(index);mask.familyKinds.push_back(family);
+                    }
+                }
+            }
+#endif
             if(control_rr::RRTexturedCharacterGuides && family!=2 && family!=5 && !(c->worldAlbedo && (family==1 || family==4)) &&
                !RRMaterialAudit::Wants(family)) continue;
             control_rr_albedo::OpaqueBatch original{};RRAlbedoShader::Result result{};
@@ -165,6 +197,15 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
                 if(family==4){++foliageRejected;if(frame%240==0)Log("RR_FOLIAGE_R266_REJECT frame=%llu source=%u reason=%s",frame,c->replay.sourceIndices[i],reason?reason:"target_contract");}
                 continue;
             }
+#ifdef CONTROL_CHARACTER_GI_BLEND
+            if(rrCharacterBlendRequested.load() && (family==2 || family==5) && result.targetCount==1){
+                auto batch=c->replay.batches[i];
+                batch.shader=RRCharacterMaskShader(original.shader,batch.shader,family);
+                if(batch.shader){
+                    mask.batches.push_back(batch);mask.sourceIndices.push_back(c->replay.sourceIndices[i]);mask.familyKinds.push_back(family);
+                }
+            }
+#endif
             if(family==4){++foliageAccepted;++c->worldBatches;}
             if(family==1) {
                 const int variant=RRWorldAlbedoVariant(batchShaders.PixelShaders()[result.selectedIndex]);
@@ -225,6 +266,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         // shaders write alpha for covered pixels, giving us an exact-build
         // screen-space character coverage candidate without touching Control's
         // original render targets. This is used only by the optional skin test.
+#ifndef CONTROL_CHARACTER_GI_BLEND
         if(control_rr::RRUserSkinResponsivity()){
             c->characterReplay.manager=c->replay.manager;
             c->characterReplay.coverage={};
@@ -245,6 +287,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             c->characterReplay.coverage.rejectedBatches=c->characterReplay.coverage.sourceBatches-c->characterReplay.coverage.replayBatches;
             c->characterReplay.coverage.complete=false;
         }
+#endif
         c->targetCount=targets;
         c->lastUsePresent=context.presentToken; // mark before the first native command
         for(UINT i=0;i<targets;++i) {
@@ -253,7 +296,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(!RRGuideResourcesShareDevice(&deviceCheck,nullptr,nullptr)) {RRDiffuseStop("target_device_mismatch");return;}
             if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault,control_rr::RRTexturedCharacterGuides)) {RRDiffuseStop("target_clear_failed");return;}
         }
-        if(characterBatches && control_rr::RRUserSkinResponsivity()){
+        if(!c->characterReplay.batches.empty()){
             if(!c->characterTarget.nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->characterTarget,&reason,&fault)){
                 Log("RR_SKIN_MASK_DISABLED frame=%llu reason=target_creation_failed fault=0x%08lX",frame,fault);
             } else if(c->characterTarget.nativeTexture && !RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->characterTarget,&fault,true)){

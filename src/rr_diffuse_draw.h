@@ -8,7 +8,11 @@ static void RRDiffuseDraw(void* manager,int first,int end) noexcept {
     ++c->drawCalls;
     if(!ReadEngineFrameSafe(&frame,&fault) || frame!=c->frame) {++c->frameSkips;return;}
     control_rr_albedo::DrawRange range{};
-    if(!control_rr_albedo::prepareDrawRange(c->replay,first,end,range)) {++c->rangeSkips;return;}
+    control_rr_albedo::DrawRange characterRange{};
+    const bool hasMask=c->characterMaskUsable.load() &&
+        control_rr_albedo::prepareDrawRange(c->characterReplay,first,end,characterRange);
+    const bool hasGuide=control_rr_albedo::prepareDrawRange(c->replay,first,end,range);
+    if(!hasGuide && !hasMask) {++c->rangeSkips;return;}
     RRDiffuseViewSnapshot selected{};
     if(!RRDiffuseReadView(&selected,&fault)) {RRDiffuseDrawFault(c,"draw_view_read_failed",first,end,fault);return;}
     if(!selected.view || selected.view!=c->primaryView) {++c->viewSkips;return;}
@@ -25,22 +29,17 @@ static void RRDiffuseDraw(void* manager,int first,int end) noexcept {
         Log("RR_G12_DIFFUSE_EXTENT_MISMATCH frame=%llu expected_width=%u expected_height=%u actual_width=%u actual_height=%u",c->frame,c->width,c->height,saved.width,saved.height);
         RRDiffuseDrawFault(c,"draw_extent_mismatch",first,end,fault);return;
     }
-    const auto start=RRGuideQpc();
-    RRAlbedoNativeTarget* targets[2]{&c->targets[0],&c->targets[1]};bool changed=false;
-    const bool bound=RRAlbedoNativeBind(&rrAlbedoAPI,&saved,targets,c->targetCount,&changed,&fault);
-    const bool drawn=bound && RRAlbedoDrawSafe(range.managerView(),&fault);
-    DWORD restoreFault=0;const bool restored=!changed || RRAlbedoNativeRestore(&rrAlbedoAPI,&saved,&restoreFault);
-    c->drawTicks.fetch_add(RRGuideQpc()-start);
-    if(!drawn || !restored) {RRDiffuseDrawFault(c,!restored?"restore_failed":!bound?"bind_failed":"draw_failed",first,end,fault,restoreFault);return;}
-    c->batches.fetch_add(range.coverage.replayBatches);
-
-    // Optional skin experiment: replay only audited Character-family batches
-    // into a separate sentinel-cleared RGBA16F target. This leaves Control's native
-    // targets and the production diffuse replay unchanged. The alpha channel is
-    // converted to a one-channel mask immediately before RR evaluation.
-    if(control_rr::RRUserSkinResponsivity() && c->characterMaskUsable.load() && !c->characterReplay.batches.empty()) {
-        control_rr_albedo::DrawRange characterRange{};
-        if(control_rr_albedo::prepareDrawRange(c->characterReplay,first,end,characterRange)) {
+    if(hasGuide){
+        const auto start=RRGuideQpc();
+        RRAlbedoNativeTarget* targets[2]{&c->targets[0],&c->targets[1]};bool changed=false;
+        const bool bound=RRAlbedoNativeBind(&rrAlbedoAPI,&saved,targets,c->targetCount,&changed,&fault);
+        const bool drawn=bound && RRAlbedoDrawSafe(range.managerView(),&fault);
+        DWORD restoreFault=0;const bool restored=!changed || RRAlbedoNativeRestore(&rrAlbedoAPI,&saved,&restoreFault);
+        c->drawTicks.fetch_add(RRGuideQpc()-start);
+        if(!drawn || !restored) {RRDiffuseDrawFault(c,!restored?"restore_failed":!bound?"bind_failed":"draw_failed",first,end,fault,restoreFault);return;}
+        c->batches.fetch_add(range.coverage.replayBatches);
+    }
+    if(hasMask){
             RRAlbedoNativeTarget* skinTargets[1]{&c->characterTarget};bool skinChanged=false;DWORD skinFault=0;
             const auto skinStart=RRGuideQpc();
             const bool skinBound=RRAlbedoNativeBind(&rrAlbedoAPI,&saved,skinTargets,1,&skinChanged,&skinFault);
@@ -57,6 +56,5 @@ static void RRDiffuseDraw(void* manager,int first,int end) noexcept {
             } else {
                 c->characterMaskBatches.fetch_add(characterRange.coverage.replayBatches,std::memory_order_relaxed);
             }
-        }
     }
 }

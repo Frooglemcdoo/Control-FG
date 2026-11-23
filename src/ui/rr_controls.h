@@ -22,12 +22,17 @@ inline void Refresh(HWND panel) noexcept {
  SetWindowTextW(GetDlgItem(panel,3),clamp==control_rr_clamp::Mode::Native?L"REF CLAMP: NATIVE":clamp==control_rr_clamp::Mode::Bypass?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%");
  wchar_t text[64]{};const unsigned fixedRays=gi_auto_dispatch::LaunchRays();
  const unsigned rays=fixedRays?fixedRays:control_rr::GISampleRequested();
- if(fixedRays)swprintf_s(text,L"GI RAYS: %u (CAPTURE)",rays);
+ if(fixedRays)swprintf_s(text,L"GI RAYS: %u",rays);
  else if(rays)swprintf_s(text,L"GI RAYS: %u",rays);else wcscpy_s(text,L"GI RAYS: NATIVE");SetWindowTextW(GetDlgItem(panel,4),text);
  SetWindowTextW(GetDlgItem(panel,5),control_rr_capture_ui::Busy()?L"CAPTURE: RECORDING":L"CAPTURE MOTION");
  SetWindowTextW(GetDlgItem(panel,6),L"PACKAGE CAPTURE");
  SetWindowTextW(GetDlgItem(panel,9),control_rr::RRUserLabel());
- SetWindowTextW(GetDlgItem(panel,10),gi_scene_capture::Motion()?L"16 full-screen frames. Move until STOP appears.":L"Capture: launch Start-GI-Motion-R489.cmd first.");
+ SetWindowTextW(GetDlgItem(panel,10),gi_scene_capture::Motion()?control_rr_capture_ui::detail.load():L"Capture requires Start-GI-Motion-R489.cmd.");
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ const bool enabled=rrCharacterBlendRequested.load();
+ SetWindowTextW(GetDlgItem(panel,7),enabled?L"CHARACTER BLEND: ON":L"CHARACTER BLEND: OFF");
+ SetWindowTextW(GetDlgItem(panel,11),enabled?rrCharacterBlendStatus.load():L"Disabled");
+#endif
  for(int i=1;i<=5;++i)EnableWindow(GetDlgItem(panel,i),!control_rr_capture_ui::Busy()&&(i!=4||!fixedRays));
 }
 inline void Package(HWND panel) noexcept {
@@ -54,10 +59,14 @@ inline void Capture(HWND panel) noexcept {
 }
 inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp) noexcept {
  if(message==WM_CREATE){
-  CreateWindowW(L"STATIC",L"CONTROLTOH R490 - RR CONTROLS",WS_CHILD|WS_VISIBLE,12,10,396,22,window,nullptr,selfModule,nullptr);
+  CreateWindowW(L"STATIC",L"CONTROLTOH R496 - RR CONTROLS",WS_CHILD|WS_VISIBLE,12,10,396,22,window,nullptr,selfModule,nullptr);
   for(int i=1;i<=6;++i){auto b=CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,12+((i-1)%2)*200,40+((i-1)/2)*42,192,34,window,reinterpret_cast<HMENU>(static_cast<INT_PTR>(i)),selfModule,nullptr);SendMessageW(b,WM_SETFONT,reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),TRUE);}
   CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,12,172,396,24,window,reinterpret_cast<HMENU>(9),selfModule,nullptr);
   CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,12,200,396,36,window,reinterpret_cast<HMENU>(10),selfModule,nullptr);
+#ifdef CONTROL_CHARACTER_GI_BLEND
+  CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP,12,237,192,34,window,reinterpret_cast<HMENU>(7),selfModule,nullptr);
+  CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,213,245,195,28,window,reinterpret_cast<HMENU>(11),selfModule,nullptr);
+#endif
   Refresh(window);return 0;
  }
  if(message==WM_MOUSEACTIVATE)return MA_NOACTIVATE;
@@ -71,6 +80,9 @@ inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
   else if(id==4&&!gi_auto_dispatch::LaunchRays()){std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);if(control_settings::Write(control_settings::Definition(control_settings::Key::GlobalIlluminationSamples),control_rr::NextGISampleRequest(control_rr::GISampleRequested())))FGSettingsMarkSettingsDirty();}
   else if(id==5)Capture(window);
   else if(id==6)Package(window);
+#ifdef CONTROL_CHARACTER_GI_BLEND
+  else if(id==7)rrCharacterBlendRequested.store(!rrCharacterBlendRequested.load());
+#endif
   Refresh(window);return 0;
  }
  if(message==WM_CTLCOLORSTATIC){SetTextColor(reinterpret_cast<HDC>(wp),RGB(240,240,240));SetBkColor(reinterpret_cast<HDC>(wp),RGB(24,24,24));return reinterpret_cast<LRESULT>(GetStockObject(DKGRAY_BRUSH));}
@@ -95,18 +107,18 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
   if(now>=nextFind){auto found=FindFGGameWindow();nextFind=now+1000;
    if(found!=game){if(panel){Close(panel);DestroyWindow(panel);panel=nullptr;}game=found;}
   }
-  if(game&&!panel)panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,ClassName,L"ControlTOH rendering controls",WS_POPUP|WS_CLIPCHILDREN,0,0,416,250,game,nullptr,selfModule,nullptr);
+  if(game&&!panel)panel=CreateWindowExW(WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE,ClassName,L"ControlTOH rendering controls",WS_POPUP|WS_CLIPCHILDREN,0,0,416,280,game,nullptr,selfModule,nullptr);
   const bool foreground=panel&&lighting_panel::Foreground(game,panel,GetForegroundWindow());
   if(foreground&&!registered)registered=RegisterHotKey(nullptr,hotkey,MOD_NOREPEAT,VK_F10)!=FALSE;
   if(!foreground&&registered){UnregisterHotKey(nullptr,hotkey);registered=false;}
   const bool capturing=control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load();
   control_diagnostics::PublishCaptureActivity(false,capturing,gi_scene_capture::Enabled());
   if(capturing){gi_phase_audit::Poll();DrainDiagnosticLog();}
-  gi_auto_box::Tick(game);
+
   render_fps::Tick(game,now);
   if(!panel)continue;
   if(!foreground){Close(panel);continue;}
-  if(open){Refresh(panel);RECT r{};GetClientRect(game,&r);POINT p{r.right>432?r.right-432:0,16};ClientToScreen(game,&p);RECT previous{};GetWindowRect(panel,&previous);const bool visible=IsWindowVisible(panel)!=FALSE;if(!visible||previous.left!=p.x||previous.top!=p.y)SetWindowPos(panel,HWND_TOP,p.x,p.y,416,250,SWP_NOACTIVATE|SWP_SHOWWINDOW|(visible?SWP_NOZORDER:0));if(GetForegroundWindow()==game||GetForegroundWindow()==panel)ClipCursor(nullptr);}
+  if(open){Refresh(panel);RECT r{};GetClientRect(game,&r);POINT p{r.right>432?r.right-432:0,16};ClientToScreen(game,&p);RECT previous{};GetWindowRect(panel,&previous);const bool visible=IsWindowVisible(panel)!=FALSE;if(!visible||previous.left!=p.x||previous.top!=p.y)SetWindowPos(panel,HWND_TOP,p.x,p.y,416,280,SWP_NOACTIVATE|SWP_SHOWWINDOW|(visible?SWP_NOZORDER:0));if(GetForegroundWindow()==game||GetForegroundWindow()==panel)ClipCursor(nullptr);}
  }
  gi_auto_box::Close();if(registered)UnregisterHotKey(nullptr,hotkey);KillTimer(nullptr,timer);if(panel){Close(panel);DestroyWindow(panel);}started=false;return 0;
 }

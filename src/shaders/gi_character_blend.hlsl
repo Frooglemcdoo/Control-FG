@@ -1,7 +1,7 @@
 // Inputs are same-frame, same-grid linear GI and visible character coverage.
 // Dispatch into a separate output so neighboring reads always see original GI.
 #include "ControlPrimaryGuideDecode.hlsli"
-#include "rr_character_albedo.hlsli"
+
 Texture2D<float4> RawGI : register(t0);
 Texture2D<float4> CharacterReplay : register(t1);
 Texture2D<float> Depth : register(t2);
@@ -13,10 +13,15 @@ RWTexture2D<float4> FilteredGI : register(u0);
 // The common world-albedo target must never be bound here.
 float CharacterCoverage(int2 p) {
     float4 a = CharacterReplay.Load(int3(p,0));
-    return ControlCharacterAlbedoValid(a.r,a.g,a.b) ? ControlHairGuideWeight(a.a) : 0;
+    if (!(a.r >= 0 && a.a > 0)) return 0;
+    uint3 limbs = uint3(a.rgb);
+    uint rasterDepth = limbs.r | (limbs.g << 11) | (limbs.b << 22);
+    float visibleDepth = Depth.Load(int3(p,0));
+    if (!(visibleDepth >= 0 && visibleDepth <= 1)) return 0;
+    return rasterDepth == asuint(visibleDepth) ? saturate(a.a) : 0;
 }
 
-uint2 Material(int2 p) { return uint2(round(G2.Load(int3(p,0)).ba * 255)); }
+uint Material(int2 p) { return ControlDecodeMaterialID(G2.Load(int3(p,0))); }
 float Peak(float3 rgb) { return max(rgb.r,max(rgb.g,rgb.b)); }
 
 [numthreads(8,8,1)]
@@ -32,14 +37,14 @@ void main(uint3 tid : SV_DispatchThreadID) {
     float z = Depth.Load(int3(p,0));
     if (!isfinite(z)) return;
     float3 normal = ControlDecodeNormalView(G1.Load(int3(p,0)));
-    uint2 material = Material(p);
+    uint material = Material(p);
     float highest = 0, second = 0;
     uint count = 0;
     [unroll] for (int y=-1; y<=1; ++y) {
         [unroll] for (int x=-1; x<=1; ++x) {
             int2 q = p + int2(x,y);
             if ((!x && !y) || any(q<0) || any(q>=int2(w,h))) continue;
-            if (!(CharacterCoverage(q) > 0.5) || any(Material(q)!=material)) continue;
+            if (!(CharacterCoverage(q) > 0.5) || Material(q)!=material) continue;
             float qz = Depth.Load(int3(q,0));
             if (!isfinite(qz) || abs(qz-z)>max(0.005*abs(z),1e-6)) continue;
             if (dot(normal,ControlDecodeNormalView(G1.Load(int3(q,0))))<0.97) continue;

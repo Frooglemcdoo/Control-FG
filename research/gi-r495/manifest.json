@@ -1,0 +1,34 @@
+{
+  "Raygen": {
+    "bytes": 20688,
+    "sha256": "df93f95e65fa41c68deca692a34a56cac26a6ee7e65c2b38753b3d45f793dded"
+  },
+  "Lighting": {
+    "bytes": 83496,
+    "sha256": "92260510edda581f6f7485c6119872bdedf43bf0b12d65ab5437cf18de0f625e"
+  },
+  "Clear": {
+    "bytes": 4952,
+    "sha256": "76ca2b5d432c69ffe184f096829cc4ca4280520b996570608142a184b24c7da3"
+  },
+  "Claim": {
+    "bytes": 5360,
+    "sha256": "ee19778086182daeb6ccb721a7f54e8137b41382fba9d7852960ec237fe01ba1"
+  },
+  "First": {
+    "bytes": 5676,
+    "sha256": "c94f0cb3f3defc9216f594af9d065dea44d92836beb6e60b5b2a232296f45e6c"
+  },
+  "Second": {
+    "bytes": 5580,
+    "sha256": "bd05af892d39cee79ccdbd5863b01081843eba927d89bfb500f622d4fa36eb49"
+  },
+  "Freeze": {
+    "bytes": 9380,
+    "sha256": "df36d13875f0ad001f2b6da5b70d256bb264bd4cbe00e29135977b5cc7466b98"
+  },
+  "Compare": {
+    "bytes": 45020,
+    "sha256": "afb872ac4b05b96e498b67c35de545ed237b1da683c129768ea157d27b075c7f"
+  }
+}

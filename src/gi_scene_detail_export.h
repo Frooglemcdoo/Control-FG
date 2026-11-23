@@ -43,6 +43,7 @@ inline void QueueDetail(ID3D12Resource* buffer,UINT64 bytes,unsigned frame,unsig
  auto* job=new(std::nothrow) DetailExport;if(!job){if(motionBytes)motionFailed=true;
  Log("GI_SCENE_R484 detail_export frame=%u success=0 allocation=0",frame);return;}
  job->buffer=buffer;job->bytes=bytes;job->frame=frame;job->width=width;job->height=height;job->rays=rays;job->paired=paired;job->pairBytes=pairBytes;job->guides=guides;job->selection=selection;job->motion=motion;job->motionBytes=motionBytes;
+ if(motionBytes){ExportDetail(job);return;}
  if(!QueueUserWorkItem(&ExportDetail,job,WT_EXECUTEDEFAULT)){delete job;if(motionBytes)motionFailed=true;
  Log("GI_SCENE_R484 detail_export frame=%u success=0 queue=0",frame);}
 }

@@ -7,7 +7,7 @@ static void RRDiffuseJoinComplete(void* callback) noexcept {
         !control_rr_albedo::ReadJoinView(callback,&view,&fault) || view!=c->primaryView) return;
     const bool frameReadable=ReadEngineFrameSafe(&frame,&fault);
     const bool drawFault=c->fault.load();const UINT replayed=c->batches.load();
-    const UINT characterExpected=c->characterBatches.load(std::memory_order_relaxed);
+    const UINT characterExpected=UINT(c->characterReplay.batches.size());
     const UINT characterReplayed=c->characterMaskBatches.load(std::memory_order_relaxed);
     const char* failure=!frameReadable?"join_frame_read_failed":frame!=c->frame?"join_frame_mismatch":drawFault?"join_draw_fault":replayed!=c->accepted?"join_batch_count_mismatch":nullptr;
     if(failure) {
@@ -32,10 +32,10 @@ static ID3D12Resource* RRDiffuseCurrent(const RRGuideInputSnapshot* in) noexcept
 }
 
 static ID3D12Resource* RRDiffuseCharacterCurrent(unsigned long long frame,UINT width,UINT height) noexcept {
-    if(!control_rr::RRUserSkinResponsivity() || rrDiffuseStage.load(std::memory_order_acquire)!=RRDiffuseStage::Joined) return nullptr;
+    if(rrDiffuseStage.load(std::memory_order_acquire)!=RRDiffuseStage::Joined) return nullptr;
     auto* c=rrDiffuse;
     if(!c || c->frame!=frame || c->width!=width || c->height!=height || !c->characterTarget.nativeTexture || !c->characterTarget.resource) return nullptr;
-    const UINT expected=c->characterBatches.load(std::memory_order_relaxed);
+    const UINT expected=UINT(c->characterReplay.batches.size());
     const UINT replayed=c->characterMaskBatches.load(std::memory_order_relaxed);
     if(!c->characterMaskUsable.load() || !expected || replayed!=expected) return nullptr;
     if(!RRAlbedoNativeTextureState(c->characterTarget.nativeTexture,D3D12_RESOURCE_STATE_RENDER_TARGET)) return nullptr;
