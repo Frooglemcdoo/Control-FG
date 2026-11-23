@@ -35,10 +35,10 @@ static void RRDiffuseDraw(void* manager,int first,int end) noexcept {
     c->batches.fetch_add(range.coverage.replayBatches);
 
     // Optional skin experiment: replay only audited Character-family batches
-    // into a separate zero-cleared RGBA16F target. This leaves Control's native
+    // into a separate sentinel-cleared RGBA16F target. This leaves Control's native
     // targets and the production diffuse replay unchanged. The alpha channel is
     // converted to a one-channel mask immediately before RR evaluation.
-    if(control_rr::RRUserSkinResponsivity() && c->characterTarget.nativeTexture && !c->characterReplay.batches.empty()) {
+    if(control_rr::RRUserSkinResponsivity() && c->characterMaskUsable.load() && !c->characterReplay.batches.empty()) {
         control_rr_albedo::DrawRange characterRange{};
         if(control_rr_albedo::prepareDrawRange(c->characterReplay,first,end,characterRange)) {
             RRAlbedoNativeTarget* skinTargets[1]{&c->characterTarget};bool skinChanged=false;DWORD skinFault=0;
@@ -52,7 +52,8 @@ static void RRDiffuseDraw(void* manager,int first,int end) noexcept {
                     c->frame,first,end,unsigned(skinBound),unsigned(skinDrawn),unsigned(skinRestored),skinFault,skinRestoreFault);
                 // Skin protection is optional. Disable this frame's mask without
                 // stopping the proven RR diffuse/guide path.
-                c->characterMaskBatches.store(0,std::memory_order_relaxed);
+                c->characterMaskUsable.store(false);
+                if(!skinRestored) RRDiffuseDrawFault(c,"character_restore_failed",first,end,skinFault,skinRestoreFault);
             } else {
                 c->characterMaskBatches.fetch_add(characterRange.coverage.replayBatches,std::memory_order_relaxed);
             }

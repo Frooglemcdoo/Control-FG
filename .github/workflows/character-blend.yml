@@ -1,0 +1,26 @@
+name: Character GI blend validation
+on:
+  push:
+    branches: [work/rr-character-blend-r496]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: Compile and execute the character-only GI pass on WARP
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          New-Item -ItemType Directory -Force build | Out-Null
+          & $dxc.FullName -WX -T cs_6_0 -E main src/shaders/gi_character_blend.hlsl -Fo build/gi-character-blend.dxil
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-blend.cpp /Fe:build/test-gi-character-blend.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./build/test-gi-character-blend.exe
+          exit $LASTEXITCODE

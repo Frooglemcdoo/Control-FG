@@ -37,7 +37,7 @@ static ID3D12Resource* RRDiffuseCharacterCurrent(unsigned long long frame,UINT w
     if(!c || c->frame!=frame || c->width!=width || c->height!=height || !c->characterTarget.nativeTexture || !c->characterTarget.resource) return nullptr;
     const UINT expected=c->characterBatches.load(std::memory_order_relaxed);
     const UINT replayed=c->characterMaskBatches.load(std::memory_order_relaxed);
-    if(!expected || replayed!=expected) return nullptr;
+    if(!c->characterMaskUsable.load() || !expected || replayed!=expected) return nullptr;
     if(!RRAlbedoNativeTextureState(c->characterTarget.nativeTexture,D3D12_RESOURCE_STATE_RENDER_TARGET)) return nullptr;
     return c->characterTarget.resource;
 }

@@ -29,6 +29,7 @@ struct RRDiffuseReplay {
     std::atomic<UINT> frameSkips{0},rangeSkips{0},viewSkips{0},drawCalls{0};
     std::atomic<UINT> batches{0};
     std::atomic<UINT> characterMaskBatches{0};
+    std::atomic<bool> characterMaskUsable{false};
     std::atomic<bool> fault{false};
     // Published after the per-frame shader-contract filter. Evaluation/compact
     // diagnostics can identify when audited character materials are actually
@@ -116,7 +117,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         if(!RRDiffuseResize(c,rrDiffuseExtent.width,rrDiffuseExtent.height,&fault))return;
         rrDiffuseStage.store(RRDiffuseStage::Idle,std::memory_order_release);
         c->frame=frame;c->renderer=preparation.renderer;c->manager=preparation.manager;c->primaryView=preparation.primaryView;
-        c->replay={};c->characterReplay={};c->drawTicks.store(0);c->characterDrawTicks.store(0);c->batches.store(0);c->characterMaskBatches.store(0);c->fault.store(false);
+        c->replay={};c->characterReplay={};c->drawTicks.store(0);c->characterDrawTicks.store(0);c->batches.store(0);c->characterMaskBatches.store(0);c->characterMaskUsable.store(false);c->fault.store(false);
         c->familyFrame.store(0,std::memory_order_release);
         for(auto& count:c->familyCounts)count.store(0,std::memory_order_relaxed);
         c->characterBatches.store(0,std::memory_order_relaxed);
@@ -220,7 +221,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         }
         if(!kept) {rrDiffuseStage.store(RRDiffuseStage::Idle);return;}
         // Build a second immutable replay containing only audited Character-family
-        // draws. Its target is cleared to zero each frame; the selected albedo
+        // draws. Its target is sentinel-cleared each frame; the selected albedo
         // shaders write alpha for covered pixels, giving us an exact-build
         // screen-space character coverage candidate without touching Control's
         // original render targets. This is used only by the optional skin test.
@@ -255,8 +256,10 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
         if(characterBatches && control_rr::RRUserSkinResponsivity()){
             if(!c->characterTarget.nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->characterTarget,&reason,&fault)){
                 Log("RR_SKIN_MASK_DISABLED frame=%llu reason=target_creation_failed fault=0x%08lX",frame,fault);
-            } else if(c->characterTarget.nativeTexture && !RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->characterTarget,&fault)){
+            } else if(c->characterTarget.nativeTexture && !RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->characterTarget,&fault,true)){
                 Log("RR_SKIN_MASK_DISABLED frame=%llu reason=target_clear_failed fault=0x%08lX",frame,fault);
+            } else if(c->characterTarget.nativeTexture){
+                c->characterMaskUsable.store(true);
             }
         }
         rrDiffuseStage.store(RRDiffuseStage::Recording,std::memory_order_release);
