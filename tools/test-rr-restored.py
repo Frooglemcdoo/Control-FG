@@ -5,7 +5,7 @@ m=json.loads((root/'tools/fixtures/r489-approved-rendering.json').read_text())
 for name,digest in m['files'].items():
  data=(root/name).read_text(encoding='utf-8')
  if name=='src/rr_live_guides.h':
-  for addition in ['#include "rr_character_color_slot.h"', '    RRCharacterColorSlot characterColor;']:
+  for addition in ['#include "rr_character_color_slot.h"', '    RRCharacterColorSlot characterColor;', '    RRCharacterHistory characterHistory;']:
    block='#ifdef CONTROL_CHARACTER_GI_BLEND\n'+addition+'\n#endif\n'
    assert data.count(block)==1
    data=data.replace(block,'',1)

@@ -14,8 +14,9 @@ struct GICharacterMeasurement {
         std::array<UINT,5> counts{};
         UINT location=0;
         float gi[3]{},scene[3]{},proposed[3]{};
+        UINT temporal=0;
     };
-    static_assert(sizeof(Sample)==60 && offsetof(Sample,location)==20 && offsetof(Sample,gi)==24 &&
+    static_assert(sizeof(Sample)==64 && offsetof(Sample,temporal)==60 && offsetof(Sample,location)==20 && offsetof(Sample,gi)==24 &&
                   offsetof(Sample,scene)==36 && offsetof(Sample,proposed)==48,"Shader readback layout");
     static constexpr UINT Bytes=sizeof(Sample);
     bool Prepare(ID3D12Device* device, UINT64 sourceFrame) noexcept {

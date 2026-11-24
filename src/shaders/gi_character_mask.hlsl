@@ -1,9 +1,4 @@
-// The native target is RGBA16F. Small integer limbs preserve all bits of
-// rasterized device depth, including reverse-Z values near zero.
-float4 Coverage(float depth, float opacity) {
-    uint bits=asuint(depth);
-    return float4(bits & 2047, (bits >> 11) & 2047, bits >> 22, opacity);
-}
+#include "gi_character_surface.hlsli"
 // Match the audited native VS output register layout for each PS family.
 struct RasterInput {
 #ifdef HAIR_MASK
@@ -17,16 +12,16 @@ struct RasterInput {
     nointerpolation uint2 instance:RenderInstance0;
     float4 position:SV_Position;
 };
-float4 OpaqueMask(RasterInput input) : SV_Target {
-    return Coverage(input.position.z, 1);
+float4 OpaqueMask(RasterInput input,uint primitive:SV_PrimitiveID) : SV_Target {
+    return CharacterSurface(input.position.z,1,input.instance,primitive);
 }
 struct MaterialData {float words[84];};
 StructuredBuffer<MaterialData> materials : register(t0,space0);
 Texture2D<float4> textures[] : register(t0,space1);
 SamplerState materialSampler : register(s19,space1);
 cbuffer mid_general : register(b0) {uint materialIndex;};
-float4 HairMask(RasterInput input) : SV_Target {
+float4 HairMask(RasterInput input,uint primitive:SV_PrimitiveID) : SV_Target {
     float opacity=textures[35*materialIndex+26].Sample(materialSampler,input.uv).w*materials[materialIndex].words[16];
     if (!(opacity>0)) discard;
-    return Coverage(input.position.z,saturate(opacity));
+    return CharacterSurface(input.position.z,saturate(opacity),input.instance,primitive);
 }

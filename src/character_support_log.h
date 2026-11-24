@@ -6,7 +6,7 @@ namespace control_character_support {
 inline bool IsLifecycleEvent(const char* format) noexcept {
     if (!format) return false;
     const char* const markers[] = {
-        "GI_CHARACTER_BLEND_R500", "RR_CHARACTER_SUPPORT_R418", "GI_CAPTURE_R490","RR_RESTORED_R489", "REBLUR_HISTORY_RESET",
+        "GI_CHARACTER_BLEND_R501", "RR_CHARACTER_SUPPORT_R418", "GI_CAPTURE_R490","RR_RESTORED_R489", "REBLUR_HISTORY_RESET",
         "RR_CHARACTER_BASE_ALBEDO_R417",
         "RR_HAIR_OPACITY_READY",
         // Bounded pipeline creation / first-and-final binding results only.

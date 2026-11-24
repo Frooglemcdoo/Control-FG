@@ -1,13 +1,26 @@
 #pragma once
+#include "rr_character_root.h"
 #include "../build/gi_character_blend.h"
 #include "../build/gi_character_measured.h"
 
-static thread_local const RREvaluationInputs* rrCharacterEvaluationInputs=nullptr;
+struct RRCharacterEvalData : RREvaluationInputs {float scaleX=0,scaleY=0;bool motionKnown=false;};
+static thread_local const RRCharacterEvalData* rrCharacterEvaluationInputs=nullptr;
 
 static void RRCharacterPrepareEvaluation(unsigned branch,ID3D12GraphicsCommandList* list,
-    const control_rr::LiveFrameInput& frame,const RREvaluationInputs& in) noexcept {
+    const control_rr::LiveFrameInput& frame,const RREvaluationInputs& base,void* parameters) noexcept {
+    RRCharacterEvalData in{base};
     const auto* previous=rrCharacterEvaluationInputs;
     rrCharacterEvaluationInputs=branch==1 && rrCharacterBlendRequested.load() && !in.fault && in.valid==127 ? &in : nullptr;
+    if(rrCharacterEvaluationInputs && ngxGetInt && ngxGetFloat){
+        __try {
+        int createFlags=0;
+        const bool flagsKnown=ngxGetInt(parameters,"DLSS.Feature.Create.Flags",&createFlags)==1;
+        in.motionKnown=(!flagsKnown || (createFlags&4)==0) &&
+            ngxGetFloat(parameters,"MV.Scale.X",&in.scaleX)==1 && ngxGetFloat(parameters,"MV.Scale.Y",&in.scaleY)==1 &&
+            std::isfinite(in.scaleX) && std::isfinite(in.scaleY) && in.scaleX!=0 && in.scaleY!=0 &&
+            std::isfinite(in.jitterX) && std::isfinite(in.jitterY);
+        } __except(EXCEPTION_EXECUTE_HANDLER) {in.motionKnown=false;}
+    }
     __try {RRLiveBeforeEvaluation(list,frame);}
     __finally {rrCharacterEvaluationInputs=previous;}
 }
@@ -15,15 +28,9 @@ static void RRCharacterPrepareEvaluation(unsigned branch,ID3D12GraphicsCommandLi
 static bool RRCharacterPrepareSlot(RRLiveOwner* owner,RRCharacterColorSlot& slot,DXGI_FORMAT format) noexcept {
     auto* device=owner->device;
     if(!slot.normal){
-        D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,6,0,0,0},
-                                         {D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,6}};
-        D3D12_ROOT_PARAMETER params[2]{};
-        params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[0].DescriptorTable={2,ranges};
-        params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;params[1].Descriptor.ShaderRegister=1;
-        D3D12_ROOT_SIGNATURE_DESC desc{2,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
         Microsoft::WRL::ComPtr<ID3DBlob> blob,error;
         Microsoft::WRL::ComPtr<ID3D12RootSignature> root;
-        if(FAILED(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&error)) ||
+        if(FAILED(RRCharacterSerializeRoot(&blob,&error)) ||
            FAILED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root))))return false;
         D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={kGICharacterBlend,sizeof(kGICharacterBlend)};
         if(FAILED(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&slot.normal))))return false;
@@ -33,7 +40,7 @@ static bool RRCharacterPrepareSlot(RRLiveOwner* owner,RRCharacterColorSlot& slot
     }
     if(!slot.heap){
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        hd.NumDescriptors=7;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        hd.NumDescriptors=10;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&slot.heap))))return false;
     }
     if(slot.output){
@@ -52,7 +59,7 @@ static bool RRCharacterPrepareSlot(RRLiveOwner* owner,RRCharacterColorSlot& slot
 }
 
 static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,const RRGuideInputSnapshot& in,
-                                         const RREvaluationInputs& eval) noexcept {
+                                         const RRCharacterEvalData& eval) noexcept {
     if(rrCharacterRawFrame.load()!=eval.frame)return "raw_gi_not_seen";
     if(eval.frame!=in.engineFrame || rrInputCaptureNativeFrame!=eval.frame)return "aa_frame";
     if(rrDiffuseStage.load(std::memory_order_acquire)!=RRDiffuseStage::Joined)return "replay_not_joined";
@@ -95,14 +102,38 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     }
     D3D12_UNORDERED_ACCESS_VIEW_DESC u{};u.Format=cf;u.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;
     owner->device->CreateUnorderedAccessView(slot.output.Get(),nullptr,&u,cpu);
+    const auto& mv=native[2];
+    auto& history=owner->characterHistory;
+    RRCharacterHistoryParams hp{};
+    const bool motionOK=eval.motionKnown && mv.desc.Width==eval.width && mv.desc.Height==eval.height &&
+        mv.desc.MipLevels==1 && mv.desc.SampleDesc.Count==1 && mv.desc.DepthOrArraySize==1 &&
+        !(mv.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
+        (mv.desc.Format==DXGI_FORMAT_R16G16_FLOAT || mv.desc.Format==DXGI_FORMAT_R32G32_FLOAT);
+    if(motionOK && history.Prepare(owner->device,eval.width,eval.height,owner->epoch)) {
+        hp=RRCharacterHistoryForFrame(history,eval.frame,rrCharacterEvaluatedFrame.load(),
+            in.camera.view,eval.reset,eval.jitterX,eval.jitterY,eval.scaleX,eval.scaleY);
+    }
+    // Prepare may have reset the history index on resize.
+    const UINT writeIndex=1-history.previous;
+    D3D12_SHADER_RESOURCE_VIEW_DESC hs{};hs.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+    hs.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;hs.Texture2D.MipLevels=1;
+    hs.Format=motionOK?mv.desc.Format:DXGI_FORMAT_R16G16_FLOAT;cpu.ptr+=owner->increment;
+    owner->device->CreateShaderResourceView(hp.mode?eval.motion:nullptr,&hs,cpu);
+    hs.Format=DXGI_FORMAT_R32G32B32A32_UINT;cpu.ptr+=owner->increment;
+    owner->device->CreateShaderResourceView(hp.mode==2?history.image[history.previous].Get():nullptr,&hs,cpu);
+    u.Format=hs.Format;cpu.ptr+=owner->increment;
+    owner->device->CreateUnorderedAccessView(hp.mode?history.image[writeIndex].Get():nullptr,nullptr,&u,cpu);
+    if(hp.mode){
+        slot.held[4]=mv.resource;slot.held[5]=history.image[history.previous];slot.held[6]=history.image[writeIndex];
+    }
     slot.held[0]=gi.resource;slot.held[1]=mask;slot.held[2]=eval.depth;slot.held[3]=eval.color;
     static UINT64 calls=0;
     const bool sample=(calls++%240)==0;
     const bool measuring=sample && slot.measured && slot.sample.Prepare(owner->device,eval.frame);
-    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R500 frame=%llu sample=unavailable",eval.frame);
+    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R501 frame=%llu sample=unavailable",eval.frame);
     auto* list=in.commandList;
     auto& commands=*reinterpret_cast<UINT64*>(static_cast<unsigned char*>(in.commandContext)+8);
-    D3D12_RESOURCE_BARRIER barriers[7]{};UINT count=0;
+    D3D12_RESOURCE_BARRIER barriers[9]{};UINT count=0;
     auto transition=[&](ID3D12Resource* res,UINT from,UINT to){
         auto& b=barriers[count++];b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         b.Transition={res,0,D3D12_RESOURCE_STATES(from),D3D12_RESOURCE_STATES(to)};
@@ -118,20 +149,33 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     transition(eval.color,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     for(UINT i=0;i<5;++i)if(!(states[i]&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
         transition(inputs[i],states[i],D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    const bool moveMotion=hp.mode && !(mv.trackedState&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    if(moveMotion)transition(mv.resource,mv.trackedState,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    if(hp.mode)transition(history.image[writeIndex].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     ++commands;list->ResourceBarrier(count,barriers);count=0;
     ID3D12DescriptorHeap* heap=slot.heap.Get();++commands;list->SetDescriptorHeaps(1,&heap);
     ++commands;list->SetComputeRootSignature(slot.root.Get());++commands;list->SetPipelineState(measuring?slot.measured.Get():slot.normal.Get());
     if(measuring){commands+=3;slot.sample.Begin(list);}
     ++commands;list->SetComputeRootDescriptorTable(0,heap->GetGPUDescriptorHandleForHeapStart());
+    ++commands;list->SetComputeRoot32BitConstants(2,5,&hp,0);
     ++commands;list->Dispatch((eval.width+7)/8,(eval.height+7)/8,1);
     if(measuring){commands+=2;slot.sample.End(list);}
     for(UINT i=0;i<5;++i)if(!(states[i]&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
         transition(inputs[i],D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,states[i]);
+    if(moveMotion)transition(mv.resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,mv.trackedState);
+    if(hp.mode)transition(history.image[writeIndex].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     if(states[5]!=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
         transition(eval.color,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,states[5]);
     transition(slot.output.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     ++commands;list->ResourceBarrier(count,barriers);
-    slot.writtenFrame=eval.frame;return "recorded";
+    if(hp.mode){
+        history.previous=writeIndex;history.frame=eval.frame;history.view=in.camera.view;
+        history.jitterX=eval.jitterX;history.jitterY=eval.jitterY;
+        history.scaleX=eval.scaleX;history.scaleY=eval.scaleY;
+    } else history.frame=0;
+    slot.writtenFrame=eval.frame;
+    return hp.mode==2?"recorded_history":hp.mode==1?"recorded_seed":"recorded_spatial";
+
 }
 
 static void RRCharacterBeforeGuideDispatch(RRLiveOwner* owner,RRLiveSlot* slot,const RRGuideInputSnapshot* in) noexcept {

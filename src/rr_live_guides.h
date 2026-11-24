@@ -30,6 +30,9 @@ struct RRLiveSlot {
     control_rr::LiveFrameInput frameInput{};
 };
 struct RRLiveOwner {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    RRCharacterHistory characterHistory;
+#endif
     ID3D12Device* device=nullptr;ID3D12CommandQueue* queue=nullptr;
     ID3D12Fence* fence=nullptr;ID3D12RootSignature* root=nullptr;ID3D12PipelineState* pipeline=nullptr;
     RRLiveCapture* capture=nullptr;

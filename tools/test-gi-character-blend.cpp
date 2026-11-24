@@ -2,6 +2,8 @@
 #include "../src/gi_character_measurement.h"
 #include "../src/rr_character_color_binding.h"
 
+#include "test-gi-character-history.h"
+
 // The fixture supplies independent GI and composed RR color, including the
 // measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
 static void Run(bool sample,bool reference=false) {
@@ -62,6 +64,7 @@ static void Run(bool sample,bool reference=false) {
     const UINT red=width*2+4,green=width*2+9,white=width*2+14,mixedGreen=width*2+20;
     spike(red,0);spike(green,1);spike(white,3);spike(mixedGreen,3);raw[mixedGreen][1]=0.0003f;
 
+    if(!reference)for(auto& pixel:mask)if(pixel[3]>0)pixel=TestMask(.5f,1,pixel[3]);
     const std::vector<Pixel>* images[]={&raw,&mask,&depth,&normals,&materials,&baseline,&baseline};
     ComPtr<ID3D12Resource> target;
     for(UINT i=0;i<7;++i){
@@ -69,12 +72,9 @@ static void Run(bool sample,bool reference=false) {
         TextureView(gpu,tex.Get(),i,i==6);
         if(i==6)target=tex;
     }
-    D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,6,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,6}};
-    D3D12_ROOT_PARAMETER params[2]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[0].DescriptorTable={2,ranges};
-    params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;params[1].Descriptor.ShaderRegister=1;
-    D3D12_ROOT_SIGNATURE_DESC desc{2,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
+    EmptyHistoryViews(gpu,7);
     ComPtr<ID3DBlob> rootBytes,error;
-    Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&rootBytes,&error));
+    Check(RRCharacterSerializeRoot(&rootBytes,&error));
     ComPtr<ID3D12RootSignature> root;
     Check(gpu.device->CreateRootSignature(0,rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),IID_PPV_ARGS(&root)));
     auto code=Read(reference?"build/gi-character-reference.dxil":sample?"build/gi-character-measured.dxil":"build/gi-character-blend.dxil");
@@ -83,6 +83,8 @@ static void Run(bool sample,bool reference=false) {
     Check(gpu.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
     gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pso.Get());
     gpu.list->SetComputeRootDescriptorTable(0,gpu.views->GetGPUDescriptorHandleForHeapStart());
+    RRCharacterHistoryParams noHistory{};
+    gpu.list->SetComputeRoot32BitConstants(2,5,&noHistory,0);
     GICharacterMeasurement stats;
     if(sample){Require(stats.Prepare(gpu.device.Get(),2841),"counter allocation");stats.Begin(gpu.list.Get());}
     gpu.list->Dispatch((width+7)/8,(height+7)/8,1);
@@ -121,7 +123,7 @@ static void Run(bool sample,bool reference=false) {
             Require(p[3]==baseline[i][3],"Original scene alpha");
         }
         if(i==centers[1] || i==mixedGreen)
-            std::cout<<(reference?"R499":"R500")<<" input "<<i%width<<","<<i/width
+            std::cout<<(reference?"R499":"R501")<<" input "<<i%width<<","<<i/width
                      <<" scene "<<baseline[i][0]<<","<<baseline[i][1]<<","<<baseline[i][2]
                      <<" result "<<p[0]<<","<<p[1]<<","<<p[2]<<"\n";
     }
@@ -147,7 +149,7 @@ static void TestBinding(){
 int main(int argc,char** argv) try {
     TestBinding();
     if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0)Run(false,true);
-    Run(false);Run(true);
+    Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
     std::cout<<"PASS character impulse and mixed-light RGB, sparse boundaries, recorded veto evidence, and RR binding\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

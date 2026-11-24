@@ -51,7 +51,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const control_rr::LiveFrameInput frameInput{in.frame,in.jitterX,in.jitterY,in.reset,in.valid,in.fault,in.width,in.height};
     const bool fullWork=rrNativeFrameEnabled&&control_rr::RRUserRuntimeWorkRequested();
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    if(fullWork)RRCharacterPrepareEvaluation(branch,list,frameInput,in);
+    if(fullWork)RRCharacterPrepareEvaluation(branch,list,frameInput,in,parameters);
 #else
     if(fullWork) RRLiveBeforeEvaluation(list,frameInput);
 #endif
@@ -182,6 +182,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     }
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
+    rrCharacterEvaluatedFrame.store(rrAttempt && colorBound && (result&0xFFF00000u)!=0xBAD00000u ? in.frame : 0);
     if(rrAttempt){
         static UINT64 evaluations=0;
         if(++evaluations<=4 || evaluations%240==0){
@@ -189,7 +190,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             const bool attempted=rrCharacterBlendAttemptFrame.load()==in.frame;
             const char* admission=!enabled?"off":attempted?rrCharacterBlendReason.load():"rr_guides_not_recorded";
             const bool current=rrDiffuse && rrDiffuse->frame==in.frame;
-            Log("GI_CHARACTER_BLEND_R500 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
+            Log("GI_CHARACTER_BLEND_R501 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
                 in.frame,admission,unsigned(colorBound),current?UINT(rrDiffuse->characterReplay.batches.size()):0u,
                 current?rrDiffuse->characterMaskBatches.load():0u,unsigned(rrNativeGIKeepThisFrame),
                 unsigned(rrNativeGIHistoryZeroThisFrame),control_rr_gi::StageName(control_rr_gi::stageMode.load()));
