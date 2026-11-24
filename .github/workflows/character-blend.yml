@@ -49,5 +49,10 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./build/mask-linkage.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Verify character color composition, history and legacy references
+        shell: powershell
+        run: |
           & ./build/test-gi-character-blend.exe --compare-r499
-          exit $LASTEXITCODE
+          $nativeExit=$LASTEXITCODE
+          Write-Host "Character composition exit $nativeExit"
+          exit $nativeExit

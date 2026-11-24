@@ -7,6 +7,7 @@
 // The fixture supplies independent GI and composed RR color, including the
 // measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
 static void Run(bool sample,bool reference=false,bool remapped=false) {
+    std::cout<<"GI composite: measured="<<sample<<" reference="<<reference<<" remap="<<remapped<<"\n";
     Device gpu(false);
     constexpr UINT width=37, height=29;
     constexpr auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -174,7 +175,8 @@ static void TestBinding(){
     }
 }
 int main(int argc,char** argv) try {
-    TestBinding();
+    std::cout<<std::unitbuf;std::cerr<<std::unitbuf;
+    std::cout<<"Checking character color binding\n";TestBinding();
     if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0){Run(false,true);TestMotionHistory(false,true); }
     Run(true,false,true);Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
     std::cout<<"PASS character impulse and mixed-light RGB, sparse boundaries, recorded veto evidence, and RR binding\n";

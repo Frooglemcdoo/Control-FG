@@ -89,7 +89,7 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
     rrCharacterRawFrame.store(context.frame);
     if(rrCharacterBlendRequested.load()){
       const auto error=GetLastError();
-      rrCharacterGISourceReason.store(RRCharacterRecordGISource(context.frame,context.view,
+      rrCharacterGISourceReason.store(RRCharacterRecordGISource(context.frame,context.view,reinterpret_cast<ID3D12CommandQueue*>(context.queue),
           reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),rrCharacterNativeSpatialCount));
       SetLastError(error);
     }

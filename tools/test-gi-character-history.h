@@ -31,6 +31,7 @@ static void EmptySourceView(Device& gpu,UINT index){
     gpu.device->CreateShaderResourceView(nullptr,&srv,h);
 }
 static void TestMotionHistory(bool sample,bool previousBuild=false) {
+    std::cout<<"Motion history: measured="<<sample<<" previous="<<previousBuild<<"\n";
     Device gpu(false);
     ComPtr<ID3DBlob> blob,error;Check(RRCharacterSerializeRoot(&blob,&error));
     ComPtr<ID3D12RootSignature> root;

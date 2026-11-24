@@ -43,7 +43,7 @@ struct Recording {
 #ifdef CONTROL_CHARACTER_GI_BLEND
  std::shared_ptr<RRCharacterGITarget> characterSource,characterPrevious;
  std::array<ComPtr<ID3D12Resource>,8> characterInputs;
- ComPtr<ID3D12DescriptorHeap> characterHeap;
+ ComPtr<ID3D12GraphicsCommandList> characterList;
 #endif
  std::shared_ptr<Epoch> epoch;
  std::vector<control_nrd::NativeReceiver::Work> exports;
@@ -130,9 +130,9 @@ static void Poll() {
   }else ++i;
  }
 }
-static bool Initialize(ID3D12CommandQueue* q) {
+static bool Initialize(ID3D12CommandQueue* q,ID3D12Device* device=nullptr) {
  if(queue)return queue.Get()==q;
- auto* d=PTGlassRuntime::device.Get();if(!d||!q)return false;
+ auto* d=device?device:PTGlassRuntime::device.Get();if(!d||!q)return false;
  ComPtr<ID3D12Fence> f;if(FAILED(d->CreateFence(0,D3D12_FENCE_FLAG_NONE,IID_PPV_ARGS(&f)))||
     !native_lighting::rt_spot_table_audit::InstallGameQueue(q))return false;
  recordings.reserve(64);retiredWork.reserve(8);queue=q;fence=f;active=true;return true;
@@ -147,12 +147,20 @@ static Recording* GetRecording(ID3D12GraphicsCommandList4* list,UINT64 generatio
 }
 static void Reset(ID3D12GraphicsCommandList* list) noexcept {
  if(!active)return;std::lock_guard<std::recursive_mutex> lock(mutex);
- for(auto& r:recordings)if(r->list.Get()==list)r->reset=true;Poll();
+ for(auto& r:recordings)if(r->list.Get()==list
+#ifdef CONTROL_CHARACTER_GI_BLEND
+     ||r->characterList.Get()==list
+#endif
+ )r->reset=true;Poll();
 }
 static UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
  if(!active)return 0;mutex.lock();UINT64 mask=0;
  for(unsigned i=0;i<recordings.size();++i){auto& r=*recordings[i];if(r.reset)continue;
-  for(UINT j=0;j<count;++j)if(lists&&lists[j]==r.list.Get()){
+  for(UINT j=0;j<count;++j)if(lists&&(lists[j]==r.list.Get()
+#ifdef CONTROL_CHARACTER_GI_BLEND
+     ||lists[j]==r.characterList.Get()
+#endif
+  )){
    if(q!=queue.Get()||r.submitted||(mask&(1ull<<i))){Invalidate(r.epoch);
 #ifdef CONTROL_CHARACTER_GI_BLEND
     if(r.characterSource)r.characterSource->invalid=true;

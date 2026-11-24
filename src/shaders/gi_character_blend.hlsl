@@ -180,7 +180,7 @@ uint ApplyBlend(uint3 tid) {
         return 4;
         }
     }
-    if(!useFilteredGI && historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
+    if((!useFilteredGI || sparse) && historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
        any(scenePixel.rgb>max(1.5*lowScene2,0.0001))) {
         float3 adjusted;
         // In a larger footprint a second bright sample can be part of a two-pixel impulse.

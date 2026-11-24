@@ -22,13 +22,16 @@ static std::shared_ptr<Image> Acquire(ID3D12Device* device,UINT w,UINT h,const s
     d.Flags=D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     for(auto& tex:v->image)if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&tex))))return {};
+    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+    hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;hd.NumDescriptors=27;
+    if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&v->descriptors))))return {};
     pool.push_back(v);return v;
 }
 static bool Ordered(const std::shared_ptr<Image>& image,ID3D12GraphicsCommandList* list){
     if(!image||image->invalid)return false;
     if(image->submitted)return true;
     for(const auto& r:ControlNrdRuntime::recordings)
-        if(!r->reset && r->characterSource==image && r->list.Get()==list)return true;
+        if(!r->reset && r->characterSource==image && r->characterList.Get()==list)return true;
     return false;
 }
 static DXGI_FORMAT ReadFormat(DXGI_FORMAT f){
@@ -41,12 +44,18 @@ static DXGI_FORMAT ReadFormat(DXGI_FORMAT f){
     default:return DXGI_FORMAT_UNKNOWN;
     }
 }
-static const char* Record(UINT64 frame,UINT64 view,ID3D12GraphicsCommandList* list,UINT passes){
+static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue,ID3D12GraphicsCommandList* list,UINT passes){
     using namespace ControlNrdRuntime;
     if(!passes||passes>MaxPasses)return "unsupported_spatial_count";
     Poll();if(fence&&fence->GetCompletedValue()==UINT64_MAX)return "device_removed";
-    PTGlassRuntime::Context c{};gi_reuse::ComputeBindingSnapshot b;UINT64 generation=0;
-    if(!PTGlassRuntime::device||!Bindings(c,b,generation)||c.list!=list||!b.Ready())return "gi_compute_bindings";
+    gi_reuse::ComputeBindingSnapshot b;UINT64 generation=0;
+    gi_reuse::GraphicsTableState graphics;
+    const auto reset=gi_dual_bridge::resetReady.load();
+    if(!list||!reset||!reset(list)||!hooks::Capture(list,b,generation)||!b.Ready()||!b.heaps[0])return "gi_compute_bindings";
+    if(!hooks::CaptureGraphics(list,graphics))return "gi_graphics_tables";
+    ComPtr<ID3D12Device> device;ComPtr<ID3D12GraphicsCommandList4> nativeList;
+    if(FAILED(list->GetDevice(IID_PPV_ARGS(&device)))||FAILED(list->QueryInterface(IID_PPV_ARGS(&nativeList)))||
+       !Initialize(gameQueue,device.Get()))return "gi_queue";
     auto* bundle=control_rr_gi::Find(b.pipeline.Get());
     if(!bundle||bundle->spatial)return "gi_temporal_pipeline";
     struct Extract{
@@ -74,20 +83,17 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12GraphicsCommandList* li
     const UINT w=UINT(t[5].desc.Width),h=t[5].desc.Height;
     if(t[5].desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return "gi_source_format";
     for(const auto& texture:t)if(texture.desc.Width!=w||texture.desc.Height!=h)return "gi_source_extents";
-    auto* device=PTGlassRuntime::device.Get();
-    if(!Prepare(device))return "gi_filter_pipeline";
+    if(!Prepare(device.Get()))return "gi_filter_pipeline";
     auto prior=latest.lock();
     const bool eligible=Ordered(prior,list)&&prior->frame+1==frame&&prior->view==view&&prior->width==w&&prior->height==h&&
         !rrNativeFrame.Reset()&&rrCharacterEvaluatedFrame.load()==prior->frame;
     if(!eligible)prior.reset();
-    auto image=Acquire(device,w,h,prior);
+    auto image=Acquire(device.Get(),w,h,prior);
     if(!image)return "gi_source_pool";
-    auto* r=GetRecording(c.rays,generation);if(!r||r->characterSource)return "gi_source_recording";
-    PTGlass::DescriptorRange fresh{};const char* reason=nullptr;
-    if(!PTGlassRuntime::FreshCount(c,27,&fresh,&reason))return reason?reason:"gi_source_descriptors";
+    auto* r=GetRecording(nativeList.Get(),generation);if(!r||r->characterSource)return "gi_source_recording";
     const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    auto cpu=fresh.heap->GetCPUDescriptorHandleForHeapStart();cpu.ptr+=SIZE_T(fresh.first)*step;
-    auto gpu=fresh.heap->GetGPUDescriptorHandleForHeapStart();gpu.ptr+=UINT64(fresh.first)*step;
+    auto cpu=image->descriptors->GetCPUDescriptorHandleForHeapStart();
+    auto gpu=image->descriptors->GetGPUDescriptorHandleForHeapStart();
     auto srv=[&](ID3D12Resource* texture,DXGI_FORMAT fmt,UINT mips){
         D3D12_SHADER_RESOURCE_VIEW_DESC d{};d.Format=fmt;d.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         d.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;d.Texture2D.MipLevels=mips;
@@ -104,7 +110,7 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12GraphicsCommandList* li
         for(UINT j=0;j<5;++j)input(j);
         srv(image->image[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();input(6);uav(1-i);
     }
-    r->characterSource=image;r->characterPrevious=prior;r->characterHeap=fresh.heap;
+    r->characterSource=image;r->characterPrevious=prior;r->characterList=list;
     for(UINT i=0;i<7;++i)r->characterInputs[i]=t[i].resource;
     image->frame=frame;image->view=view;image->submitted=false;image->invalid=false;image->passes=passes;image->output=passes&1;
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -114,9 +120,14 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12GraphicsCommandList* li
         if(!alias){Barrier(list,t[i].resource,t[i].state,read);transitioned[i]=true;}
     }
     ID3D12Resource* images[]={image->image[0].Get(),image->image[1].Get()};
+    ID3D12DescriptorHeap* privateHeap=image->descriptors.Get();
+    list->SetDescriptorHeaps(1,&privateHeap);
     DispatchPasses(list,native.cb[0],native.cb[1],gpu,step,images,w,h,passes,bool(prior));
     for(UINT i=0;i<7;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
-    b.Restore(c.rays);latest=image;
+    ID3D12DescriptorHeap* restore[]={b.heaps[0].Get(),b.heaps[1].Get()};
+    list->SetDescriptorHeaps(b.heaps[1]?2:1,restore);
+    graphics.Replay([&](UINT index,UINT64 address){list->SetGraphicsRootDescriptorTable(index,{address});});
+    b.Restore(nativeList.Get());latest=image;
     return prior?"both_history":"both_seed";
 }
 }
@@ -124,10 +135,10 @@ static bool RRCharacterUsesSingleSample() noexcept {
     int id=-1;std::uint32_t count=0;
     return control_nrd_native::Resolve(rrNativeClampApi,"g_uNumSamples",id)&&rrNativeClampApi.ReadCurrent(id,count)&&count<=1;
 }
-static const char* RRCharacterRecordGISource(UINT64 frame,UINT64 view,ID3D12GraphicsCommandList* list,unsigned passes) noexcept {
+static const char* RRCharacterRecordGISource(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue,ID3D12GraphicsCommandList* list,unsigned passes) noexcept {
     std::lock_guard<std::recursive_mutex> lock(ControlNrdRuntime::mutex);
     ControlNrdRuntime::Mute mute;
-    try{return RRCharacterSource::Record(frame,view,list,passes);}catch(...){return "gi_allocation";}
+    try{return RRCharacterSource::Record(frame,view,gameQueue,list,passes);}catch(...){return "gi_allocation";}
 }
 static std::shared_ptr<RRCharacterGITarget> RRCharacterGIForColor(UINT64 frame,UINT64 view,
     ID3D12CommandQueue* queue,ID3D12GraphicsCommandList* list,UINT w,UINT h) noexcept {
