@@ -1,4 +1,5 @@
 #include "gpu_test_textures.h"
+#include <DirectXPackedVector.h>
 #include "../build/gi_motion_history.generated.h"
 #include "../build/gi_spatial_history.generated.h"
 #include "../src/rr_character_gi_dispatch.h"
@@ -36,7 +37,8 @@ int main(int argc,char** argv) try {
     ComPtr<ID3D12Resource> history;Readback samples[2];
     for(UINT frame=0;frame<2;++frame){
         auto raw=Texture(g,w,h,format,frame?flash.data():flat.data());
-        ComPtr<ID3D12Resource> a=Texture(g,w,h,format,nullptr,true),b=Texture(g,w,h,format,nullptr,true);
+        constexpr auto privateFormat=DXGI_FORMAT_R16G16B16A16_FLOAT;
+        auto a=Texture(g,w,h,privateFormat,nullptr,true),b=Texture(g,w,h,privateFormat,nullptr,true);
         auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,write=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         g.Transition(a.Get(),write,read);g.Transition(b.Get(),write,read);
         ID3D12Resource* images[]={a.Get(),b.Get()};
@@ -62,10 +64,19 @@ int main(int argc,char** argv) try {
     g.Submit();
     for(UINT f=0;f<2;++f){
         unsigned char* data=nullptr;Check(samples[f].buffer->Map(0,nullptr,reinterpret_cast<void**>(&data)));
-        Pixel value{};std::memcpy(&value,data+8*samples[f].rowPitch+12*sizeof(Pixel),sizeof(Pixel));
+        std::array<DirectX::PackedVector::HALF,4> channels{};
+        std::memcpy(channels.data(),data+8*samples[f].rowPitch+12*sizeof(channels),sizeof(channels));
+        Pixel value{};
+        for(UINT k=0;k<4;++k)value[k]=DirectX::PackedVector::XMConvertHalfToFloat(channels[k]);
         for(UINT k=0;k<3;++k)Require(std::isfinite(value[k])&&value[k]>0&&
             (f?value[k]<flash[8*w+12][k]*.3f:std::abs(value[k]-flat[0][k])<1e-6f),"Uniform energy or captured flash");
         std::cout<<(useHit?"hit-aware":"no-hit geometry")<<" source frame "<<f<<" raw red "<<(f?flash[8*w+12][0]:flat[0][0])<<" Both GI red "<<value[0]<<"\n";
+        if(missing && f==1){
+            // The separate RR composition fixture consumes exactly this GPU result.
+            std::ofstream output("build/character-no-hit-gpu-sample.bin",std::ios::binary);
+            output.write(reinterpret_cast<const char*>(value.data()),sizeof(value));
+            output.close();Require(bool(output),"Saving private GI readback");
+        }
         D3D12_RANGE empty{};samples[f].buffer->Unmap(0,&empty);
     }
     return 0;

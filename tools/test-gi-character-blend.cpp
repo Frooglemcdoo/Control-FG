@@ -84,7 +84,12 @@ static void Run(bool sample,bool reference=false,bool remapped=false) {
     auto map=Texture(gpu,mw,mh,DXGI_FORMAT_R32_UINT,selectors.data());
     TextureView(gpu,map.Get(),10);
     if(remapped){
-        std::vector<Pixel> filtered=raw;filtered[source]=raw[0];
+        const auto gpuSample=Read("build/character-no-hit-gpu-sample.bin");
+        Require(gpuSample.size()==sizeof(Pixel),"Missing no-hit GI readback");
+        std::vector<Pixel> filtered=raw;
+        std::memcpy(filtered[source].data(),gpuSample.data(),sizeof(Pixel));
+        // The environment spike has the same filtered lighting available. Its RR color must survive.
+        filtered[width*5+36]=filtered[source];
         auto earlier=Texture(gpu,width,height,format,filtered.data());TextureView(gpu,earlier.Get(),11);
     }else EmptySourceView(gpu,11);
     ComPtr<ID3DBlob> rootBytes,error;
