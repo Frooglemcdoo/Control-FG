@@ -12,6 +12,9 @@ static void RRLiveAfterPresent(unsigned long long present) noexcept {
             }
             if(!c->stopped) for(UINT i=0;i<3;++i) {
                 const auto state=c->policy.Inspect()[i];auto& s=c->slots[i];
+#ifdef CONTROL_CHARACTER_GI_BLEND
+                if(state.state==control_rr::SlotState::Free)s.characterColor.Retire();
+#endif
                 if(state.state==control_rr::SlotState::Free && s.sources[0]) {RRLiveReleaseSources(s);++c->retired;}
                 if(state.state==control_rr::SlotState::Ready && s.present<present) {
                     const auto value=++c->signal;

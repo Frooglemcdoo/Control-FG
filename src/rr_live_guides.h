@@ -9,7 +9,13 @@
 // Included after rr_albedo_capture.h so exact native Part1 readers are available.
 #include "rr_live_capture.h"
 #include "rr_diffuse_copy.h"
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "rr_character_color_slot.h"
+#endif
 struct RRLiveSlot {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    RRCharacterColorSlot characterColor;
+#endif
     ID3D12DescriptorHeap* heap=nullptr;
     ID3D12Resource* normal=nullptr;ID3D12Resource* specular=nullptr;
     ID3D12Resource* diffuse=nullptr;

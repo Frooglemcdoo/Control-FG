@@ -1,6 +1,6 @@
 #pragma once
 #ifdef CONTROL_CHARACTER_GI_BLEND
-inline std::atomic<unsigned long long> rrCharacterBlendAttemptFrame{0};
+inline std::atomic<unsigned long long> rrCharacterRawFrame{0}, rrCharacterBlendAttemptFrame{0};
 inline std::atomic<const char*> rrCharacterBlendReason{"awaiting_gi"};
 inline std::atomic<bool> rrCharacterBlendRequested{true};
 inline std::atomic<const wchar_t*> rrCharacterBlendStatus{L"Waiting for character GI"};

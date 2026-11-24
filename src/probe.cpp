@@ -261,7 +261,7 @@ static void OpenLog() {
     char frozenPrepare[4]{};
     const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    Log("GI_CHARACTER_BLEND_R497 startup=1 spatial_only=1 measurement_period=240");
+    Log("GI_CHARACTER_BLEND_R498 startup=1 boundary=rr_input spatial_only=1 measurement_period=240");
 #endif
     Log("GI_FROZEN_R426 startup=1 check_revision=2 requested=%u diagnostics=%u",unsigned(frozenRequested),unsigned(control_diagnostics::Active()));
     Log("RR_CHARACTER_SUPPORT_R418 build=R425 lifecycle_logging=1 diagnostics=%u skin_record_limit=32 hair_record_limit=32 rendering=R424 guide_history=mode_changes_only character_coverage_guard=valid_sample_zero character_diffuse=r421_radiance_rejection_restored",unsigned(control_diagnostics::Active()));
@@ -445,6 +445,9 @@ static bool ReadEngineCommandContext(ID3D12Resource* candidate, EngineCommandCon
 #include "rr_reflection_runtime.h"
 #include "rr_distance_runtime.h"
 #include "rr_input_capture.h"
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "rr_character_color_runtime.inl"
+#endif
 static bool RRNativePrepareAA(void* color,void*& normal,void*& diffuse,void*& specular) noexcept;
 
 static void ProbeVideoMemory(unsigned long long call,unsigned long long present,void* color,const char* reason) noexcept {
@@ -1155,24 +1158,7 @@ static bool ReadSceneRawGI(void* out) noexcept {
 static const bool sceneRawRegistered=[] {gi_scene_capture::rawTexture.store(&ReadSceneRawGI);return true;}();
 #endif
 
-#ifdef CONTROL_CHARACTER_GI_BLEND
-#include "../build/gi_character_blend.h"
-#include "../build/gi_character_measured.h"
-#endif
 #include "nrd_diffuse_runtime.h"
-#ifdef CONTROL_CHARACTER_GI_BLEND
-static void RRRecordCharacterBlend(const control_rr_reflection::Context& ctx) noexcept {
- const DWORD saved=GetLastError();
- const char* status="exception";
- if(!rrCharacterBlendRequested.load())return;
- try {status=ControlNrdRuntime::RecordCharacterBlend(ctx);}catch(...){}
- rrCharacterBlendReason.store(status);
- rrCharacterBlendAttemptFrame.store(ctx.frame);
- rrCharacterBlendStatus.store(strcmp(status,"recorded")==0?L"GI pass recorded":L"Bypassed this frame");
-
- SetLastError(saved);
-}
-#endif
 #include "pt_reflection_diffuse_bridge_runtime.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"

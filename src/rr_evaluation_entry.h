@@ -12,6 +12,9 @@ static RREvaluationC rrEvaluationOriginal = nullptr;
 static RRAlbedoCallPatch rrEvaluationPatches[2]{};
 static std::atomic<unsigned long long> rrEvaluationCalls[2]{};
 #include "rr_evaluation_inputs.h"
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "rr_character_evaluation.h"
+#endif
 static RREvaluationInputs RRReadEvaluationInputs(void* parameters) noexcept {
     RREvaluationInputs in{};
     // POD-only SEH boundary. Never catch or retry a fault in native evaluation.
@@ -47,7 +50,11 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     // invocation; the separate live pass acquires its own source references.
     const control_rr::LiveFrameInput frameInput{in.frame,in.jitterX,in.jitterY,in.reset,in.valid,in.fault,in.width,in.height};
     const bool fullWork=rrNativeFrameEnabled&&control_rr::RRUserRuntimeWorkRequested();
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    if(fullWork)RRCharacterPrepareEvaluation(branch,list,frameInput,in);
+#else
     if(fullWork) RRLiveBeforeEvaluation(list,frameInput);
+#endif
     const bool partial=rrNativeFrameEnabled&&RRNativePartialActive();
     // Compile-time retained references keep the old skin experiment available for source comparison,
     // but r20t never executes it.
@@ -141,7 +148,13 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     const auto stageTicket=RRStageTimingBegin(list,gi_stage_timing::Stage::Reconstruction);
     SetLastError(incomingError);
 #endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    bool colorBound=false;
+    const unsigned int result=RRCharacterEvaluate(rrEvaluationOriginal,list,evaluationFeature,parameters,callback,
+        in.color,rrAttempt?bindings.characterColor:nullptr,colorBound);
+#else
     const unsigned int result=rrEvaluationOriginal(list,evaluationFeature,parameters,callback);
+#endif
     const DWORD nativeError=GetLastError();
 #ifdef CONTROL_RR_GI_SEQUENCE
     RRStageTimingEnd(stageTicket,list);
@@ -174,10 +187,10 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
         if(++evaluations<=4 || evaluations%240==0){
             const bool enabled=rrCharacterBlendRequested.load();
             const bool attempted=rrCharacterBlendAttemptFrame.load()==in.frame;
-            const char* admission=!enabled?"off":attempted?rrCharacterBlendReason.load():"gi_callback_not_reached";
+            const char* admission=!enabled?"off":attempted?rrCharacterBlendReason.load():"rr_guides_not_recorded";
             const bool current=rrDiffuse && rrDiffuse->frame==in.frame;
-            Log("GI_CHARACTER_BLEND_R497 rr_frame=%llu admission=%s mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
-                in.frame,admission,current?UINT(rrDiffuse->characterReplay.batches.size()):0u,
+            Log("GI_CHARACTER_BLEND_R498 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
+                in.frame,admission,unsigned(colorBound),current?UINT(rrDiffuse->characterReplay.batches.size()):0u,
                 current?rrDiffuse->characterMaskBatches.load():0u,unsigned(rrNativeGIKeepThisFrame),
                 unsigned(rrNativeGIHistoryZeroThisFrame),control_rr_gi::StageName(control_rr_gi::stageMode.load()));
         }

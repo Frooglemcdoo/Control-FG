@@ -1,8 +1,9 @@
 #include "gpu_test_textures.h"
 #include "../src/gi_character_measurement.h"
+#include "../src/rr_character_color_binding.h"
 
-// Seed output exactly as the native raw-bypass shader does. Uncovered pixels
-// must remain bit-identical even when they are brighter than the foreground.
+// The fixture supplies independent GI and composed RR color, including the
+// measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
 static void Run(bool sample) {
     Device gpu(false);
     constexpr UINT width=37, height=11;
@@ -23,16 +24,22 @@ static void Run(bool sample) {
     raw[width*5+25]=raw[width*5+29]=raw[centers[0]];
     depth[width*5+25][0]=0.25f; // An occluder won depth after the character replay.
     materials[width*5+29][2]=1;
-    std::vector<Pixel> baseline=raw;
-    for(auto& p:baseline)p[3]=p[0];
-    const std::vector<Pixel>* images[]={&raw,&mask,&depth,&normals,&materials,&baseline};
+    const Pixel background={0.00020f,0.00010f,0.00005f,0.75f};
+    std::vector<Pixel> baseline(width*height,background);
+    for(UINT i=0;i<width*height;++i)
+        if(raw[i][0]>0.001f)baseline[i]={0.036713f,0.015060f,0.004642f,0.875f};
+    const UINT direct=width*8+22,giOnly=width*8+26;
+    baseline[direct]={0.2f,0.3f,0.4f,0.625f}; // isolated direct light, ordinary GI
+    raw[giOnly]=raw[centers[0]]; // GI impulse with no corresponding scene impulse
+    raw[centers[1]][0]=0.0005f; // protect the independent red channel at this pixel
+    const std::vector<Pixel>* images[]={&raw,&mask,&depth,&normals,&materials,&baseline,&baseline};
     ComPtr<ID3D12Resource> target;
-    for(UINT i=0;i<6;++i){
-        auto tex=Texture(gpu,width,height,format,images[i]->data(),i==5);
-        TextureView(gpu,tex.Get(),i,i==5);
-        if(i==5)target=tex;
+    for(UINT i=0;i<7;++i){
+        auto tex=Texture(gpu,width,height,format,images[i]->data(),i==6);
+        TextureView(gpu,tex.Get(),i,i==6);
+        if(i==6)target=tex;
     }
-    D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,5,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,5}};
+    D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,6,0,0,0},{D3D12_DESCRIPTOR_RANGE_TYPE_UAV,1,0,0,6}};
     D3D12_ROOT_PARAMETER params[2]{};params[0].ParameterType=D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;params[0].DescriptorTable={2,ranges};
     params[1].ParameterType=D3D12_ROOT_PARAMETER_TYPE_UAV;params[1].Descriptor.ShaderRegister=1;
     D3D12_ROOT_SIGNATURE_DESC desc{2,params,0,nullptr,D3D12_ROOT_SIGNATURE_FLAG_NONE};
@@ -62,17 +69,37 @@ static void Run(bool sample) {
         if(std::find(std::begin(centers),std::end(centers),i)==std::end(centers))
             Require(p==baseline[i],"Unexpected write on background, edge, or supported highlight");
         else {
-            const float peak=(std::max)({raw[i][0],raw[i][1],raw[i][2]});
             const float coverage=mask[i][3];
-            for(UINT k=0;k<3;++k)
-                Require(std::abs(p[k]-raw[i][k]*(1-coverage+coverage*0.0005f/peak))<1e-6f,"Impulse outside neighborhood scale");
-            Require(p[3]==p[0],"Native red/alpha contract");
+            for(UINT k=0;k<3;++k){
+                const bool independent=(i==centers[1] && k==0);
+                const float expected=independent?baseline[i][k]:baseline[i][k]+coverage*(background[k]-baseline[i][k]);
+                Require(std::abs(p[k]-expected)<1e-6f,"Incorrect composed color or independent channel");
+            }
+            Require(p[3]==baseline[i][3],"Original scene alpha");
         }
     }
     D3D12_RANGE empty{};output.buffer->Unmap(0,&empty);
 }
+static void TestBinding(){
+    struct Api {
+        int* value;int* reject;
+        void Resource(const char*,int* p){if(p!=reject)value=p;}
+        bool ResourceEquals(const char*,int* p){return value==p;}
+    };
+    int source=1,corrected=2;
+    for(unsigned mode=0;mode<3;++mode){
+        Api api{&source,mode==2?&corrected:nullptr};unsigned calls=0;bool bound=false;
+        auto eval=[&](){
+            ++calls;Require(api.value==(mode!=2?&corrected:&source),"Wrong color during evaluation");
+            return mode==1?0xBAD00002u:1u;
+        };
+        auto result=RRWithCharacterColor(api,&source,&corrected,eval,bound);
+        Require(result==(mode==1?0xBAD00002u:1u) && calls==1 && bound==(mode!=2) && api.value==&source,"Color scope or fallback");
+    }
+}
 int main() try {
+    TestBinding();
     Run(false);Run(true);
-    std::cout<<"PASS character GI RGB impulses, supported highlight, depth/material edges and uncovered background\n";
+    std::cout<<"PASS current-frame GI and scene impulses, independent direct color, visibility edges, background, GPU counts and single-call RR color restoration\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

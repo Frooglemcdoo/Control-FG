@@ -1,7 +1,7 @@
 name: Character GI blend validation
 on:
   push:
-    branches: [work/rr-character-blend-r497]
+    branches: [work/rr-character-blend-r498]
 permissions:
   contents: read
 jobs:

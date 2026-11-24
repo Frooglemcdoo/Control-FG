@@ -57,9 +57,6 @@ static void RRNativeHookGITemporalBind(void* record){
  __finally {if(observe)dual->end();}
  if(rrNativeGIHistoryScope){rrNativeGIMotionBound=true;rrNativeGIHistoryReason="native_bind_returned";}
 }
-#ifdef CONTROL_CHARACTER_GI_BLEND
-static void RRRecordCharacterBlend(const control_rr_reflection::Context&) noexcept;
-#endif
 static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
  const DWORD saved=GetLastError();
  control_rr_reflection::Context context{};
@@ -86,7 +83,7 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
  if(used && control_rr_gi::rawBypass && !control_rr_gi::ownedDenoise && !rrNativeGIHistoryDispatches)
-    RRRecordCharacterBlend(context);
+    rrCharacterRawFrame.store(context.frame);
 #endif
  if(used){rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GITemporal);++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
  else rrNativeGIHistoryReason="native_pipeline_fallback";

@@ -12,6 +12,9 @@
 static bool RRLiveRecord(RRLiveOwner* c,RRLiveSlot* s,const RRGuideInputSnapshot* in,
     const RRLiveConstants* constants,DWORD* fault) noexcept {
     RR_SEH_TRY {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+        RRCharacterBeforeGuideDispatch(c,s,in);
+#endif
         auto* list=in->commandList;
         auto* count=reinterpret_cast<unsigned long long*>(static_cast<unsigned char*>(in->commandContext)+8);
         D3D12_RESOURCE_BARRIER barriers[4]{};ID3D12Resource* outputs[4]{s->normal,s->diffuse,s->specular,s->hairResponsivity};
