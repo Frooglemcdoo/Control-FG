@@ -59,7 +59,7 @@ inline void Capture(HWND panel) noexcept {
 }
 inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp) noexcept {
  if(message==WM_CREATE){
-  CreateWindowW(L"STATIC",L"CONTROLTOH R503 - RR CONTROLS",WS_CHILD|WS_VISIBLE,12,10,396,22,window,nullptr,selfModule,nullptr);
+  CreateWindowW(L"STATIC",L"CONTROLTOH R504 - RR CONTROLS",WS_CHILD|WS_VISIBLE,12,10,396,22,window,nullptr,selfModule,nullptr);
   for(int i=1;i<=6;++i){auto b=CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,12+((i-1)%2)*200,40+((i-1)/2)*42,192,34,window,reinterpret_cast<HMENU>(static_cast<INT_PTR>(i)),selfModule,nullptr);SendMessageW(b,WM_SETFONT,reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),TRUE);}
   CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,12,172,396,24,window,reinterpret_cast<HMENU>(9),selfModule,nullptr);
   CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,12,200,396,36,window,reinterpret_cast<HMENU>(10),selfModule,nullptr);

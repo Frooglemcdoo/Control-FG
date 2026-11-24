@@ -3,7 +3,7 @@ import struct
 import sys
 import tempfile
 from pathlib import Path
-from gi_spatial_history import generate
+from gi_spatial_history import generate, character_geometry_spatial
 from dxbc_checksum import checksum
 
 root = Path(__file__).resolve().parents[1]
@@ -88,3 +88,20 @@ for variant in range(2):
 print('PASS R259 both spatial variants: only final history coefficient changes; spatial math, descriptors, control flow and output ABI unchanged')
 print('PASS R260 both bounded variants: five RGB-bound instructions; all original instructions preserved except scratch register count; no new samples or bindings')
 print('PASS R261 both steady variants: fixed hit-distance and variance multipliers, zero final history; geometry/material weights, stencil, bindings and ABI preserved')
+
+# Both axes retain the exact hit-aware instructions outside its single tap-weight
+# calculation. Check instruction operands too, so a t7 read cannot sneak back in.
+for variant in range(2):
+    source=base64.b64decode((root/f'research/gi-temporal-r208/diffuse-spatial-{variant}.dxbc.b64').read_bytes())
+    def instructions(blob):
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory)/'spatial.dxbc';p.write_bytes(blob)
+            return decode(p)['instructions']
+    original=instructions(generate(source,steady=True,native_hit_weight=True))
+    geometry=character_geometry_spatial(source)
+    assert geometry[4:20]==checksum(geometry)
+    checked=instructions(geometry)
+    def signature(instruction):return instruction['name'],instruction['operands']
+    assert [signature(i) for i in checked]==[signature(i) for i in original if not 1427<=i['dword']<1503]
+    assert not any('t[7][7]' in operand for i in checked if not i['name'].startswith('dcl_') for operand in i['operands'])
+print('PASS both geometry-only spatial kernels remove the sole hit-distance read and retain other instructions')

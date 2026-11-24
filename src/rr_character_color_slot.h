@@ -23,15 +23,15 @@ struct RRCharacterColorSlot {
                 const auto& n=s.counts;
                 const UINT temporal=s.temporal+s.strongTemporal;
                 const UINT supported=n[2]+n[3]+n[4]+temporal+s.sourceCorrected,visible=n[1]+supported;
-                Log("GI_CHARACTER_BLEND_R503 gpu_frame=%llu drawn=%u visible=%u supported=%u corrected=%u mixed_color_preserved=%u temporal_corrected=%u strong_temporal=%u source_corrected=%u",
+                Log("GI_CHARACTER_BLEND_R504 gpu_frame=%llu drawn=%u visible=%u supported=%u corrected=%u mixed_color_preserved=%u temporal_corrected=%u strong_temporal=%u source_corrected=%u",
                     sample.frame,n[0]+visible,visible,supported,n[3]+temporal+s.sourceCorrected,n[4],temporal,s.strongTemporal,s.sourceCorrected);
                 if(s.location){
                     const UINT xy=s.location-1;
-                    Log("GI_CHARACTER_BLEND_R503 mixed_frame=%llu input_xy=%u,%u gi=%.6g,%.6g,%.6g scene_kept=%.6g,%.6g,%.6g rejected_rgb=%.6g,%.6g,%.6g",
+                    Log("GI_CHARACTER_BLEND_R504 mixed_frame=%llu input_xy=%u,%u gi=%.6g,%.6g,%.6g scene_kept=%.6g,%.6g,%.6g rejected_rgb=%.6g,%.6g,%.6g",
                         sample.frame,xy&65535u,xy>>16,s.gi[0],s.gi[1],s.gi[2],s.scene[0],s.scene[1],s.scene[2],
                         s.proposed[0],s.proposed[1],s.proposed[2]);
                 }
-            } else Log("GI_CHARACTER_BLEND_R503 gpu_frame=%llu sample=read_failed",sample.frame);
+            } else Log("GI_CHARACTER_BLEND_R504 gpu_frame=%llu sample=read_failed",sample.frame);
         }
         sourceLease.reset();sample={};writtenFrame=0;
         for(auto& resource:held)resource.Reset();

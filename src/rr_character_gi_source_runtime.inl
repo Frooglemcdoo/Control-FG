@@ -34,16 +34,6 @@ static bool Ordered(const std::shared_ptr<Image>& image,ID3D12GraphicsCommandLis
         if(!r->reset && r->characterSource==image && r->characterList.Get()==list)return true;
     return false;
 }
-static DXGI_FORMAT ReadFormat(DXGI_FORMAT f){
-    if(f==DXGI_FORMAT_R32_TYPELESS || f==DXGI_FORMAT_D32_FLOAT)return DXGI_FORMAT_R32_FLOAT;
-    if(f==DXGI_FORMAT_R16_TYPELESS || f==DXGI_FORMAT_D16_UNORM)return DXGI_FORMAT_R16_UNORM;
-    switch(f){
-    case DXGI_FORMAT_R16G16B16A16_FLOAT:case DXGI_FORMAT_R32G32B32A32_FLOAT:
-    case DXGI_FORMAT_R32G32_FLOAT:case DXGI_FORMAT_R16G16_FLOAT:case DXGI_FORMAT_R8G8B8A8_UNORM:
-    case DXGI_FORMAT_R32_FLOAT:case DXGI_FORMAT_R16_FLOAT:case DXGI_FORMAT_R16_UNORM:return f;
-    default:return DXGI_FORMAT_UNKNOWN;
-    }
-}
 static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue,ID3D12GraphicsCommandList* list,UINT passes){
     using namespace ControlNrdRuntime;
     if(!passes||passes>MaxPasses)return "unsupported_spatial_count";
@@ -68,9 +58,9 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     b.arguments.Replay(native);
     if(!native.cb[0]||!native.cb[1])return "gi_native_constants";
     static const char* names[]={"g_tGBuffer1","g_tGBuffer2","g_tLinearDepth","g_tPreviousLinearDepth",
-                                 "g_tGeometryVelocityTexture","g_DLF_rwtColorSource","g_tHitInfo"};
+                                 "g_tGeometryVelocityTexture","g_DLF_rwtColorSource"};
     Texture t[7]{};
-    for(UINT i=0;i<7;++i){
+    for(UINT i=0;i<_countof(names);++i){
         if(i<2){
             RRGuideInputTexture nativeTexture{};DWORD fault=0;const char* why=nullptr;
             if(!RRGuideReadTexture(i?kRRGuideGBuffer2ShaderRva:kRRGuideGBuffer1ShaderRva,&nativeTexture,&why,&fault))return names[i];
@@ -82,7 +72,13 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     }
     const UINT w=UINT(t[5].desc.Width),h=t[5].desc.Height;
     if(t[5].desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return "gi_source_format";
-    for(const auto& texture:t)if(texture.desc.Width!=w||texture.desc.Height!=h)return "gi_source_extents";
+    for(UINT i=0;i<_countof(names);++i)if(t[i].desc.Width!=w||t[i].desc.Height!=h)return "gi_source_extents";
+    // Hit distance first becomes useful in the private spatial pass. RAW bypass
+    // can reach this temporal callback without a readable spatial hit provider.
+    const bool useHitDistance=HitDistanceInput(w,h,t[6],[](Texture& hit){
+        return ControlNrdRuntime::NamedTexture("g_tHitInfo",hit);
+    });
+    const UINT inputCount=useHitDistance?7:6;
     if(!Prepare(device.Get()))return "gi_filter_pipeline";
     auto prior=latest.lock();
     const bool eligible=Ordered(prior,list)&&prior->frame+1==frame&&prior->view==view&&prior->width==w&&prior->height==h&&
@@ -108,27 +104,31 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     uav(0);
     for(UINT i=0;i<2;++i){
         for(UINT j=0;j<5;++j)input(j);
-        srv(image->image[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();input(6);uav(1-i);
+        srv(image->image[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();
+        HitView(device.Get(),cpu,useHitDistance?t[6].resource:nullptr,ReadFormat(t[6].desc.Format));
+        cpu.ptr+=step;
+        uav(1-i);
     }
     r->characterSource=image;r->characterPrevious=prior;r->characterList=list;
-    for(UINT i=0;i<7;++i)r->characterInputs[i]=t[i].resource;
+    for(UINT i=0;i<inputCount;++i)r->characterInputs[i]=t[i].resource;
     image->frame=frame;image->view=view;image->submitted=false;image->invalid=false;image->passes=passes;image->output=passes&1;
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     bool transitioned[7]{};
-    for(UINT i=0;i<7;++i)if(!(t[i].state&read)){
+    for(UINT i=0;i<inputCount;++i)if(!(t[i].state&read)){
         bool alias=false;for(UINT j=0;j<i;++j)if(t[j].resource==t[i].resource)alias=true;
         if(!alias){Barrier(list,t[i].resource,t[i].state,read);transitioned[i]=true;}
     }
     ID3D12Resource* images[]={image->image[0].Get(),image->image[1].Get()};
     ID3D12DescriptorHeap* privateHeap=image->descriptors.Get();
     list->SetDescriptorHeaps(1,&privateHeap);
-    DispatchPasses(list,native.cb[0],native.cb[1],gpu,step,images,w,h,passes,bool(prior));
-    for(UINT i=0;i<7;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
+    DispatchPasses(list,native.cb[0],native.cb[1],gpu,step,images,w,h,passes,bool(prior),useHitDistance);
+    for(UINT i=0;i<inputCount;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
     ID3D12DescriptorHeap* restore[]={b.heaps[0].Get(),b.heaps[1].Get()};
     list->SetDescriptorHeaps(b.heaps[1]?2:1,restore);
     graphics.Replay([&](UINT index,UINT64 address){list->SetGraphicsRootDescriptorTable(index,{address});});
     b.Restore(nativeList.Get());latest=image;
-    return prior?"both_history":"both_seed";
+    if(useHitDistance)return prior?"both_history_hit":"both_seed_hit";
+    return prior?"both_history_geometry":"both_seed_geometry";
 }
 }
 static bool RRCharacterUsesSingleSample() noexcept {

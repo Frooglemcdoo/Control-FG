@@ -4,8 +4,34 @@ namespace RRCharacterSource {
 using Microsoft::WRL::ComPtr;
 constexpr UINT MaxPasses=6;
 static ComPtr<ID3D12RootSignature> root;
-static ComPtr<ID3D12PipelineState> pipelines[4];
+static ComPtr<ID3D12PipelineState> pipelines[6];
 static ComPtr<ID3D12Resource> constants;
+static DXGI_FORMAT ReadFormat(DXGI_FORMAT f){
+    if(f==DXGI_FORMAT_R32_TYPELESS || f==DXGI_FORMAT_D32_FLOAT)return DXGI_FORMAT_R32_FLOAT;
+    if(f==DXGI_FORMAT_R16_TYPELESS || f==DXGI_FORMAT_D16_UNORM)return DXGI_FORMAT_R16_UNORM;
+    switch(f){
+    case DXGI_FORMAT_R16G16B16A16_FLOAT:case DXGI_FORMAT_R32G32B32A32_FLOAT:
+    case DXGI_FORMAT_R32G32_FLOAT:case DXGI_FORMAT_R16G16_FLOAT:case DXGI_FORMAT_R8G8B8A8_UNORM:
+    case DXGI_FORMAT_R32_FLOAT:case DXGI_FORMAT_R16_FLOAT:case DXGI_FORMAT_R16_UNORM:return f;
+    default:return DXGI_FORMAT_UNKNOWN;
+    }
+}
+// A rejected optional provider must not stop the six required GI inputs.
+template<class Texture,class Lookup>
+static bool HitDistanceInput(UINT w,UINT h,Texture& t,Lookup lookup){
+    if(!lookup(t))return false;
+    const auto& d=t.desc;
+    return t.resource && d.Width==w && d.Height==h && d.MipLevels &&
+        (t.state&(D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)) &&
+        !(d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) && ReadFormat(d.Format)!=DXGI_FORMAT_UNKNOWN;
+}
+static void HitView(ID3D12Device* device,D3D12_CPU_DESCRIPTOR_HANDLE handle,
+                    ID3D12Resource* input,DXGI_FORMAT viewFormat){
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
+    srv.Format=input?viewFormat:DXGI_FORMAT_R32_FLOAT;
+    device->CreateShaderResourceView(input,&srv,handle);
+}
 static bool Prepare(ID3D12Device* device){
     if(root)return true;
     D3D12_DESCRIPTOR_RANGE ranges[]={{D3D12_DESCRIPTOR_RANGE_TYPE_SRV,8,0,0,0},
@@ -26,8 +52,9 @@ static bool Prepare(ID3D12Device* device){
        FAILED(device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&signature))))return false;
     D3D12_SHADER_BYTECODE shaders[]={{kGINoHistoryShader,sizeof(kGINoHistoryShader)},
         {kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)},
-        {kGICharacterSteady0,sizeof(kGICharacterSteady0)},{kGICharacterSteady1,sizeof(kGICharacterSteady1)}};
-    for(UINT i=0;i<4;++i){
+        {kGICharacterSteady0,sizeof(kGICharacterSteady0)},{kGICharacterSteady1,sizeof(kGICharacterSteady1)},
+        {kGICharacterGeometry0,sizeof(kGICharacterGeometry0)},{kGICharacterGeometry1,sizeof(kGICharacterGeometry1)}};
+    for(UINT i=0;i<_countof(shaders);++i){
         D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=signature.Get();pd.CS=shaders[i];
         if(FAILED(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(pipelines[i].ReleaseAndGetAddressOf()))))return false;
     }
@@ -51,7 +78,7 @@ static void Barrier(ID3D12GraphicsCommandList* list,ID3D12Resource* r,D3D12_RESO
 }
 static void DispatchPasses(ID3D12GraphicsCommandList* list,UINT64 cb0,UINT64 cb1,
     D3D12_GPU_DESCRIPTOR_HANDLE gpu,UINT step,ID3D12Resource* const images[2],
-    UINT w,UINT h,UINT passes,bool history){
+    UINT w,UINT h,UINT passes,bool history,bool useHitDistance){
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     constexpr auto write=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     list->SetComputeRootSignature(root.Get());list->SetComputeRootConstantBufferView(0,cb0);
@@ -59,7 +86,8 @@ static void DispatchPasses(ID3D12GraphicsCommandList* list,UINT64 cb0,UINT64 cb1
     for(UINT i=0;i<=passes;++i){
         const UINT out=i&1;
         const UINT table=i?1+((i-1)&1):0;
-        list->SetPipelineState(pipelines[i?2+((i-1)&1):unsigned(history)].Get());
+        const UINT spatialBase=useHitDistance?2:4;
+        list->SetPipelineState(pipelines[i?spatialBase+((i-1)&1):unsigned(history)].Get());
         if(i)list->SetComputeRootConstantBufferView(1,constants->GetGPUVirtualAddress()+256*((passes-1)*MaxPasses+i-1));
         list->SetComputeRootDescriptorTable(2,{gpu.ptr+UINT64(9*table)*step});
         Barrier(list,images[out],read,write);list->Dispatch((w+7)/8,(h+7)/8,1);

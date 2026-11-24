@@ -51,13 +51,26 @@ def generate(data, bounded=False, steady=False, native_hit_weight=False):
         w[2121:2121] = code
     return transform_shex(data, patch)
 
+def character_geometry_spatial(source):
+    """Use the native geometric tap weights when the optional hit texture is unavailable."""
+    data = generate(source, steady=True, native_hit_weight=True)
+    def patch(words):
+        # Both pinned kernels only read t7 here. This contiguous block scales
+        # r1's tap weights. The next two instructions redefine both scratch lanes.
+        assert words[1427] >> 24 == 8 and words[1434] == 7
+        assert words[1496:1503] == [0x07000038, 0x001000f2, 1, 0x00100aa6, 0, 0x00100e46, 1]
+        assert words[1503:1506] == [0x0a000010, 0x00100042, 0]
+        assert words[1513:1516] == [0x0a000010, 0x00100082, 0]
+        del words[1427:1503]
+    return transform_shex(data, patch)
+
 def write_header(root):
     out = root / 'build/gi_spatial_history.generated.h'
     out.parent.mkdir(exist_ok=True)
     text = '#pragma once\n'
     for i in range(2):
         source = base64.b64decode((root / f'research/gi-temporal-r208/diffuse-spatial-{i}.dxbc.b64').read_bytes())
-        for name, data in [(f'kGINativeSpatial{i}', source), (f'kGISingleHistorySpatial{i}', generate(source)), (f'kGIBoundedHistorySpatial{i}', generate(source, bounded=True)), (f'kGISteadySpatial{i}', generate(source, steady=True)), (f'kGICharacterSteady{i}', generate(source, steady=True, native_hit_weight=True))]:
+        for name, data in [(f'kGINativeSpatial{i}', source), (f'kGISingleHistorySpatial{i}', generate(source)), (f'kGIBoundedHistorySpatial{i}', generate(source, bounded=True)), (f'kGISteadySpatial{i}', generate(source, steady=True)), (f'kGICharacterSteady{i}', generate(source, steady=True, native_hit_weight=True)), (f'kGICharacterGeometry{i}', character_geometry_spatial(source))]:
             text += 'inline constexpr unsigned char '+name+'[]={\n'+','.join(map(str,data))+'\n};\n'
     out.write_text(text)
 

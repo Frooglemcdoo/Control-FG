@@ -113,7 +113,7 @@ static void Run(bool sample,bool reference=false,bool remapped=false) {
             if(i==mappedCenter){
                 for(UINT k=0;k<3;++k)Require(actual[k]>=0 && actual[k]<baseline[i][k]*0.025f,"Both GI remapped flash suppression");
                 Require(actual[3]==baseline[i][3],"Source correction preserves alpha");
-                std::cout<<"R503 remapped flash RR red "<<baseline[i][0]<<" -> "<<actual[0]<<"\n";
+                std::cout<<"R504 remapped flash RR red "<<baseline[i][0]<<" -> "<<actual[0]<<"\n";
             }else Require(actual==baseline[i],"Character correction altered environment, stable light, or independent RGB");
         }
         D3D12_RANGE empty{};output.buffer->Unmap(0,&empty);
