@@ -190,7 +190,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             const bool attempted=rrCharacterBlendAttemptFrame.load()==in.frame;
             const char* admission=!enabled?"off":attempted?rrCharacterBlendReason.load():"rr_guides_not_recorded";
             const bool current=rrDiffuse && rrDiffuse->frame==in.frame;
-            Log("GI_CHARACTER_BLEND_R501 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
+            Log("GI_CHARACTER_BLEND_R502 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s",
                 in.frame,admission,unsigned(colorBound),current?UINT(rrDiffuse->characterReplay.batches.size()):0u,
                 current?rrDiffuse->characterMaskBatches.load():0u,unsigned(rrNativeGIKeepThisFrame),
                 unsigned(rrNativeGIHistoryZeroThisFrame),control_rr_gi::StageName(control_rr_gi::stageMode.load()));

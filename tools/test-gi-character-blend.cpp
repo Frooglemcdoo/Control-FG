@@ -123,7 +123,7 @@ static void Run(bool sample,bool reference=false) {
             Require(p[3]==baseline[i][3],"Original scene alpha");
         }
         if(i==centers[1] || i==mixedGreen)
-            std::cout<<(reference?"R499":"R501")<<" input "<<i%width<<","<<i/width
+            std::cout<<(reference?"R499":"R502")<<" input "<<i%width<<","<<i/width
                      <<" scene "<<baseline[i][0]<<","<<baseline[i][1]<<","<<baseline[i][2]
                      <<" result "<<p[0]<<","<<p[1]<<","<<p[2]<<"\n";
     }
@@ -148,7 +148,7 @@ static void TestBinding(){
 }
 int main(int argc,char** argv) try {
     TestBinding();
-    if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0)Run(false,true);
+    if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0){Run(false,true);TestMotionHistory(false,true); }
     Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
     std::cout<<"PASS character impulse and mixed-light RGB, sparse boundaries, recorded veto evidence, and RR binding\n";
     return 0;

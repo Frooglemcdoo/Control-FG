@@ -23,15 +23,15 @@ static void EmptyHistoryViews(Device& gpu,UINT first) {
     gpu.device->CreateUnorderedAccessView(nullptr,nullptr,&u,h);
 }
 
-static void TestMotionHistory(bool sample) {
+static void TestMotionHistory(bool sample,bool previousBuild=false) {
     Device gpu(false);
     ComPtr<ID3DBlob> blob,error;Check(RRCharacterSerializeRoot(&blob,&error));
     ComPtr<ID3D12RootSignature> root;
     Check(gpu.device->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)));
-    auto code=Read(sample?"build/gi-character-measured.dxil":"build/gi-character-blend.dxil");
+    auto code=Read(previousBuild?"build/gi-character-r501.dxil":sample?"build/gi-character-measured.dxil":"build/gi-character-blend.dxil");
     D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};
     ComPtr<ID3D12PipelineState> pso;Check(gpu.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
-    constexpr UINT w=20,h=32;
+    constexpr UINT w=20,h=84;
     const Pixel darkGI={.000468f,.000434f,.000351f,1}, darkScene={.000102f,.000041f,.000024f,.75f};
     const Pixel flashGI={.153931f,.120056f,.074219f,1},flashScene={.036713f,.015060f,.004642f,.75f};
     const auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -45,8 +45,8 @@ static void TestMotionHistory(bool sample) {
         std::vector<Pixel> gi(w*h,darkGI),scene(w*h,darkScene),mask(w*h,{0,0,0,0}),motion(w*h,Pixel{}),
             depth(w*h,{.5f,0,0,0}),normal(w*h,{.5f,.5f,0,0}),mat(w*h,{0,0,0,0});
         UINT x=frame==0?5:9;
-        for(UINT kind=0;kind<10;++kind){
-            UINT y=kind*3+1,i=y*w+x;
+        for(UINT kind=0;kind<20;++kind){
+            UINT y=kind*4+1,i=y*w+x;
             for(UINT j=i-1;j<=i+1;++j) {
                 mask[j]=TestMask(.5f,kind+1);
                 // Jitter delta -0.8 plus -3.2 pixels of motion maps 9 to 5.
@@ -59,16 +59,46 @@ static void TestMotionHistory(bool sample) {
                     if(kind==6)mask[j]=TestMask(.5f,88); // different replay surface
                 }
             }
+            if(kind>=10 && kind<=15){
+                mask[i+1][3]=0; // Only one current character neighbor.
+                if(kind==11)mask[i-1]=TestMask(.5f,99); // wrong primitive
+                if(kind==12)mask[i-1][3]=0; // no independent neighbor
+            }
+            if(kind==17 || kind==18) {
+                for(int yy=-1;yy<=1;++yy)for(int xx=-1;xx<=2;++xx) {
+                    UINT j=(y+yy)*w+x+xx;
+                    mask[j]=TestMask(.5f,kind+1);
+                    motion[j][0]=frame==1?-3.2f/w:0;
+                    if(frame==1 && (kind==18 || (yy==0 && (xx==0 || xx==1)))) {
+                        gi[j]=flashGI;scene[j]=flashScene;
+                    }
+                }
+            }
             if(frame==1 || (frame==0 && kind==7)){gi[i]=flashGI;scene[i]=flashScene;}
             if(frame==1 && kind==8)motion[i][0]=2; // off screen
             if(frame==1 && kind==9)gi[i]=darkGI; // direct-light-only change
+            if(frame==1){
+                if(kind==13){gi[i-1]=flashGI;scene[i-1]=flashScene;}
+                if(kind==14 || kind==19){gi[i]=darkGI;scene[i]=darkScene;gi[i][0]=.002f;scene[i][0]=.00045f;}
+                if(kind==15)motion[i][0]=-3.f/w; // only 80% previous character support
+                if(kind==16)gi[i][1]=darkGI[1]; // independent green scene spike
+            }
             if(kind==1 && frame==1){gi[i]=darkGI;gi[i][1]=.15f;scene[i]=darkScene;scene[i][1]=.03f;}
         }
         expected[frame]=scene;
-        if(frame==1)for(UINT kind=0;kind<=1;++kind){
-            UINT i=(kind*3+1)*w+x;
-            for(UINT k=0;k<3;++k)if(kind==0 || k==1)
-                expected[frame][i][k]-=.70f*std::min(scene[i][k]-darkScene[k],scene[i][k]*(1-darkGI[k]/gi[i][k]));
+        if(frame==1){
+            for(UINT kind:{0u,1u,10u,17u,19u}){
+                if(previousBuild && kind==10)continue;
+                UINT first=(kind*4+1)*w+x;
+                for(UINT i=first;i<=first+(kind==17);++i)for(UINT k=0;k<3;++k){
+                    if((kind==1 && k!=1) || (kind==19 && k!=0))continue;
+                    if(previousBuild || kind==19) {
+                        expected[frame][i][k]-=.70f*std::min(scene[i][k]-darkScene[k],scene[i][k]*(1-darkGI[k]/gi[i][k]));
+                    } else {
+                        expected[frame][i][k]=std::max(2*std::max(darkScene[k],.00005f),scene[i][k]*2*darkGI[k]/gi[i][k]);
+                    }
+                }
+            }
         }
         const UINT offset=frame*10;
         std::vector<Pixel>* images[]={&gi,&mask,&depth,&normal,&mat,&scene,&scene,&motion};
@@ -93,10 +123,14 @@ static void TestMotionHistory(bool sample) {
         unsigned char* p=nullptr;Check(read[frame].buffer->Map(0,nullptr,reinterpret_cast<void**>(&p)));
         for(UINT i=0;i<w*h;++i){
             Pixel actual{};std::memcpy(&actual,p+(i/w)*read[frame].rowPitch+(i%w)*16,16);
-            for(UINT k=0;k<4;++k)Require(std::abs(actual[k]-expected[frame][i][k])<1e-6f,"Temporal RGB, alpha or disoccluded background");
+            for(UINT k=0;k<4;++k)if(std::abs(actual[k]-expected[frame][i][k])>=1e-6f){
+                std::cerr<<"frame="<<frame<<" xy="<<i%w<<","<<i/w<<" channel="<<k<<" actual="<<actual[k]<<" expected="<<expected[frame][i][k]<<"\n";
+                Require(false,"Temporal RGB, alpha or disoccluded background");
+            }
+            if(frame==1 && i==w+9)std::cout<<(previousBuild?"R501":"R502")<<" neck test RR input red="<<actual[0]<<"\n";
         }
         D3D12_RANGE empty{};read[frame].buffer->Unmap(0,&empty);
-        if(sample){GICharacterMeasurement::Sample saved{};Require(stats[frame].Read(saved)&&saved.temporal==(frame==1?2u:0u),"Count actual history corrections");}
+        if(sample){GICharacterMeasurement::Sample saved{};Require(stats[frame].Read(saved)&&saved.temporal==(frame==1?1u:0u) && saved.strongTemporal==(frame==1?5u:0u),"Count actual history corrections");}
     }
     RRCharacterHistory state;int view=1;state.view=&view;state.frame=7;state.scaleX=w;state.scaleY=h;
     auto mode=[&](UINT f,UINT committed,void* v,int reset){return RRCharacterHistoryForFrame(state,f,committed,v,reset,0,0,w,h).mode;};

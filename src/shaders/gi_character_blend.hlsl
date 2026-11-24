@@ -28,7 +28,7 @@ float Peak(float3 rgb) { return max(rgb.r,max(rgb.g,rgb.b)); }
 
 #ifdef MEASURE_BLEND
 RWByteAddressBuffer Counts : register(u1);
-groupshared uint localCounts[6];
+groupshared uint localCounts[7];
 
 // Retain one rejected partial-color edit per measured frame, at input resolution.
 // The queue fence retires the readback only after every lane finishes its stores.
@@ -75,6 +75,7 @@ uint ApplyBlend(uint3 tid) {
     float3 sceneHigh=0, sceneSecond=0, giHigh=0, giSecond=0;
     float3 lowGI=1e30, lowGI2=1e30, lowScene=1e30, lowScene2=1e30;
     uint count = 0;
+    uint neighborTag=0;
     [unroll] for (int y=-1; y<=1; ++y) {
         [unroll] for (int x=-1; x<=1; ++x) {
             int2 q = p + int2(x,y);
@@ -96,11 +97,15 @@ uint ApplyBlend(uint3 tid) {
             float v = Peak(rgb);
             second = max(second,min(highest,v));
             highest = max(highest,v);
+            if (count==0 && key) neighborTag=UnpackSurfaceWord(CharacterReplay.Load(int3(q,0)).b);
             ++count;
         }
     }
-    // Keep supported highlights and leave sparse silhouette samples alone.
-    if (count < 2) return 2;
+    // An isolated character pixel has no independent current lighting evidence.
+    // With one neighbor require the same replayed instance/primitive and a strong history match.
+    bool sparse=count==1;
+    if (!count || (sparse && (historyMode!=2 || !key || neighborTag!=(key&32767u)))) return 2;
+    if (sparse) {lowGI2=lowGI;lowScene2=lowScene;}
     float threshold = max(second*3.0,0.002);
     float peak = Peak(center.rgb);
     if (count>=4 && peak > threshold && highest < peak*0.5) {
@@ -133,9 +138,14 @@ uint ApplyBlend(uint3 tid) {
     if(historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
        any(scenePixel.rgb>max(1.5*lowScene2,0.0001))) {
         float3 adjusted;
-        if(TemporalGI(p,int2(w,h),key,z,normal,center.rgb,scenePixel.rgb,lowGI2,lowScene2,coverage,adjusted)){
+        // In a larger footprint a second bright sample can be part of a two-pixel impulse.
+        // With only one or two neighbors, every neighbor must support the strong correction.
+        float3 neighborGI=count>2?giSecond:giHigh, neighborScene=count>2?sceneSecond:sceneHigh;
+        uint outcome=TemporalGI(p,int2(w,h),key,z,normal,center.rgb,scenePixel.rgb,
+                                lowGI2,lowScene2,neighborGI,neighborScene,sparse,coverage,adjusted);
+        if(outcome){
             FilteredColor[p]=float4(adjusted,scenePixel.a);
-            return 6;
+            return outcome;
         }
     }
     return count<4 ? 2 : 3;
@@ -144,13 +154,13 @@ uint ApplyBlend(uint3 tid) {
 [numthreads(8,8,1)]
 void main(uint3 tid : SV_DispatchThreadID, uint lane : SV_GroupIndex) {
 #ifdef MEASURE_BLEND
-    if (lane < 6) localCounts[lane] = 0;
+    if (lane < 7) localCounts[lane] = 0;
     GroupMemoryBarrierWithGroupSync();
 #endif
     uint outcome = ApplyBlend(tid);
 #ifdef MEASURE_BLEND
     if (outcome) InterlockedAdd(localCounts[outcome-1], 1);
     GroupMemoryBarrierWithGroupSync();
-    if (lane < 6 && localCounts[lane]) Counts.InterlockedAdd(lane==5?60:4*lane,localCounts[lane]);
+    if (lane < 7 && localCounts[lane]) Counts.InterlockedAdd(lane>=5?60+4*(lane-5):4*lane,localCounts[lane]);
 #endif
 }
