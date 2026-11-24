@@ -296,6 +296,9 @@ static unsigned RRNativeGISampleCount(void* option) {
  const bool full=rrNativeFrameEnabled&&rrNativeFrame.Selected()&&!rrNativeFrame.Stopped()&&!RRNativePartialActive();
  const unsigned launchRays=gi_auto_dispatch::LaunchRays();
  const unsigned effective=control_rr::GISampleComparison(nativeCount,launchRays?launchRays:rrNativeGISampleSelection.requested,full);
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ if(rr_pair::Armed())rr_pair::fourRayFrame.store(full&&effective==4?rrNativeFrame.Key().frame:0);
+#endif
  settings_check::RecordGISamples(effective);
  static thread_local unsigned lastNative=~0u,lastEffective=~0u;
  if(nativeCount!=lastNative||effective!=lastEffective)

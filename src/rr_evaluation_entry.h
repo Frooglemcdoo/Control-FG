@@ -182,6 +182,7 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     }
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
+    if(rrAttempt&&rr_pair::Armed())rr_pair::After(list,in,result,colorBound);
     rrCharacterEvaluatedFrame.store(rrAttempt && colorBound && (result&0xFFF00000u)!=0xBAD00000u ? in.frame : 0);
     if(rrAttempt){
         static UINT64 evaluations=0;

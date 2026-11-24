@@ -4,7 +4,7 @@ namespace RRCharacterSource {
 using Microsoft::WRL::ComPtr;
 constexpr UINT MaxPasses=6;
 static ComPtr<ID3D12RootSignature> root;
-static ComPtr<ID3D12PipelineState> pipelines[6];
+static ComPtr<ID3D12PipelineState> pipelines[8];
 static ComPtr<ID3D12Resource> constants;
 static DXGI_FORMAT ReadFormat(DXGI_FORMAT f){
     if(f==DXGI_FORMAT_R32_TYPELESS || f==DXGI_FORMAT_D32_FLOAT)return DXGI_FORMAT_R32_FLOAT;
@@ -53,22 +53,23 @@ static bool Prepare(ID3D12Device* device){
     D3D12_SHADER_BYTECODE shaders[]={{kGINoHistoryShader,sizeof(kGINoHistoryShader)},
         {kGIMotionHistoryShader,sizeof(kGIMotionHistoryShader)},
         {kGICharacterSteady0,sizeof(kGICharacterSteady0)},{kGICharacterSteady1,sizeof(kGICharacterSteady1)},
-        {kGICharacterGeometry0,sizeof(kGICharacterGeometry0)},{kGICharacterGeometry1,sizeof(kGICharacterGeometry1)}};
+        {kGICharacterGeometry0,sizeof(kGICharacterGeometry0)},{kGICharacterGeometry1,sizeof(kGICharacterGeometry1)},
+        {kGINativeSpatial0,sizeof(kGINativeSpatial0)},{kGINativeSpatial1,sizeof(kGINativeSpatial1)}};
     for(UINT i=0;i<_countof(shaders);++i){
         D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=signature.Get();pd.CS=shaders[i];
         if(FAILED(device->CreateComputePipelineState(&pd,IID_PPV_ARGS(pipelines[i].ReleaseAndGetAddressOf()))))return false;
     }
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_UPLOAD;heap.CreationNodeMask=heap.VisibleNodeMask=1;
     D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
-    buffer.Width=256*MaxPasses*MaxPasses;buffer.Height=buffer.DepthOrArraySize=buffer.MipLevels=buffer.SampleDesc.Count=1;
+    buffer.Width=2*256*MaxPasses*MaxPasses;buffer.Height=buffer.DepthOrArraySize=buffer.MipLevels=buffer.SampleDesc.Count=1;
     buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
     if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,D3D12_RESOURCE_STATE_GENERIC_READ,
         nullptr,IID_PPV_ARGS(constants.ReleaseAndGetAddressOf()))))return false;
     UINT* data=nullptr;D3D12_RANGE empty{};
     if(FAILED(constants->Map(0,&empty,reinterpret_cast<void**>(&data))))return false;
     std::memset(data,0,SIZE_T(buffer.Width));
-    for(UINT n=1;n<=MaxPasses;++n)for(UINT i=0;i<n;++i){
-        auto* pass=data+64*((n-1)*MaxPasses+i);pass[4]=i;pass[5]=n;pass[6]=1;
+    for(UINT cut=0;cut<2;++cut)for(UINT n=1;n<=MaxPasses;++n)for(UINT i=0;i<n;++i){
+        auto* pass=data+64*(cut*MaxPasses*MaxPasses+(n-1)*MaxPasses+i);pass[4]=i;pass[5]=n;pass[6]=cut;
     }
     constants->Unmap(0,nullptr);root=std::move(signature);return true;
 }
@@ -78,7 +79,8 @@ static void Barrier(ID3D12GraphicsCommandList* list,ID3D12Resource* r,D3D12_RESO
 }
 static void DispatchPasses(ID3D12GraphicsCommandList* list,UINT64 cb0,UINT64 cb1,
     D3D12_GPU_DESCRIPTOR_HANDLE gpu,UINT step,ID3D12Resource* const images[2],
-    UINT w,UINT h,UINT passes,bool history,bool useHitDistance){
+    UINT w,UINT h,UINT passes,bool history,bool useHitDistance,
+    ID3D12Resource* temporalSnapshot=nullptr,UINT cameraCut=1){
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     constexpr auto write=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     list->SetComputeRootSignature(root.Get());list->SetComputeRootConstantBufferView(0,cb0);
@@ -86,12 +88,19 @@ static void DispatchPasses(ID3D12GraphicsCommandList* list,UINT64 cb0,UINT64 cb1
     for(UINT i=0;i<=passes;++i){
         const UINT out=i&1;
         const UINT table=i?1+((i-1)&1):0;
-        const UINT spatialBase=useHitDistance?2:4;
+        const UINT spatialBase=temporalSnapshot?6:(useHitDistance?2:4);
         list->SetPipelineState(pipelines[i?spatialBase+((i-1)&1):unsigned(history)].Get());
-        if(i)list->SetComputeRootConstantBufferView(1,constants->GetGPUVirtualAddress()+256*((passes-1)*MaxPasses+i-1));
+        if(i)list->SetComputeRootConstantBufferView(1,constants->GetGPUVirtualAddress()+256*(cameraCut*MaxPasses*MaxPasses+(passes-1)*MaxPasses+i-1));
         list->SetComputeRootDescriptorTable(2,{gpu.ptr+UINT64(9*table)*step});
         Barrier(list,images[out],read,write);list->Dispatch((w+7)/8,(h+7)/8,1);
         Barrier(list,images[out],write,read);
+        if(!i&&temporalSnapshot){
+            Barrier(list,images[out],read,D3D12_RESOURCE_STATE_COPY_SOURCE);
+            Barrier(list,temporalSnapshot,read,D3D12_RESOURCE_STATE_COPY_DEST);
+            list->CopyResource(temporalSnapshot,images[out]);
+            Barrier(list,temporalSnapshot,D3D12_RESOURCE_STATE_COPY_DEST,read);
+            Barrier(list,images[out],D3D12_RESOURCE_STATE_COPY_SOURCE,read);
+        }
     }
  }
 }

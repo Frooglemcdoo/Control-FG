@@ -25,6 +25,8 @@ static void RRCharacterPrepareEvaluation(unsigned branch,ID3D12GraphicsCommandLi
     __finally {rrCharacterEvaluationInputs=previous;}
 }
 
+#include "rr_paired_runtime.inl"
+
 static bool RRCharacterPrepareSlot(RRLiveOwner* owner,RRCharacterColorSlot& slot,DXGI_FORMAT format) noexcept {
     auto* device=owner->device;
     if(!slot.normal){
@@ -195,6 +197,10 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
         history.jitterX=eval.jitterX;history.jitterY=eval.jitterY;
         history.scaleX=eval.scaleX;history.scaleY=eval.scaleY;
     } else history.frame=0;
+    if(rr_pair::Armed()){
+        try{rr_pair::Before(owner,slot,eval,in,native,gi,mask,remap);}
+        catch(...){rr_pair::Issue(rr_pair::Armed(),L"Unable to allocate capture");}
+    }
     slot.writtenFrame=eval.frame;
     if(hp.useSource)return "both_gi_bound";
     return hp.mode==2?"recorded_history":hp.mode==1?"recorded_seed":"recorded_spatial";

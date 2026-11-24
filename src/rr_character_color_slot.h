@@ -1,5 +1,6 @@
 #pragma once
 #include "gi_character_measurement.h"
+#include "rr_paired_capture.h"
 #include "rr_character_gi_source.h"
 #include "rr_character_history.h"
 #include "rr_evaluation_inputs.h"
@@ -15,8 +16,10 @@ struct RRCharacterColorSlot {
     Microsoft::WRL::ComPtr<ID3D12PipelineState> normal, measured;
     std::shared_ptr<RRCharacterGITarget> sourceLease;
     GICharacterMeasurement sample;
+    std::shared_ptr<rr_pair::Frame> pair;
     UINT64 writtenFrame=0;
     void Retire() noexcept {
+        if(pair){try{rr_pair::CaptureReader().Submit(std::move(pair));}catch(...){pair.reset();}}
         if(sample.frame){
             GICharacterMeasurement::Sample s{};
             if(sample.Read(s)){

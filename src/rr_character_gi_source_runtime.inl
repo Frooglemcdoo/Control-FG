@@ -34,6 +34,18 @@ static bool Ordered(const std::shared_ptr<Image>& image,ID3D12GraphicsCommandLis
         if(!r->reset && r->characterSource==image && r->characterList.Get()==list)return true;
     return false;
 }
+static bool PrepareReference(ID3D12Device* device,Image& image){
+    if(image.referenceHeap)return true;
+    const auto d=image.image[0]->GetDesc();
+    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
+    ComPtr<ID3D12Resource> textures[3];
+    for(auto& t:textures)if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&t))))return false;
+    const auto hd=image.descriptors->GetDesc();
+    if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&image.referenceHeap))))return false;
+    image.reference[0]=std::move(textures[0]);image.reference[1]=std::move(textures[1]);
+    image.temporal=std::move(textures[2]);return true;
+}
 static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue,ID3D12GraphicsCommandList* list,UINT passes){
     using namespace ControlNrdRuntime;
     if(!passes||passes>MaxPasses)return "unsupported_spatial_count";
@@ -78,6 +90,15 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     const bool useHitDistance=HitDistanceInput(w,h,t[6],[](Texture& hit){
         return ControlNrdRuntime::NamedTexture("g_tHitInfo",hit);
     });
+    const auto session=rr_pair::Armed();
+    // RAW bypass can leave the producer's actual hit texture in UAV state.
+    // Snapshot the named SRV provider; transition its resource only for the reference read.
+    Texture referenceHit=t[6];
+    const bool referenceHasHit=useHitDistance || (session && NamedTexture("g_tHitInfo",referenceHit) &&
+        referenceHit.state==D3D12_RESOURCE_STATE_UNORDERED_ACCESS && referenceHit.resource &&
+        referenceHit.desc.Width==w && referenceHit.desc.Height==h && referenceHit.desc.MipLevels &&
+        !(referenceHit.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
+        ReadFormat(referenceHit.desc.Format)!=DXGI_FORMAT_UNKNOWN);
     const UINT inputCount=useHitDistance?7:6;
     if(!Prepare(device.Get()))return "gi_filter_pipeline";
     auto prior=latest.lock();
@@ -88,6 +109,13 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     if(!image)return "gi_source_pool";
     auto* r=GetRecording(nativeList.Get(),generation);if(!r||r->characterSource)return "gi_source_recording";
     const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+    uint32_t cut=0;int cutId=-1;
+    const bool cutKnown=session && control_nrd_native::Resolve(rrNativeClampApi,"g_uCameraCut",cutId) &&
+        rrNativeClampApi.ReadCurrent(cutId,cut) && cut<=1;
+    image->session=0;image->historyFrames=0;
+    const bool referenceReady=session&&referenceHasHit&&cutKnown&&PrepareReference(device.Get(),*image);
+    if(session&&!referenceReady)rr_pair::Issue(session,!referenceHasHit?L"Waiting for native GI hit texture":
+        !cutKnown?L"Waiting for camera-cut constant":L"Reference allocation unavailable");
     auto cpu=image->descriptors->GetCPUDescriptorHandleForHeapStart();
     auto gpu=image->descriptors->GetGPUDescriptorHandleForHeapStart();
     auto srv=[&](ID3D12Resource* texture,DXGI_FORMAT fmt,UINT mips){
@@ -95,20 +123,29 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
         d.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;d.Texture2D.MipLevels=mips;
         device->CreateShaderResourceView(texture,&d,cpu);cpu.ptr+=step;
     };
-    auto input=[&](UINT i){srv(t[i].resource,ReadFormat(t[i].desc.Format),i==5?t[i].desc.MipLevels:1);};
-    auto history=[&](){if(prior)srv(prior->image[prior->output].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);else input(5);};
-    auto uav=[&](UINT i){D3D12_UNORDERED_ACCESS_VIEW_DESC u{};u.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
-        u.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;device->CreateUnorderedAccessView(image->image[i].Get(),nullptr,&u,cpu);cpu.ptr+=step;};
-    input(2);input(3);input(4);input(5);history();
-    for(UINT i=5;i<8;++i)srv(nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT,1);
-    uav(0);
-    for(UINT i=0;i<2;++i){
-        for(UINT j=0;j<5;++j)input(j);
-        srv(image->image[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();
-        HitView(device.Get(),cpu,useHitDistance?t[6].resource:nullptr,ReadFormat(t[6].desc.Format));
-        cpu.ptr+=step;
-        uav(1-i);
-    }
+    auto tables=[&](bool reference){
+        cpu=(reference?image->referenceHeap:image->descriptors)->GetCPUDescriptorHandleForHeapStart();
+        auto* images=reference?image->reference:image->image;
+        const bool previous=prior&&(!reference||prior->session==session);
+        auto input=[&](UINT i){srv(t[i].resource,ReadFormat(t[i].desc.Format),i==5?t[i].desc.MipLevels:1);};
+        auto history=[&](){
+            if(!previous){input(5);return;}
+            srv((reference?prior->reference:prior->image)[prior->output].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);
+        };
+        auto uav=[&](UINT i){D3D12_UNORDERED_ACCESS_VIEW_DESC u{};u.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+            u.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;device->CreateUnorderedAccessView(images[i].Get(),nullptr,&u,cpu);cpu.ptr+=step;};
+        input(2);input(3);input(4);input(5);history();
+        for(UINT i=5;i<8;++i)srv(nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT,1);
+        uav(0);
+        for(UINT i=0;i<2;++i){
+            for(UINT j=0;j<5;++j)input(j);
+            srv(images[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();
+            const auto& hit=reference?referenceHit:t[6];
+            HitView(device.Get(),cpu,(reference||useHitDistance)?hit.resource:nullptr,ReadFormat(hit.desc.Format));
+            cpu.ptr+=step;uav(1-i);
+        }
+    };
+    tables(false);if(referenceReady)tables(true);
     r->characterSource=image;r->characterPrevious=prior;r->characterList=list;
     for(UINT i=0;i<inputCount;++i)r->characterInputs[i]=t[i].resource;
     image->frame=frame;image->view=view;image->submitted=false;image->invalid=false;image->passes=passes;image->output=passes&1;
@@ -122,6 +159,20 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     ID3D12DescriptorHeap* privateHeap=image->descriptors.Get();
     list->SetDescriptorHeaps(1,&privateHeap);
     DispatchPasses(list,native.cb[0],native.cb[1],gpu,step,images,w,h,passes,bool(prior),useHitDistance);
+    if(referenceReady){
+        image->session=session;
+        const bool previous=prior&&prior->session==session;
+        image->historyFrames=previous&&!cut?prior->historyFrames+1:1;
+        if(!useHitDistance){
+            r->characterInputs[6]=referenceHit.resource;
+            Barrier(list,referenceHit.resource,referenceHit.state,read);
+        }
+        ID3D12Resource* pair[]={image->reference[0].Get(),image->reference[1].Get()};
+        auto* heap=image->referenceHeap.Get();list->SetDescriptorHeaps(1,&heap);
+        DispatchPasses(list,native.cb[0],native.cb[1],heap->GetGPUDescriptorHandleForHeapStart(),step,
+            pair,w,h,passes,previous,true,image->temporal.Get(),cut);
+        if(!useHitDistance)Barrier(list,referenceHit.resource,read,referenceHit.state);
+    }
     for(UINT i=0;i<inputCount;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
     ID3D12DescriptorHeap* restore[]={b.heaps[0].Get(),b.heaps[1].Get()};
     list->SetDescriptorHeaps(b.heaps[1]?2:1,restore);
