@@ -261,7 +261,7 @@ static void OpenLog() {
     char frozenPrepare[4]{};
     const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    Log("GI_PAIRED_CAPTURE_R506 startup=1 armed=0 trigger=rgb_temporal storage=compact_crop");
+    Log("GI_PAIRED_CAPTURE_R507 startup=1 armed=0 trigger=rgb_temporal storage=compact_crop");
     Log("GI_CHARACTER_BLEND_R505 startup=1 boundary=diffuse_gi_private resolve=character_rr_input measurement_period=240");
 #endif
     Log("GI_FROZEN_R426 startup=1 check_revision=2 requested=%u diagnostics=%u",unsigned(frozenRequested),unsigned(control_diagnostics::Active()));

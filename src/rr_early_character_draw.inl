@@ -64,6 +64,10 @@ static const char* Draw(void* pass) noexcept {
         stamp.depth=*reinterpret_cast<ID3D12Resource**>(static_cast<unsigned char*>(saved.depthTarget)+0x88);
         stamp.list=*reinterpret_cast<ID3D12GraphicsCommandList**>(static_cast<unsigned char*>(saved.commandContext)+0x18);
         if(!stamp.list||!stamp.depth)return "gbuffer_list_or_depth";
+        // Clear and rasterize on this exact list so a delayed main-list clear
+        // cannot erase the coverage, and previous-frame texels cannot survive.
+        RRAlbedoNativeFloat4 sentinel{-1,-1,-1,0};
+        rrAlbedoAPI.clear(saved.deviceState,target.nativeTexture,&sentinel);
         const void* color=target.nativeTexture;
         changed=true;
         rrAlbedoAPI.targets(saved.deviceState,1,&color,nullptr);

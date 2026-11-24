@@ -301,9 +301,16 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault,control_rr::RRTexturedCharacterGuides)) {RRDiffuseStop("target_clear_failed");return;}
         }
 #ifdef CONTROL_CHARACTER_GI_BLEND
-        c->earlyCharacterReady=!c->characterReplay.batches.empty() &&
-            (c->earlyCharacterTarget.nativeTexture || RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->earlyCharacterTarget,&reason,&fault)) &&
-            RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->earlyCharacterTarget,&fault,true);
+        c->earlyCharacterReady=false;
+        if(!c->characterReplay.batches.empty()){
+            auto& target=c->earlyCharacterTarget;
+            if(!target.nativeTexture){
+                if(RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&target,&reason,&fault)){
+                    // Initialize on the main list. The first eligible draw is next frame.
+                    if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&target,&fault,true))target.everRecorded=false;
+                }
+            }else c->earlyCharacterReady=target.everRecorded;
+        }
 #endif
         if(!c->characterReplay.batches.empty()){
             if(!c->characterTarget.nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->characterTarget,&reason,&fault)){

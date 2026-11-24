@@ -41,6 +41,7 @@ struct Recording {
  std::unique_ptr<control_nrd::NativeTransaction::Work> specularWork;
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
+ GICharacterMeasurement materialSample;
  std::shared_ptr<RRCharacterGITarget> characterSource,characterPrevious;
  std::array<ComPtr<ID3D12Resource>,10> characterInputs;
  ComPtr<ID3D12GraphicsCommandList> characterList;
@@ -110,6 +111,17 @@ static void Poll() {
    r.specularCompleted=true;
    if(r.specularEpoch&&!r.specularEpoch->poisoned){control_reblur::status=control_reblur::Status::Active;
     static int completedMode=-1;const int mode=int(r.specularEpoch->rrRequested);if(completedMode!=mode){completedMode=mode;Log("REBLUR_SPECULAR gpu_completed=1 rr=%u",unsigned(mode));}}
+  }
+#endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+  if(r.materialSample.frame && r.submitted && r.fence<=complete && r.characterSource && !r.characterSource->invalid){
+      GICharacterMeasurement::Sample s{};
+      if(r.materialSample.Read(s)){
+          rrCharacterMeasuredPixels.store(s.counts[0]);
+          rrCharacterMeasuredFrame.store(r.materialSample.frame);
+          Log("GI_CHARACTER_MATERIAL_R507 gpu_frame=%llu selected_pixels=%u changed_rgb_pixels=%u",r.materialSample.frame,s.counts[0],s.counts[1]);
+      }
+      r.materialSample={};
   }
 #endif
   if(r.submitted&&r.filtered&&!r.checkCompleted&&r.fence<=complete){settings_check::RecordFor(settings_check::RelaxCompleted,r.checkGeneration);r.checkCompleted=true;}

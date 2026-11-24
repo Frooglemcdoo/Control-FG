@@ -64,6 +64,20 @@ static bool ReadProducerHit(Texture& hit) noexcept {
         return control_nrd_native::ReadTexture({reinterpret_cast<uintptr_t>(shader),reinterpret_cast<uintptr_t>(native)},hit);
     }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
+// The early worker captured the actual bound depth attachment. At the GI
+// boundary its native tracker can still be in a complete depth-only state.
+static bool CurrentDepth(const RRCharacterEarly::Stamp& stamp,RRGuideInputTexture& out) noexcept {
+    if(RRInputCaptureReadNative(stamp.nativeDepth,stamp.depth,&out))return true;
+    __try {
+        if(!stamp.depth||!stamp.nativeDepth || *reinterpret_cast<ID3D12Resource**>(
+                static_cast<unsigned char*>(stamp.nativeDepth)+0x88)!=stamp.depth)return false;
+        const UINT states[]={D3D12_RESOURCE_STATE_DEPTH_WRITE,D3D12_RESOURCE_STATE_DEPTH_READ};
+        for(auto state:states)if(RRAlbedoNativeTextureState(stamp.nativeDepth,state)){
+            out={};out.resource=stamp.depth;out.desc=stamp.depth->GetDesc();out.trackedState=state;return true;
+        }
+    }__except(EXCEPTION_EXECUTE_HANDLER){}
+    return false;
+}
 static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue,ID3D12GraphicsCommandList* list,UINT passes){
     using namespace ControlNrdRuntime;
     if(!passes||passes>MaxPasses)return "unsupported_spatial_count";
@@ -152,7 +166,7 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
         outcome="mask_submission_pending";
         if(stamp.submitted || stamp.list==list){
             outcome="gbuffer_depth_unavailable";
-            if(RRCharacterUsesSingleSample()&&RRInputCaptureReadNative(stamp.nativeDepth,stamp.depth,&depth) &&
+            if(RRCharacterUsesSingleSample()&&CurrentDepth(stamp,depth) &&
                depth.desc.Width==w&&depth.desc.Height==h&&depth.desc.Format==DXGI_FORMAT_R32_TYPELESS&&
                !(depth.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)){
                 apply=true;outcome="native_character_gi";
@@ -183,7 +197,10 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
         Barrier(list,mask,D3D12_RESOURCE_STATE_RENDER_TARGET,read);
         const bool depthMove=!(depth.trackedState&read);
         if(depthMove)Barrier(list,depth.resource,D3D12_RESOURCE_STATES(depth.trackedState),read);
-        RRCharacterMaterial::Dispatch(list,{gpu.ptr+UINT64(27)*step},target.resource,w,h);
+        const auto measured=rrCharacterMeasuredFrame.load();
+        const bool sample=RRCharacterMaterial::measured && (!measured || frame%120==0) &&
+            r->materialSample.Prepare(device.Get(),frame);
+        RRCharacterMaterial::Dispatch(list,{gpu.ptr+UINT64(27)*step},target.resource,w,h,sample?&r->materialSample:nullptr);
         if(depthMove)Barrier(list,depth.resource,read,D3D12_RESOURCE_STATES(depth.trackedState));
         Barrier(list,mask,read,D3D12_RESOURCE_STATE_RENDER_TARGET);
         image->materialDispatched=true;

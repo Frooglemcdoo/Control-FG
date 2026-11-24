@@ -23,7 +23,9 @@ int main() try{
     TextureView(gpu,m.Get(),0);TextureView(gpu,z.Get(),1);TextureView(gpu,b.Get(),2);TextureView(gpu,d.Get(),3,true);
     Require(RRCharacterMaterial::Prepare(gpu.device.Get()),"material pipeline");
     ID3D12DescriptorHeap* heaps[]={gpu.views.Get()};gpu.list->SetDescriptorHeaps(1,heaps);
-    RRCharacterMaterial::Dispatch(gpu.list.Get(),gpu.views->GetGPUDescriptorHandleForHeapStart(),d.Get(),w,h);
+    GICharacterMeasurement sample;
+    Require(RRCharacterMaterial::measured && sample.Prepare(gpu.device.Get(),123),"GPU coverage counter setup");
+    RRCharacterMaterial::Dispatch(gpu.list.Get(),gpu.views->GetGPUDescriptorHandleForHeapStart(),d.Get(),w,h,&sample);
     auto download=CopyOutput(gpu,d.Get());gpu.Submit();unsigned char* bytes=nullptr;
     Check(download.buffer->Map(0,nullptr,reinterpret_cast<void**>(&bytes)));
     UINT changed=0;
@@ -35,6 +37,8 @@ int main() try{
         H4 expected=inside?filtered:raw;expected[3]=raw[3];changed+=inside;
         Require(!std::memcmp(&expected,bytes+y*download.rowPitch+x*sizeof(H4),sizeof(H4)),"incorrect selected GI, boundary, or alpha");
     }
+    GICharacterMeasurement::Sample stats{};
+    Require(sample.Read(stats)&&stats.counts[0]==changed&&stats.counts[1]==changed,"real GPU counts differ from selected footprint");
     Require(changed>0&&changed<w*h,"empty selection");D3D12_RANGE empty{};download.buffer->Unmap(0,&empty);
     std::cout<<"R507 material GI WARP: "<<changed<<" interior pixels changed, other pixels and all alpha preserved\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}
