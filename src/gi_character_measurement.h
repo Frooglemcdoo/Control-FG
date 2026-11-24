@@ -9,7 +9,8 @@
 struct GICharacterMeasurement {
     UINT64 frame=0;
     Microsoft::WRL::ComPtr<ID3D12Resource> zero, counters, readback;
-    static constexpr UINT Bytes=4*sizeof(UINT);
+    using Counts=std::array<UINT,6>;
+    static constexpr UINT Bytes=sizeof(Counts);
     bool Prepare(ID3D12Device* device, UINT64 sourceFrame) noexcept {
         D3D12_RESOURCE_DESC desc{};
         desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -45,7 +46,7 @@ struct GICharacterMeasurement {
         Transition(list,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(readback.Get(),0,counters.Get(),0,Bytes);
     }
-    bool Read(std::array<UINT,4>& values) const noexcept {
+    bool Read(Counts& values) const noexcept {
         D3D12_RANGE range{0,Bytes};void* ptr=nullptr;
         if(FAILED(readback->Map(0,&range,&ptr)))return false;
         std::memcpy(values.data(),ptr,Bytes);D3D12_RANGE empty{};readback->Unmap(0,&empty);

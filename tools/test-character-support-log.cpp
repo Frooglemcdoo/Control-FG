@@ -6,7 +6,7 @@ int main() {
     const char* const admitted[] = {
         "GI_SCENE_R484 requested=1",
         "GI_SCENE_R484_FAILED frame=1 raw=0",
-        "GI_CHARACTER_BLEND_R498 gpu_frame=%llu corrected=%u",
+        "GI_CHARACTER_BLEND_R499 gpu_frame=%llu corrected=%u",
         "RR_CHARACTER_SUPPORT_R418 build=R418",
         "RR_CHARACTER_BASE_ALBEDO_R417 original=%p",
         "RR_HAIR_OPACITY_READY original=%p",

@@ -15,10 +15,13 @@ struct RRCharacterColorSlot {
     UINT64 writtenFrame=0;
     void Retire() noexcept {
         if(sample.frame){
-            std::array<UINT,4> n{};
-            if(sample.Read(n))Log("GI_CHARACTER_BLEND_R498 gpu_frame=%llu drawn=%u visible=%u supported=%u corrected=%u",
-                sample.frame,n[0]+n[1]+n[2]+n[3],n[1]+n[2]+n[3],n[2]+n[3],n[3]);
-            else Log("GI_CHARACTER_BLEND_R498 gpu_frame=%llu sample=read_failed",sample.frame);
+            GICharacterMeasurement::Counts n{};
+            if(sample.Read(n)){
+                const UINT extended=n[4]+n[5], supported=n[2]+n[3]+extended;
+                const UINT visible=n[1]+supported;
+                Log("GI_CHARACTER_BLEND_R499 gpu_frame=%llu drawn=%u visible=%u supported=%u corrected=%u extended_supported=%u extended_corrected=%u",
+                    sample.frame,n[0]+visible,visible,supported,n[3]+n[5],extended,n[5]);
+            } else Log("GI_CHARACTER_BLEND_R499 gpu_frame=%llu sample=read_failed",sample.frame);
         }
         sample={};writtenFrame=0;
         for(auto& resource:held)resource.Reset();

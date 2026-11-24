@@ -6,14 +6,14 @@
 // measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
 static void Run(bool sample) {
     Device gpu(false);
-    constexpr UINT width=37, height=11;
+    constexpr UINT width=37, height=29;
     constexpr auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
     std::vector<Pixel> raw(width*height, {0.0005f,0.0003f,0.0002f,0.9f});
     std::vector<Pixel> mask(width*height, {-1,-1,-1,0});
     std::vector<Pixel> depth(width*height, {0.5f,0,0,0});
     std::vector<Pixel> normals(width*height, {0.5f,0.5f,0,0});
     std::vector<Pixel> materials(width*height, {0,0,0,0});
-    for(UINT y=1;y<height-1;++y)
+    for(UINT y=1;y<10;++y)
         for(UINT x=2;x<width-5;++x) mask[y*width+x]={0,0,252,1}; // IEEE 0.5 = 0x3f000000
     const UINT centers[]={width*5+5,width*5+10,width*5+15,width*8+6};
     raw[centers[0]]={0.153931f,0.120056f,0.074219f,1};
@@ -32,6 +32,31 @@ static void Run(bool sample) {
     baseline[direct]={0.2f,0.3f,0.4f,0.625f}; // isolated direct light, ordinary GI
     raw[giOnly]=raw[centers[0]]; // GI impulse with no corresponding scene impulse
     raw[centers[1]][0]=0.0005f; // protect the independent red channel at this pixel
+    // Each strip has exactly two inner neighbors. A wide tap is valid only
+    // along a direction whose intermediate pixel also belongs to this surface.
+    const Pixel covered={0,0,252,1};
+    const Pixel clear={-1,-1,-1,0};
+    auto strip=[&](int x,int y,int dy) {
+        for(int i=-2;i<=2;++i) mask[(y+i*dy)*width+x+i]=covered;
+        return y*width+UINT(x);
+    };
+    auto spike=[&](UINT i,UINT channel) {
+        for(UINT k=0;k<3;++k) if(k==channel || channel==3) {
+            raw[i][k]=0.19f;baseline[i][k]=0.04f;
+        }
+    };
+    const UINT extra[]={strip(4,13,0),strip(12,13,0),strip(20,13,0),strip(4,24,1)};
+    spike(extra[0],0);spike(extra[1],1);spike(extra[2],3);spike(extra[3],1);
+    const UINT noScene=strip(29,13,0);raw[noScene]=raw[extra[2]];
+    const UINT seam=strip(4,18,0);spike(seam,0);materials[seam+2][2]=1;
+    const UINT occluded=strip(12,18,0);spike(occluded,1);depth[occluded+2][0]=0.25f;
+    const UINT gap=strip(20,18,0);spike(gap,3);mask[gap+1]=clear;
+    const UINT highlight=strip(29,18,0);spike(highlight,1);spike(highlight+2,1);
+    const UINT oneSide=strip(12,24,0);spike(oneSide,0);
+    mask[oneSide-1]=clear;mask[oneSide-width+1]=mask[oneSide-2*width+2]=covered;
+    const UINT crease=strip(20,24,0);spike(crease,0);normals[crease+2]={0,0,0,0};
+    const UINT directEdge=strip(29,24,0);baseline[directEdge]=baseline[direct];
+
     const std::vector<Pixel>* images[]={&raw,&mask,&depth,&normals,&materials,&baseline,&baseline};
     ComPtr<ID3D12Resource> target;
     for(UINT i=0;i<7;++i){
@@ -59,14 +84,18 @@ static void Run(bool sample) {
     if(sample)stats.End(gpu.list.Get());
     auto output=CopyOutput(gpu,target.Get());gpu.Submit();
     if(sample){
-        std::array<UINT,4> counts{};Require(stats.Read(counts),"counter readback");
-        const UINT drawn=(height-2)*(width-7);
-        Require(counts[0]==1 && counts[1]+counts[2]+counts[3]==drawn-1 && counts[3]==4,"GPU coverage and correction counts");
+        GICharacterMeasurement::Counts counts{};Require(stats.Read(counts),"counter readback");
+        UINT drawn=0;
+        for(const auto& m:mask) if(m[3]>0) ++drawn;
+        Require(counts[0]==2 && counts[1]+counts[2]+counts[3]+counts[4]+counts[5]==drawn-2,"Visible character coverage");
+        Require(counts[3]==4 && counts[4]==2 && counts[5]==4,"Original and extended correction counts");
     }
     unsigned char* mapped=nullptr;Check(output.buffer->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
     for(UINT i=0;i<width*height;++i){
         Pixel p{};std::memcpy(&p,mapped+(i/width)*output.rowPitch+(i%width)*sizeof(p),sizeof(p));
-        if(std::find(std::begin(centers),std::end(centers),i)==std::end(centers))
+        const bool original=std::find(std::begin(centers),std::end(centers),i)!=std::end(centers);
+        const bool extended=std::find(std::begin(extra),std::end(extra),i)!=std::end(extra);
+        if(!original && !extended)
             Require(p==baseline[i],"Unexpected write on background, edge, or supported highlight");
         else {
             const float coverage=mask[i][3];
@@ -100,6 +129,6 @@ static void TestBinding(){
 int main() try {
     TestBinding();
     Run(false);Run(true);
-    std::cout<<"PASS current-frame GI and scene impulses, independent direct color, visibility edges, background, GPU counts and single-call RR color restoration\n";
+    std::cout<<"PASS dense and narrow character surfaces, red/green/white impulses, gap/occlusion/material/normal boundaries, supported highlights, GPU counts and RR binding\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}
