@@ -34,6 +34,10 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-rr-paired-capture.cpp /Fe:test-rr-paired-capture.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./test-rr-paired-capture.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/gi_motion_history.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-source.cpp /Fe:build/test-gi-character-source.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
