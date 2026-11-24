@@ -21,17 +21,16 @@ uint4 MakeHistory(int2 p,uint key,float3 gi,float3 scene) {
     uint geom=f32tof16(Depth.Load(int3(p,0))) | (n.x<<16) | (n.y<<24);
     return uint4(PackRGB(gi),PackRGB(scene),geom,key);
 }
-// Return the ordinary or strongly corroborated temporal outcome, or zero to preserve the input.
-uint TemporalGI(int2 p,int2 size,uint key,float depth,float3 normal,float3 gi,float3 scene,
-                float3 lowGI,float3 lowScene,float3 neighborGI,float3 neighborScene,
-                bool sparse,float coverage,out float3 result) {
-    result=scene;
+struct CharacterPrior {
+    float weight;
+    float3 oldGI,oldScene,peakGI,peakScene;
+};
+void ProjectCharacterPrior(int2 p,int2 size,uint key,float depth,float3 normal,out CharacterPrior prior){
+    prior=(CharacterPrior)0;
     float2 xy=p+CharacterMotion.Load(int3(p,0))*motionScale+jitterDelta;
-    if (!all(isfinite(xy)) || any(xy<0) || any(xy>size-1)) return 0;
+    if (!all(isfinite(xy)) || any(xy<0) || any(xy>size-1)) return;
     int2 base=int2(floor(xy));
     float2 f=frac(xy);
-    float weight=0;
-    float3 oldGI=0,oldScene=0,peakGI=0,peakScene=0;
     [unroll] for(int y=0;y<=1;++y) [unroll] for(int x=0;x<=1;++x) {
         int2 q=base+int2(x,y);
         if(any(q>=size)) continue;
@@ -42,10 +41,20 @@ uint TemporalGI(int2 p,int2 size,uint key,float depth,float3 normal,float3 gi,fl
         float2 rg=float2((h.z>>16)&255,h.z>>24)/255.0;
         if(dot(normal,ControlDecodeNormalView(float4(rg,0,0)))<.97) continue;
         float3 g=ReadRGB(h.x),s=ReadRGB(h.y);
-        weight+=w;oldGI+=w*g;oldScene+=w*s;
-        peakGI=max(peakGI,g);peakScene=max(peakScene,s);
+        prior.weight+=w;prior.oldGI+=w*g;prior.oldScene+=w*s;
+        prior.peakGI=max(prior.peakGI,g);prior.peakScene=max(prior.peakScene,s);
     }
+}
+// Return the ordinary or strongly corroborated temporal outcome, or zero to preserve the input.
+uint TemporalGI(int2 p,int2 size,uint key,float depth,float3 normal,float3 gi,float3 scene,
+                float3 lowGI,float3 lowScene,float3 neighborGI,float3 neighborScene,
+                bool sparse,float coverage,out float3 result) {
+    result=scene;
+    CharacterPrior prior;
+    ProjectCharacterPrior(p,size,key,depth,normal,prior);
+    float weight=prior.weight;
     if(weight<.75) return 0;
+    float3 oldGI=prior.oldGI,oldScene=prior.oldScene,peakGI=prior.peakGI,peakScene=prior.peakScene;
     float3 giFloor=max(oldGI/weight,lowGI),sceneFloor=max(oldScene/weight,lowScene);
     float3 giUpper=max(peakGI,neighborGI),sceneUpper=max(peakScene,neighborScene);
     float3 bounded=scene;

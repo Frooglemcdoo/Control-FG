@@ -15,8 +15,10 @@ struct GICharacterMeasurement {
         UINT location=0;
         float gi[3]{},scene[3]{},proposed[3]{};
         UINT temporal=0,strongTemporal=0,sourceCorrected=0;
+        UINT retainedLocation=0, retainedReason=0;
+        float retainedGI[3]{},retainedFiltered[3]{},retainedScene[3]{},retainedNearby[3]{};
     };
-    static_assert(sizeof(Sample)==72 && offsetof(Sample,sourceCorrected)==68 && offsetof(Sample,strongTemporal)==64 && offsetof(Sample,temporal)==60 && offsetof(Sample,location)==20 && offsetof(Sample,gi)==24 &&
+    static_assert(sizeof(Sample)==128 && offsetof(Sample,retainedLocation)==72 && offsetof(Sample,retainedNearby)==116 && offsetof(Sample,sourceCorrected)==68 && offsetof(Sample,strongTemporal)==64 && offsetof(Sample,temporal)==60 && offsetof(Sample,location)==20 && offsetof(Sample,gi)==24 &&
                   offsetof(Sample,scene)==36 && offsetof(Sample,proposed)==48,"Shader readback layout");
     static constexpr UINT Bytes=sizeof(Sample);
     bool Prepare(ID3D12Device* device, UINT64 sourceFrame) noexcept {

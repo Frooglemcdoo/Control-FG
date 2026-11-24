@@ -3,6 +3,7 @@
 #include "../src/rr_character_color_binding.h"
 
 #include "test-gi-character-history.h"
+#include "test-gi-character-source-regression.h"
 
 // The fixture supplies independent GI and composed RR color, including the
 // measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
@@ -118,7 +119,7 @@ static void Run(bool sample,bool reference=false,bool remapped=false) {
             if(i==mappedCenter){
                 for(UINT k=0;k<3;++k)Require(actual[k]>=0 && actual[k]<baseline[i][k]*0.025f,"Both GI remapped flash suppression");
                 Require(actual[3]==baseline[i][3],"Source correction preserves alpha");
-                std::cout<<"R504 remapped flash RR red "<<baseline[i][0]<<" -> "<<actual[0]<<"\n";
+                std::cout<<"R505 remapped flash RR red "<<baseline[i][0]<<" -> "<<actual[0]<<"\n";
             }else Require(actual==baseline[i],"Character correction altered environment, stable light, or independent RGB");
         }
         D3D12_RANGE empty{};output.buffer->Unmap(0,&empty);
@@ -184,8 +185,8 @@ static void TestBinding(){
 int main(int argc,char** argv) try {
     std::cout<<std::unitbuf;std::cerr<<std::unitbuf;
     std::cout<<"Checking character color binding\n";TestBinding();
-    if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0){Run(false,true);TestMotionHistory(false,true); }
-    Run(true,false,true);Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
+    if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0){Run(false,true);TestMotionHistory(false,true);TestBoundSource(true); }
+    TestBoundSource(false);Run(true,false,true);Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
     std::cout<<"PASS character impulse and mixed-light RGB, sparse boundaries, recorded veto evidence, and RR binding\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

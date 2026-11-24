@@ -149,7 +149,7 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     static UINT64 calls=0;
     const bool sample=(calls++%240)==0;
     const bool measuring=sample && slot.measured && slot.sample.Prepare(owner->device,eval.frame);
-    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R504 frame=%llu sample=unavailable",eval.frame);
+    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R505 frame=%llu sample=unavailable",eval.frame);
     auto* list=in.commandList;
     auto& commands=*reinterpret_cast<UINT64*>(static_cast<unsigned char*>(in.commandContext)+8);
     D3D12_RESOURCE_BARRIER barriers[11]{};UINT count=0;

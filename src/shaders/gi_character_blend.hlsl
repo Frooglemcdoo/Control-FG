@@ -51,6 +51,19 @@ void RecordMixedPixel(uint2 p,float3 gi,float3 scene,float3 proposed) {
         Counts.Store3(48,asuint(proposed));
     }
 }
+// Record one retained high-contrast character sample on the existing measured frames.
+void RecordRetained(int2 p,uint reason,float3 gi,float3 filtered,float3 scene,float3 neighbors){
+    if(!any(scene>max(8*neighbors,.0008)))return;
+    uint previous;
+    Counts.InterlockedCompareExchange(72,0,1u+uint(p.x)+(uint(p.y)<<16),previous);
+    if(previous==0){
+        Counts.Store(76,reason);Counts.Store3(80,asuint(gi));Counts.Store3(92,asuint(filtered));
+        Counts.Store3(104,asuint(scene));Counts.Store3(116,asuint(neighbors));
+    }
+}
+#define RETAIN_SAMPLE(reason) RecordRetained(p,reason,center.rgb,BothGI.Load(int3(source,0)).rgb,scenePixel.rgb,nearbyScene)
+#else
+#define RETAIN_SAMPLE(reason)
 #endif
 
 #include "gi_character_history.hlsli"
@@ -132,24 +145,45 @@ uint ApplyBlend(uint3 tid) {
     bool sparse=count==1;
     if (!count || (sparse && (historyMode!=2 || !key || neighborTag!=(key&32767u)))) return 2;
     if (sparse) {lowGI2=lowGI;lowScene2=lowScene;}
-    if(useFilteredGI && count>=2 && all(isfinite(scenePixel.rgb)) && all(scenePixel.rgb>=0)){
+    if(useFilteredGI){
+        // One similarly bright neighbor can be a second sample of the same flash.
+        // Admit that case only with independent previous-frame evidence.
+        float3 nearbyGI=count>=4?giSecond:giHigh;
+        float3 nearbyScene=count>=4?sceneSecond:sceneHigh;
+        if(!all(isfinite(scenePixel.rgb)) || any(scenePixel.rgb<0) ||
+           !any((scenePixel.rgb>max(3*nearbyScene,0.0003)) & (center.rgb>max(3*nearbyGI,0.001)))){ RETAIN_SAMPLE(1);return 3; }
+
+        CharacterPrior prior=(CharacterPrior)0;
+        if(historyMode==2 && key)ProjectCharacterPrior(p,int2(w,h),key,z,normal,prior);
+        const bool matched=prior.weight>=.9;
+        if(!matched && count<4){ RETAIN_SAMPLE(2);return 2; }
+        float3 referenceGI=matched?max(nearbyGI,prior.peakGI):giHigh;
+        float3 referenceScene=matched?max(nearbyScene,prior.peakScene):sceneHigh;
+        bool3 flash=(scenePixel.rgb>max(3*referenceScene,0.0003)) & (center.rgb>max(3*referenceGI,0.001));
+        if(!any(flash)){ RETAIN_SAMPLE(3);return 3; }
         float3 filtered=BothGI.Load(int3(source,0)).rgb;
-        if(all(isfinite(filtered)) && all(filtered>=0)){
-            // GI is incident radiance. Apply its measured attenuation only to the
-            // positive scene excess supported by independent character samples.
-            // This cannot add previous-frame color to a newly exposed surface.
-            float3 giFloor=max(lowGI2,filtered);
-            float3 sceneFloor=max(lowScene2,0);
-            bool3 sceneHighChannel=scenePixel.rgb>max(1.5*sceneFloor,0.0001);
-            bool3 giHighChannel=center.rgb>max(1.5*giFloor,0.0001);
-            if(any(sceneHighChannel) && !any(uint3(sceneHighChannel) & (1u-uint3(giHighChannel)))){
-                float3 fraction=saturate(1-giFloor/max(center.rgb,1e-8));
-                float3 excess=min(max(0,scenePixel.rgb-sceneFloor),scenePixel.rgb*fraction);
-                float3 result=scenePixel.rgb-coverage*float3(sceneHighChannel)*excess;
-                if(any(result!=scenePixel.rgb)){FilteredColor[p]=float4(result,scenePixel.a);return 8;}
-            }
+        if(!all(isfinite(filtered)) || any(filtered<0))return 3;
+
+        // Attenuate the excess toward the same-surface color with one RGB factor.
+        // A new directly lit channel with ordinary GI vetoes a partial-color edit.
+        float retain=0, historyRetain=0;
+        float3 admitted=0;
+        bool extreme=matched;
+        [unroll] for(uint k=0;k<3;++k){
+            if(scenePixel[k]<=max(1.5*referenceScene[k],referenceScene[k]+.00005))continue;
+            if(center[k]<=max(1.5*referenceGI[k],referenceGI[k]+.0001)){ RETAIN_SAMPLE(4);return 3; }
+            admitted[k]=1;
+            retain=max(retain,max(filtered[k],referenceGI[k])/max(center[k],1e-8));
+            historyRetain=max(historyRetain,2*referenceGI[k]/max(center[k],1e-8));
+            extreme=extreme && scenePixel[k]>max(8*referenceScene[k],.0008) && center[k]>max(8*referenceGI[k],.008);
         }
-        return 3;
+        bool fromHistory=extreme && historyRetain<retain;
+        if(fromHistory)retain=historyRetain;
+        if(retain>.5 || (sparse && !extreme)){ RETAIN_SAMPLE(5);return 3; }
+        float3 result=scenePixel.rgb-coverage*admitted*(1-saturate(retain))*max(scenePixel.rgb-referenceScene,0);
+        if(!any(result!=scenePixel.rgb))return 3;
+        FilteredColor[p]=float4(result,scenePixel.a);
+        return fromHistory?7:8;
     }
     float threshold = max(second*3.0,0.002);
     float peak = Peak(center.rgb);
@@ -180,7 +214,7 @@ uint ApplyBlend(uint3 tid) {
         return 4;
         }
     }
-    if((!useFilteredGI || sparse) && historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
+    if(historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
        any(scenePixel.rgb>max(1.5*lowScene2,0.0001))) {
         float3 adjusted;
         // In a larger footprint a second bright sample can be part of a two-pixel impulse.

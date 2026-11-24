@@ -1,7 +1,7 @@
 name: Character GI blend validation
 on:
   push:
-    branches: [work/rr-character-blend-r504]
+    branches: [work/rr-character-blend-r505]
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,12 @@ jobs:
         with:
           ref: 81146cac4e9dce98eae3c7e5eb3aac2e88ad1374
           path: reference_history
+          sparse-checkout: src/shaders
+      - name: Check out R504 for the source-bound regression
+        uses: actions/checkout@v4
+        with:
+          ref: 706fff14a2744a1ded2d67b0e71315cff9a26797
+          path: reference_r504
           sparse-checkout: src/shaders
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -42,6 +48,8 @@ jobs:
           & $dxc.FullName -WX -T cs_6_0 -E main reference/src/shaders/gi_character_blend.hlsl -Fo build/gi-character-reference.dxil
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & $dxc.FullName -WX -T cs_6_0 -E main reference_history/src/shaders/gi_character_blend.hlsl -Fo build/gi-character-r501.dxil
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $dxc.FullName -WX -T cs_6_0 -E main reference_r504/src/shaders/gi_character_blend.hlsl -Fo build/gi-character-r504.dxil
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-blend.cpp /Fe:build/test-gi-character-blend.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
