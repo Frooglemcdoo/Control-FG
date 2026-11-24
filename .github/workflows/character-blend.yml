@@ -52,7 +52,11 @@ jobs:
       - name: Verify character color composition, history and legacy references
         shell: powershell
         run: |
+          $started=Get-Date
           & ./build/test-gi-character-blend.exe --compare-r499
           $nativeExit=$LASTEXITCODE
           Write-Host "Character composition exit $nativeExit"
+          if ($nativeExit -lt 0) {
+            Get-WinEvent -FilterHashtable @{LogName='Application'; Id=1000; StartTime=$started} -ErrorAction SilentlyContinue | Select-Object -First 2 -ExpandProperty Message | Write-Host
+          }
           exit $nativeExit

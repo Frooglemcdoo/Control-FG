@@ -94,6 +94,7 @@ static void Run(bool sample,bool reference=false,bool remapped=false) {
     auto code=Read(reference?"build/gi-character-reference.dxil":sample?"build/gi-character-measured.dxil":"build/gi-character-blend.dxil");
     D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};
     ComPtr<ID3D12PipelineState> pso;
+    std::cout<<"Create character pipeline\n";
     Check(gpu.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
     gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pso.Get());
     gpu.list->SetComputeRootDescriptorTable(0,gpu.views->GetGPUDescriptorHandleForHeapStart());
@@ -103,7 +104,8 @@ static void Run(bool sample,bool reference=false,bool remapped=false) {
     if(sample){Require(stats.Prepare(gpu.device.Get(),2841),"counter allocation");stats.Begin(gpu.list.Get());}
     gpu.list->Dispatch((width+7)/8,(height+7)/8,1);
     if(sample)stats.End(gpu.list.Get());
-    auto output=CopyOutput(gpu,target.Get());gpu.Submit();
+    auto output=CopyOutput(gpu,target.Get());
+    std::cout<<"Submit character dispatch\n";gpu.Submit();std::cout<<"Character dispatch completed\n";
     if(remapped){
         unsigned char* bytes=nullptr;Check(output.buffer->Map(0,nullptr,reinterpret_cast<void**>(&bytes)));
         for(UINT i=0;i<width*height;++i){

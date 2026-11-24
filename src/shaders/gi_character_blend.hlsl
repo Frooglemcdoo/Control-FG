@@ -96,8 +96,8 @@ uint ApplyBlend(uint3 tid) {
     // Index distinct source receivers in the at-most 4x4 remapped footprint.
     uint seen=0;
     int2 tileOrigin=(p-1)&~1;
-    [unroll] for (int y=-1; y<=1; ++y) {
-        [unroll] for (int x=-1; x<=1; ++x) {
+    [loop] for (int y=-1; y<=1; ++y) {
+        [loop] for (int x=-1; x<=1; ++x) {
             int2 q = p + int2(x,y);
             if ((!x && !y) || any(q<0) || any(q>=int2(w,h))) continue;
             bool neighborDrawn;
@@ -206,6 +206,9 @@ void main(uint3 tid : SV_DispatchThreadID, uint lane : SV_GroupIndex) {
 #ifdef MEASURE_BLEND
     if (outcome) InterlockedAdd(localCounts[outcome-1], 1);
     GroupMemoryBarrierWithGroupSync();
-    if (lane < 8 && localCounts[lane]) Counts.InterlockedAdd(lane>=5?60+4*(lane-5):4*lane,localCounts[lane]);
+    if (lane < 8) {
+        uint total=localCounts[lane];
+        if (total) Counts.InterlockedAdd(lane>=5?60+4*(lane-5):4*lane,total);
+    }
 #endif
 }
