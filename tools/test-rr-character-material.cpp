@@ -34,11 +34,11 @@ int main() try{
         bool inside=tx>=4&&tx<=22&&ty>=4&&ty<=14;
         auto overlaps=[&](int px,int py){return tx-1<=px&&px<=tx+2&&ty-1<=py&&py<=ty+2;};
         inside=inside&&!overlaps(6,6)&&!overlaps(18,6)&&!(x==12&&y==12);
-        H4 expected=inside?filtered:raw;expected[3]=raw[3];changed+=inside;
+        const H4& expected=inside?filtered:raw;changed+=inside;
         Require(!std::memcmp(&expected,bytes+y*download.rowPitch+x*sizeof(H4),sizeof(H4)),"incorrect selected GI, boundary, or alpha");
     }
     GICharacterMeasurement::Sample stats{};
     Require(sample.Read(stats)&&stats.counts[0]==changed&&stats.counts[1]==changed,"real GPU counts differ from selected footprint");
     Require(changed>0&&changed<w*h,"empty selection");D3D12_RANGE empty{};download.buffer->Unmap(0,&empty);
-    std::cout<<"R507 material GI WARP: "<<changed<<" interior pixels changed, other pixels and all alpha preserved\n";return 0;
+    std::cout<<"R507 material GI WARP: "<<changed<<" interior pixels changed, outside RGBA preserved, selected RGBA matches Both\n";return 0;
 }catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 1;}

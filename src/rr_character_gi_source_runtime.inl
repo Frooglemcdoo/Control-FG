@@ -168,6 +168,7 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
             outcome="gbuffer_depth_unavailable";
             if(RRCharacterUsesSingleSample()&&CurrentDepth(stamp,depth) &&
                depth.desc.Width==w&&depth.desc.Height==h&&depth.desc.Format==DXGI_FORMAT_R32_TYPELESS&&
+               depth.resource!=target.resource&&std::none_of(std::begin(t),std::end(t),[&](const Texture& v){return v.resource==depth.resource;})&&
                !(depth.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)){
                 apply=true;outcome="native_character_gi";
                 srv(rrDiffuse->earlyCharacterTarget.resource,DXGI_FORMAT_R16G16B16A16_FLOAT,1);

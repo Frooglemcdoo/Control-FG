@@ -52,7 +52,7 @@ static const char* Draw(void* pass) noexcept {
        !control_rr_albedo::ReadPrimaryView(reinterpret_cast<UINT64>(verifiedRenderer),&view,&fault)||view!=c->primaryView)return "gbuffer_view";
     control_rr_albedo::DrawRange range{};
     if(!control_rr_albedo::prepareDrawRange(c->characterReplay,int(c->characterReplay.sourceFirst),-1,range))return "empty_character_range";
-    if(!RRAlbedoNativeReadBindings(&rrAlbedoAPI,&saved,&why,&fault))return why;
+    if(!RRAlbedoNativeReadBindings(&rrAlbedoAPI,&saved,&why,&fault,true))return why;
     if(!saved.workerContext||saved.targetCount!=2||saved.width!=c->width||saved.height!=c->height)return "gbuffer_bindings";
     bool changed=false,drawn=false;
     Stamp stamp{frame,c->cameraView,c->queue};

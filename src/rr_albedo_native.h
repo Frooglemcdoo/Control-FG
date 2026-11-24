@@ -101,7 +101,7 @@ static bool RRAlbedoNativeContext(const RRAlbedoNativeAPI* api,
 }
 #include "rr_albedo_depth.h"
 static bool RRAlbedoNativeReadBindings(const RRAlbedoNativeAPI* api,
-    RRAlbedoNativeBindings* out, const char** reason, DWORD* fault) noexcept {
+    RRAlbedoNativeBindings* out, const char** reason, DWORD* fault, bool gbufferWorker=false) noexcept {
     if (!api || !api->module || !out || !reason || !fault) return false;
     *out = {}; *fault = 0; *reason = "native_binding_unavailable";
     __try {
@@ -115,6 +115,18 @@ static bool RRAlbedoNativeReadBindings(const RRAlbedoNativeAPI* api,
         // Native primary binding would otherwise change inherited resource
         // states. This gate also establishes the expected worker inheritance.
         for (int i = 0; i < out->targetCount; ++i) {
+            // A worker inherits the actual attachments. Its resource tracker
+            // is shared with the main list, which may be recording later passes.
+            // This option is used only inside the validated G-buffer worker.
+            if(gbufferWorker && out->workerContext && out->targetCount==2){
+                auto* native=static_cast<unsigned char*>(out->nativeTargets[i]);
+                auto* res=native?*reinterpret_cast<ID3D12Resource**>(native+0x88):nullptr;
+                if(!res||native[0x68]||(*reinterpret_cast<const UINT*>(native+0x38)&0x30u)||
+                   !(res->GetDesc().Flags&D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET)){
+                    *reason="invalid_inherited_gbuffer";return false;
+                }
+                continue;
+            }
             if (!RRAlbedoNativeTextureState(out->nativeTargets[i], D3D12_RESOURCE_STATE_RENDER_TARGET)) {
                 *reason = "original_color_not_render_target"; return false;
             }

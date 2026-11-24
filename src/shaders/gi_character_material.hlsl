@@ -33,10 +33,12 @@ void main(uint3 tid:SV_DispatchThreadID) {
         [unroll] for(int i=0;i<2;++i){
             int2 p=tile+int2(i,j);
             float4 both=Both.Load(int3(p,0));
-            if(all(isfinite(both.rgb))&&all(both.rgb>=0)){
-                // The native raw-copy alpha is a separate GI operand.
+            if(all(isfinite(both))&&all(both.rgb>=0)){
+                // Keep all four lanes from the same native spatial result.
+#ifdef MEASURE_MATERIAL
                 float4 raw=NativeGI[p];
-                NativeGI[p]=float4(both.rgb,raw.a);
+#endif
+                NativeGI[p]=both;
 #ifdef MEASURE_MATERIAL
                 ++written;if(any(raw.rgb!=both.rgb))++changed;
 #endif
