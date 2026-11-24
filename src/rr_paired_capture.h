@@ -109,7 +109,7 @@ inline bool WriteEvent(uint64_t session,const Event& e,const std::vector<std::st
       <<",\"ray_count\":4,\"crop_width\":9,\"crop_order\":\"row_major_rgb\",\"trigger_stage\":\""<<Name(e.stage)
       <<"\",\"trigger_channel\":"<<e.channel<<",\"peak_ratio\":"<<e.score
       <<",\"rr_output_mapping\":\"exact output peak in matched receiver footprint; adjacent receiver correspondence approximate\""
-      <<",\"brightest_per_channel\":"<<peaks<<" ,\"both_shaded_measured\":false,\"frame_count\":"<<crops.size()<<",\"frames\":[";
+      <<",\"brightest_per_channel\":"<<peaks<<" ,\"unfiltered_native_shading_also_captured\":false,\"frame_count\":"<<crops.size()<<",\"frames\":[";
     for(size_t i=0;i<crops.size();++i){if(i)os<<',';os<<crops[i];}
     os<<"]}\n";const auto data=os.str();
     HANDLE h=CreateFileW(temp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);

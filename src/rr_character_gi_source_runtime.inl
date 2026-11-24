@@ -171,7 +171,7 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
                depth.resource!=target.resource&&std::none_of(std::begin(t),std::end(t),[&](const Texture& v){return v.resource==depth.resource;})&&
                !(depth.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)){
                 apply=true;outcome="native_character_gi";
-                srv(rrDiffuse->earlyCharacterTarget.resource,DXGI_FORMAT_R16G16B16A16_FLOAT,1);
+                srv(rrDiffuse->EarlyCharacterTarget().resource,DXGI_FORMAT_R16G16B16A16_FLOAT,1);
                 srv(depth.resource,DXGI_FORMAT_R32_FLOAT,1);srv(image->image[passes&1].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);
                 uav(target.resource);
             }
@@ -193,7 +193,7 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
         capture?image->temporal.Get():nullptr,cut,true);
     if(capture)SaveMip(list,t[5].resource,transitioned[5]?read:t[5].state,image->raw.Get());
     if(apply){
-        auto* mask=rrDiffuse->earlyCharacterTarget.resource;
+        auto* mask=rrDiffuse->EarlyCharacterTarget().resource;
         r->characterInputs[7]=mask;r->characterInputs[8]=depth.resource;r->characterInputs[9]=target.resource;
         Barrier(list,mask,D3D12_RESOURCE_STATE_RENDER_TARGET,read);
         const bool depthMove=!(depth.trackedState&read);

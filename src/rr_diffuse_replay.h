@@ -14,10 +14,16 @@ enum class RRDiffuseStage {Idle,Recording,Joined,Stopped};
 struct RRDiffuseReplay {
     control_rr_albedo::PreparedReplay replay;
     control_rr_albedo::PreparedReplay characterReplay;
+    // Two native guide outputs. The optional third private target shares
+    // their existing post-Present retirement and resize loop.
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    RRAlbedoNativeTarget targets[3]{};
+    RRAlbedoNativeTarget& EarlyCharacterTarget() noexcept {return targets[2];}
+#else
     RRAlbedoNativeTarget targets[2]{};
+#endif
     RRAlbedoNativeTarget characterTarget{};
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    RRAlbedoNativeTarget earlyCharacterTarget{};
     bool earlyCharacterReady=false;
 #endif
     std::uintptr_t renderer=0,manager=0;
@@ -303,7 +309,7 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
 #ifdef CONTROL_CHARACTER_GI_BLEND
         c->earlyCharacterReady=false;
         if(!c->characterReplay.batches.empty()){
-            auto& target=c->earlyCharacterTarget;
+            auto& target=c->EarlyCharacterTarget();
             if(!target.nativeTexture){
                 if(RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&target,&reason,&fault)){
                     // Initialize on the main list. The first eligible draw is next frame.

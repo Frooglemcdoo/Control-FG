@@ -50,9 +50,6 @@ static bool RRAlbedoExchangeCall(RRAlbedoCallPatch* patch, bool install) noexcep
     // must count this patch as applied and preserve its relay for any rollback.
     return true;
 }
-#ifdef CONTROL_CHARACTER_GI_BLEND
-#include "rr_early_character_draw.inl"
-#endif
 static bool RRAlbedoInstallHooks(HMODULE renderer, HMODULE d3d) noexcept {
     if (renderer != verifiedRenderer || d3d != verifiedD3d || !renderer || !d3d) return false;
     auto base = reinterpret_cast<unsigned char*>(renderer);
@@ -96,9 +93,6 @@ static bool RRAlbedoInstallHooks(HMODULE renderer, HMODULE d3d) noexcept {
         }
         return false;
     }
-#ifdef CONTROL_CHARACTER_GI_BLEND
-    RRInstallEarlyCharacterDraw(base);
-#endif
     rrAlbedoStage.store(RRAlbedoStage::Waiting, std::memory_order_release);
     Log("RR_GUIDE_G3_ALBEDO_HOOKS_READY prepare=0x632008 join=0x631C18 serial=0x12E29E worker=0x126591 captures=1 rr_eval=disabled");
     return true;

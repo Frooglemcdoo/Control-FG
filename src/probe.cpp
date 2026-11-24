@@ -1117,6 +1117,9 @@ static bool Exchange(Patch& p, bool install) {
 }
 
 #include "rr_albedo_hooks.h"
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "rr_early_character_draw.inl"
+#endif
 #include "native_cpu_runtime.h"
 #include "directstorage_game_runtime.h"
 #include "native_loader_trace_runtime.h"
@@ -1640,6 +1643,9 @@ static BOOL CALLBACK Configure(PINIT_ONCE, PVOID, PVOID*) noexcept {
         const bool ptReflectionLookupReady=PTReflectionInstallShaderLookupHooks(renderer,d3d);
         Log("GLASS_RR_TRANSPORT_INSTALL ready=%u opaque_pt=disabled",unsigned(ptReflectionLookupReady));
         const bool albedoHooksReady = guideInputsReady && RRAlbedoInstallHooks(renderer, d3d);
+#ifdef CONTROL_CHARACTER_GI_BLEND
+        if(albedoHooksReady)RRInstallEarlyCharacterDraw(reinterpret_cast<unsigned char*>(renderer));
+#endif
         if(albedoHooksReady) rrAlbedoStage.store(RRAlbedoStage::Disabled,std::memory_order_release);
         Log("RR_GUIDE_G3_NATIVE_PATH ready=%u diagnostic_capture=0 recurring_replay=on_demand_full_rr_only rr_eval=warmup_then_native", unsigned(albedoHooksReady));
         RRGuideArm(false);

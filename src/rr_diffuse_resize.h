@@ -34,9 +34,6 @@ static bool RRDiffuseResize(RRDiffuseReplay* c,UINT width,UINT height,DWORD* fau
     if(!RRDiffuseDestroyTarget(&c->characterTarget,fault)){
         RRDiffuseStop("resize_character_target_destroy_failed");return false;
     }
-#ifdef CONTROL_CHARACTER_GI_BLEND
-    if(!RRDiffuseDestroyTarget(&c->earlyCharacterTarget,fault)){RRDiffuseStop("early_mask_destroy_failed");return false;}
-#endif
     c->width=width;c->height=height;c->targetCount=0;c->retireFence=0;c->resizePending=false;
     Log("RR_DIFFUSE_RESIZED width=%u height=%u completed_fence=%llu",width,height,static_cast<unsigned long long>(completed));
     return true;

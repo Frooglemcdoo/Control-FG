@@ -58,7 +58,7 @@ static const char* Draw(void* pass) noexcept {
     Stamp stamp{frame,c->cameraView,c->queue};
     __try {
         if(*reinterpret_cast<void**>(c->renderer+0x270)!=pass)return "gbuffer_owner";
-        auto& target=c->earlyCharacterTarget;
+        auto& target=c->EarlyCharacterTarget();
         if(!RRAlbedoNativeTextureState(target.nativeTexture,D3D12_RESOURCE_STATE_RENDER_TARGET))return "early_mask_state";
         stamp.nativeDepth=saved.depthTarget;
         stamp.depth=*reinterpret_cast<ID3D12Resource**>(static_cast<unsigned char*>(saved.depthTarget)+0x88);
