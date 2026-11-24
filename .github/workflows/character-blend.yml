@@ -1,7 +1,7 @@
 name: Character GI blend validation
 on:
   push:
-    branches: [work/rr-character-blend-r499]
+    branches: [work/rr-character-blend-r500]
 permissions:
   contents: read
 jobs:
@@ -9,6 +9,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check out the R499 comparison shader
+        uses: actions/checkout@v4
+        with:
+          ref: 7af217265824ebc7fb5f4cab572df6675f06fdd2
+          path: reference
+          sparse-checkout: src/shaders
       - uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
@@ -18,6 +24,9 @@ jobs:
           $ErrorActionPreference='Stop'
           & ./tools/build-gi-character-blend.ps1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
+          & $dxc.FullName -WX -T cs_6_0 -E main reference/src/shaders/gi_character_blend.hlsl -Fo build/gi-character-reference.dxil
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-blend.cpp /Fe:build/test-gi-character-blend.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/character_surface.py
@@ -26,5 +35,5 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./build/mask-linkage.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          & ./build/test-gi-character-blend.exe
+          & ./build/test-gi-character-blend.exe --compare-r499
           exit $LASTEXITCODE

@@ -261,7 +261,7 @@ static void OpenLog() {
     char frozenPrepare[4]{};
     const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    Log("GI_CHARACTER_BLEND_R499 startup=1 boundary=rr_input spatial_only=1 measurement_period=240");
+    Log("GI_CHARACTER_BLEND_R500 startup=1 boundary=rr_input spatial_only=1 measurement_period=240");
 #endif
     Log("GI_FROZEN_R426 startup=1 check_revision=2 requested=%u diagnostics=%u",unsigned(frozenRequested),unsigned(control_diagnostics::Active()));
     Log("RR_CHARACTER_SUPPORT_R418 build=R425 lifecycle_logging=1 diagnostics=%u skin_record_limit=32 hair_record_limit=32 rendering=R424 guide_history=mode_changes_only character_coverage_guard=valid_sample_zero character_diffuse=r421_radiance_rejection_restored",unsigned(control_diagnostics::Active()));

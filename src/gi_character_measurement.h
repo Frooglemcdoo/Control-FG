@@ -1,5 +1,6 @@
 #pragma once
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <d3d12.h>
 #include <wrl/client.h>
@@ -9,8 +10,14 @@
 struct GICharacterMeasurement {
     UINT64 frame=0;
     Microsoft::WRL::ComPtr<ID3D12Resource> zero, counters, readback;
-    using Counts=std::array<UINT,6>;
-    static constexpr UINT Bytes=sizeof(Counts);
+    struct Sample {
+        std::array<UINT,5> counts{};
+        UINT location=0;
+        float gi[3]{},scene[3]{},proposed[3]{};
+    };
+    static_assert(sizeof(Sample)==60 && offsetof(Sample,location)==20 && offsetof(Sample,gi)==24 &&
+                  offsetof(Sample,scene)==36 && offsetof(Sample,proposed)==48,"Shader readback layout");
+    static constexpr UINT Bytes=sizeof(Sample);
     bool Prepare(ID3D12Device* device, UINT64 sourceFrame) noexcept {
         D3D12_RESOURCE_DESC desc{};
         desc.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;desc.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -46,10 +53,10 @@ struct GICharacterMeasurement {
         Transition(list,D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COPY_SOURCE);
         list->CopyBufferRegion(readback.Get(),0,counters.Get(),0,Bytes);
     }
-    bool Read(Counts& values) const noexcept {
+    bool Read(Sample& values) const noexcept {
         D3D12_RANGE range{0,Bytes};void* ptr=nullptr;
         if(FAILED(readback->Map(0,&range,&ptr)))return false;
-        std::memcpy(values.data(),ptr,Bytes);D3D12_RANGE empty{};readback->Unmap(0,&empty);
+        std::memcpy(&values,ptr,Bytes);D3D12_RANGE empty{};readback->Unmap(0,&empty);
         return true;
     }
 };

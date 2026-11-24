@@ -4,7 +4,7 @@
 
 // The fixture supplies independent GI and composed RR color, including the
 // measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
-static void Run(bool sample) {
+static void Run(bool sample,bool reference=false) {
     Device gpu(false);
     constexpr UINT width=37, height=29;
     constexpr auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -57,6 +57,11 @@ static void Run(bool sample) {
     const UINT crease=strip(20,24,0);spike(crease,0);normals[crease+2]={0,0,0,0};
     const UINT directEdge=strip(29,24,0);baseline[directEdge]=baseline[direct];
 
+    // Dense, isolated single-channel impulses, plus a white input whose green
+    // channel has no GI impulse. R499 makes the latter bright green.
+    const UINT red=width*2+4,green=width*2+9,white=width*2+14,mixedGreen=width*2+20;
+    spike(red,0);spike(green,1);spike(white,3);spike(mixedGreen,3);raw[mixedGreen][1]=0.0003f;
+
     const std::vector<Pixel>* images[]={&raw,&mask,&depth,&normals,&materials,&baseline,&baseline};
     ComPtr<ID3D12Resource> target;
     for(UINT i=0;i<7;++i){
@@ -72,7 +77,7 @@ static void Run(bool sample) {
     Check(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&rootBytes,&error));
     ComPtr<ID3D12RootSignature> root;
     Check(gpu.device->CreateRootSignature(0,rootBytes->GetBufferPointer(),rootBytes->GetBufferSize(),IID_PPV_ARGS(&root)));
-    auto code=Read(sample?"build/gi-character-measured.dxil":"build/gi-character-blend.dxil");
+    auto code=Read(reference?"build/gi-character-reference.dxil":sample?"build/gi-character-measured.dxil":"build/gi-character-blend.dxil");
     D3D12_COMPUTE_PIPELINE_STATE_DESC pd{};pd.pRootSignature=root.Get();pd.CS={code.data(),code.size()};
     ComPtr<ID3D12PipelineState> pso;
     Check(gpu.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
@@ -84,28 +89,41 @@ static void Run(bool sample) {
     if(sample)stats.End(gpu.list.Get());
     auto output=CopyOutput(gpu,target.Get());gpu.Submit();
     if(sample){
-        GICharacterMeasurement::Counts counts{};Require(stats.Read(counts),"counter readback");
+        GICharacterMeasurement::Sample record{};Require(stats.Read(record),"counter readback");
+        const auto& counts=record.counts;
         UINT drawn=0;
         for(const auto& m:mask) if(m[3]>0) ++drawn;
-        Require(counts[0]==2 && counts[1]+counts[2]+counts[3]+counts[4]+counts[5]==drawn-2,"Visible character coverage");
-        Require(counts[3]==4 && counts[4]==2 && counts[5]==4,"Original and extended correction counts");
+        Require(counts[0]==2 && counts[1]+counts[2]+counts[3]+counts[4]==drawn-2,"Visible character coverage");
+        Require(counts[3]==6 && counts[4]==2 && record.location!=0,"Corrected and preserved totals");
+        UINT xy=record.location-1, idx=(xy>>16)*width+(xy&65535);
+        Require(idx==centers[1] || idx==mixedGreen,"Recorded pixel matches an actual mixed-source sample");
+        UINT independent=idx==centers[1]?0:1;
+        for(UINT k=0;k<3;++k){
+            Require(record.gi[k]==raw[idx][k] && record.scene[k]==baseline[idx][k],"Recorded linear inputs");
+            float expected=k==independent?baseline[idx][k]:background[k];
+            Require(std::abs(record.proposed[k]-expected)<1e-6f,"Recorded rejected color");
+        }
     }
     unsigned char* mapped=nullptr;Check(output.buffer->Map(0,nullptr,reinterpret_cast<void**>(&mapped)));
     for(UINT i=0;i<width*height;++i){
         Pixel p{};std::memcpy(&p,mapped+(i/width)*output.rowPitch+(i%width)*sizeof(p),sizeof(p));
-        const bool original=std::find(std::begin(centers),std::end(centers),i)!=std::end(centers);
-        const bool extended=std::find(std::begin(extra),std::end(extra),i)!=std::end(extra);
-        if(!original && !extended)
-            Require(p==baseline[i],"Unexpected write on background, edge, or supported highlight");
-        else {
-            const float coverage=mask[i][3];
+        const bool mixed=i==centers[1] || i==mixedGreen;
+        const bool sparse=std::find(std::begin(extra),std::end(extra),i)!=std::end(extra);
+        const bool dense=i==centers[0] || i==centers[2] || i==centers[3] || i==red || i==green || i==white;
+        if(!dense && !(reference && (sparse || mixed))){
+            Require(p==baseline[i],"Unexpected change at sparse, mixed-light, edge or background pixel");
+        } else {
             for(UINT k=0;k<3;++k){
-                const bool independent=(i==centers[1] && k==0);
-                const float expected=independent?baseline[i][k]:baseline[i][k]+coverage*(background[k]-baseline[i][k]);
+                const bool keep=reference && ((i==centers[1] && k==0) || (i==mixedGreen && k==1));
+                const float expected=keep?baseline[i][k]:baseline[i][k]+mask[i][3]*(background[k]-baseline[i][k]);
                 Require(std::abs(p[k]-expected)<1e-6f,"Incorrect composed color or independent channel");
             }
             Require(p[3]==baseline[i][3],"Original scene alpha");
         }
+        if(i==centers[1] || i==mixedGreen)
+            std::cout<<(reference?"R499":"R500")<<" input "<<i%width<<","<<i/width
+                     <<" scene "<<baseline[i][0]<<","<<baseline[i][1]<<","<<baseline[i][2]
+                     <<" result "<<p[0]<<","<<p[1]<<","<<p[2]<<"\n";
     }
     D3D12_RANGE empty{};output.buffer->Unmap(0,&empty);
 }
@@ -126,9 +144,10 @@ static void TestBinding(){
         Require(result==(mode==1?0xBAD00002u:1u) && calls==1 && bound==(mode!=2) && api.value==&source,"Color scope or fallback");
     }
 }
-int main() try {
+int main(int argc,char** argv) try {
     TestBinding();
+    if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0)Run(false,true);
     Run(false);Run(true);
-    std::cout<<"PASS dense and narrow character surfaces, red/green/white impulses, gap/occlusion/material/normal boundaries, supported highlights, GPU counts and RR binding\n";
+    std::cout<<"PASS character impulse and mixed-light RGB, sparse boundaries, recorded veto evidence, and RR binding\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

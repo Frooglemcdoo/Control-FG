@@ -8,7 +8,7 @@ on:
       - work/gi-guided-live-r434
       - work/rr-r434-rays-r439
       - work/gi-cost-r440
-      - work/rr-character-blend-r499
+      - work/rr-character-blend-r500
       - work/rr-restored-r489
       - work/gi-motion-capture-r484
       - work/gi-stage-diagnostic-r432
@@ -927,7 +927,7 @@ jobs:
           python -c "from pathlib import Path;Path('build/gi_temporal.generated.h').write_text(''.join('static const unsigned char kTemporal%d[]={'%v+','.join(str(x) for x in Path('build/gi-temporal-%d.dxil'%v).read_bytes())+'};'+chr(10) for v in (0,1)))"
           if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
           $baselineFlags=@()
-          if ($env:GITHUB_REF_NAME -eq 'work/rr-character-blend-r499') { $baselineFlags+='--r495' }
+          if ($env:GITHUB_REF_NAME -eq 'work/rr-character-blend-r500') { $baselineFlags+='--r495' }
           python tools/build-gi-auto.py --regional --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe @baselineFlags
           if ($LASTEXITCODE -ne 0) { throw 'Auto GI shader build failed' }
           python tools/build-gi-frozen.py --dxc $dxc --output build
@@ -1360,7 +1360,7 @@ jobs:
           if not "%errorlevel%"=="0" exit /b 1
 
       - name: Compile character mask and check spatial blend on WARP
-        if: github.ref_name == 'work/rr-character-blend-r499'
+        if: github.ref_name == 'work/rr-character-blend-r500'
         shell: cmd
         run: |
           call "%VSROOT%\VC\Auxiliary\Build\vcvars64.bat"
@@ -1403,7 +1403,7 @@ jobs:
           if errorlevel 1 exit /b 1
           set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE"
           if "${{ github.ref_name }}"=="work/rr-restored-r489" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
-          if "${{ github.ref_name }}"=="work/rr-character-blend-r499" set "RENDER_FLAGS=%RENDER_FLAGS% /DCONTROL_RR_RESTORED /DCONTROL_CHARACTER_GI_BLEND"
+          if "${{ github.ref_name }}"=="work/rr-character-blend-r500" set "RENDER_FLAGS=%RENDER_FLAGS% /DCONTROL_RR_RESTORED /DCONTROL_CHARACTER_GI_BLEND"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 %RENDER_FLAGS% /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
@@ -1588,15 +1588,15 @@ jobs:
           cl /nologo /std:c++17 /EHsc /O2 /MT tools\validate-gi-motion.cpp /Fe:build\validate-gi-motion.exe
           if errorlevel 1 exit /b 1
 
-      - name: Save R499 drop-in DLL
-        if: github.ref_name == 'work/rr-character-blend-r499'
+      - name: Save R500 drop-in DLL
+        if: github.ref_name == 'work/rr-character-blend-r500'
         uses: actions/upload-artifact@v4
         with:
-          name: ControlTOH-R499-Character-Blend
+          name: ControlTOH-R500-Character-Blend
           path: build/dxgi.dll
           if-no-files-found: error
       - name: Package guarded GI test
-        if: github.ref_name != 'work/rr-character-blend-r499'
+        if: github.ref_name != 'work/rr-character-blend-r500'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -1688,7 +1688,7 @@ jobs:
 
 
       - uses: actions/upload-artifact@v4
-        if: always() && github.ref_name != 'work/rr-character-blend-r499'
+        if: always() && github.ref_name != 'work/rr-character-blend-r500'
         with:
           name: ${{ github.ref_name == 'work/rr-restored-r489' && 'ControlTOH-RR-R490' || github.ref_name == 'work/gi-motion-capture-r484' && 'ControlTOH-GI-Auto-R484' || github.ref_name == 'work/gi-cost-r440' && 'ControlTOH-GI-Source10-R447' || github.ref_name == 'work/rr-r434-rays-r439' && 'ControlTOH-R434-Rays-R439' || github.ref_name == 'work/gi-guided-live-r434' && 'ControlTOH-GI-Guided-Live-R434' || github.ref_name == 'work/gi-stage-diagnostic-r432' && 'ControlTOH-GI-Stages-R432' || github.ref_name == 'work/gi-replacement-binding-r426' && 'ControlTOH-GI-Frozen-R431' || github.ref_name == 'work/gi-replacement-core-r425' && 'ControlTOH-GI-Compact-Preview' || 'ControlTOH-R425' }}
           path: |
