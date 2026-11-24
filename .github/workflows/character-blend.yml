@@ -44,6 +44,8 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./build/test-gi-character-source.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./build/test-gi-character-source.exe --original-both
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./build/test-gi-character-source.exe --missing-hit
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./tools/build-gi-character-blend.ps1

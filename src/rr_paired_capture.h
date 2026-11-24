@@ -16,6 +16,7 @@ struct Frame:FrameView {
     std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT,PlaneCount> layouts{};
     std::array<ComPtr<ID3D12Resource>,PlaneCount> sources;
     uint64_t capacity=0,bytes=0;
+    ID3D12GraphicsCommandList* recordedList=nullptr;
     bool outputRecorded=false, mapped=false;
     ~Frame(){Unmap();}
     void Unmap(){
@@ -26,13 +27,13 @@ struct Frame:FrameView {
         if(mapped)return true;
         D3D12_RANGE range{0,SIZE_T(bytes)};void* data=nullptr;
         if(FAILED(buffer->Map(0,&range,&data)))return false;
-        for(unsigned i=0;i<PlaneCount;++i)g[i].base=static_cast<unsigned char*>(data)+layouts[i].Offset;
+        for(unsigned i=0;i<PlaneCount;++i)if(g[i].w)g[i].base=static_cast<unsigned char*>(data)+layouts[i].Offset;
         mapped=true;return true;
     }
 };
 inline const char* Name(Plane p){
     static const char* names[]={"raw_gi","both_temporal_gi","both_final_gi","native_raw_shaded",
-        "r505_rr_input","character_mask","hardware_depth","normal","motion","native_map","rr_output"};
+        "r505_rr_input","character_mask","hardware_depth","normal","motion","native_map","native_diffuse_light_at_rr","native_specular_light_at_rr","rr_output"};
     return names[p];
 }
 inline void WriteRGB(std::ostream& os,RGB rgb){
@@ -48,9 +49,10 @@ inline std::string Crop(const Frame& f,XY p){
      <<",\"native_pass_count\":"<<f.passes<<",\"jitter\":["<<f.jitterX<<','<<f.jitterY
      <<"],\"motion_scale\":["<<f.scaleX<<','<<f.scaleY<<"],\"planes\":{";
     bool first=true;
-    for(Plane k:{Raw,Temporal,Spatial,Scene,RRInput,RROut}){
+    for(Plane k:{Raw,Temporal,Spatial,Diffuse,Specular,Scene,RRInput,RROut}){
         if(!first)s<<',';first=false;
-        XY center=k<=Spatial?f.Source(p):p;
+        if(!f.g[k].base){s<<'"'<<Name(k)<<"\":null";continue;}
+        XY center=(k<=Spatial||k==Diffuse||k==Specular)?f.Source(p):p;
         if(k==RROut)center={int((p.x+.5)*f.g[k].w/f.w),int((p.y+.5)*f.g[k].h/f.h)};
         s<<'"'<<Name(k)<<"\":{\"center\":";WriteXY(s,center);
         s<<",\"dxgi_format\":"<<f.g[k].format<<",\"extent\":["<<f.g[k].w<<','<<f.g[k].h<<"],\"rgb\":[";
@@ -61,27 +63,31 @@ inline std::string Crop(const Frame& f,XY p){
     }
     s<<"}}";return s.str();
 }
-inline bool WriteEvent(const Frame& f,const Event& e,const std::vector<std::string>& crops){
+// A new session owns one CREATE_NEW report. Follow-through atomically replaces
+// only that report after the confirmed three-frame event is already on disk.
+inline bool WriteEvent(uint64_t session,const Event& e,const std::vector<std::string>& crops,std::wstring& dest){
     wchar_t base[32768]{};auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",base,_countof(base));
     if(!n||n>=_countof(base))return false;
     std::wstring dir=std::wstring(base)+L"\\ControlFGProbe";
     if(!CreateDirectoryW(dir.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return false;
-    auto stem=dir+L"\\Character-Speckle-R506-"+std::to_wstring(GetCurrentProcessId())+L"-"+
-        std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(f.session);
-    auto temp=stem+L".partial",dest=stem+L".json";
+    const bool update=!dest.empty();
+    const auto stem=dir+L"\\Character-Speckle-R506-"+std::to_wstring(GetCurrentProcessId())+L"-"+
+        std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(session);
+    const auto path=update?dest:stem+L".json";
+    const auto temp=path+L".partial";
     std::ostringstream os;os.imbue(std::locale::classic());os<<std::setprecision(8);
     os<<"{\"schema\":\"control-character-speckle-r506\",\"pid\":"<<GetCurrentProcessId()
       <<",\"ray_count\":4,\"crop_width\":9,\"crop_order\":\"row_major_rgb\",\"trigger_stage\":\""<<Name(e.stage)
       <<"\",\"trigger_channel\":"<<e.channel<<",\"peak_ratio\":"<<e.score
       <<",\"rr_output_mapping\":\"nearest output pixel center; RR reconstruction correspondence approximate\""
-      <<",\"both_shaded_measured\":false,\"frames\":[";
+      <<",\"both_shaded_measured\":false,\"frame_count\":"<<crops.size()<<",\"frames\":[";
     for(size_t i=0;i<crops.size();++i){if(i)os<<',';os<<crops[i];}
     os<<"]}\n";const auto data=os.str();
     HANDLE h=CreateFileW(temp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(h==INVALID_HANDLE_VALUE)return false;
     DWORD written=0;bool ok=WriteFile(h,data.data(),DWORD(data.size()),&written,nullptr)&&written==data.size()&&FlushFileBuffers(h);
-    CloseHandle(h);if(ok)ok=MoveFileExW(temp.c_str(),dest.c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
-    if(!ok)DeleteFileW(temp.c_str());
+    CloseHandle(h);if(ok)ok=MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_WRITE_THROUGH|(update?MOVEFILE_REPLACE_EXISTING:0))!=FALSE;
+    if(!ok)DeleteFileW(temp.c_str());else dest=path;
     return ok;
 }
 // Only the fenced, completed RR slot enters this worker. A slow reader applies
@@ -91,7 +97,6 @@ struct Reader {
     std::condition_variable ready,space;
     std::deque<std::shared_ptr<Frame>> arrivals;
     std::vector<std::shared_ptr<Frame>> pool;
-    std::thread worker;
     bool running=false;
     std::shared_ptr<Frame> Acquire(ID3D12Device* device,uint64_t size){
         std::unique_lock<std::mutex> lock(mutex);
@@ -118,7 +123,7 @@ struct Reader {
     void Run() noexcept {
         try{
             std::vector<std::shared_ptr<Frame>> ordered;
-            std::vector<std::string> crops;Event event{};XY tail{};
+            std::vector<std::string> crops;std::wstring dest;Event event{};XY tail{};
             uint64_t lastEventFrame=0,currentSession=0;
             for(;;){
                 std::shared_ptr<Frame> f;
@@ -135,7 +140,7 @@ struct Reader {
                     f=std::move(arrivals.front());arrivals.pop_front();space.notify_all();
                 }
                 if(f->session!=Armed())continue;
-                if(currentSession!=f->session){ordered.clear();crops.clear();lastEventFrame=0;currentSession=f->session;}
+                if(currentSession!=f->session){ordered.clear();crops.clear();dest.clear();lastEventFrame=0;currentSession=f->session;}
                 if(!f->Map()){Issue(f->session,L"Readback failed");continue;}
                 if(std::any_of(ordered.begin(),ordered.end(),[&](const auto& p){return p->number==f->number;}))continue;
                 ordered.push_back(f);std::sort(ordered.begin(),ordered.end(),[](const auto& a,const auto& b){return a->number<b->number;});
@@ -150,7 +155,14 @@ struct Reader {
                     if(crops.empty()){
                         event=Find(*a,*b,*c);if(!event.score)continue;
                         crops={Crop(*a,event.positions[0]),Crop(*b,event.positions[1]),Crop(*c,event.positions[2])};
-                        capturingTail=true;tail=event.positions[2];lastEventFrame=c->number;Issue(c->session,L"Flash found; recording follow-through");
+                        std::lock_guard<std::mutex> guard(stateMutex);
+                        if(active!=c->session)break;
+                        if(!WriteEvent(c->session,event,crops,dest)){
+                            status=L"Could not save capture";active=0;break;
+                        }
+                        capturingTail=true;tail=event.positions[2];lastEventFrame=c->number;
+                        status=L"Flash saved; collecting follow-through";
+                        continue;
                     }else if(c->number==lastEventFrame+1){
                         // Find the destination that reprojects to the previous confirmed receiver.
                         bool matched=false;XY next{};int nearest=0;
@@ -162,12 +174,17 @@ struct Reader {
                         }
                         if(matched){crops.push_back(Crop(*c,next));tail=next;}
                         else crops.push_back("{\"frame\":"+std::to_string(c->number)+",\"surface_match\":false}");
-                        ++lastEventFrame;if(matched&&crops.size()<6)continue;
-                    }else if(c->number<lastEventFrame)continue;
-                    if(crops.size()==3&&c->number==lastEventFrame)continue;
+                        ++lastEventFrame;
+                        std::lock_guard<std::mutex> guard(stateMutex);
+                        if(active!=c->session)break;
+                        if(!WriteEvent(c->session,event,crops,dest)){
+                            status=L"Flash saved; follow-through incomplete";active=0;break;
+                        }
+                        if(matched&&crops.size()<6)continue;
+                    }else if(c->number<=lastEventFrame)continue;
                     {std::lock_guard<std::mutex> lock(stateMutex);
                     if(active==c->session){
-                        const bool ok=WriteEvent(*c,event,crops);status=ok?L"Saved in ControlFGProbe":L"Could not save capture";active=0;
+                        status=L"Saved in ControlFGProbe";active=0;
                     }}
                     ordered.clear();crops.clear();break;
                 }
@@ -178,16 +195,16 @@ struct Reader {
 };
 // Process-lifetime storage, matching the existing probe's renderer lifetime.
 inline Reader& CaptureReader(){static Reader* r=new Reader;return *r;}
-inline void Copy(ID3D12GraphicsCommandList* list,Frame& f,unsigned i,ID3D12Resource* r,D3D12_RESOURCE_STATES state){
+inline void Copy(ID3D12GraphicsCommandList* list,UINT64& commands,Frame& f,unsigned i,ID3D12Resource* r,D3D12_RESOURCE_STATES state){
     auto barrier=[&](D3D12_RESOURCE_STATES before,D3D12_RESOURCE_STATES after){
         if(before==after)return;
         D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={r,0,before,after};
-        list->ResourceBarrier(1,&b);
+        ++commands;list->ResourceBarrier(1,&b);
     };
     barrier(state,D3D12_RESOURCE_STATE_COPY_SOURCE);
     D3D12_TEXTURE_COPY_LOCATION src{},dst{};src.pResource=r;src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     dst.pResource=f.buffer.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=f.layouts[i];
-    list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);barrier(D3D12_RESOURCE_STATE_COPY_SOURCE,state);
+    ++commands;list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);barrier(D3D12_RESOURCE_STATE_COPY_SOURCE,state);
     f.sources[i]=r;
 }
 }

@@ -15,7 +15,7 @@ inline void Issue(uint64_t id,const wchar_t* label){
 }
 inline void Toggle(){
     std::lock_guard<std::mutex> lock(stateMutex);
-    if(active){active=0;status=L"Cancelled";return;}
+    if(active){active=0;status=capturingTail?L"Flash saved; follow-through stopped":L"Cancelled";return;}
     capturingTail=false;active=++serial;status=L"Waiting for four-ray character frames";
 }
 }

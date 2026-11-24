@@ -198,7 +198,7 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
         history.scaleX=eval.scaleX;history.scaleY=eval.scaleY;
     } else history.frame=0;
     if(rr_pair::Armed()){
-        try{rr_pair::Before(owner,slot,eval,in,native,gi,mask,remap);}
+        try{rr_pair::Before(owner,slot,eval,in,native,mask,remap);}
         catch(...){rr_pair::Issue(rr_pair::Armed(),L"Unable to allocate capture");}
     }
     slot.writtenFrame=eval.frame;

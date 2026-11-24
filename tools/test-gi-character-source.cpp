@@ -7,7 +7,8 @@
 // Separate processes exercise both native provider outcomes with the shipped GPU recorder.
 int main(int argc,char** argv) try {
     const bool missing=argc==2 && std::strcmp(argv[1],"--missing-hit")==0;
-    Require(argc==1 || missing,"Expected --missing-hit or no argument");
+    const bool originalBoth=argc==2&&std::strcmp(argv[1],"--original-both")==0;
+    Require(argc==1 || missing || originalBoth,"Expected --missing-hit, --original-both or no argument");
     Device g(false);Require(RRCharacterSource::Prepare(g.device.Get()),"Both source pipelines");
     constexpr UINT w=32,h=16,n=w*h;constexpr auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
     std::vector<Pixel> flat(n,{.00047f,.00043f,.00035f,.00047f}),flash=flat;
@@ -34,7 +35,7 @@ int main(int argc,char** argv) try {
     sys[2]=sys[6]=1.f/w;sys[3]=sys[7]=1.f/h;
     auto cb=g.Buffer(sizeof(sys),D3D12_HEAP_TYPE_UPLOAD,D3D12_RESOURCE_STATE_GENERIC_READ,false,sys.data());
     auto filter=g.Upload(std::vector<UINT>(64));
-    ComPtr<ID3D12Resource> history;Readback samples[2];
+    ComPtr<ID3D12Resource> history;Readback samples[2],expectedTemporal[2],savedTemporal[2];
     for(UINT frame=0;frame<2;++frame){
         auto raw=Texture(g,w,h,format,frame?flash.data():flat.data());
         constexpr auto privateFormat=DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -56,13 +57,32 @@ int main(int argc,char** argv) try {
             TextureView(g,images[1-i],offset+9*(i+1)+8,true);
         }
         auto gpu=g.views->GetGPUDescriptorHandleForHeapStart();gpu.ptr+=UINT64(offset)*g.descriptorSize;
+        ComPtr<ID3D12Resource> snapshot;
+        if(originalBoth){
+            snapshot=Texture(g,w,h,privateFormat,nullptr,true);g.Transition(snapshot.Get(),write,read);
+            RRCharacterSource::DispatchPasses(g.list.Get(),cb->GetGPUVirtualAddress(),filter->GetGPUVirtualAddress(),
+                gpu,g.descriptorSize,images,w,h,0,frame!=0,true);
+            g.Transition(a.Get(),read,write);expectedTemporal[frame]=CopyOutput(g,a.Get());
+            g.Transition(a.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,read);
+        }
         RRCharacterSource::DispatchPasses(g.list.Get(),cb->GetGPUVirtualAddress(),filter->GetGPUVirtualAddress(),
-            gpu,g.descriptorSize,images,w,h,6,frame!=0,useHit);
+            gpu,g.descriptorSize,images,w,h,6,frame!=0,useHit,snapshot.Get(),!originalBoth||frame==0?1u:0u);
+        if(originalBoth){
+            g.Transition(snapshot.Get(),read,write);savedTemporal[frame]=CopyOutput(g,snapshot.Get());
+        }
         g.Transition(a.Get(),read,write);samples[frame]=CopyOutput(g,a.Get());
         g.Transition(a.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,read);history=a;
     }
     g.Submit();
     for(UINT f=0;f<2;++f){
+        if(originalBoth){
+            unsigned char *actual=nullptr,*expected=nullptr;
+            Check(savedTemporal[f].buffer->Map(0,nullptr,reinterpret_cast<void**>(&actual)));
+            Check(expectedTemporal[f].buffer->Map(0,nullptr,reinterpret_cast<void**>(&expected)));
+            for(unsigned y=0;y<h;++y)Require(std::memcmp(actual+y*savedTemporal[f].rowPitch,
+                expected+y*expectedTemporal[f].rowPitch,w*8)==0,"Temporal snapshot differs from independently dispatched temporal shader");
+            D3D12_RANGE empty{};savedTemporal[f].buffer->Unmap(0,&empty);expectedTemporal[f].buffer->Unmap(0,&empty);
+        }
         unsigned char* data=nullptr;Check(samples[f].buffer->Map(0,nullptr,reinterpret_cast<void**>(&data)));
         std::array<DirectX::PackedVector::HALF,4> channels{};
         std::memcpy(channels.data(),data+8*samples[f].rowPitch+12*sizeof(channels),sizeof(channels));
@@ -70,7 +90,7 @@ int main(int argc,char** argv) try {
         for(UINT k=0;k<4;++k)value[k]=DirectX::PackedVector::XMConvertHalfToFloat(channels[k]);
         for(UINT k=0;k<3;++k)Require(std::isfinite(value[k])&&value[k]>0&&
             (f?value[k]<flash[8*w+12][k]*.3f:std::abs(value[k]-flat[0][k])<1e-6f),"Uniform energy or captured flash");
-        std::cout<<(useHit?"hit-aware":"no-hit geometry")<<" source frame "<<f<<" raw red "<<(f?flash[8*w+12][0]:flat[0][0])<<" Both GI red "<<value[0]<<"\n";
+        std::cout<<(originalBoth?"original Both":useHit?"hit-aware":"no-hit geometry")<<" source frame "<<f<<" raw red "<<(f?flash[8*w+12][0]:flat[0][0])<<" Both GI red "<<value[0]<<"\n";
         if(missing && f==1){
             // The separate RR composition fixture consumes exactly this GPU result.
             std::ofstream output("build/character-no-hit-gpu-sample.bin",std::ios::binary);

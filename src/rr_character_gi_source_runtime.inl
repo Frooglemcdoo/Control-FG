@@ -38,13 +38,22 @@ static bool PrepareReference(ID3D12Device* device,Image& image){
     if(image.referenceHeap)return true;
     const auto d=image.image[0]->GetDesc();
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
-    ComPtr<ID3D12Resource> textures[3];
+    ComPtr<ID3D12Resource> textures[4];
     for(auto& t:textures)if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&t))))return false;
     const auto hd=image.descriptors->GetDesc();
     if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&image.referenceHeap))))return false;
     image.reference[0]=std::move(textures[0]);image.reference[1]=std::move(textures[1]);
-    image.temporal=std::move(textures[2]);return true;
+    image.temporal=std::move(textures[2]);image.raw=std::move(textures[3]);return true;
+}
+// The producer binds this ShaderTexture immediately before the GI filtering call.
+static bool ReadProducerHit(Texture& hit) noexcept {
+    if(!verifiedRenderer||!rrGuideGetNativeTexture)return false;
+    __try {
+        auto* shader=reinterpret_cast<unsigned char*>(verifiedRenderer)+0x12974a0;
+        auto* native=rrGuideGetNativeTexture(shader);
+        return control_nrd_native::ReadTexture({reinterpret_cast<uintptr_t>(shader),reinterpret_cast<uintptr_t>(native)},hit);
+    }__except(EXCEPTION_EXECUTE_HANDLER){return false;}
 }
 static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue,ID3D12GraphicsCommandList* list,UINT passes){
     using namespace ControlNrdRuntime;
@@ -94,8 +103,10 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     // RAW bypass can leave the producer's actual hit texture in UAV state.
     // Snapshot the named SRV provider; transition its resource only for the reference read.
     Texture referenceHit=t[6];
-    const bool referenceHasHit=useHitDistance || (session && NamedTexture("g_tHitInfo",referenceHit) &&
-        referenceHit.state==D3D12_RESOURCE_STATE_UNORDERED_ACCESS && referenceHit.resource &&
+    const bool referenceHasHit=useHitDistance || (session && (ReadProducerHit(referenceHit)||NamedTexture("g_tHitInfo",referenceHit)) &&
+        ((referenceHit.state& D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)||
+         (referenceHit.state& D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)||
+         referenceHit.state==D3D12_RESOURCE_STATE_UNORDERED_ACCESS) && referenceHit.resource &&
         referenceHit.desc.Width==w && referenceHit.desc.Height==h && referenceHit.desc.MipLevels &&
         !(referenceHit.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
         ReadFormat(referenceHit.desc.Format)!=DXGI_FORMAT_UNKNOWN);
@@ -163,15 +174,28 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
         image->session=session;
         const bool previous=prior&&prior->session==session;
         image->historyFrames=previous&&!cut?prior->historyFrames+1:1;
-        if(!useHitDistance){
-            r->characterInputs[6]=referenceHit.resource;
-            Barrier(list,referenceHit.resource,referenceHit.state,read);
-        }
+        const bool moveHit=!useHitDistance&&!(referenceHit.state&read);
+        if(!useHitDistance)r->characterInputs[6]=referenceHit.resource;
+        if(moveHit)Barrier(list,referenceHit.resource,referenceHit.state,read);
+        // Preserve the exact mip sampled by the reference before native filtering/composition.
+        const auto rawState=transitioned[5]?read:t[5].state;
+        D3D12_RESOURCE_BARRIER rawBarrier{};
+        rawBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        rawBarrier.Transition={t[5].resource,0,rawState,D3D12_RESOURCE_STATE_COPY_SOURCE};
+        list->ResourceBarrier(1,&rawBarrier);
+        Barrier(list,image->raw.Get(),read,D3D12_RESOURCE_STATE_COPY_DEST);
+        D3D12_TEXTURE_COPY_LOCATION src{},dst{};
+        src.pResource=t[5].resource;dst.pResource=image->raw.Get();
+        src.Type=dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+        list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
+        Barrier(list,image->raw.Get(),D3D12_RESOURCE_STATE_COPY_DEST,read);
+        std::swap(rawBarrier.Transition.StateBefore,rawBarrier.Transition.StateAfter);
+        list->ResourceBarrier(1,&rawBarrier);
         ID3D12Resource* pair[]={image->reference[0].Get(),image->reference[1].Get()};
         auto* heap=image->referenceHeap.Get();list->SetDescriptorHeaps(1,&heap);
         DispatchPasses(list,native.cb[0],native.cb[1],heap->GetGPUDescriptorHandleForHeapStart(),step,
             pair,w,h,passes,previous,true,image->temporal.Get(),cut);
-        if(!useHitDistance)Barrier(list,referenceHit.resource,read,referenceHit.state);
+        if(moveHit)Barrier(list,referenceHit.resource,read,referenceHit.state);
     }
     for(UINT i=0;i<inputCount;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
     ID3D12DescriptorHeap* restore[]={b.heaps[0].Get(),b.heaps[1].Get()};

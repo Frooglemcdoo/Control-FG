@@ -78,6 +78,9 @@ inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp)
  if(message==WM_COMMAND && HIWORD(wp)==BN_CLICKED){
   const unsigned id=LOWORD(wp);
   if(id!=6&&control_rr_capture_ui::Busy())return 0;
+#ifdef CONTROL_CHARACTER_GI_BLEND
+  if(rr_pair::Armed()&&id!=12)return 0;
+#endif
   if(id==1){std::lock_guard<std::recursive_mutex> lock(fgSettingsMutex);if(control_settings::Write(control_settings::Definition(control_settings::Key::RayReconstruction),!control_rr::RRUserRequested()))FGSettingsMarkSettingsDirty();}
   else if(id==2){if(gi_evaluator::Enabled())gi_evaluator::Toggle();else if(gi_live_toggle::ready.load())gi_live_toggle::Toggle();}
   else if(id==3)control_rr_clamp::requestedMode.store(control_rr_clamp::Next(control_rr_clamp::requestedMode.load()));

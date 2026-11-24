@@ -6,7 +6,7 @@
 #include <cstring>
 #include <limits>
 namespace rr_pair {
-enum Plane {Raw,Temporal,Spatial,Scene,RRInput,Mask,Depth,Normal,Motion,Remap,RROut,PlaneCount};
+enum Plane {Raw,Temporal,Spatial,Scene,RRInput,Mask,Depth,Normal,Motion,Remap,Diffuse,Specular,RROut,PlaneCount};
 using RGB=std::array<float,3>;
 struct XY {int x,y;};
 struct Grid {
@@ -43,7 +43,7 @@ struct FrameView {
         return {(p.x&~1)+int(bits&1),(p.y&~1)+int((bits>>1)&1)};
     }
     RGB Value(Plane k,XY p) const {
-        if(k<=Spatial)p=Source(p);
+        if(k<=Spatial||k==Diffuse||k==Specular)p=Source(p);
         if(k==RROut)p={int((p.x+.5)*g[k].w/w),int((p.y+.5)*g[k].h/h)};
         return Color(g[k],p);
     }
