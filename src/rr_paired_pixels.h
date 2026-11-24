@@ -49,7 +49,8 @@ struct FrameView {
     }
     bool Visible(XY p) const{
         auto m=g[Mask].At(p),d=g[Depth].At(p);
-        if(!m||!d||!(Half(Read<uint16_t>(m+6))>.5f))return false;
+        if(!m||!d)return false;
+        const auto alpha=Read<uint16_t>(m+6);if(alpha<=0x3800u||alpha>=0x7c00u)return false;
         return (Word(m)|(Word(m+2)<<15))==Read<uint32_t>(d);
     }
 };
@@ -83,27 +84,62 @@ inline bool MatchPrevious(const FrameView& now,XY p,const FrameView& old,XY& res
     }
     return found;
 }
-struct Event {XY positions[3]{};float score=0;Plane stage=Raw;unsigned channel=0;};
+struct Observation {
+    XY positions[3]{},output[3]{};
+    float score=0;
+    Plane stage=RROut;
+    unsigned channel=0;
+};
+struct Event:Observation {std::array<Observation,3> byChannel{};};
 // Use a per-channel temporal impulse. Branch disagreement and chroma are never requirements.
-inline void Score(const RGB& a,const RGB& b,const RGB& c,Plane k,Event& event){
-    for(unsigned ch=0;ch<3;++ch){
-        if(!std::isfinite(a[ch])||!std::isfinite(b[ch])||!std::isfinite(c[ch]))continue;
-        float base=std::max(.0002f,std::max(a[ch],c[ch]));
-        if(b[ch]-base<.0008f)continue;
-        float ratio=b[ch]/base;
-        if(ratio>=3&&ratio>event.score){event.score=ratio;event.stage=k;event.channel=ch;}
-    }
+inline float Impulse(float before,float current,float after){
+    if(!std::isfinite(before)||!std::isfinite(current)||!std::isfinite(after))return 0;
+    const float base=std::max(.0002f,std::max(before,after));
+    if(current-base<.0008f)return 0;
+    const float ratio=current/base;
+    return ratio>=3?ratio:0;
+}
+// Output centers owned by this internal pixel. At 1.5x there may be two
+// possible samples on either axis; choosing only the rounded center loses flashes.
+inline int FirstOutput(int pixel,unsigned input,unsigned output){
+    return int((2ull*unsigned(pixel)*output+input-1)/(2ull*input));
+}
+struct Peak {
+    RGB value{{-INFINITY,-INFINITY,-INFINITY}};
+    std::array<XY,3> pixel{};
+};
+inline Peak OutputPeak(const FrameView& frame,XY p){
+    Peak out;
+    const Grid& g=frame.g[RROut];
+    for(int y=FirstOutput(p.y,frame.h,g.h);y<FirstOutput(p.y+1,frame.h,g.h);++y)
+        for(int x=FirstOutput(p.x,frame.w,g.w);x<FirstOutput(p.x+1,frame.w,g.w);++x){
+            const auto rgb=Color(g,{x,y});
+            for(unsigned i=0;i<3;++i)if(std::isfinite(rgb[i])&&rgb[i]>out.value[i]){
+                out.value[i]=rgb[i];out.pixel[i]={x,y};
+            }
+        }
+    return out;
 }
 inline Event Find(const FrameView& a,const FrameView& b,const FrameView& c){
     Event best{};
     if(!Consecutive(a,b)||!Consecutive(b,c)||a.warm<4)return best;
     for(unsigned y=0;y<c.h;++y)for(unsigned x=0;x<c.w;++x){
         XY cp{int(x),int(y)},bp{},ap{};
-        if(!MatchPrevious(c,cp,b,bp)||!MatchPrevious(b,bp,a,ap))continue;
-        Event next{};next.positions[0]=ap;next.positions[1]=bp;next.positions[2]=cp;
-        for(Plane k:{Raw,Spatial,Scene,RRInput,RROut})
-            Score(a.Value(k,ap),b.Value(k,bp),c.Value(k,cp),k,next);
-        if(next.score>best.score)best=next;
+        if(!MatchPrevious(c,cp,b,bp))continue;
+        const auto middle=OutputPeak(b,bp);
+        if(*std::max_element(middle.value.begin(),middle.value.end())<.001f)continue;
+        const auto after=OutputPeak(c,cp);
+        bool bright=false;
+        for(unsigned ch=0;ch<3;++ch)if(Impulse(after.value[ch],middle.value[ch],after.value[ch]))bright=true;
+        if(!bright||!MatchPrevious(b,bp,a,ap))continue;
+        const auto before=OutputPeak(a,ap);
+        for(unsigned ch=0;ch<3;++ch){
+            const float score=Impulse(before.value[ch],middle.value[ch],after.value[ch]);
+            if(score<=best.byChannel[ch].score)continue;
+            Observation found{{ap,bp,cp},{before.pixel[ch],middle.pixel[ch],after.pixel[ch]},score,RROut,ch};
+            best.byChannel[ch]=found;
+            if(score>best.score)static_cast<Observation&>(best)=found;
+        }
     }
     return best;
 }

@@ -5,7 +5,10 @@ inline void Before(RRLiveOwner* owner,RRCharacterColorSlot& slot,const RRCharact
                    ID3D12Resource* mask,const RRGuideInputTexture& remap){
     const auto id=Armed();if(!id)return;
     const auto& ref=slot.sourceLease;
-    if(!ref||ref->session!=id||ref->historyFrames<4||!eval.motionKnown||rr_pair::fourRayFrame.load()!=eval.frame)return;
+    if(!ref||ref->session!=id)return;
+    if(ref->historyFrames<4){Issue(id,L"Warming Both GI history");return;}
+    if(!eval.motionKnown){Issue(id,L"Motion vectors unavailable");return;}
+    if(rr_pair::fourRayFrame.load()!=eval.frame){Issue(id,L"Waiting for verified four-ray GI");return;}
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     RRGuideInputTexture light[2]{};
     RRInputCaptureReadShaderTexture(kRRShaderLightBufferDiffuseRva,&light[0]);

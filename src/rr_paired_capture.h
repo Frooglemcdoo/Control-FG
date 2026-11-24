@@ -42,9 +42,17 @@ inline void WriteRGB(std::ostream& os,RGB rgb){
     os<<']';
 }
 inline void WriteXY(std::ostream& os,XY v){os<<'['<<v.x<<','<<v.y<<']';}
-inline std::string Crop(const Frame& f,XY p){
+inline std::string Crop(const Frame& f,XY p,XY output){
     std::ostringstream s;s.imbue(std::locale::classic());s<<std::setprecision(8);
     s<<"{\"frame\":"<<f.number<<",\"internal_xy\":";WriteXY(s,p);
+    const auto normal=UnitNormal(f.g[Normal].At(p));
+    const auto mv=f.g[Motion].At(p);
+    const bool fp32=f.g[Motion].format==16;
+    s<<",\"receiver_normal\":";WriteRGB(s,normal);
+    s<<",\"raster_depth\":"<<Read<float>(f.g[Depth].At(p))
+     <<",\"surface_tag_bits\":"<<Read<uint16_t>(f.g[Mask].At(p)+4)
+     <<",\"motion\":["<<(fp32?Read<float>(mv):Half(Read<uint16_t>(mv)))<<','
+     <<(fp32?Read<float>(mv+4):Half(Read<uint16_t>(mv+2)))<<']';
     s<<",\"lighting_xy\":";WriteXY(s,f.Source(p));s<<",\"history_frames\":"<<f.warm
      <<",\"native_pass_count\":"<<f.passes<<",\"jitter\":["<<f.jitterX<<','<<f.jitterY
      <<"],\"motion_scale\":["<<f.scaleX<<','<<f.scaleY<<"],\"planes\":{";
@@ -53,7 +61,7 @@ inline std::string Crop(const Frame& f,XY p){
         if(!first)s<<',';first=false;
         if(!f.g[k].base){s<<'"'<<Name(k)<<"\":null";continue;}
         XY center=(k<=Spatial||k==Diffuse||k==Specular)?f.Source(p):p;
-        if(k==RROut)center={int((p.x+.5)*f.g[k].w/f.w),int((p.y+.5)*f.g[k].h/f.h)};
+        if(k==RROut)center=output;
         s<<'"'<<Name(k)<<"\":{\"center\":";WriteXY(s,center);
         s<<",\"dxgi_format\":"<<f.g[k].format<<",\"extent\":["<<f.g[k].w<<','<<f.g[k].h<<"],\"rgb\":[";
         for(int j=-4;j<=4;++j)for(int i=-4;i<=4;++i){
@@ -63,9 +71,30 @@ inline std::string Crop(const Frame& f,XY p){
     }
     s<<"}}";return s.str();
 }
+inline std::string ChannelPeaks(const Event& event,const Frame& before,const Frame& middle,const Frame& after){
+    std::ostringstream s;s.imbue(std::locale::classic());s<<std::setprecision(8)<<'[';
+    const Frame* frames[]={&before,&middle,&after};bool first=true;
+    for(const auto& candidate:event.byChannel){
+        if(!candidate.score)continue;
+        if(!first)s<<',';first=false;
+        s<<"{\"channel\":"<<candidate.channel<<",\"ratio\":"<<candidate.score<<",\"samples\":[";
+        for(unsigned i=0;i<3;++i){
+            if(i)s<<',';
+            const auto& f=*frames[i];const XY p=candidate.positions[i];
+            s<<"{\"frame\":"<<f.number<<",\"internal_xy\":";WriteXY(s,p);
+            s<<",\"output_xy\":";WriteXY(s,candidate.output[i]);
+            for(Plane k:{Raw,Temporal,Spatial,Diffuse,Specular,Scene,RRInput,RROut}){
+                s<<",\""<<Name(k)<<"\":";WriteRGB(s,k==RROut?Color(f.g[k],candidate.output[i]):f.Value(k,p));
+            }
+            s<<'}';
+        }
+        s<<"]}";
+    }
+    s<<']';return s.str();
+}
 // A new session owns one CREATE_NEW report. Follow-through atomically replaces
 // only that report after the confirmed three-frame event is already on disk.
-inline bool WriteEvent(uint64_t session,const Event& e,const std::vector<std::string>& crops,std::wstring& dest){
+inline bool WriteEvent(uint64_t session,const Event& e,const std::vector<std::string>& crops,const std::string& peaks,std::wstring& dest){
     wchar_t base[32768]{};auto n=GetEnvironmentVariableW(L"LOCALAPPDATA",base,_countof(base));
     if(!n||n>=_countof(base))return false;
     std::wstring dir=std::wstring(base)+L"\\ControlFGProbe";
@@ -79,8 +108,8 @@ inline bool WriteEvent(uint64_t session,const Event& e,const std::vector<std::st
     os<<"{\"schema\":\"control-character-speckle-r506\",\"pid\":"<<GetCurrentProcessId()
       <<",\"ray_count\":4,\"crop_width\":9,\"crop_order\":\"row_major_rgb\",\"trigger_stage\":\""<<Name(e.stage)
       <<"\",\"trigger_channel\":"<<e.channel<<",\"peak_ratio\":"<<e.score
-      <<",\"rr_output_mapping\":\"nearest output pixel center; RR reconstruction correspondence approximate\""
-      <<",\"both_shaded_measured\":false,\"frame_count\":"<<crops.size()<<",\"frames\":[";
+      <<",\"rr_output_mapping\":\"exact output peak in matched receiver footprint; adjacent receiver correspondence approximate\""
+      <<",\"brightest_per_channel\":"<<peaks<<" ,\"both_shaded_measured\":false,\"frame_count\":"<<crops.size()<<",\"frames\":[";
     for(size_t i=0;i<crops.size();++i){if(i)os<<',';os<<crops[i];}
     os<<"]}\n";const auto data=os.str();
     HANDLE h=CreateFileW(temp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -105,7 +134,7 @@ struct Reader {
             if(d.Get()==device){p->Unmap();return p;}
         }
         pool.erase(std::remove_if(pool.begin(),pool.end(),[](const auto& p){return p.use_count()==1;}),pool.end());
-        if(pool.size()>=9 || size>640ull*1024*1024)return {};
+        if(pool.size()>=9 || size>768ull*1024*1024)return {};
         auto p=std::make_shared<Frame>();D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;
         hp.CreationNodeMask=hp.VisibleNodeMask=1;D3D12_RESOURCE_DESC d{};d.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
         d.Width=size;d.Height=d.DepthOrArraySize=d.MipLevels=d.SampleDesc.Count=1;d.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -123,7 +152,7 @@ struct Reader {
     void Run() noexcept {
         try{
             std::vector<std::shared_ptr<Frame>> ordered;
-            std::vector<std::string> crops;std::wstring dest;Event event{};XY tail{};
+            std::vector<std::string> crops;std::wstring dest;std::string peaks;Event event{};XY tail{};
             uint64_t lastEventFrame=0,currentSession=0;
             for(;;){
                 std::shared_ptr<Frame> f;
@@ -154,10 +183,11 @@ struct Reader {
                     ordered.erase(ordered.begin());
                     if(crops.empty()){
                         event=Find(*a,*b,*c);if(!event.score)continue;
-                        crops={Crop(*a,event.positions[0]),Crop(*b,event.positions[1]),Crop(*c,event.positions[2])};
+                        peaks=ChannelPeaks(event,*a,*b,*c);
+                        crops={Crop(*a,event.positions[0],event.output[0]),Crop(*b,event.positions[1],event.output[1]),Crop(*c,event.positions[2],event.output[2])};
                         std::lock_guard<std::mutex> guard(stateMutex);
                         if(active!=c->session)break;
-                        if(!WriteEvent(c->session,event,crops,dest)){
+                        if(!WriteEvent(c->session,event,crops,peaks,dest)){
                             status=L"Could not save capture";active=0;break;
                         }
                         capturingTail=true;tail=event.positions[2];lastEventFrame=c->number;
@@ -172,12 +202,12 @@ struct Reader {
                                 int d=dx*dx+dy*dy;if(!matched||d<nearest){matched=true;nearest=d;next=q;}
                             }
                         }
-                        if(matched){crops.push_back(Crop(*c,next));tail=next;}
+                        if(matched){crops.push_back(Crop(*c,next,OutputPeak(*c,next).pixel[event.channel]));tail=next;}
                         else crops.push_back("{\"frame\":"+std::to_string(c->number)+",\"surface_match\":false}");
                         ++lastEventFrame;
                         std::lock_guard<std::mutex> guard(stateMutex);
                         if(active!=c->session)break;
-                        if(!WriteEvent(c->session,event,crops,dest)){
+                        if(!WriteEvent(c->session,event,crops,peaks,dest)){
                             status=L"Flash saved; follow-through incomplete";active=0;break;
                         }
                         if(matched&&crops.size()<6)continue;

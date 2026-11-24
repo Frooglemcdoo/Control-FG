@@ -38,6 +38,12 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./test-rr-paired-capture.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-rr-paired-packet.cpp /Fe:test-rr-paired-packet.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./test-rr-paired-packet.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -c "import json,pathlib; p=list(pathlib.Path('build/paired-packet').rglob('*.json')); assert len(p)==1; d=json.loads(p[0].read_bytes()); assert [x['frame'] for x in d['frames']]==list(range(100,106)); assert len(d['brightest_per_channel'])==3; assert d['frames'][1]['planes']['rr_output']['rgb'][40]==[0.0625]*3; assert not list(p[0].parent.glob('*.partial'))"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python tools/gi_motion_history.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-source.cpp /Fe:build/test-gi-character-source.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
