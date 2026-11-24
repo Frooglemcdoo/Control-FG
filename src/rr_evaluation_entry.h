@@ -182,8 +182,8 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
     }
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    if(rrAttempt&&rr_pair::Armed())rr_pair::After(list,in,result,colorBound);
-    rrCharacterEvaluatedFrame.store(rrAttempt && colorBound && (result&0xFFF00000u)!=0xBAD00000u ? in.frame : 0);
+    if(rrAttempt&&rr_pair::Armed())rr_pair::After(list,in,result,true);
+    rrCharacterEvaluatedFrame.store(rrAttempt && rrCharacterBlendRequested.load() && (result&0xFFF00000u)!=0xBAD00000u ? in.frame : 0);
     if(rrAttempt){
         static UINT64 evaluations=0;
         if(++evaluations<=4 || evaluations%240==0){
@@ -191,10 +191,10 @@ static unsigned int RREvaluationEntry(unsigned int branch, ID3D12GraphicsCommand
             const bool attempted=rrCharacterBlendAttemptFrame.load()==in.frame;
             const char* admission=!enabled?"off":attempted?rrCharacterBlendReason.load():"rr_guides_not_recorded";
             const bool current=rrDiffuse && rrDiffuse->frame==in.frame;
-            Log("GI_CHARACTER_BLEND_R505 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s gi_source=%s",
+            Log("GI_CHARACTER_MATERIAL_R507 rr_frame=%llu admission=%s color_bound=%u mask_candidates=%u mask_drawn=%u gi_keep=%u native_blend=%u stage=%s gi_source=%s early_draw=%s",
                 in.frame,admission,unsigned(colorBound),current?UINT(rrDiffuse->characterReplay.batches.size()):0u,
                 current?rrDiffuse->characterMaskBatches.load():0u,unsigned(rrNativeGIKeepThisFrame),
-                unsigned(rrNativeGIHistoryZeroThisFrame),control_rr_gi::StageName(control_rr_gi::stageMode.load()),rrCharacterGISourceReason.load());
+                unsigned(rrNativeGIHistoryZeroThisFrame),control_rr_gi::StageName(control_rr_gi::stageMode.load()),rrCharacterGISourceReason.load(),RRCharacterEarly::drawReason.load());
         }
     }
 #endif

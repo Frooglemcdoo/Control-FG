@@ -7,8 +7,8 @@
 struct RRCharacterGITarget {
     Microsoft::WRL::ComPtr<ID3D12Resource> image[2];
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptors;
-    Microsoft::WRL::ComPtr<ID3D12Resource> reference[2],temporal,raw;
-    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> referenceHeap;
+    Microsoft::WRL::ComPtr<ID3D12Resource> selected,temporal,raw;
+    bool materialDispatched=false;
     unsigned long long session=0;
     unsigned historyFrames=0;
     UINT width=0,height=0,output=0,passes=0;

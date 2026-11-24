@@ -42,7 +42,7 @@ struct Recording {
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
  std::shared_ptr<RRCharacterGITarget> characterSource,characterPrevious;
- std::array<ComPtr<ID3D12Resource>,8> characterInputs;
+ std::array<ComPtr<ID3D12Resource>,10> characterInputs;
  ComPtr<ID3D12GraphicsCommandList> characterList;
 #endif
  std::shared_ptr<Epoch> epoch;
@@ -146,6 +146,9 @@ static Recording* GetRecording(ID3D12GraphicsCommandList4* list,UINT64 generatio
  r->exports.reserve(16);auto* result=r.get();recordings.push_back(std::move(r));return result;
 }
 static void Reset(ID3D12GraphicsCommandList* list) noexcept {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ RRCharacterEarly::Reset(list);
+#endif
  if(!active)return;std::lock_guard<std::recursive_mutex> lock(mutex);
  for(auto& r:recordings)if(r->list.Get()==list
 #ifdef CONTROL_CHARACTER_GI_BLEND
@@ -154,6 +157,9 @@ static void Reset(ID3D12GraphicsCommandList* list) noexcept {
  )r->reset=true;Poll();
 }
 static UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* lists) noexcept {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ RRCharacterEarly::Before(q,count,lists);
+#endif
  if(!active)return 0;mutex.lock();UINT64 mask=0;
  for(unsigned i=0;i<recordings.size();++i){auto& r=*recordings[i];if(r.reset)continue;
   for(UINT j=0;j<count;++j)if(lists&&(lists[j]==r.list.Get()
@@ -175,6 +181,9 @@ static UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* l
  if(!mask)mutex.unlock();return mask;
 }
 static void After(ID3D12CommandQueue* q,UINT64 mask) noexcept {
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ RRCharacterEarly::After();
+#endif
  if(!mask)return;
  for(unsigned i=0;i<recordings.size();++i)if(mask&(1ull<<i)){
   auto& r=*recordings[i];r.submitted=true;r.fence=++nextFence;

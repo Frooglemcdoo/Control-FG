@@ -705,6 +705,22 @@ inline void ObserveGraphics(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_
 }
 inline HRESULT STDMETHODCALLTYPE GraphicsHook(ID3D12Device* device, const D3D12_GRAPHICS_PIPELINE_STATE_DESC* desc, REFIID iid, void** out) {
     if (!originalGraphics) return E_UNEXPECTED;
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    // This private replay has no depth attachment. Visibility is checked later
+    // against the actual same-frame scene depth before any GI store.
+    if(desc && desc->DSVFormat==DXGI_FORMAT_UNKNOWN && desc->NumRenderTargets==1 &&
+       desc->RTVFormats[0]==DXGI_FORMAT_R16G16B16A16_FLOAT && desc->PS.pShaderBytecode){
+        const auto matches=[&](const auto& mask){
+            return desc->PS.BytecodeLength==sizeof(mask) && std::memcmp(desc->PS.pShaderBytecode,mask,sizeof(mask))==0;
+        };
+        if(matches(kCharacterMaskOpaque)||matches(kCharacterMaskAmbient)||matches(kCharacterMaskHair)){
+            auto privateMask=*desc;privateMask.DepthStencilState.DepthEnable=FALSE;
+            privateMask.DepthStencilState.DepthWriteMask=D3D12_DEPTH_WRITE_MASK_ZERO;
+            privateMask.DepthStencilState.StencilEnable=FALSE;privateMask.CachedPSO={};
+            return originalGraphics(device,&privateMask,iid,out);
+        }
+    }
+#endif
     const HRESULT hr = originalGraphics(device, desc, iid, out);
     if (SUCCEEDED(hr) && out && *out && desc) ObserveGraphics(device, desc, reinterpret_cast<IUnknown*>(*out));
     return hr; // The game always receives its original native PSO.

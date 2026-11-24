@@ -1,6 +1,7 @@
 // Evaluate the single-history Both filter on private GI targets while the engine's
-// temporal bindings are live. Only the later visible-character pass can consume them.
+// temporal bindings are live, then select GI for the native material path.
 #include "rr_character_gi_dispatch.h"
+#include "rr_character_material_dispatch.h"
 namespace RRCharacterSource {
 using Microsoft::WRL::ComPtr;
 using Image=RRCharacterGITarget;
@@ -23,7 +24,7 @@ static std::shared_ptr<Image> Acquire(ID3D12Device* device,UINT w,UINT h,const s
     for(auto& tex:v->image)if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&tex))))return {};
     D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-    hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;hd.NumDescriptors=27;
+    hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;hd.NumDescriptors=31;
     if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&v->descriptors))))return {};
     pool.push_back(v);return v;
 }
@@ -35,16 +36,24 @@ static bool Ordered(const std::shared_ptr<Image>& image,ID3D12GraphicsCommandLis
     return false;
 }
 static bool PrepareReference(ID3D12Device* device,Image& image){
-    if(image.referenceHeap)return true;
+    if(image.selected)return true;
     const auto d=image.image[0]->GetDesc();
-    D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;heap.CreationNodeMask=heap.VisibleNodeMask=1;
-    ComPtr<ID3D12Resource> textures[4];
-    for(auto& t:textures)if(FAILED(device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&d,
+    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_DEFAULT;hp.CreationNodeMask=hp.VisibleNodeMask=1;
+    ComPtr<ID3D12Resource> textures[3];
+    for(auto& t:textures)if(FAILED(device->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&d,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,nullptr,IID_PPV_ARGS(&t))))return false;
-    const auto hd=image.descriptors->GetDesc();
-    if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&image.referenceHeap))))return false;
-    image.reference[0]=std::move(textures[0]);image.reference[1]=std::move(textures[1]);
-    image.temporal=std::move(textures[2]);image.raw=std::move(textures[3]);return true;
+    image.raw=std::move(textures[0]);image.temporal=std::move(textures[1]);image.selected=std::move(textures[2]);return true;
+}
+static void SaveMip(ID3D12GraphicsCommandList* list,ID3D12Resource* src,D3D12_RESOURCE_STATES state,ID3D12Resource* dst){
+    constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={src,0,state,D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1,&barrier);Barrier(list,dst,read,D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_TEXTURE_COPY_LOCATION a{},b{};
+    a.pResource=src;b.pResource=dst;a.Type=b.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    list->CopyTextureRegion(&b,0,0,0,&a,nullptr);
+    Barrier(list,dst,D3D12_RESOURCE_STATE_COPY_DEST,read);
+    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
 }
 // The producer binds this ShaderTexture immediately before the GI filtering call.
 static bool ReadProducerHit(Texture& hit) noexcept {
@@ -94,39 +103,30 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
     const UINT w=UINT(t[5].desc.Width),h=t[5].desc.Height;
     if(t[5].desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return "gi_source_format";
     for(UINT i=0;i<_countof(names);++i)if(t[i].desc.Width!=w||t[i].desc.Height!=h)return "gi_source_extents";
-    // Hit distance first becomes useful in the private spatial pass. RAW bypass
-    // can reach this temporal callback without a readable spatial hit provider.
-    const bool useHitDistance=HitDistanceInput(w,h,t[6],[](Texture& hit){
-        return ControlNrdRuntime::NamedTexture("g_tHitInfo",hit);
-    });
     const auto session=rr_pair::Armed();
-    // RAW bypass can leave the producer's actual hit texture in UAV state.
-    // Snapshot the named SRV provider; transition its resource only for the reference read.
-    Texture referenceHit=t[6];
-    const bool referenceHasHit=useHitDistance || (session && (ReadProducerHit(referenceHit)||NamedTexture("g_tHitInfo",referenceHit)) &&
-        ((referenceHit.state& D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)||
-         (referenceHit.state& D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE)||
-         referenceHit.state==D3D12_RESOURCE_STATE_UNORDERED_ACCESS) && referenceHit.resource &&
-        referenceHit.desc.Width==w && referenceHit.desc.Height==h && referenceHit.desc.MipLevels &&
-        !(referenceHit.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) &&
-        ReadFormat(referenceHit.desc.Format)!=DXGI_FORMAT_UNKNOWN);
-    const UINT inputCount=useHitDistance?7:6;
-    if(!Prepare(device.Get()))return "gi_filter_pipeline";
+    const bool hit=(ReadProducerHit(t[6])||NamedTexture("g_tHitInfo",t[6])) && t[6].resource &&
+        t[6].desc.Width==w&&t[6].desc.Height==h&&t[6].desc.MipLevels&&
+        !(t[6].desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)&&ReadFormat(t[6].desc.Format)!=DXGI_FORMAT_UNKNOWN;
+    if(!hit)return "producer_hit_unavailable";
+    uint32_t cut=0;int cutId=-1;
+    if(!control_nrd_native::Resolve(rrNativeClampApi,"g_uCameraCut",cutId)||!rrNativeClampApi.ReadCurrent(cutId,cut)||cut>1)return "camera_cut_unavailable";
+    Texture target{};
+    if(!NamedTexture("g_DLF_rwtColorTarget",target)||target.state!=D3D12_RESOURCE_STATE_UNORDERED_ACCESS||
+       target.desc.Width!=w||target.desc.Height!=h||target.desc.Format!=DXGI_FORMAT_R16G16B16A16_FLOAT||
+       !(target.desc.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS))return "native_raw_destination";
+    for(auto& input:t)if(input.resource==target.resource)return "native_target_alias";
+    if(!Prepare(device.Get())||!RRCharacterMaterial::Prepare(device.Get()))return "gi_filter_pipeline";
     auto prior=latest.lock();
     const bool eligible=Ordered(prior,list)&&prior->frame+1==frame&&prior->view==view&&prior->width==w&&prior->height==h&&
-        !rrNativeFrame.Reset()&&rrCharacterEvaluatedFrame.load()==prior->frame;
+        !cut&&!rrNativeFrame.Reset()&&rrCharacterEvaluatedFrame.load()==prior->frame;
     if(!eligible)prior.reset();
-    auto image=Acquire(device.Get(),w,h,prior);
-    if(!image)return "gi_source_pool";
+    auto image=Acquire(device.Get(),w,h,prior);if(!image)return "gi_source_pool";
     auto* r=GetRecording(nativeList.Get(),generation);if(!r||r->characterSource)return "gi_source_recording";
     const UINT step=device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-    uint32_t cut=0;int cutId=-1;
-    const bool cutKnown=session && control_nrd_native::Resolve(rrNativeClampApi,"g_uCameraCut",cutId) &&
-        rrNativeClampApi.ReadCurrent(cutId,cut) && cut<=1;
-    image->session=0;image->historyFrames=0;
-    const bool referenceReady=session&&referenceHasHit&&cutKnown&&PrepareReference(device.Get(),*image);
-    if(session&&!referenceReady)rr_pair::Issue(session,!referenceHasHit?L"Waiting for native GI hit texture":
-        !cutKnown?L"Waiting for camera-cut constant":L"Reference allocation unavailable");
+    const bool capture=session&&PrepareReference(device.Get(),*image);
+    if(session&&!capture)rr_pair::Issue(session,L"Capture snapshot allocation failed");
+    image->materialDispatched=false;image->session=capture?session:0;
+    image->historyFrames=prior?prior->historyFrames+1:1;
     auto cpu=image->descriptors->GetCPUDescriptorHandleForHeapStart();
     auto gpu=image->descriptors->GetGPUDescriptorHandleForHeapStart();
     auto srv=[&](ID3D12Resource* texture,DXGI_FORMAT fmt,UINT mips){
@@ -134,76 +134,67 @@ static const char* Record(UINT64 frame,UINT64 view,ID3D12CommandQueue* gameQueue
         d.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;d.Texture2D.MipLevels=mips;
         device->CreateShaderResourceView(texture,&d,cpu);cpu.ptr+=step;
     };
-    auto tables=[&](bool reference){
-        cpu=(reference?image->referenceHeap:image->descriptors)->GetCPUDescriptorHandleForHeapStart();
-        auto* images=reference?image->reference:image->image;
-        const bool previous=prior&&(!reference||prior->session==session);
-        auto input=[&](UINT i){srv(t[i].resource,ReadFormat(t[i].desc.Format),i==5?t[i].desc.MipLevels:1);};
-        auto history=[&](){
-            if(!previous){input(5);return;}
-            srv((reference?prior->reference:prior->image)[prior->output].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);
-        };
-        auto uav=[&](UINT i){D3D12_UNORDERED_ACCESS_VIEW_DESC u{};u.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
-            u.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;device->CreateUnorderedAccessView(images[i].Get(),nullptr,&u,cpu);cpu.ptr+=step;};
-        input(2);input(3);input(4);input(5);history();
-        for(UINT i=5;i<8;++i)srv(nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT,1);
-        uav(0);
-        for(UINT i=0;i<2;++i){
-            for(UINT j=0;j<5;++j)input(j);
-            srv(images[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();
-            const auto& hit=reference?referenceHit:t[6];
-            HitView(device.Get(),cpu,(reference||useHitDistance)?hit.resource:nullptr,ReadFormat(hit.desc.Format));
-            cpu.ptr+=step;uav(1-i);
+    auto input=[&](UINT i){srv(t[i].resource,ReadFormat(t[i].desc.Format),i==5?t[i].desc.MipLevels:1);};
+    auto history=[&](){if(prior)srv(prior->image[prior->output].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);else input(5);};
+    auto uav=[&](ID3D12Resource* output){D3D12_UNORDERED_ACCESS_VIEW_DESC u{};u.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+        u.ViewDimension=D3D12_UAV_DIMENSION_TEXTURE2D;device->CreateUnorderedAccessView(output,nullptr,&u,cpu);cpu.ptr+=step;};
+    input(2);input(3);input(4);input(5);history();
+    for(UINT i=5;i<8;++i)srv(nullptr,DXGI_FORMAT_R16G16B16A16_FLOAT,1);uav(image->image[0].Get());
+    for(UINT i=0;i<2;++i){
+        for(UINT j=0;j<5;++j)input(j);
+        srv(image->image[i].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);history();input(6);uav(image->image[1-i].Get());
+    }
+    const auto stamp=RRCharacterEarly::Snapshot();
+    RRGuideInputTexture depth{};
+    const char* outcome="mask_not_recorded";
+    bool apply=false;
+    if(stamp.frame==frame && stamp.view==view && stamp.queue==gameQueue && rrDiffuse && rrDiffuse->frame==frame){
+        outcome="mask_submission_pending";
+        if(stamp.submitted || stamp.list==list){
+            outcome="gbuffer_depth_unavailable";
+            if(RRCharacterUsesSingleSample()&&RRInputCaptureReadNative(stamp.nativeDepth,stamp.depth,&depth) &&
+               depth.desc.Width==w&&depth.desc.Height==h&&depth.desc.Format==DXGI_FORMAT_R32_TYPELESS&&
+               !(depth.desc.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE)){
+                apply=true;outcome="native_character_gi";
+                srv(rrDiffuse->earlyCharacterTarget.resource,DXGI_FORMAT_R16G16B16A16_FLOAT,1);
+                srv(depth.resource,DXGI_FORMAT_R32_FLOAT,1);srv(image->image[passes&1].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,1);
+                uav(target.resource);
+            }
         }
-    };
-    tables(false);if(referenceReady)tables(true);
+    }
     r->characterSource=image;r->characterPrevious=prior;r->characterList=list;
-    for(UINT i=0;i<inputCount;++i)r->characterInputs[i]=t[i].resource;
+    for(UINT i=0;i<7;++i)r->characterInputs[i]=t[i].resource;
     image->frame=frame;image->view=view;image->submitted=false;image->invalid=false;image->passes=passes;image->output=passes&1;
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     bool transitioned[7]{};
-    for(UINT i=0;i<inputCount;++i)if(!(t[i].state&read)){
+    for(UINT i=0;i<7;++i)if(!(t[i].state&read)){
         bool alias=false;for(UINT j=0;j<i;++j)if(t[j].resource==t[i].resource)alias=true;
         if(!alias){Barrier(list,t[i].resource,t[i].state,read);transitioned[i]=true;}
     }
     ID3D12Resource* images[]={image->image[0].Get(),image->image[1].Get()};
     ID3D12DescriptorHeap* privateHeap=image->descriptors.Get();
     list->SetDescriptorHeaps(1,&privateHeap);
-    DispatchPasses(list,native.cb[0],native.cb[1],gpu,step,images,w,h,passes,bool(prior),useHitDistance);
-    if(referenceReady){
-        image->session=session;
-        const bool previous=prior&&prior->session==session;
-        image->historyFrames=previous&&!cut?prior->historyFrames+1:1;
-        const bool moveHit=!useHitDistance&&!(referenceHit.state&read);
-        if(!useHitDistance)r->characterInputs[6]=referenceHit.resource;
-        if(moveHit)Barrier(list,referenceHit.resource,referenceHit.state,read);
-        // Preserve the exact mip sampled by the reference before native filtering/composition.
-        const auto rawState=transitioned[5]?read:t[5].state;
-        D3D12_RESOURCE_BARRIER rawBarrier{};
-        rawBarrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        rawBarrier.Transition={t[5].resource,0,rawState,D3D12_RESOURCE_STATE_COPY_SOURCE};
-        list->ResourceBarrier(1,&rawBarrier);
-        Barrier(list,image->raw.Get(),read,D3D12_RESOURCE_STATE_COPY_DEST);
-        D3D12_TEXTURE_COPY_LOCATION src{},dst{};
-        src.pResource=t[5].resource;dst.pResource=image->raw.Get();
-        src.Type=dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-        list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
-        Barrier(list,image->raw.Get(),D3D12_RESOURCE_STATE_COPY_DEST,read);
-        std::swap(rawBarrier.Transition.StateBefore,rawBarrier.Transition.StateAfter);
-        list->ResourceBarrier(1,&rawBarrier);
-        ID3D12Resource* pair[]={image->reference[0].Get(),image->reference[1].Get()};
-        auto* heap=image->referenceHeap.Get();list->SetDescriptorHeaps(1,&heap);
-        DispatchPasses(list,native.cb[0],native.cb[1],heap->GetGPUDescriptorHandleForHeapStart(),step,
-            pair,w,h,passes,previous,true,image->temporal.Get(),cut);
-        if(moveHit)Barrier(list,referenceHit.resource,read,referenceHit.state);
+    DispatchPasses(list,native.cb[0],native.cb[1],gpu,step,images,w,h,passes,bool(prior),true,
+        capture?image->temporal.Get():nullptr,cut,true);
+    if(capture)SaveMip(list,t[5].resource,transitioned[5]?read:t[5].state,image->raw.Get());
+    if(apply){
+        auto* mask=rrDiffuse->earlyCharacterTarget.resource;
+        r->characterInputs[7]=mask;r->characterInputs[8]=depth.resource;r->characterInputs[9]=target.resource;
+        Barrier(list,mask,D3D12_RESOURCE_STATE_RENDER_TARGET,read);
+        const bool depthMove=!(depth.trackedState&read);
+        if(depthMove)Barrier(list,depth.resource,D3D12_RESOURCE_STATES(depth.trackedState),read);
+        RRCharacterMaterial::Dispatch(list,{gpu.ptr+UINT64(27)*step},target.resource,w,h);
+        if(depthMove)Barrier(list,depth.resource,read,D3D12_RESOURCE_STATES(depth.trackedState));
+        Barrier(list,mask,read,D3D12_RESOURCE_STATE_RENDER_TARGET);
+        image->materialDispatched=true;
     }
-    for(UINT i=0;i<inputCount;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
+    if(capture){r->characterInputs[9]=target.resource;SaveMip(list,target.resource,target.state,image->selected.Get());}
+    for(UINT i=0;i<7;++i)if(transitioned[i])Barrier(list,t[i].resource,read,t[i].state);
     ID3D12DescriptorHeap* restore[]={b.heaps[0].Get(),b.heaps[1].Get()};
     list->SetDescriptorHeaps(b.heaps[1]?2:1,restore);
     graphics.Replay([&](UINT index,UINT64 address){list->SetGraphicsRootDescriptorTable(index,{address});});
     b.Restore(nativeList.Get());latest=image;
-    if(useHitDistance)return prior?"both_history_hit":"both_seed_hit";
-    return prior?"both_history_geometry":"both_seed_geometry";
+    return outcome;
 }
 }
 static bool RRCharacterUsesSingleSample() noexcept {

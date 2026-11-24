@@ -80,7 +80,7 @@ static void Barrier(ID3D12GraphicsCommandList* list,ID3D12Resource* r,D3D12_RESO
 static void DispatchPasses(ID3D12GraphicsCommandList* list,UINT64 cb0,UINT64 cb1,
     D3D12_GPU_DESCRIPTOR_HANDLE gpu,UINT step,ID3D12Resource* const images[2],
     UINT w,UINT h,UINT passes,bool history,bool useHitDistance,
-    ID3D12Resource* temporalSnapshot=nullptr,UINT cameraCut=1){
+    ID3D12Resource* temporalSnapshot=nullptr,UINT cameraCut=1,bool exactSpatial=false){
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     constexpr auto write=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     list->SetComputeRootSignature(root.Get());list->SetComputeRootConstantBufferView(0,cb0);
@@ -88,7 +88,7 @@ static void DispatchPasses(ID3D12GraphicsCommandList* list,UINT64 cb0,UINT64 cb1
     for(UINT i=0;i<=passes;++i){
         const UINT out=i&1;
         const UINT table=i?1+((i-1)&1):0;
-        const UINT spatialBase=temporalSnapshot?6:(useHitDistance?2:4);
+        const UINT spatialBase=(exactSpatial||temporalSnapshot)?6:(useHitDistance?2:4);
         list->SetPipelineState(pipelines[i?spatialBase+((i-1)&1):unsigned(history)].Get());
         if(i)list->SetComputeRootConstantBufferView(1,constants->GetGPUVirtualAddress()+256*(cameraCut*MaxPasses*MaxPasses+(passes-1)*MaxPasses+i-1));
         list->SetComputeRootDescriptorTable(2,{gpu.ptr+UINT64(9*table)*step});

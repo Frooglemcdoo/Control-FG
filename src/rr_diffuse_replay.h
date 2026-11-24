@@ -16,6 +16,10 @@ struct RRDiffuseReplay {
     control_rr_albedo::PreparedReplay characterReplay;
     RRAlbedoNativeTarget targets[2]{};
     RRAlbedoNativeTarget characterTarget{};
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    RRAlbedoNativeTarget earlyCharacterTarget{};
+    bool earlyCharacterReady=false;
+#endif
     std::uintptr_t renderer=0,manager=0;
     void* primaryView=nullptr;
     UINT64 cameraView=0;
@@ -296,6 +300,11 @@ static void RRDiffusePrepare(void* callback,void* table) noexcept {
             if(!RRGuideResourcesShareDevice(&deviceCheck,nullptr,nullptr)) {RRDiffuseStop("target_device_mismatch");return;}
             if(!RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->targets[i],&fault,control_rr::RRTexturedCharacterGuides)) {RRDiffuseStop("target_clear_failed");return;}
         }
+#ifdef CONTROL_CHARACTER_GI_BLEND
+        c->earlyCharacterReady=!c->characterReplay.batches.empty() &&
+            (c->earlyCharacterTarget.nativeTexture || RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->earlyCharacterTarget,&reason,&fault)) &&
+            RRAlbedoNativePrepareClear(&rrAlbedoAPI,&c->earlyCharacterTarget,&fault,true);
+#endif
         if(!c->characterReplay.batches.empty()){
             if(!c->characterTarget.nativeTexture && !RRAlbedoNativeCreate(&rrAlbedoAPI,c->width,c->height,&c->characterTarget,&reason,&fault)){
                 Log("RR_SKIN_MASK_DISABLED frame=%llu reason=target_creation_failed fault=0x%08lX",frame,fault);

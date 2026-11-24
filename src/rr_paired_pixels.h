@@ -6,7 +6,7 @@
 #include <cstring>
 #include <limits>
 namespace rr_pair {
-enum Plane {Raw,Temporal,Spatial,Scene,RRInput,Mask,Depth,Normal,Motion,Remap,Diffuse,Specular,RROut,PlaneCount};
+enum Plane {Raw,Temporal,Spatial,Scene,RRInput,Mask,Depth,Normal,Motion,Remap,Diffuse,Specular,Selected,RROut,PlaneCount};
 using RGB=std::array<float,3>;
 struct XY {int x,y;};
 struct Grid {
@@ -36,14 +36,14 @@ struct FrameView {
     std::array<Grid,PlaneCount> g{};
     uint64_t number=0,session=0,view=0,epoch=0;
     unsigned w=0,h=0,warm=0,passes=0;float jitterX=0,jitterY=0,scaleX=0,scaleY=0;
-    bool reset=false;
+    bool reset=false,materialDispatched=false;
     XY Source(XY p) const{
         auto a=g[Remap].At({p.x/2,p.y/2});if(!a)return {-1,-1};
         unsigned bits=Read<uint32_t>(a)>>((p.x&1)*8+(p.y&1)*16);
         return {(p.x&~1)+int(bits&1),(p.y&~1)+int((bits>>1)&1)};
     }
     RGB Value(Plane k,XY p) const {
-        if(k<=Spatial||k==Diffuse||k==Specular)p=Source(p);
+        if(k<=Spatial||k==Selected||k==Diffuse||k==Specular)p=Source(p);
         if(k==RROut)p={int((p.x+.5)*g[k].w/w),int((p.y+.5)*g[k].h/h)};
         return Color(g[k],p);
     }

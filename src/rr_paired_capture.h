@@ -32,8 +32,8 @@ struct Frame:FrameView {
     }
 };
 inline const char* Name(Plane p){
-    static const char* names[]={"raw_gi","both_temporal_gi","both_final_gi","native_raw_shaded",
-        "r505_rr_input","character_mask","hardware_depth","normal","motion","native_map","native_diffuse_light_at_rr","native_specular_light_at_rr","rr_output"};
+    static const char* names[]={"raw_gi","both_temporal_gi","both_final_gi","native_shaded_color",
+        "rr_input","character_mask","hardware_depth","normal","motion","native_map","native_diffuse_light_at_rr","native_specular_light_at_rr","selected_native_gi","rr_output"};
     return names[p];
 }
 inline void WriteRGB(std::ostream& os,RGB rgb){
@@ -53,14 +53,14 @@ inline std::string Crop(const Frame& f,XY p,XY output){
      <<",\"surface_tag_bits\":"<<Read<uint16_t>(f.g[Mask].At(p)+4)
      <<",\"motion\":["<<(fp32?Read<float>(mv):Half(Read<uint16_t>(mv)))<<','
      <<(fp32?Read<float>(mv+4):Half(Read<uint16_t>(mv+2)))<<']';
-    s<<",\"lighting_xy\":";WriteXY(s,f.Source(p));s<<",\"history_frames\":"<<f.warm
+    s<<",\"lighting_xy\":";WriteXY(s,f.Source(p));s<<",\"history_frames\":"<<f.warm<<",\"character_gi_dispatched\":"<<(f.materialDispatched?"true":"false")
      <<",\"native_pass_count\":"<<f.passes<<",\"jitter\":["<<f.jitterX<<','<<f.jitterY
      <<"],\"motion_scale\":["<<f.scaleX<<','<<f.scaleY<<"],\"planes\":{";
     bool first=true;
-    for(Plane k:{Raw,Temporal,Spatial,Diffuse,Specular,Scene,RRInput,RROut}){
+    for(Plane k:{Raw,Temporal,Spatial,Selected,Diffuse,Specular,Scene,RRInput,RROut}){
         if(!first)s<<',';first=false;
         if(!f.g[k].base){s<<'"'<<Name(k)<<"\":null";continue;}
-        XY center=(k<=Spatial||k==Diffuse||k==Specular)?f.Source(p):p;
+        XY center=(k<=Spatial||k==Selected||k==Diffuse||k==Specular)?f.Source(p):p;
         if(k==RROut)center=output;
         s<<'"'<<Name(k)<<"\":{\"center\":";WriteXY(s,center);
         s<<",\"dxgi_format\":"<<f.g[k].format<<",\"extent\":["<<f.g[k].w<<','<<f.g[k].h<<"],\"rgb\":[";
@@ -83,7 +83,7 @@ inline std::string ChannelPeaks(const Event& event,const Frame& before,const Fra
             const auto& f=*frames[i];const XY p=candidate.positions[i];
             s<<"{\"frame\":"<<f.number<<",\"internal_xy\":";WriteXY(s,p);
             s<<",\"output_xy\":";WriteXY(s,candidate.output[i]);
-            for(Plane k:{Raw,Temporal,Spatial,Diffuse,Specular,Scene,RRInput,RROut}){
+            for(Plane k:{Raw,Temporal,Spatial,Selected,Diffuse,Specular,Scene,RRInput,RROut}){
                 s<<",\""<<Name(k)<<"\":";WriteRGB(s,k==RROut?Color(f.g[k],candidate.output[i]):f.Value(k,p));
             }
             s<<'}';
@@ -100,12 +100,12 @@ inline bool WriteEvent(uint64_t session,const Event& e,const std::vector<std::st
     std::wstring dir=std::wstring(base)+L"\\ControlFGProbe";
     if(!CreateDirectoryW(dir.c_str(),nullptr)&&GetLastError()!=ERROR_ALREADY_EXISTS)return false;
     const bool update=!dest.empty();
-    const auto stem=dir+L"\\Character-Speckle-R506-"+std::to_wstring(GetCurrentProcessId())+L"-"+
+    const auto stem=dir+L"\\Character-Speckle-R507-"+std::to_wstring(GetCurrentProcessId())+L"-"+
         std::to_wstring(GetTickCount64())+L"-"+std::to_wstring(session);
     const auto path=update?dest:stem+L".json";
     const auto temp=path+L".partial";
     std::ostringstream os;os.imbue(std::locale::classic());os<<std::setprecision(8);
-    os<<"{\"schema\":\"control-character-speckle-r506\",\"pid\":"<<GetCurrentProcessId()
+    os<<"{\"schema\":\"control-character-speckle-r507\",\"pid\":"<<GetCurrentProcessId()
       <<",\"ray_count\":4,\"crop_width\":9,\"crop_order\":\"row_major_rgb\",\"trigger_stage\":\""<<Name(e.stage)
       <<"\",\"trigger_channel\":"<<e.channel<<",\"peak_ratio\":"<<e.score
       <<",\"rr_output_mapping\":\"exact output peak in matched receiver footprint; adjacent receiver correspondence approximate\""

@@ -13,10 +13,10 @@ inline void Before(RRLiveOwner* owner,RRCharacterColorSlot& slot,const RRCharact
     RRGuideInputTexture light[2]{};
     RRInputCaptureReadShaderTexture(kRRShaderLightBufferDiffuseRva,&light[0]);
     RRInputCaptureReadShaderTexture(kRRShaderLightBufferSpecularRva,&light[1]);
-    std::array<ID3D12Resource*,PlaneCount> src{ref->raw.Get(),ref->temporal.Get(),ref->reference[ref->output].Get(),
-        eval.color,slot.output.Get(),mask,eval.depth,in.gbuffer1.resource,eval.motion,remap.resource,light[0].resource,light[1].resource,eval.output};
-    std::array<UINT,PlaneCount> states{read,read,read,native[0].trackedState,read,D3D12_RESOURCE_STATE_RENDER_TARGET,
-        native[1].trackedState,in.gbuffer1.trackedState,native[2].trackedState,remap.trackedState,light[0].trackedState,light[1].trackedState,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
+    std::array<ID3D12Resource*,PlaneCount> src{ref->raw.Get(),ref->temporal.Get(),ref->image[ref->output].Get(),
+        eval.color,eval.color,mask,eval.depth,in.gbuffer1.resource,eval.motion,remap.resource,light[0].resource,light[1].resource,ref->selected.Get(),eval.output};
+    std::array<UINT,PlaneCount> states{read,read,read,native[0].trackedState,native[0].trackedState,D3D12_RESOURCE_STATE_RENDER_TARGET,
+        native[1].trackedState,in.gbuffer1.trackedState,native[2].trackedState,remap.trackedState,light[0].trackedState,light[1].trackedState,read,D3D12_RESOURCE_STATE_UNORDERED_ACCESS};
     UINT64 total=0;
     std::array<D3D12_PLACED_SUBRESOURCE_FOOTPRINT,PlaneCount> layouts{};
     for(unsigned i=0;i<PlaneCount;++i){
@@ -42,7 +42,7 @@ inline void Before(RRLiveOwner* owner,RRCharacterColorSlot& slot,const RRCharact
     auto f=CaptureReader().Acquire(owner->device,total);
     if(!f){Issue(id,L"Readback budget reached");return;}
     f->bytes=total;f->layouts=layouts;f->session=id;f->number=eval.frame;f->epoch=owner->epoch;
-    f->view=reinterpret_cast<UINT64>(in.camera.view);f->warm=ref->historyFrames;f->passes=ref->passes;
+    f->view=reinterpret_cast<UINT64>(in.camera.view);f->warm=ref->historyFrames;f->passes=ref->passes;f->materialDispatched=ref->materialDispatched;
     f->w=eval.width;f->h=eval.height;f->reset=eval.reset!=0;
     f->jitterX=eval.jitterX;f->jitterY=eval.jitterY;f->scaleX=eval.scaleX;f->scaleY=eval.scaleY;
     f->outputRecorded=false;f->recordedList=in.commandList;

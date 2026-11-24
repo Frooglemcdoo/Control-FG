@@ -1,7 +1,7 @@
 name: Character GI blend validation
 on:
   push:
-    branches: [work/rr-paired-capture-r506]
+    branches: [work/rr-character-material-r507]
 permissions:
   contents: read
 jobs:
@@ -55,6 +55,10 @@ jobs:
           & ./build/test-gi-character-source.exe --missing-hit
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./tools/build-gi-character-blend.ps1
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /std:c++17 /EHsc tools/test-rr-character-material.cpp /Fe:build/test-rr-character-material.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./build/test-rr-character-material.exe
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1
           & $dxc.FullName -WX -T cs_6_0 -E main reference/src/shaders/gi_character_blend.hlsl -Fo build/gi-character-reference.dxil
