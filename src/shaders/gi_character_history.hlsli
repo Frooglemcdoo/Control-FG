@@ -6,7 +6,7 @@ RWTexture2D<uint4> NextHistory : register(u2);
 cbuffer CharacterHistoryParams : register(b0) {
     float2 motionScale;
     float2 jitterDelta;
-    uint historyMode; // 0 spatial fallback, 1 seed, 2 use previous and seed current
+    uint historyMode, useFilteredGI; // 0 spatial fallback, 1 seed, 2 use previous and seed current
 };
 
 uint PackRGB(float3 c) {

@@ -6,7 +6,7 @@
 
 // The fixture supplies independent GI and composed RR color, including the
 // measured pair at frame 2841. The output starts as a byte-for-byte scene copy.
-static void Run(bool sample,bool reference=false) {
+static void Run(bool sample,bool reference=false,bool remapped=false) {
     Device gpu(false);
     constexpr UINT width=37, height=29;
     constexpr auto format=DXGI_FORMAT_R32G32B32A32_FLOAT;
@@ -65,6 +65,10 @@ static void Run(bool sample,bool reference=false) {
     spike(red,0);spike(green,1);spike(white,3);spike(mixedGreen,3);raw[mixedGreen][1]=0.0003f;
 
     if(!reference)for(auto& pixel:mask)if(pixel[3]>0)pixel=TestMask(.5f,1,pixel[3]);
+    const UINT mappedCenter=centers[0], source=mappedCenter-1;
+    // Pixel (5,5) selects (4,5). Both destinations see the same lighting ray.
+    // Make all other pixels identical and put GI exclusively at its actual source.
+    if(remapped){raw[source]=raw[mappedCenter];raw[mappedCenter]=raw[0];}
     const std::vector<Pixel>* images[]={&raw,&mask,&depth,&normals,&materials,&baseline,&baseline};
     ComPtr<ID3D12Resource> target;
     for(UINT i=0;i<7;++i){
@@ -73,6 +77,15 @@ static void Run(bool sample,bool reference=false) {
         if(i==6)target=tex;
     }
     EmptyHistoryViews(gpu,7);
+    const UINT mw=(width+1)/2,mh=(height+1)/2;
+    std::vector<UINT> selectors(mw*mh,0x03020100u);
+    if(remapped)selectors[2*mw+2]=0x02020100u;
+    auto map=Texture(gpu,mw,mh,DXGI_FORMAT_R32_UINT,selectors.data());
+    TextureView(gpu,map.Get(),10);
+    if(remapped){
+        std::vector<Pixel> filtered=raw;filtered[source]=raw[0];
+        auto earlier=Texture(gpu,width,height,format,filtered.data());TextureView(gpu,earlier.Get(),11);
+    }else EmptySourceView(gpu,11);
     ComPtr<ID3DBlob> rootBytes,error;
     Check(RRCharacterSerializeRoot(&rootBytes,&error));
     ComPtr<ID3D12RootSignature> root;
@@ -83,13 +96,27 @@ static void Run(bool sample,bool reference=false) {
     Check(gpu.device->CreateComputePipelineState(&pd,IID_PPV_ARGS(&pso)));
     gpu.list->SetComputeRootSignature(root.Get());gpu.list->SetPipelineState(pso.Get());
     gpu.list->SetComputeRootDescriptorTable(0,gpu.views->GetGPUDescriptorHandleForHeapStart());
-    RRCharacterHistoryParams noHistory{};
-    gpu.list->SetComputeRoot32BitConstants(2,5,&noHistory,0);
+    RRCharacterHistoryParams noHistory{};noHistory.useSource=remapped;
+    gpu.list->SetComputeRoot32BitConstants(2,6,&noHistory,0);
     GICharacterMeasurement stats;
     if(sample){Require(stats.Prepare(gpu.device.Get(),2841),"counter allocation");stats.Begin(gpu.list.Get());}
     gpu.list->Dispatch((width+7)/8,(height+7)/8,1);
     if(sample)stats.End(gpu.list.Get());
     auto output=CopyOutput(gpu,target.Get());gpu.Submit();
+    if(remapped){
+        unsigned char* bytes=nullptr;Check(output.buffer->Map(0,nullptr,reinterpret_cast<void**>(&bytes)));
+        for(UINT i=0;i<width*height;++i){
+            Pixel actual{};std::memcpy(&actual,bytes+(i/width)*output.rowPitch+(i%width)*sizeof(Pixel),sizeof(Pixel));
+            if(i==mappedCenter){
+                for(UINT k=0;k<3;++k)Require(actual[k]>=0 && actual[k]<baseline[i][k]*0.025f,"Both GI remapped flash suppression");
+                Require(actual[3]==baseline[i][3],"Source correction preserves alpha");
+                std::cout<<"R503 remapped flash RR red "<<baseline[i][0]<<" -> "<<actual[0]<<"\n";
+            }else Require(actual==baseline[i],"Character correction altered environment, stable light, or independent RGB");
+        }
+        D3D12_RANGE empty{};output.buffer->Unmap(0,&empty);
+        GICharacterMeasurement::Sample record{};Require(stats.Read(record)&&record.sourceCorrected==1,"one source correction");
+        return;
+    }
     if(sample){
         GICharacterMeasurement::Sample record{};Require(stats.Read(record),"counter readback");
         const auto& counts=record.counts;
@@ -149,7 +176,7 @@ static void TestBinding(){
 int main(int argc,char** argv) try {
     TestBinding();
     if(argc==2 && std::strcmp(argv[1],"--compare-r499")==0){Run(false,true);TestMotionHistory(false,true); }
-    Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
+    Run(true,false,true);Run(false);Run(true);TestMotionHistory(false);TestMotionHistory(true);
     std::cout<<"PASS character impulse and mixed-light RGB, sparse boundaries, recorded veto evidence, and RR binding\n";
     return 0;
 } catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}

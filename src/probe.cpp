@@ -261,7 +261,7 @@ static void OpenLog() {
     char frozenPrepare[4]{};
     const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';
 #ifdef CONTROL_CHARACTER_GI_BLEND
-    Log("GI_CHARACTER_BLEND_R502 startup=1 boundary=rr_input character_history=1 measurement_period=240");
+    Log("GI_CHARACTER_BLEND_R503 startup=1 boundary=diffuse_gi_private resolve=character_rr_input measurement_period=240");
 #endif
     Log("GI_FROZEN_R426 startup=1 check_revision=2 requested=%u diagnostics=%u",unsigned(frozenRequested),unsigned(control_diagnostics::Active()));
     Log("RR_CHARACTER_SUPPORT_R418 build=R425 lifecycle_logging=1 diagnostics=%u skin_record_limit=32 hair_record_limit=32 rendering=R424 guide_history=mode_changes_only character_coverage_guard=valid_sample_zero character_diffuse=r421_radiance_rejection_restored",unsigned(control_diagnostics::Active()));
@@ -1159,6 +1159,9 @@ static const bool sceneRawRegistered=[] {gi_scene_capture::rawTexture.store(&Rea
 #endif
 
 #include "nrd_diffuse_runtime.h"
+#ifdef CONTROL_CHARACTER_GI_BLEND
+#include "rr_character_gi_source_runtime.inl"
+#endif
 #include "pt_reflection_diffuse_bridge_runtime.h"
 #include "rr_native_guides.h"
 #include "rr_skin_mask_runtime.h"

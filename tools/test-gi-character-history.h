@@ -23,6 +23,13 @@ static void EmptyHistoryViews(Device& gpu,UINT first) {
     gpu.device->CreateUnorderedAccessView(nullptr,nullptr,&u,h);
 }
 
+static void EmptySourceView(Device& gpu,UINT index){
+    auto h=gpu.views->GetCPUDescriptorHandleForHeapStart();h.ptr+=SIZE_T(index)*gpu.descriptorSize;
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+    srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;srv.Texture2D.MipLevels=1;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    gpu.device->CreateShaderResourceView(nullptr,&srv,h);
+}
 static void TestMotionHistory(bool sample,bool previousBuild=false) {
     Device gpu(false);
     ComPtr<ID3DBlob> blob,error;Check(RRCharacterSerializeRoot(&blob,&error));
@@ -100,7 +107,11 @@ static void TestMotionHistory(bool sample,bool previousBuild=false) {
                 }
             }
         }
-        const UINT offset=frame*10;
+        const UINT offset=frame*12;
+        std::vector<UINT> identity(((w+1)/2)*((h+1)/2),0x03020100u);
+        auto map=Texture(gpu,(w+1)/2,(h+1)/2,DXGI_FORMAT_R32_UINT,identity.data());
+        TextureView(gpu,map.Get(),offset+10);
+        EmptySourceView(gpu,offset+11);
         std::vector<Pixel>* images[]={&gi,&mask,&depth,&normal,&mat,&scene,&scene,&motion};
         ComPtr<ID3D12Resource> target;
         for(UINT k=0;k<8;++k){auto t=Texture(gpu,w,h,format,images[k]->data(),k==6);TextureView(gpu,t.Get(),offset+k,k==6);if(k==6)target=t;}
@@ -111,7 +122,7 @@ static void TestMotionHistory(bool sample,bool previousBuild=false) {
         auto handle=gpu.views->GetGPUDescriptorHandleForHeapStart();handle.ptr+=UINT64(offset)*gpu.descriptorSize;
         gpu.list->SetComputeRootDescriptorTable(0,handle);
         RRCharacterHistoryParams params{float(w),float(h),frame==1?-.8f:0,0,frame?2u:1u};
-        gpu.list->SetComputeRoot32BitConstants(2,5,&params,0);
+        gpu.list->SetComputeRoot32BitConstants(2,6,&params,0);
         if(sample){Require(stats[frame].Prepare(gpu.device.Get(),2840+frame),"History counters");stats[frame].Begin(gpu.list.Get());}
         gpu.list->Dispatch((w+7)/8,(h+7)/8,1);
         if(sample)stats[frame].End(gpu.list.Get());

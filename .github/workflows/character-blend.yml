@@ -1,7 +1,7 @@
 name: Character GI blend validation
 on:
   push:
-    branches: [work/rr-character-blend-r502]
+    branches: [work/rr-character-blend-r503]
 permissions:
   contents: read
 jobs:
@@ -28,6 +28,12 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          python tools/gi_motion_history.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cl /nologo /std:c++17 /EHsc /W4 tools/test-gi-character-source.cpp /Fe:build/test-gi-character-source.exe /link dxgi.lib d3d12.lib d3dcompiler.lib
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & ./build/test-gi-character-source.exe
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           & ./tools/build-gi-character-blend.ps1
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           $dxc=Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\dxc.exe" | Sort-Object FullName -Descending | Select-Object -First 1

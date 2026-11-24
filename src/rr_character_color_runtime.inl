@@ -40,7 +40,7 @@ static bool RRCharacterPrepareSlot(RRLiveOwner* owner,RRCharacterColorSlot& slot
     }
     if(!slot.heap){
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        hd.NumDescriptors=10;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        hd.NumDescriptors=12;hd.Flags=D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         if(FAILED(device->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&slot.heap))))return false;
     }
     if(slot.output){
@@ -73,6 +73,16 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     ID3D12Resource* aa[]={eval.color,eval.depth,eval.motion};
     if(!RRInputCaptureFindNative(eval.frame,aa,native))return "aa_resource_state";
     if(!RRInputCaptureReadGI(&gi))return "raw_gi_at_rr";
+    if(!RRCharacterUsesSingleSample())return "native_coverage_sample_count";
+    RRGuideInputTexture remap{};
+    if(!RRInputCaptureReadShaderTexture(kRRShaderGBufferReconstructionRva,&remap))return "reconstruction_map_state";
+    const auto md=remap.desc;
+    if(md.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D || md.Format!=DXGI_FORMAT_R32_UINT ||
+       md.Width<(eval.width+1)/2 || md.Width>eval.width || md.Height<(eval.height+1)/2 || md.Height>eval.height ||
+       md.MipLevels!=1 || md.SampleDesc.Count!=1 || md.SampleDesc.Quality || md.DepthOrArraySize!=1 ||
+       (md.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE))return "reconstruction_map_format";
+    Microsoft::WRL::ComPtr<ID3D12Device> mapDevice;
+    if(FAILED(remap.resource->GetDevice(IID_PPV_ARGS(&mapDevice))) || mapDevice.Get()!=owner->device)return "map_device";
     const auto cf=native[0].desc.Format,df=native[1].desc.Format;
     if((cf!=DXGI_FORMAT_R11G11B10_FLOAT && cf!=DXGI_FORMAT_R16G16B16A16_FLOAT) ||
        (df!=DXGI_FORMAT_R32_TYPELESS && df!=DXGI_FORMAT_R32_FLOAT) ||
@@ -88,6 +98,7 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
            d.DepthOrArraySize!=1 || d.SampleDesc.Count!=1 || !d.MipLevels || (d.Flags&D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) ||
            (i==5 && d.MipLevels!=1))return "input_extent_or_flags";
         for(UINT j=0;j<i;++j)if(inputs[i]==inputs[j])return "input_alias";
+        if(inputs[i]==remap.resource || eval.motion==remap.resource)return "map_alias";
         Microsoft::WRL::ComPtr<ID3D12Device> device;
         if(FAILED(inputs[i]->GetDevice(IID_PPV_ARGS(&device))) || device.Get()!=owner->device)return "input_device";
     }
@@ -123,6 +134,14 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     owner->device->CreateShaderResourceView(hp.mode==2?history.image[history.previous].Get():nullptr,&hs,cpu);
     u.Format=hs.Format;cpu.ptr+=owner->increment;
     owner->device->CreateUnorderedAccessView(hp.mode?history.image[writeIndex].Get():nullptr,nullptr,&u,cpu);
+    cpu.ptr+=owner->increment;hs.Format=DXGI_FORMAT_R32_UINT;
+    owner->device->CreateShaderResourceView(remap.resource,&hs,cpu);
+    slot.held[7]=remap.resource;
+    slot.sourceLease=RRCharacterGIForColor(eval.frame,reinterpret_cast<UINT64>(in.camera.view),
+        in.queue,in.commandList,eval.width,eval.height);
+    hp.useSource=slot.sourceLease?1:0;
+    cpu.ptr+=owner->increment;hs.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+    owner->device->CreateShaderResourceView(hp.useSource?slot.sourceLease->image[slot.sourceLease->output].Get():nullptr,&hs,cpu);
     if(hp.mode){
         slot.held[4]=mv.resource;slot.held[5]=history.image[history.previous];slot.held[6]=history.image[writeIndex];
     }
@@ -130,10 +149,10 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     static UINT64 calls=0;
     const bool sample=(calls++%240)==0;
     const bool measuring=sample && slot.measured && slot.sample.Prepare(owner->device,eval.frame);
-    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R502 frame=%llu sample=unavailable",eval.frame);
+    if(sample && !measuring)Log("GI_CHARACTER_BLEND_R503 frame=%llu sample=unavailable",eval.frame);
     auto* list=in.commandList;
     auto& commands=*reinterpret_cast<UINT64*>(static_cast<unsigned char*>(in.commandContext)+8);
-    D3D12_RESOURCE_BARRIER barriers[9]{};UINT count=0;
+    D3D12_RESOURCE_BARRIER barriers[11]{};UINT count=0;
     auto transition=[&](ID3D12Resource* res,UINT from,UINT to){
         auto& b=barriers[count++];b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         b.Transition={res,0,D3D12_RESOURCE_STATES(from),D3D12_RESOURCE_STATES(to)};
@@ -150,6 +169,8 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     for(UINT i=0;i<5;++i)if(!(states[i]&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
         transition(inputs[i],states[i],D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     const bool moveMotion=hp.mode && !(mv.trackedState&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    const bool moveMap=!(remap.trackedState&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    if(moveMap)transition(remap.resource,remap.trackedState,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     if(moveMotion)transition(mv.resource,mv.trackedState,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     if(hp.mode)transition(history.image[writeIndex].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     ++commands;list->ResourceBarrier(count,barriers);count=0;
@@ -157,11 +178,12 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
     ++commands;list->SetComputeRootSignature(slot.root.Get());++commands;list->SetPipelineState(measuring?slot.measured.Get():slot.normal.Get());
     if(measuring){commands+=3;slot.sample.Begin(list);}
     ++commands;list->SetComputeRootDescriptorTable(0,heap->GetGPUDescriptorHandleForHeapStart());
-    ++commands;list->SetComputeRoot32BitConstants(2,5,&hp,0);
+    ++commands;list->SetComputeRoot32BitConstants(2,6,&hp,0);
     ++commands;list->Dispatch((eval.width+7)/8,(eval.height+7)/8,1);
     if(measuring){commands+=2;slot.sample.End(list);}
     for(UINT i=0;i<5;++i)if(!(states[i]&D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE))
         transition(inputs[i],D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,states[i]);
+    if(moveMap)transition(remap.resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,remap.trackedState);
     if(moveMotion)transition(mv.resource,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,mv.trackedState);
     if(hp.mode)transition(history.image[writeIndex].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     if(states[5]!=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)
@@ -174,6 +196,7 @@ static const char* RRCharacterRecordColor(RRLiveOwner* owner,RRLiveSlot* live,co
         history.scaleX=eval.scaleX;history.scaleY=eval.scaleY;
     } else history.frame=0;
     slot.writtenFrame=eval.frame;
+    if(hp.useSource)return "both_gi_bound";
     return hp.mode==2?"recorded_history":hp.mode==1?"recorded_seed":"recorded_spatial";
 
 }

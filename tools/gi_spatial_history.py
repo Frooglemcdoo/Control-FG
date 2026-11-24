@@ -10,7 +10,7 @@ HASHES = (
     '80af0f6bec196ab7d0816589246b19ffbaf92b07cb10aecdfa9da4acb0c66cb3',
 )
 
-def generate(data, bounded=False, steady=False):
+def generate(data, bounded=False, steady=False, native_hit_weight=False):
     if bounded and steady:
         raise ValueError('Steady spatial test requires the R259 zero final-history path')
     if hashlib.sha256(data).hexdigest() not in HASHES:
@@ -30,7 +30,7 @@ def generate(data, bounded=False, steady=False):
                 # R376: retain a fixed footprint on the same surface. The
                 # native hit-distance factor fluctuates with stochastic rays.
                 assert w[1496:1503] == [0x07000038,0x001000f2,1,0x00100aa6,0,0x00100e46,1]
-                w[1499:1501] = [0x4001,0x3f800000]
+                if not native_hit_weight: w[1499:1501] = [0x4001,0x3f800000]
                 w[1807:1814] = [0x05000036, 0x00100042, 0, 0x4001, 0x3f800000]
             return
         # Bound the history sample against the final current spatial result,
@@ -57,7 +57,7 @@ def write_header(root):
     text = '#pragma once\n'
     for i in range(2):
         source = base64.b64decode((root / f'research/gi-temporal-r208/diffuse-spatial-{i}.dxbc.b64').read_bytes())
-        for name, data in [(f'kGINativeSpatial{i}', source), (f'kGISingleHistorySpatial{i}', generate(source)), (f'kGIBoundedHistorySpatial{i}', generate(source, bounded=True)), (f'kGISteadySpatial{i}', generate(source, steady=True))]:
+        for name, data in [(f'kGINativeSpatial{i}', source), (f'kGISingleHistorySpatial{i}', generate(source)), (f'kGIBoundedHistorySpatial{i}', generate(source, bounded=True)), (f'kGISteadySpatial{i}', generate(source, steady=True)), (f'kGICharacterSteady{i}', generate(source, steady=True, native_hit_weight=True))]:
             text += 'inline constexpr unsigned char '+name+'[]={\n'+','.join(map(str,data))+'\n};\n'
     out.write_text(text)
 

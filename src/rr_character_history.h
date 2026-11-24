@@ -29,9 +29,9 @@ struct RRCharacterHistory {
 };
 struct RRCharacterHistoryParams {
     float scaleX=0,scaleY=0,deltaX=0,deltaY=0;
-    UINT mode=0;
+    UINT mode=0,useSource=0;
 };
-static_assert(sizeof(RRCharacterHistoryParams)==5*sizeof(UINT),"Character history constants");
+static_assert(sizeof(RRCharacterHistoryParams)==6*sizeof(UINT),"Character history constants");
 inline RRCharacterHistoryParams RRCharacterHistoryForFrame(const RRCharacterHistory& h,UINT64 frame,UINT64 evaluated,
         void* view,int reset,float x,float y,float scaleX,float scaleY) noexcept {
     RRCharacterHistoryParams p{scaleX,scaleY,0,0,1};

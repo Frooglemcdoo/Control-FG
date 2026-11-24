@@ -40,6 +40,11 @@ struct Recording {
  std::unique_ptr<control_nrd::SpecularGuides::Work> specularGuides;
  std::unique_ptr<control_nrd::NativeTransaction::Work> specularWork;
 #endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ std::shared_ptr<RRCharacterGITarget> characterSource,characterPrevious;
+ std::array<ComPtr<ID3D12Resource>,8> characterInputs;
+ ComPtr<ID3D12DescriptorHeap> characterHeap;
+#endif
  std::shared_ptr<Epoch> epoch;
  std::vector<control_nrd::NativeReceiver::Work> exports;
  std::unique_ptr<control_nrd::NativeTransaction::Work> work;
@@ -112,6 +117,9 @@ static void Poll() {
    #ifdef CONTROL_REBLUR_ONLY
    if(!r.submitted&&r.specularEpoch)r.specularEpoch->poisoned=true;
 #endif
+#ifdef CONTROL_CHARACTER_GI_BLEND
+   if(!r.submitted&&r.characterSource)r.characterSource->invalid=true;
+#endif
    if(!r.submitted&&(r.filtered||r.exported||(r.work&&r.work->diffuse.commandsRecorded)))Invalidate(r.epoch);
    // Both conditions above are mandatory: completion alone cannot rule out
    // replay of an unreset list. Never recycle failed or obsolete-epoch work.
@@ -146,6 +154,9 @@ static UINT64 Before(ID3D12CommandQueue* q,UINT count,ID3D12CommandList*const* l
  for(unsigned i=0;i<recordings.size();++i){auto& r=*recordings[i];if(r.reset)continue;
   for(UINT j=0;j<count;++j)if(lists&&lists[j]==r.list.Get()){
    if(q!=queue.Get()||r.submitted||(mask&(1ull<<i))){Invalidate(r.epoch);
+#ifdef CONTROL_CHARACTER_GI_BLEND
+    if(r.characterSource)r.characterSource->invalid=true;
+#endif
 #ifdef CONTROL_REBLUR_ONLY
     if(r.specularEpoch)r.specularEpoch->poisoned=true;
 #endif
@@ -160,6 +171,9 @@ static void After(ID3D12CommandQueue* q,UINT64 mask) noexcept {
  for(unsigned i=0;i<recordings.size();++i)if(mask&(1ull<<i)){
   auto& r=*recordings[i];r.submitted=true;r.fence=++nextFence;
   const bool signaled=SUCCEEDED(q->Signal(fence.Get(),r.fence));
+#ifdef CONTROL_CHARACTER_GI_BLEND
+  if(r.characterSource){r.characterSource->submitted=signaled;if(!signaled)r.characterSource->invalid=true;}
+#endif
 #ifdef CONTROL_REBLUR_ONLY
   if(r.specularEpoch&&(!signaled||(r.specularFiltered&&!r.specularEpoch->filter->Submitted(reinterpret_cast<UINT64>(q),r.fence))))r.specularEpoch->poisoned=true;
 #endif

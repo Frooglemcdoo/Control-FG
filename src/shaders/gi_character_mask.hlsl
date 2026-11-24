@@ -12,7 +12,8 @@ struct RasterInput {
     nointerpolation uint2 instance:RenderInstance0;
     float4 position:SV_Position;
 };
-float4 OpaqueMask(RasterInput input,uint primitive:SV_PrimitiveID) : SV_Target {
+float4 OpaqueMask(RasterInput input,uint primitive:SV_PrimitiveID,uint coverage:SV_Coverage) : SV_Target {
+    if(!(coverage&1u)) discard;
     return CharacterSurface(input.position.z,1,input.instance,primitive);
 }
 struct MaterialData {float words[84];};
@@ -20,7 +21,8 @@ StructuredBuffer<MaterialData> materials : register(t0,space0);
 Texture2D<float4> textures[] : register(t0,space1);
 SamplerState materialSampler : register(s19,space1);
 cbuffer mid_general : register(b0) {uint materialIndex;};
-float4 HairMask(RasterInput input,uint primitive:SV_PrimitiveID) : SV_Target {
+float4 HairMask(RasterInput input,uint primitive:SV_PrimitiveID,uint coverage:SV_Coverage) : SV_Target {
+    if(!(coverage&1u)) discard;
     float opacity=textures[35*materialIndex+26].Sample(materialSampler,input.uv).w*materials[materialIndex].words[16];
     if (!(opacity>0)) discard;
     return CharacterSurface(input.position.z,saturate(opacity),input.instance,primitive);

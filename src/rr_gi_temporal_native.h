@@ -22,6 +22,9 @@ static thread_local const char* rrNativeGIHistoryReason="idle";
 static thread_local bool rrNativeGIMotionBound=false;
 static RRAlbedoCallPatch rrNativeGITemporalBindPatch{};
 static RRIndirectCallPatch rrNativeGITemporalDispatchPatch{},rrNativeGISpatialDispatchPatch{};
+#ifdef CONTROL_CHARACTER_GI_BLEND
+static thread_local unsigned rrCharacterNativeSpatialCount=0;
+#endif
 static thread_local bool rrNativeGISingleHistory=false;
 static thread_local unsigned rrNativeGISpatialApplied=0;
 static thread_local unsigned rrNativeGISpatialObserved=0;
@@ -82,8 +85,15 @@ static void RRNativeHookGITemporalDispatch(void* state,const void* groups){
  }
 #endif
 #ifdef CONTROL_CHARACTER_GI_BLEND
- if(used && control_rr_gi::rawBypass && !control_rr_gi::ownedDenoise && !rrNativeGIHistoryDispatches)
+ if(used && control_rr_gi::rawBypass && !control_rr_gi::ownedDenoise && !rrNativeGIHistoryDispatches){
     rrCharacterRawFrame.store(context.frame);
+    if(rrCharacterBlendRequested.load()){
+      const auto error=GetLastError();
+      rrCharacterGISourceReason.store(RRCharacterRecordGISource(context.frame,context.view,
+          reinterpret_cast<ID3D12GraphicsCommandList*>(context.list),rrCharacterNativeSpatialCount));
+      SetLastError(error);
+    }
+ }
 #endif
  if(used){rt_surface_source::Record(rt_surface_source::giScope,rt_surface_source::Event::GITemporal);++rrNativeGIHistoryDispatches;rrNativeGIHistoryReason="applied";}
  else rrNativeGIHistoryReason="native_pipeline_fallback";
@@ -130,6 +140,9 @@ static void RRNativeRunGIFilter(void* color,void* history,unsigned passes){
  const bool previousRaw=control_rr_gi::rawBypass;
  control_rr_gi::rawBypass=mode==control_rr_gi::StageMode::RawBypass;
  rrNativeGISpatialObserved=0;
+#ifdef CONTROL_CHARACTER_GI_BLEND
+ rrCharacterNativeSpatialCount=passes;
+#endif
  const auto previousView=control_rr_gi::activeView;control_rr_gi::activeView=view;
  const bool outlier=control_rr_gi::UseOutlier(mode,control_rr_gi::outlierRequested.load(std::memory_order_acquire))||view==control_rr_gi::DiagnosticView::Mask;
  const bool previousOutlier=control_rr_gi::outlierEnabled;

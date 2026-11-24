@@ -15,7 +15,8 @@ static ComPtr<ID3D12Resource> Texture(Device& gpu,UINT width,UINT height,DXGI_FO
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;
         gpu.device->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
         std::vector<unsigned char> padded(static_cast<size_t>(bytes));
-        for(UINT y=0;y<height;++y)std::memcpy(padded.data()+size_t(y)*footprint.Footprint.RowPitch,static_cast<const unsigned char*>(data)+size_t(y)*width*16,size_t(width)*16);
+        const UINT stride=format==DXGI_FORMAT_R32_UINT?4u:16u;
+        for(UINT y=0;y<height;++y)std::memcpy(padded.data()+size_t(y)*footprint.Footprint.RowPitch,static_cast<const unsigned char*>(data)+size_t(y)*width*stride,size_t(width)*stride);
         auto upload=gpu.Upload(padded);
         D3D12_TEXTURE_COPY_LOCATION to{};to.pResource=texture.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
         D3D12_TEXTURE_COPY_LOCATION from{};from.pResource=upload.Get();from.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;from.PlacedFootprint=footprint;

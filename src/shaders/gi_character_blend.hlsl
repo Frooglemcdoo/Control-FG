@@ -9,6 +9,16 @@ Texture2D<float> Depth : register(t2);
 Texture2D<float4> G1 : register(t3);
 Texture2D<float4> G2 : register(t4);
 Texture2D<float4> SceneColor : register(t5);
+Texture2D<float4> BothGI : register(t9);
+Texture2D<uint> ReconstructionMap : register(t8);
+
+// For coverage sample zero the native shader selects two low coordinate bits
+// per destination using bits 0, 8, 16 or 24 of the tile's reconstruction word.
+int2 LightingSource(int2 p) {
+    uint word=ReconstructionMap.Load(int3(p>>1,0));
+    uint pair=word>>((p.x&1)*8+(p.y&1)*16);
+    return (p & ~1) + int2(pair&1,(pair>>1)&1);
+}
 RWTexture2D<float4> FilteredColor : register(u0);
 
 // Dedicated character replay target cleared to (-1,-1,-1,0).
@@ -28,7 +38,7 @@ float Peak(float3 rgb) { return max(rgb.r,max(rgb.g,rgb.b)); }
 
 #ifdef MEASURE_BLEND
 RWByteAddressBuffer Counts : register(u1);
-groupshared uint localCounts[7];
+groupshared uint localCounts[8];
 
 // Retain one rejected partial-color edit per measured frame, at input resolution.
 // The queue fence retires the readback only after every lane finishes its stores.
@@ -51,22 +61,29 @@ uint ApplyBlend(uint3 tid) {
     FilteredColor.GetDimensions(w,h);
     int2 p = int2(tid.xy);
     if (any(p >= int2(w,h))) return 0;
-    float4 center = RawGI.Load(int3(p,0));
     bool drawn;
-    float coverage = CharacterCoverage(p, drawn);
+    float coverage=CharacterCoverage(p,drawn);
+    if(!(coverage>0.5)){
+        if(historyMode)NextHistory[p]=0;
+        return drawn?1:0;
+    }
+    int2 source=LightingSource(p);
+    bool sourceInBounds=all(source<int2(w,h));
+    float4 center=sourceInBounds ? RawGI.Load(int3(source,0)) : 0;
+
     // The owned output was initialized by a bit-for-bit copy of the NGX color input.
     float4 scenePixel=SceneColor.Load(int3(p,0));
     uint key=0;
     if(historyMode) {
         uint4 record=0;
-        if(coverage>0.5 && all(isfinite(center.rgb)) && all(isfinite(scenePixel.rgb)) &&
+        if(sourceInBounds && coverage>0.5 && all(isfinite(center.rgb)) && all(isfinite(scenePixel.rgb)) &&
            all(center.rgb>=0) && all(scenePixel.rgb>=0)) {
             key=0x80000000u | (Material(p)<<15) | UnpackSurfaceWord(CharacterReplay.Load(int3(p,0)).b);
             record=MakeHistory(p,key,center.rgb,scenePixel.rgb);
         }
         NextHistory[p]=record;
     }
-    if (!(coverage > 0.5) || !all(isfinite(center.rgb))) return drawn ? 1 : 0;
+    if (!sourceInBounds || !(coverage > 0.5) || !all(isfinite(center.rgb))) return drawn ? 1 : 0;
     float z = Depth.Load(int3(p,0));
     if (!isfinite(z)) return 1;
     float3 normal = ControlDecodeNormalView(G1.Load(int3(p,0)));
@@ -76,6 +93,9 @@ uint ApplyBlend(uint3 tid) {
     float3 lowGI=1e30, lowGI2=1e30, lowScene=1e30, lowScene2=1e30;
     uint count = 0;
     uint neighborTag=0;
+    // Index distinct source receivers in the at-most 4x4 remapped footprint.
+    uint seen=0;
+    int2 tileOrigin=(p-1)&~1;
     [unroll] for (int y=-1; y<=1; ++y) {
         [unroll] for (int x=-1; x<=1; ++x) {
             int2 q = p + int2(x,y);
@@ -85,9 +105,15 @@ uint ApplyBlend(uint3 tid) {
             float qz = Depth.Load(int3(q,0));
             if (!isfinite(qz) || abs(qz-z)>max(0.005*abs(z),1e-6)) continue;
             if (dot(normal,ControlDecodeNormalView(G1.Load(int3(q,0))))<0.97) continue;
-            float3 rgb = RawGI.Load(int3(q,0)).rgb;
+            int2 tap=LightingSource(q);
+            if(any(tap>=int2(w,h)) || all(tap==source)) continue;
+            int2 local=tap-tileOrigin;
+            uint bit=1u<<(local.y*4+local.x);
+            if(seen&bit) continue;
+            float3 rgb=RawGI.Load(int3(tap,0)).rgb;
             float3 scene=SceneColor.Load(int3(q,0)).rgb;
             if (!all(isfinite(rgb)) || !all(isfinite(scene))) continue;
+            seen|=bit;
             lowGI2=min(lowGI2,max(lowGI,rgb)); lowGI=min(lowGI,rgb);
             lowScene2=min(lowScene2,max(lowScene,scene)); lowScene=min(lowScene,scene);
             sceneSecond=max(sceneSecond,min(sceneHigh,scene));
@@ -106,6 +132,25 @@ uint ApplyBlend(uint3 tid) {
     bool sparse=count==1;
     if (!count || (sparse && (historyMode!=2 || !key || neighborTag!=(key&32767u)))) return 2;
     if (sparse) {lowGI2=lowGI;lowScene2=lowScene;}
+    if(useFilteredGI && count>=2 && all(isfinite(scenePixel.rgb)) && all(scenePixel.rgb>=0)){
+        float3 filtered=BothGI.Load(int3(source,0)).rgb;
+        if(all(isfinite(filtered)) && all(filtered>=0)){
+            // GI is incident radiance. Apply its measured attenuation only to the
+            // positive scene excess supported by independent character samples.
+            // This cannot add previous-frame color to a newly exposed surface.
+            float3 giFloor=max(lowGI2,filtered);
+            float3 sceneFloor=max(lowScene2,0);
+            bool3 sceneHighChannel=scenePixel.rgb>max(1.5*sceneFloor,0.0001);
+            bool3 giHighChannel=center.rgb>max(1.5*giFloor,0.0001);
+            if(any(sceneHighChannel) && !any(uint3(sceneHighChannel) & (1u-uint3(giHighChannel)))){
+                float3 fraction=saturate(1-giFloor/max(center.rgb,1e-8));
+                float3 excess=min(max(0,scenePixel.rgb-sceneFloor),scenePixel.rgb*fraction);
+                float3 result=scenePixel.rgb-coverage*float3(sceneHighChannel)*excess;
+                if(any(result!=scenePixel.rgb)){FilteredColor[p]=float4(result,scenePixel.a);return 8;}
+            }
+        }
+        return 3;
+    }
     float threshold = max(second*3.0,0.002);
     float peak = Peak(center.rgb);
     if (count>=4 && peak > threshold && highest < peak*0.5) {
@@ -135,7 +180,7 @@ uint ApplyBlend(uint3 tid) {
         return 4;
         }
     }
-    if(historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
+    if(!useFilteredGI && historyMode==2 && key && any(center.rgb>max(1.5*lowGI2,0.001)) &&
        any(scenePixel.rgb>max(1.5*lowScene2,0.0001))) {
         float3 adjusted;
         // In a larger footprint a second bright sample can be part of a two-pixel impulse.
@@ -154,13 +199,13 @@ uint ApplyBlend(uint3 tid) {
 [numthreads(8,8,1)]
 void main(uint3 tid : SV_DispatchThreadID, uint lane : SV_GroupIndex) {
 #ifdef MEASURE_BLEND
-    if (lane < 7) localCounts[lane] = 0;
+    if (lane < 8) localCounts[lane] = 0;
     GroupMemoryBarrierWithGroupSync();
 #endif
     uint outcome = ApplyBlend(tid);
 #ifdef MEASURE_BLEND
     if (outcome) InterlockedAdd(localCounts[outcome-1], 1);
     GroupMemoryBarrierWithGroupSync();
-    if (lane < 7 && localCounts[lane]) Counts.InterlockedAdd(lane>=5?60+4*(lane-5):4*lane,localCounts[lane]);
+    if (lane < 8 && localCounts[lane]) Counts.InterlockedAdd(lane>=5?60+4*(lane-5):4*lane,localCounts[lane]);
 #endif
 }
