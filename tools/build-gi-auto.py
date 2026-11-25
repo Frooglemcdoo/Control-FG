@@ -44,13 +44,25 @@ if a.r495_stages:
  for name in manifest:
   if name!='Lighting' and manifest[name]!=pinned[name]:raise ValueError('R495 GI stage differs: '+name)
  if a.ray_clamp is not None:
+  sha=lambda q:hashlib.sha256(q.read_bytes()).hexdigest()
   ref=out/'gi-auto-lighting-unclamped.dxil'
   subprocess.run([a.dxc,'-T','cs_6_0','-HV','2018','-O3','-WX','-I',str(ROOT/'src/shaders'),str(out/'gi-auto-lighting-unclamped.hlsl'),'-Fo',str(ref),'-E','main'],check=True)
+  plain=sha(ref);fast=None
   if a.assembler:
-   fast=out/'gi-auto-lighting-unclamped-fast.dxil'
-   subprocess.run([sys.executable,str(ROOT/'tools/gi_evaluator_loads.py'),'--dxc',a.dxc,'--assembler',a.assembler,'--input',str(ref),'--output',str(fast)],check=True);ref=fast
-  digest=hashlib.sha256(ref.read_bytes()).hexdigest()
-  print('R495_LIGHTING_IDENTITY unclamped_source_matches_pinned=%d sha256=%s pinned=%s'%(digest==pinned['Lighting']['sha256'],digest,pinned['Lighting']['sha256']))
+   fastPath=out/'gi-auto-lighting-unclamped-fast.dxil'
+   subprocess.run([sys.executable,str(ROOT/'tools/gi_evaluator_loads.py'),'--dxc',a.dxc,'--assembler',a.assembler,'--input',str(ref),'--output',str(fastPath)],check=True);fast=sha(fastPath)
+  want=pinned['Lighting']['sha256']
+  print('R495_LIGHTING_IDENTITY plain_matches=%d fast_matches=%d plain=%s fast=%s pinned=%s'%(plain==want,fast==want,plain,fast,want))
+  if plain==want:
+   # R495 shipped the plain compile: rebuild the clamped Lighting the same way.
+   clamped=out/'gi-auto-lighting.dxil'
+   subprocess.run([a.dxc,'-T','cs_6_0','-HV','2018','-O3','-WX','-I',str(ROOT/'src/shaders'),str(lighting),'-Fo',str(clamped),'-E','main'],check=True)
+   data=clamped.read_bytes();manifest['Lighting']={'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+   index=[i for i,(n,_,_,_) in enumerate(stages) if n=='Lighting'][0]
+   arrays[index]='inline constexpr unsigned char kLighting[]={'+','.join(map(str,data))+'};'
+   print('R495_RAY_CLAMP parity=plain_compile')
+  elif fast!=want:
+   print('R495_RAY_CLAMP parity=UNMATCHED (Lighting source/toolchain differs from pinned R495)')
   print('R495_RAY_CLAMP k=%.4f lighting_sha256=%s'%(a.ray_clamp,manifest['Lighting']['sha256']))
 if a.r495 and manifest!=json.loads((ROOT/'research/gi-r495/manifest.json').read_text()):
  raise ValueError('The R495 baseline GI shader set differs')
