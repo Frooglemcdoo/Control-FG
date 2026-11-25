@@ -22,12 +22,12 @@ inline void Refresh(HWND panel) noexcept {
  SetWindowTextW(GetDlgItem(panel,3),clamp==control_rr_clamp::Mode::Native?L"REF CLAMP: NATIVE":clamp==control_rr_clamp::Mode::Bypass?L"REF CLAMP: BYPASS":L"REF CLAMP: 60%");
  wchar_t text[64]{};const unsigned fixedRays=gi_auto_dispatch::LaunchRays();
  const unsigned rays=fixedRays?fixedRays:control_rr::GISampleRequested();
- if(fixedRays)swprintf_s(text,L"GI RAYS: %u (CAPTURE)",rays);
+ if(fixedRays)swprintf_s(text,L"GI RAYS: %u",rays);
  else if(rays)swprintf_s(text,L"GI RAYS: %u",rays);else wcscpy_s(text,L"GI RAYS: NATIVE");SetWindowTextW(GetDlgItem(panel,4),text);
  SetWindowTextW(GetDlgItem(panel,5),control_rr_capture_ui::Busy()?L"CAPTURE: RECORDING":L"CAPTURE MOTION");
  SetWindowTextW(GetDlgItem(panel,6),L"PACKAGE CAPTURE");
  SetWindowTextW(GetDlgItem(panel,9),control_rr::RRUserLabel());
- SetWindowTextW(GetDlgItem(panel,10),gi_scene_capture::Motion()?L"16 full-screen frames. Move until STOP appears.":L"Capture: launch Start-GI-Motion-R489.cmd first.");
+ SetWindowTextW(GetDlgItem(panel,10),gi_scene_capture::Motion()?(control_rr_capture_ui::state.load()==control_rr_capture_ui::State::Idle?L"Ready to capture motion.":control_rr_capture_ui::detail.load()):L"Capture requires the fresh-capture launcher.");
  for(int i=1;i<=5;++i)EnableWindow(GetDlgItem(panel,i),!control_rr_capture_ui::Busy()&&(i!=4||!fixedRays));
 }
 inline void Package(HWND panel) noexcept {
@@ -54,7 +54,7 @@ inline void Capture(HWND panel) noexcept {
 }
 inline LRESULT CALLBACK WindowProc(HWND window,UINT message,WPARAM wp,LPARAM lp) noexcept {
  if(message==WM_CREATE){
-  CreateWindowW(L"STATIC",L"CONTROLTOH R490 - RR CONTROLS",WS_CHILD|WS_VISIBLE,12,10,396,22,window,nullptr,selfModule,nullptr);
+  CreateWindowW(L"STATIC",L"CONTROLTOH R495 - CAPTURE FIX 1",WS_CHILD|WS_VISIBLE,12,10,396,22,window,nullptr,selfModule,nullptr);
   for(int i=1;i<=6;++i){auto b=CreateWindowW(L"BUTTON",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,12+((i-1)%2)*200,40+((i-1)/2)*42,192,34,window,reinterpret_cast<HMENU>(static_cast<INT_PTR>(i)),selfModule,nullptr);SendMessageW(b,WM_SETFONT,reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),TRUE);}
   CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,12,172,396,24,window,reinterpret_cast<HMENU>(9),selfModule,nullptr);
   CreateWindowW(L"STATIC",L"",WS_CHILD|WS_VISIBLE,12,200,396,36,window,reinterpret_cast<HMENU>(10),selfModule,nullptr);
@@ -102,7 +102,7 @@ inline DWORD WINAPI ThreadProc(LPVOID) noexcept {
   const bool capturing=control_rr_capture_ui::Busy()||control_rr_capture_ui::requested.load();
   control_diagnostics::PublishCaptureActivity(false,capturing,gi_scene_capture::Enabled());
   if(capturing){gi_phase_audit::Poll();DrainDiagnosticLog();}
-  gi_auto_box::Tick(game);
+
   render_fps::Tick(game,now);
   if(!panel)continue;
   if(!foreground){Close(panel);continue;}

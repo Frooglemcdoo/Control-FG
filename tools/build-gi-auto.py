@@ -2,7 +2,7 @@
 import argparse,hashlib,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--dxc',required=True);p.add_argument('--output',default='build');p.add_argument('--assembler');p.add_argument('--regional',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--dxc',required=True);p.add_argument('--output',default='build');p.add_argument('--assembler');p.add_argument('--regional',action='store_true');p.add_argument('--r495',action='store_true');a=p.parse_args()
 out=Path(a.output).resolve();out.mkdir(parents=True,exist_ok=True)
 secondary=(ROOT/'src/shaders/gi_evaluator_secondary.generated.hlsl').read_text()
 if a.regional:
@@ -20,7 +20,9 @@ for name,source,target,entry in stages:
  binary=out/('gi-auto-'+name.lower()+'.dxil');command=[a.dxc,'-T',target,'-HV','2018','-O3','-WX','-I',str(ROOT/'src/shaders'),str(source),'-Fo',str(binary)]
  if entry:command+=['-E',entry]
  subprocess.run(command,check=True)
- if name=='Lighting' and a.assembler:
+ if name=='Lighting' and a.r495:
+  binary.write_bytes((ROOT/'research/gi-r495/lighting.dxil').read_bytes())
+ elif name=='Lighting' and a.assembler:
   reference=binary.with_name('gi-auto-lighting-reference.dxil');reference.write_bytes(binary.read_bytes())
   subprocess.run([sys.executable,str(ROOT/'tools/gi_evaluator_loads.py'),'--dxc',a.dxc,'--assembler',a.assembler,'--input',str(reference),'--output',str(binary)],check=True)
  if name=='Compare':
@@ -30,5 +32,7 @@ for name,source,target,entry in stages:
  data=binary.read_bytes();assert data[:4]==b'DXBC'
  arrays.append('inline constexpr unsigned char k'+name+'[]={'+','.join(map(str,data))+'};')
  manifest[name]={'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+if a.r495 and manifest!=json.loads((ROOT/'research/gi-r495/manifest.json').read_text()):
+ raise ValueError('The R495 baseline GI shader set differs')
 (out/'gi_auto.generated.h').write_text('#pragma once\nnamespace gi_auto_shader {\n'+'\n'.join(arrays)+'\n}\n')
 (out/'gi-auto-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')

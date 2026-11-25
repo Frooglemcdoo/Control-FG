@@ -2,6 +2,7 @@
 namespace gi_scene_capture {
 inline SRWLOCK motionDiskLock=SRWLOCK_INIT;
 struct DetailExport {
+ gi_motion::ExportLease motionLease;
  Microsoft::WRL::ComPtr<ID3D12Resource> buffer,paired,guides,motion;
  gi_reuse::GIAutoSelection selection{};
  UINT64 bytes=0,pairBytes=0,motionBytes=0;unsigned frame=0,width=0,height=0,rays=0;
@@ -39,11 +40,12 @@ inline DWORD WINAPI ExportDetail(void* context) noexcept {
  if(job->motionBytes){if(okay)++motionExported;else motionFailed=true;}
  Log("GI_SCENE_R484 detail_export frame=%u success=%u bytes=%llu pair_bytes=%llu",job->frame,unsigned(okay),job->bytes,job->pairBytes);return 0;
 }
-inline void QueueDetail(ID3D12Resource* buffer,UINT64 bytes,unsigned frame,unsigned width,unsigned height,unsigned rays,ID3D12Resource* paired,UINT64 pairBytes,ID3D12Resource* guides,gi_reuse::GIAutoSelection selection,ID3D12Resource* motion=nullptr,UINT64 motionBytes=0) noexcept {
+inline void QueueDetail(ID3D12Resource* buffer,UINT64 bytes,unsigned frame,unsigned width,unsigned height,unsigned rays,ID3D12Resource* paired,UINT64 pairBytes,ID3D12Resource* guides,gi_reuse::GIAutoSelection selection,ID3D12Resource* motion,UINT64 motionBytes,gi_motion::ExportLease& lease) noexcept {
  auto* job=new(std::nothrow) DetailExport;if(!job){if(motionBytes)motionFailed=true;
  Log("GI_SCENE_R484 detail_export frame=%u success=0 allocation=0",frame);return;}
+ job->motionLease=lease;
  job->buffer=buffer;job->bytes=bytes;job->frame=frame;job->width=width;job->height=height;job->rays=rays;job->paired=paired;job->pairBytes=pairBytes;job->guides=guides;job->selection=selection;job->motion=motion;job->motionBytes=motionBytes;
- if(!QueueUserWorkItem(&ExportDetail,job,WT_EXECUTEDEFAULT)){delete job;if(motionBytes)motionFailed=true;
+ if(!QueueUserWorkItem(&ExportDetail,job,WT_EXECUTEDEFAULT)){if(motionBytes)motionFailed=true;delete job;
  Log("GI_SCENE_R484 detail_export frame=%u success=0 queue=0",frame);}
 }
 }

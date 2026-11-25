@@ -1,4 +1,5 @@
 #pragma once
+#include "motion_export_lease.h"
 #include "d3d12_auto_pipeline_bundle.h"
 #include "d3d12_auto_raygen.h"
 #include "auto_guide_session.h"
@@ -18,6 +19,9 @@ struct D3D12AutoScratch {
  UINT width=0,height=0,rays=0;
 };
 class D3D12AutoInvocation {
+public:
+ gi_motion::ExportLease motionLease;
+private:
  template<class T>using Ptr=Microsoft::WRL::ComPtr<T>;
  static HRESULT Buffer(ID3D12Device* device,UINT64 bytes,D3D12_HEAP_TYPE heap,D3D12_RESOURCE_STATES state,bool uav,Ptr<ID3D12Resource>& out)noexcept {
   D3D12_HEAP_PROPERTIES hp{};hp.Type=heap;hp.CreationNodeMask=hp.VisibleNodeMask=1;

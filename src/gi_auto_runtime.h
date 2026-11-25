@@ -56,7 +56,7 @@ inline void Collect()noexcept {
    else Log("GI_AUTO_R484 gpu_timing_read_failed frame=%u",owner->output.frame);
   }
 #ifdef CONTROL_GI_REGIONAL
-  if(owner->audit){
+  if(owner->audit&&!owner->motionBytes){
    void* mapped=nullptr;D3D12_RANGE read{0,2*gi_reuse::GIAutoPublicationBytes};
    if(SUCCEEDED(owner->audit->Map(0,&read,&mapped))&&mapped){
     const auto* tables=static_cast<const gi_reuse::GIRegionalTarget*>(mapped);unsigned outputRegions=0,inputRegions=0,fitted=0;double radiusSum=0;float minRadius=1;
@@ -67,7 +67,7 @@ inline void Collect()noexcept {
    }
   }
 #else
-  if(owner->audit){
+  if(owner->audit&&!owner->motionBytes){
    void* mapped=nullptr;D3D12_RANGE read{0,2*sizeof(gi_reuse::GIAutoTargets)};
    const auto hr=owner->audit->Map(0,&read,&mapped);
    if(SUCCEEDED(hr)&&mapped){gi_reuse::GIAutoTargets t{};std::memcpy(&t,mapped,sizeof(t));gi_reuse::GIAutoTargets input{};std::memcpy(&input,static_cast<const unsigned char*>(mapped)+sizeof(t),sizeof(input));D3D12_RANGE empty{};owner->audit->Unmap(0,&empty);
@@ -78,8 +78,8 @@ inline void Collect()noexcept {
    }else Log("GI_AUTO_R484 target_readback_failed=1 hr=0x%08lX",static_cast<unsigned long>(hr));
   }
 #endif
-  if(owner->pixelAudit){
-   if(owner->sceneAudit)gi_scene_capture::QueueDetail(owner->pixelAudit.Get(),owner->pixelBytes,owner->output.frame,owner->width,owner->height,owner->target.Selection().rayCount,owner->pairAudit.Get(),owner->pairBytes,owner->audit.Get(),owner->target.Selection(),owner->motionAudit.Get(),owner->motionBytes);
+  if(owner->pixelAudit&&owner->sceneAudit)gi_scene_capture::QueueDetail(owner->pixelAudit.Get(),owner->pixelBytes,owner->output.frame,owner->width,owner->height,owner->target.Selection().rayCount,owner->pairAudit.Get(),owner->pairBytes,owner->audit.Get(),owner->target.Selection(),owner->motionAudit.Get(),owner->motionBytes,owner->motionLease);
+  if(owner->pixelAudit&&!owner->motionBytes){
    void* mapped=nullptr;D3D12_RANGE read{0,SIZE_T(owner->pixelBytes)};
    const auto hr=owner->pixelAudit->Map(0,&read,&mapped);
    if(SUCCEEDED(hr)&&mapped){
@@ -191,13 +191,18 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
   const bool scene=gi_scene_capture::Enabled();
   const bool collecting=scene?control_rr_capture_ui::Busy():gi_auto_capture::phase.load()==gi_auto_capture::Collecting;
   if(collecting&&requestedCapture!=captureRequest){captureRequest=requestedCapture;captureOrdinal=0;}
-  const auto ordinal=captureOrdinal;const bool auditPair=scene?RRSceneWantsGI(scope.frame):collecting&&gi_reuse::GIAuditPairDue(ordinal);
+  const auto ordinal=captureOrdinal;bool auditPair=scene?RRSceneWantsGI(scope.frame):collecting&&gi_reuse::GIAuditPairDue(ordinal);
+  auto owner=std::make_unique<Owner>();
+  if(auditPair&&gi_scene_capture::Motion()&&!owner->motionLease.Acquire(gi_scene_capture::outstanding,gi_motion::InFlight)){
+   gi_scene_capture::StopAcquisition("writer_capacity");
+   auditPair=false;
+  }
   const auto roi=scene?gi_reuse::GIAuditRegion(desc->Width,desc->Height,0,0):gi_auto_capture::Region(desc->Width,desc->Height);
   std::unique_ptr<gi_reuse::D3D12AutoScratch> scratch;
   if(!auditPair){std::lock_guard<std::mutex> lock(mutex);
    for(auto& slot:scratchCache)if(slot&&slot->device.Get()==context.device&&slot->width==desc->Width&&slot->height==desc->Height&&slot->rays==rays){scratch=std::move(slot);break;}
   }
-  auto owner=std::make_unique<Owner>();owner->roiX=roi.x;owner->roiY=roi.y;
+  owner->roiX=roi.x;owner->roiY=roi.y;
   if(FAILED(owner->Initialize(context.device,state,bundle.Get(),prior,desc->Width,desc->Height,UINT(scope.frame),guideVersion,produced.load()<4||auditPair,auditPair,rays,std::move(scratch),scene,gi_scene_capture::TextureMipOne())))return Skip(16,"invocation_or_ray_record_prepare");
   if(timingFrequency&&!collecting&&produced.load()%120==0&&!owner->timing.Initialize(context.device))Skip(24,"timing_allocation_failed");
   if(owner->reusedScratch)++scratchHits;else ++scratchMisses;

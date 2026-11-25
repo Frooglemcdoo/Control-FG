@@ -8,6 +8,7 @@ on:
       - work/gi-guided-live-r434
       - work/rr-r434-rays-r439
       - work/gi-cost-r440
+      - fix/r495-motion-writer
       - work/rr-restored-r489
       - work/gi-motion-capture-r484
       - work/gi-stage-diagnostic-r432
@@ -925,7 +926,9 @@ jobs:
           }
           python -c "from pathlib import Path;Path('build/gi_temporal.generated.h').write_text(''.join('static const unsigned char kTemporal%d[]={'%v+','.join(str(x) for x in Path('build/gi-temporal-%d.dxil'%v).read_bytes())+'};'+chr(10) for v in (0,1)))"
           if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
-          python tools/build-gi-auto.py --regional --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe
+          $baselineFlags=@()
+          if ($env:GITHUB_REF_NAME -eq 'fix/r495-motion-writer') { $baselineFlags+='--r495' }
+          python tools/build-gi-auto.py --regional --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe @baselineFlags
           if ($LASTEXITCODE -ne 0) { throw 'Auto GI shader build failed' }
           python tools/build-gi-frozen.py --dxc $dxc --output build
           if($LASTEXITCODE -ne 0){throw 'Frozen GI runtime embedding failed'}
@@ -1387,11 +1390,26 @@ jobs:
           python tools\rt-scene-probe\analyze-instances.py RT-instances-fixture.bin > build\rt-instance-fixture.json
           if errorlevel 1 exit /b 1
           set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE"
+          if "${{ github.ref_name }}"=="fix/r495-motion-writer" (
+            cl /nologo /std:c++17 /EHsc /W4 tools\test-r495-motion-drain.cpp /Febuild\test-r495-motion-drain.exe
+            if errorlevel 1 exit /b 1
+            build\test-r495-motion-drain.exe
+            if errorlevel 1 exit /b 1
+          )
           if "${{ github.ref_name }}"=="work/rr-restored-r489" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
+          if "${{ github.ref_name }}"=="fix/r495-motion-writer" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 %RENDER_FLAGS% /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
+
+      - name: Publish the tested R495 capture DLL
+        if: github.ref_name == 'fix/r495-motion-writer'
+        uses: actions/upload-artifact@v4
+        with:
+          name: R495-bounded-capture-dll
+          path: build/dxgi.dll
+          if-no-files-found: error
 
       - name: Build RTX 40-series provider fix
         shell: cmd

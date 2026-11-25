@@ -847,6 +847,9 @@ static void NativeCpuPoll(unsigned long long present) noexcept;
 #include "rt_frame_intervals_runtime.h"
 #endif
 
+#ifdef CONTROL_GI_AUTO_TARGETS
+namespace gi_auto_runtime {inline void Collect() noexcept;}
+#endif
 static void HookPresent() {
     control_gi_frames::Present();
     auto count = ++presentCount;
@@ -887,6 +890,9 @@ static void HookPresent() {
     RRDistanceAfterPresent();
     RRVramLifecycleAfterPresent(count);
 #ifndef CONTROL_REBLUR_ONLY
+#ifdef CONTROL_GI_AUTO_TARGETS
+    if(gi_scene_capture::outstanding.load())gi_auto_runtime::Collect();
+#endif
     RRInputCaptureAfterPresent(count);
 #endif
     RRDiffuseAfterPresent(count);

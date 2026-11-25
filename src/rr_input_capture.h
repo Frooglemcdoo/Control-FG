@@ -69,6 +69,9 @@ static unsigned RRSelectCapture(unsigned long long frame) noexcept {
   const auto n=control_rr::SelectInputCapturePair(rrInputCaptures[0].policy.phase,rrInputCaptures[1].policy.phase,rrInputCaptures[0].frame,frame);
   return n<2?n:kRRInputCaptureSlots;
  }
+#ifdef CONTROL_GI_AUTO_TARGETS
+ if(gi_scene_capture::stopReason.load())return kRRInputCaptureSlots;
+#endif
  control_rr::InputCapturePolicy::Phase phases[kRRInputCaptureSlots];std::uint64_t frames[kRRInputCaptureSlots];
  for(unsigned i=0;i<kRRInputCaptureSlots;++i){phases[i]=rrInputCaptures[i].policy.phase;frames[i]=rrInputCaptures[i].frame;}
  return control_rr::SelectInputCaptureSequence(phases,frames,kRRInputCaptureSlots,frame);
@@ -254,7 +257,7 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
     out<<"\"resource_identity\":"<<reinterpret_cast<std::uintptr_t>(c->sources[i])<<",";
 #endif
     out<<"\"file\":\""<<name<<"\",\"dxgi_format\":"<<unsigned(c->descriptions[i].Format)<<",\"pixel_bytes\":"<<c->pixelBytes[i]<<",\"state_before_and_after\":"<<unsigned(c->states[i])<<",\"width\":"<<gi_path_capture::Extent(static_cast<unsigned>(c->descriptions[i].Width),c->exportStride)<<",\"height\":"<<gi_path_capture::Extent(c->descriptions[i].Height,c->exportStride)<<",\"copied\":"<<((i!=c->outputIndex||c->outputCaptured)?"true":"false")<<'}';}
-   out<<"],\"pair_index\":"<<c->pairIndex<<",\"previous_frame\":"<<c->previousFrame<<",\"consecutive\":"<<((c->pairIndex==1&&c->frame==c->previousFrame+1)?"true":"false")<<",\"reset\":"<<c->reset<<",\"rr_result\":"<<c->evaluationResult<<",\"output_captured\":"<<(c->outputCaptured?"true":"false")<<"}\n";
+   out<<"],\"pair_index\":"<<c->pairIndex<<",\"previous_frame\":"<<c->previousFrame<<",\"consecutive\":"<<((c->pairIndex>0&&c->frame==c->previousFrame+1)?"true":"false")<<",\"reset\":"<<c->reset<<",\"rr_result\":"<<c->evaluationResult<<",\"output_captured\":"<<(c->outputCaptured?"true":"false")<<"}\n";
    const auto bytes=out.str();RRGuideExportDetail::File file(directory+L"\\metadata.pending");
    okay=file.Write(bytes.data(),bytes.size())&&file.Finish();
    if(okay)okay=MoveFileExW((directory+L"\\metadata.pending").c_str(),(directory+L"\\metadata.json").c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
@@ -263,8 +266,11 @@ static DWORD WINAPI RRInputCaptureExport(void* context) noexcept {
  for(unsigned i=0;i<c->count;++i)if(mapped[i]){D3D12_RANGE written{0,0};c->readback[i]->Unmap(0,&written);}
  Log("RR_INPUT_CAPTURE_C1_EXPORTED success=%u frame=%llu preset=%u buffers=%u",unsigned(okay),c->frame,c->preset,c->count);
  Log("RR_INPUT_CAPTURE_EXPORT_END frame=%llu elapsed_ms=%llu",c->frame,GetTickCount64()-exportStarted);
+ // Exporting owns these resources exclusively. Releasing large D3D buffers
+ // can be slow; keep that work outside the render-side lock for motion jobs.
+ if(RRMotionCapture())RRInputCaptureRelease(c);
  AcquireSRWLockExclusive(&rrInputCaptureLock);
- RRInputCaptureRelease(c);
+ if(!RRMotionCapture())RRInputCaptureRelease(c);
  if(okay)c->policy.Exported();else {c->policy.phase=control_rr::InputCapturePolicy::Failed;control_rr_capture_ui::detail.store(L"Image export failed. PACKAGE LIGHT will collect diagnostics.");}
 
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
@@ -364,7 +370,20 @@ static void RRInputCaptureOneBeforeEvaluation(RRInputCaptureJob* c,ID3D12Graphic
     const bool addressable=gi_motion::Addressable(UINT(width),height,gi_scene_capture::Rays(),256ull*1024*1024);
     const bool poolFits=gi_motion::OwnerBudget(UINT(width),height,gi_scene_capture::Rays())<=gi_motion::MaxOwnerBudget;
     Log("GI_CAPTURE_R490 preflight inflight=%u owner_allowance=%llu pool_budget=%llu pool_fits=%u",gi_motion::InFlight,gi_motion::OwnerAllowance(UINT(width),height,gi_scene_capture::Rays()),gi_motion::OwnerBudget(UINT(width),height,gi_scene_capture::Rays()),unsigned(poolFits));
-    const bool enough=poolFits&&addressable&&GlobalMemoryStatusEx(&memory)&&memory.ullAvailPhys>=reserve&&n&&n<32768&&GetDiskFreeSpaceExW(root,&free,nullptr,nullptr)&&free.QuadPart>=reserve;
+    const BOOL ramQuery=GlobalMemoryStatusEx(&memory);
+    // Check the capture volume independently of RAM. A fresh capture folder may
+    // not exist yet; LOCALAPPDATA and ControlFGProbe can be on different volumes.
+    BOOL diskQuery=FALSE;
+    if(n && n+16<32768){
+     wcscat_s(root,L"\\ControlFGProbe");
+     diskQuery=GetDiskFreeSpaceExW(root,&free,nullptr,nullptr);
+     if(!diskQuery && (GetLastError()==ERROR_PATH_NOT_FOUND || GetLastError()==ERROR_FILE_NOT_FOUND)){
+      root[n]=0;diskQuery=GetDiskFreeSpaceExW(root,&free,nullptr,nullptr);
+     }
+    }
+    const DWORD diskError=diskQuery?0:GetLastError();
+    Log("GI_CAPTURE_PREFLIGHT ram_query=%u disk_query=%u disk_error=%lu",unsigned(ramQuery!=0),unsigned(diskQuery!=0),diskError);
+    const bool enough=poolFits&&addressable&&ramQuery&&diskQuery&&free.QuadPart>=reserve;
     Log("GI_MOTION_R484 preflight width=%llu height=%u rays=%u reserve=%llu available_ram=%llu free_disk=%llu addressable=%u okay=%u",width,height,gi_scene_capture::Rays(),reserve,memory.ullAvailPhys,free.QuadPart,unsigned(addressable),unsigned(enough));
     if(!enough){for(auto& job:rrInputCaptures)job.policy.phase=Policy::Failed;
      control_rr_capture_ui::detail.store(L"Motion preflight failed: memory, disk, or buffer limit. Package diagnostics; do not rerun.");__leave;}
@@ -518,8 +537,9 @@ static void RRInputCaptureBeforeEvaluation(ID3D12GraphicsCommandList* list,unsig
  if(RRMotionCapture()&&rrInputCaptures[0].frame){
   for(unsigned i=1;i<kRRInputCaptureSlots;++i)if(rrInputCaptures[i].policy.phase==control_rr::InputCapturePolicy::Ready&&rrInputCaptures[i-1].frame&&
    (frame>rrInputCaptures[i-1].frame+1||!resetKnown||reset!=0)){
-    rrInputCaptures[i].policy.phase=control_rr::InputCapturePolicy::Failed;
-    control_rr_capture_ui::detail=L"Motion sequence interrupted. Package diagnostics; no retry needed yet.";
+#ifdef CONTROL_GI_AUTO_TARGETS
+    gi_scene_capture::StopAcquisition("frame_gap_or_reset");
+#endif
    }
  }
  unsigned select=RRSelectCapture(frame);
@@ -553,9 +573,19 @@ static void RRInputCaptureAfterEvaluation(ID3D12GraphicsCommandList* list,unsign
   DWORD fault=0;bool started=false;
   c->outputCaptured=RRInputCaptureRecordGuarded(&copy,&native,&input,&fault,&started,1,true);
   if(!c->outputCaptured&&started)c->policy.phase=control_rr::InputCapturePolicy::Failed;
-  Log("RR_INPUT_CAPTURE_C1_OUTPUT frame=%llu captured=%u pair_index=%u previous_frame=%llu consecutive=%u fault=0x%08lX",frame,unsigned(c->outputCaptured),c->pairIndex,c->previousFrame,unsigned(c->pairIndex==1&&frame==c->previousFrame+1),fault);
+  Log("RR_INPUT_CAPTURE_C1_OUTPUT frame=%llu captured=%u pair_index=%u previous_frame=%llu consecutive=%u fault=0x%08lX",frame,unsigned(c->outputCaptured),c->pairIndex,c->previousFrame,unsigned(c->pairIndex>0&&frame==c->previousFrame+1),fault);
  } __except(EXCEPTION_EXECUTE_HANDLER){if(active)active->policy.phase=control_rr::InputCapturePolicy::Failed;}
  ReleaseSRWLockExclusive(&rrInputCaptureLock);
+}
+// Used only for prepared slots for which no commands were recorded. The
+// Exporting phase reserves the slot but no files or completion count result.
+static DWORD WINAPI RRDiscardUnusedMotionSlot(void* context) noexcept {
+ auto* c=static_cast<RRInputCaptureJob*>(context);
+ RRInputCaptureRelease(c);
+ AcquireSRWLockExclusive(&rrInputCaptureLock);
+ c->policy.phase=control_rr::InputCapturePolicy::Idle;
+ ReleaseSRWLockExclusive(&rrInputCaptureLock);
+ return 0;
 }
 static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
 #if defined(CONTROL_CAPTURE_DIAGNOSTIC)
@@ -575,9 +605,10 @@ static void RRInputCaptureAfterPresent(unsigned long long present) noexcept {
 DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foregroundPid);
    if(buttonRequested || foregroundPid==GetCurrentProcessId()){
     bool accepted=rrInputCaptures[0].policy.phase==P::Idle&&rrInputCaptures[1].policy.phase==P::Idle&&rrInputCaptures[0].policy.requests<kRRCapturePairs;
+    if(RRMotionCapture()&&rrInputCaptures[0].policy.requests)accepted=false;
     if(accepted){
 #ifdef CONTROL_GI_AUTO_TARGETS
-     if(RRMotionCapture()){gi_scene_capture::motionRecorded=0;gi_scene_capture::motionExported=0;gi_scene_capture::motionFailed=false;}
+     if(RRMotionCapture()){gi_scene_capture::stopReason=nullptr;gi_scene_capture::motionRecorded=0;gi_scene_capture::motionExported=0;gi_scene_capture::motionFailed=false;}
 #endif
      for(unsigned i=0;i<RRInputCaptureSlotCount();++i){rrInputCaptures[i].pairIndex=i;rrInputCaptures[i].frame=0;
 #ifdef CONTROL_RR_GI_SEQUENCE
@@ -594,8 +625,22 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
   }
 #ifdef CONTROL_RR_GI_SEQUENCE
   if(control_rr_capture_ui::Busy()&&rrInputCaptureRequestTick&&GetTickCount64()-rrInputCaptureRequestTick>600000){
+#ifdef CONTROL_GI_AUTO_TARGETS
+   if(RRMotionCapture())gi_scene_capture::StopAcquisition("timeout");
+   else
+#endif
    for(auto& job:rrInputCaptures)job.policy.phase=P::Failed;
    control_rr_capture_ui::detail.store(L"Sequence timed out. PACKAGE RR will collect diagnostics.");
+  }
+#endif
+#ifdef CONTROL_GI_AUTO_TARGETS
+  if(RRMotionCapture()&&rrInputCaptures[0].policy.requests){
+   const auto recorded=gi_scene_capture::motionRecorded.load();
+   if(recorded&&recorded<kRRInputCaptureSlots){
+    unsigned long long current=0;DWORD fault=0;
+    if(ReadEngineFrameSafe(&current,&fault)&&current>rrInputCaptures[recorded-1].frame+1)
+     gi_scene_capture::StopAcquisition("missing_evaluation");
+   }
   }
 #endif
   for(auto& job:rrInputCaptures){auto* c=&job;
@@ -612,9 +657,16 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
 #else
     true;
 #endif
-   bool sequenceReady=true;
-  if(RRMotionCapture())for(const auto& pending:rrInputCaptures)if(pending.policy.phase==P::Requested||pending.policy.phase==P::Preparing||pending.policy.phase==P::Ready)sequenceReady=false;
-   if(mayExport&&sequenceReady&&c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
+   // Completed motion frames export independently, including when later RR evaluations stop.
+   if(c->policy.phase==P::Submitted&&(RRMotionCapture()||mayExport)&&c->policy.Retire(c->fence?c->fence->GetCompletedValue():0)){
+    if(RRMotionCapture()&&(!c->outputCaptured||c->evaluationResult!=1)){
+     c->policy.phase=P::Failed;
+#ifdef CONTROL_GI_AUTO_TARGETS
+     gi_scene_capture::StopAcquisition("rr_output_missing");
+#endif
+     if(QueueUserWorkItem(&RRDiscardUnusedMotionSlot,c,WT_EXECUTEDEFAULT))c->policy.phase=P::Exporting;
+     continue;
+    }
     if(!QueueUserWorkItem(&RRInputCaptureExport,c,WT_EXECUTEDEFAULT))c->policy.phase=P::Failed;
    }
    if(c->policy.CanSubmit(present)){const HRESULT hr=c->queue->Signal(c->fence,1);c->policy.Submit(SUCCEEDED(hr));
@@ -622,18 +674,40 @@ DWORD foregroundPid=0;GetWindowThreadProcessId(GetForegroundWindow(),&foreground
   }
 #ifdef CONTROL_GI_AUTO_TARGETS
   if(RRMotionCapture()){
-   bool failed=gi_scene_capture::motionFailed.load(),idle=true,preparing=false,complete=true;
-   for(unsigned i=0;i<kRRInputCaptureSlots;++i){const auto& c=rrInputCaptures[i];
-    failed|=c.policy.phase==P::Failed;idle&=c.policy.phase==P::Idle;
+   if(!rrInputCaptures[0].policy.requests)__leave;
+   if(control_rr_capture_ui::completedPairs.load())__leave;
+   unsigned saved=0;bool pending=false,preparing=false;
+   for(const auto& c:rrInputCaptures){
+    if(c.policy.phase==P::Failed)gi_scene_capture::StopAcquisition("rr_slot_failed");
+    pending|=c.policy.phase==P::Recorded||c.policy.phase==P::Submitted||c.policy.phase==P::Exporting;
     preparing|=c.policy.phase==P::Preparing||c.policy.phase==P::Requested;
-    complete&=c.outputCaptured&&c.evaluationResult==1&&c.frame&&(!i||(c.frame==rrInputCaptures[i-1].frame+1&&c.previousFrame==rrInputCaptures[i-1].frame));
+    if(c.policy.phase==P::Idle&&c.frame&&c.evaluationResult==1&&c.outputCaptured)++saved;
    }
-   if(failed){control_rr_capture_ui::state=control_rr_capture_ui::State::Failed;control_rr_gi::boundaryRequested=false;}
-   else if(idle&&rrInputCaptures[0].policy.requests&&complete&&gi_scene_capture::motionExported==kRRInputCaptureSlots){
-    control_rr_capture_ui::detail=L"Sequence saved. Run Package-GI-Motion.cmd to validate and review.";
-    control_rr_capture_ui::completedPairs=1;control_rr_capture_ui::state=control_rr_capture_ui::State::Complete;control_rr_gi::boundaryRequested=false;
-   }else if(rrInputCaptures[0].policy.requests){
-    control_rr_capture_ui::state=preparing?control_rr_capture_ui::State::Preparing:(gi_scene_capture::motionRecorded==kRRInputCaptureSlots?control_rr_capture_ui::State::Saving:control_rr_capture_ui::State::Capturing);
+   if(gi_scene_capture::motionFailed.load())gi_scene_capture::StopAcquisition("gi_export_failed");
+   const auto recorded=gi_scene_capture::motionRecorded.load();
+   const auto reason=gi_scene_capture::stopReason.load();
+   const bool closing=reason||recorded==kRRInputCaptureSlots;
+   if(closing){
+    control_rr_gi::boundaryRequested=false;
+    control_rr_capture_ui::state=control_rr_capture_ui::State::Saving;
+    control_rr_capture_ui::detail=L"Saving completed frames. Keep Control open.";
+    // Unused prepared slots have no GPU commands referring to them.
+    for(auto& c:rrInputCaptures)if(c.policy.phase==P::Ready&&!c.preGICaptured&&!c.giHits.commandsStarted&&!c.timing.count){
+     c.policy.phase=P::Exporting;
+     if(QueueUserWorkItem(&RRDiscardUnusedMotionSlot,&c,WT_EXECUTEDEFAULT))pending=true;
+     else c.policy.phase=P::Failed;
+    }
+    if(!pending&&!gi_scene_capture::outstanding.load()){
+     const auto details=gi_scene_capture::motionExported.load();
+     const bool full=!reason&&saved==kRRInputCaptureSlots&&details==saved;
+     control_rr_capture_ui::detail=full?L"Sequence saved. Close Control for review.":saved?L"Partial sequence saved. Close Control for review.":L"No RR frames saved. Close Control for diagnostics.";
+     control_rr_capture_ui::completedPairs=1;
+     control_rr_capture_ui::state=saved?control_rr_capture_ui::State::Complete:control_rr_capture_ui::State::Failed;
+     Log("GI_MOTION_EXPORT_FINAL reason=%s recorded=%u rr_saved=%u gi_saved=%u full=%u",reason?reason:(full?"complete":"incomplete"),recorded,saved,details,unsigned(full));
+    }
+   }else{
+    control_rr_capture_ui::state=preparing?control_rr_capture_ui::State::Preparing:control_rr_capture_ui::State::Capturing;
+    if(recorded)control_rr_capture_ui::detail=recorded>=gi_motion::StopCue?L"STOP moving. Capture in progress.":L"Keep moving. Capture in progress.";
    }
   }else
 #endif
