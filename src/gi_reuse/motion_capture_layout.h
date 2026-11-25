@@ -18,7 +18,7 @@ inline std::uint64_t OwnerBudget(unsigned w,unsigned h,unsigned rays) noexcept {
  return InFlight*OwnerAllowance(w,h,rays)+512ull*1024*1024;
 }
 inline bool Addressable(unsigned w,unsigned h,unsigned rays,std::uint64_t base) noexcept {
- return w&&h&&(rays==4||rays==10)&&base+Bytes(w,h,rays)<=0xffffffe0ull;
+ return w&&h&&(rays==2||rays==4||rays==10)&&base+Bytes(w,h,rays)<=0xffffffe0ull;
 }
 // No crops, subsampling, frame skipping, or precision reduction to meet a budget.
 inline std::uint64_t Reservation(unsigned w,unsigned h,unsigned rays,std::uint64_t images) noexcept {

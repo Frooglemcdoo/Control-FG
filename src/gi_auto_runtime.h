@@ -166,7 +166,7 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
  if(!scope.token||!scope.frame||scope.frame>UINT_MAX)return Skip(4,"native_render_scope_unavailable");
  UINT rays=0,pass=0,passes=0;
  if(!Provider("g_uRTDiffuseRayCount",rays))return Skip(5,"ray_count_provider");
- if(rays!=10&&rays!=4)return Skip(6,"ray_count_not_four_or_ten");
+ if(rays!=10&&rays!=4&&rays!=2)return Skip(6,"ray_count_not_two_four_or_ten");
  if(!Provider("g_uDGIPass",pass)||pass!=0)return Skip(7,"batch_not_zero");
  if(!Provider("g_uDGIPassCount",passes)||passes!=1)return Skip(8,"pass_count_not_one");
  try {

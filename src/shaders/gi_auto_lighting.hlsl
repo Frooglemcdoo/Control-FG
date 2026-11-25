@@ -16,7 +16,7 @@ void main(uint3 id:SV_DispatchThreadID) {
  if(trainingIndex!=0xffffffff)autoTraining[trainingIndex]=(GIAutoTraining)0;
  GIAutoTraining bestTraining=(GIAutoTraining)0;
  GIShadingRegisters receiver;
- if(giCB4[0].z!=selection.rayCount||(selection.rayCount!=10&&selection.rayCount!=4)||!GIInitializeReceiver(id.xy,receiver)) {
+ if(giCB4[0].z!=selection.rayCount||(selection.rayCount!=10&&selection.rayCount!=4&&selection.rayCount!=2)||!GIInitializeReceiver(id.xy,receiver)) {
   g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;
  }
  GIFrozenReceiver source=GIFrozenDecodeReceiver(id.xy,g_tGBuffer1.Load(int3(id.xy,0)),
@@ -40,7 +40,7 @@ void main(uint3 id:SV_DispatchThreadID) {
    bestTraining=GIAutoKeepBrightest(bestTraining,GIAutoCandidate(selection.version,hit.material,position,rgb,draw.weight));
   }
   valid=valid&&all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&
-        draw.weight>=0&&draw.weight<=(selection.rayCount==4?2.00001:1.66667);
+        draw.weight>=0&&draw.weight<=(selection.rayCount==10?1.66667:2.00001);
   if(auditIndex!=0xffffffff){
    float lum=dot(rgb,float3(.2126,.7152,.0722));rawSum+=rgb;rawPeak=max(rawPeak,lum);
    if(draw.weight<1)++covered;

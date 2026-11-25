@@ -63,7 +63,7 @@ public:
    if(!mapped){selected.buffer->Unmap(0,&empty);return E_UNEXPECTED;}
    std::memset(mapped,0,GIAutoPublicationBytes);const D3D12_RANGE written{0,GIAutoPublicationBytes};selected.buffer->Unmap(0,&written);
   }
-  if(!target.Initialize(selected.buffer.Get(),{epoch,selected.frame,rayCount,rayCount==4?.25f:.2f,frame}))return E_INVALIDARG;
+  if(!target.Initialize(selected.buffer.Get(),{epoch,selected.frame,rayCount,rayCount==10?.2f:.25f,frame}))return E_INVALIDARG;
   if(recycled&&!capturePixels&&recycled->device.Get()==device&&recycled->width==w&&recycled->height==h&&recycled->rays==rayCount){
    training=std::move(recycled->training);cells=std::move(recycled->cells);record=std::move(recycled->record);reusedScratch=true;
   }

@@ -17,7 +17,7 @@ struct Payload {uint slice;};
 void giAutoRaygen() {
  uint2 pixel=DispatchRaysIndex().xy;
  // These are admission requirements, not a safe post-dispatch recovery path.
- if((selection.rayCount!=10&&selection.rayCount!=4)||controls.z!=selection.rayCount||controls.w!=0||passCount!=1)return;
+ if((selection.rayCount!=10&&selection.rayCount!=4&&selection.rayCount!=2)||controls.z!=selection.rayCount||controls.w!=0||passCount!=1)return;
  GIFrozenReceiver receiver=GIFrozenDecodeReceiver(pixel,gbuffer.Load(int3(pixel,0)),
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
  if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i)materials[uint3(pixel,i)]=65534;return;}

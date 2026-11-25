@@ -32,6 +32,14 @@ static float gRayScale=0;
 static float gRayLevel=-1;
 static uint gRayCount=0;
 static bool gRayPending=false;
+#ifdef GI_HALF_RES
+// 0 = nothing to reconstruct, 1 = active (traced), 2 = inactive, needs reconstruction.
+static uint gHalfState=0;
+static float gHalfDepth=0;
+static float3 gHalfNormal=0;
+static float gHalfHit=65504;
+bool GIHalfActive(uint2 p){const uint phase=selection.sampleFrame&3u;return (p.x&1u)==(phase&1u)&&(p.y&1u)==(phase>>1u);}
+#endif
 float GIRayMaxChannel(float3 c){return max(c.r,max(c.g,c.b));}
 #endif
 void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GIWorldGuideKey key) {
@@ -47,12 +55,17 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
  GIRedTermsWrite(auditIndex,redTerms,selection.rayCount);
  GIAutoAuditWrite(auditIndex,0,0,0,0,0,0,65534,0,0,0);
  GIShadingRegisters receiver;
- if(giCB4[0].z!=selection.rayCount||(selection.rayCount!=10&&selection.rayCount!=4)||!GIInitializeReceiver(id.xy,receiver)) {
+ if(giCB4[0].z!=selection.rayCount||(selection.rayCount!=10&&selection.rayCount!=4&&selection.rayCount!=2)||!GIInitializeReceiver(id.xy,receiver)) {
   g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;
  }
  GIFrozenReceiver source=GIFrozenDecodeReceiver(id.xy,g_tGBuffer1.Load(int3(id.xy,0)),
   g_tLinearDepth.Load(int3(id.xy,0)).x,g_tClipDepth.Load(int3(id.xy,0)).x,giCB0);
  if(!source.valid){g_rwtDiffuseGIColorTarget[id.xy]=0;g_rwtHitInfo[id.xy]=65504;return;}
+#ifdef GI_HALF_RES
+ gHalfDepth=asfloat(receiver.r1.w);gHalfNormal=source.normal;
+ if(!GIHalfActive(id.xy)){gHalfState=2;return;}
+ gHalfState=1;
+#endif
  GIAutoTargets frozen=(GIAutoTargets)0;GIAutoPrepared prepared=(GIAutoPrepared)0;
  if(auditIndex!=0xffffffff){frozen=GISelectRegional(source.origin,source.normal,selection);prepared=GIAutoPrepare(source.origin,frozen,selection);}
  float alpha=prepared.alpha;
@@ -82,7 +95,7 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
    bestTraining=GIAutoKeepBrightest(bestTraining,GIAutoCandidate(selection.version,hit.material,position,rgb,draw.weight));
   }
   valid=valid&&all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&
-        draw.weight>=0&&draw.weight<=(selection.rayCount==4?2.00001:1.66667);
+        draw.weight>=0&&draw.weight<=(selection.rayCount==10?1.66667:2.00001);
   if(auditIndex!=0xffffffff){
    float score=rgb.r*draw.weight;
    if(all(isfinite(rgb))&&all(rgb>=0)&&isfinite(draw.weight)&&draw.weight>0&&score>redScore){
@@ -147,6 +160,9 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
  #else
  g_rwtDiffuseGIColorTarget[id.xy]=float4(scale*radiance,1);
  #endif
+ #ifdef GI_HALF_RES
+ gHalfHit=asfloat(receiver.r5.w)/float(selection.rayCount);
+ #endif
  g_rwtHitInfo[id.xy]=asfloat(receiver.r5.w)/float(selection.rayCount);
 }
 
@@ -157,6 +173,14 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
 groupshared uint blockSlot[2], blockWinner[2], score[128];
 #ifdef GI_RAY_CLAMP
 groupshared float rayLevel[128];
+#ifdef GI_HALF_RES
+#ifndef GI_RAY_CLAMP
+#error GI_HALF_RES requires GI_RAY_CLAMP (deferred GI target write)
+#endif
+groupshared uint halfState[128];
+groupshared float halfDepth[128], halfHit[128];
+groupshared float3 halfNormal[128], halfColor[128];
+#endif
 #endif
 [numthreads(8,16,1)]
 void main(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) {
@@ -173,6 +197,10 @@ void main(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) {
  score[lane]=(candidate.valid&&receiverKey.valid)?asuint(candidate.energy):0;
 #ifdef GI_RAY_CLAMP
  rayLevel[lane]=gRayPending?gRayLevel:-1.0f;
+#endif
+#ifdef GI_HALF_RES
+ halfState[lane]=gRayPending?1u:gHalfState==2u?2u:0u;
+ halfDepth[lane]=gHalfDepth;halfNormal[lane]=gHalfNormal;halfHit[lane]=gHalfHit;halfColor[lane]=0;
 #endif
  GroupMemoryBarrierWithGroupSync();
 #ifdef GI_RAY_CLAMP
@@ -196,6 +224,41 @@ void main(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) {
    clamped+=(limit&&m>limitValue)?c*(limitValue/m):c;
   }
   g_rwtDiffuseGIColorTarget[id.xy]=float4(clamped,1);
+#ifdef GI_HALF_RES
+  halfColor[lane]=clamped;
+#endif
+ }
+#endif
+#ifdef GI_HALF_RES
+ GroupMemoryBarrierWithGroupSync();
+ if(halfState[lane]==2u){
+  // Reconstruct from active receivers in the 5x5 window (always includes this
+  // quad's own active pixel). Gaussian distance weight, reject >5% relative
+  // depth difference, normal power 8. Current frame only.
+  const int lx=int(lane%8u),ly=int(lane/8u);
+  const float z=halfDepth[lane];const float3 n=halfNormal[lane];
+  float3 sum=0;float hitSum=0,wSum=0;
+  float bestW=-1;float3 bestC=0;float bestHit=65504;
+  [unroll]for(int dy=-2;dy<=2;++dy){
+   [unroll]for(int dx=-2;dx<=2;++dx){
+    const int qx=lx+dx,qy=ly+dy;
+    if(qx<0||qx>=8||qy<0||qy>=16)continue;
+    const uint q=uint(qy*8+qx);
+    if(halfState[q]!=1u)continue;
+    const float rel=abs(halfDepth[q]-z)/max(abs(z),1e-4f);
+    const float wz=saturate(1.0f-rel*20.0f);
+    const float wn=pow(saturate(dot(n,halfNormal[q])),8.0f);
+    const float ws=exp(-0.5f*float(dx*dx+dy*dy));
+    const float w=ws*wz*wn;
+    sum+=halfColor[q]*w;hitSum+=halfHit[q]*w;wSum+=w;
+    const float fallbackW=ws*(0.05f+wz)*(0.05f+wn);
+    if(fallbackW>bestW){bestW=fallbackW;bestC=halfColor[q];bestHit=halfHit[q];}
+   }
+  }
+  float3 color=bestC;float hit=bestHit;
+  if(wSum>1e-4f){color=sum/wSum;hit=hitSum/wSum;}
+  g_rwtDiffuseGIColorTarget[id.xy]=float4(color,1);
+  g_rwtHitInfo[id.xy]=hit;
  }
 #endif
  if(lane==first&&slot!=0xffffffff){

@@ -19,13 +19,20 @@ struct Payload {uint slice;};
 void giAutoRaygen() {
  uint2 pixel=DispatchRaysIndex().xy;
  // These are admission requirements, not a safe post-dispatch recovery path.
- if((selection.rayCount!=10&&selection.rayCount!=4)||controls.z!=selection.rayCount||controls.w!=0||passCount!=1)return;
+ if((selection.rayCount!=10&&selection.rayCount!=4&&selection.rayCount!=2)||controls.z!=selection.rayCount||controls.w!=0||passCount!=1)return;
  GIFrozenReceiver receiver=GIFrozenDecodeReceiver(pixel,gbuffer.Load(int3(pixel,0)),
   linearDepth.Load(int3(pixel,0)).x,clipDepth.Load(int3(pixel,0)).x,system);
  GIMotionProducerBegin(pixel,receiver.origin,receiver.valid,system);
  uint packet=GIPacketAddress(pixel);
  if(packet!=0xffffffff)producerPackets.Store4(packet,uint4(asuint(receiver.origin),receiver.valid?selection.sampleFrame:0));
  if(!receiver.valid){[loop]for(uint i=0;i<selection.rayCount;++i){materials[uint3(pixel,i)]=65534;GIStoreWeight(pixel,i,0);}return;}
+#ifdef GI_HALF_RES
+ // Half-resolution GI: one receiver per 2x2 quad traces, rotating each frame.
+ // The Lighting kernel reconstructs the other three from depth/normal-matched
+ // active neighbours. Must match GIHalfActive in gi_regional_lighting.hlsl.
+ {const uint phase=selection.sampleFrame&3u;
+  if((pixel.x&1u)!=(phase&1u)||(pixel.y&1u)!=(phase>>1u)){[loop]for(uint i=0;i<selection.rayCount;++i){materials[uint3(pixel,i)]=65534;GIStoreWeight(pixel,i,0);}return;}}
+#endif
  GIAutoTargets frozen=GISelectRegional(receiver.origin,receiver.normal,selection);GIAutoPrepared prepared=GIAutoPrepare(receiver.origin,frozen,selection);
  [loop]for(uint rayIndex=0;rayIndex<selection.rayCount;++rayIndex) {
   GIAutoDraw draw=GIAutoSamplePrepared(pixel,system[69].z,0,rayIndex,receiver.normal,prepared,selection);

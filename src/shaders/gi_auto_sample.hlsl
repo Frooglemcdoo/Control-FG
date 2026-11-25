@@ -6,7 +6,7 @@
 // Paired ten-ray baseline and four-ray candidate, both single-batch.
 // The caller must freeze one target resource for producer AND evaluator.
 float GIAutoAlpha(GIAutoTargets targets,GIAutoSelection selection) {
- return ((selection.rayCount==10&&selection.fraction==.2f)||(selection.rayCount==4&&selection.fraction==.25f))&&GIAutoUsable(targets,selection)?selection.fraction:0;
+ return ((selection.rayCount==10&&selection.fraction==.2f)||((selection.rayCount==4||selection.rayCount==2)&&selection.fraction==.25f))&&GIAutoUsable(targets,selection)?selection.fraction:0;
 }
 uint GIAutoSeed(uint2 pixel,uint frame,uint batch,uint ray) {
  return pixel.x*73856093u^pixel.y*19349663u^frame*83492791u^
@@ -49,7 +49,7 @@ GIAutoDraw GIAutoSamplePrepared(uint2 pixel,uint frame,uint batch,uint ray,
  float alpha=prepared.alpha;
  if(alpha==0) {
   float2 uv;
-  if(selection.rayCount==4){GIProducerCoordinates nativeDraw=GIProducerSample(pixel.x,pixel.y,frame,batch,ray,4);uv=float2(nativeDraw.u,nativeDraw.v);}
+  if(selection.rayCount!=10){GIProducerCoordinates nativeDraw=GIProducerSample(pixel.x,pixel.y,frame,batch,ray,selection.rayCount);uv=float2(nativeDraw.u,nativeDraw.v);}
   else uv=GIAutoOwned10(pixel,frame,batch,ray,seed);
   result.direction=GTLocal(normal,sqrt(uv.y),2*GT_PI*uv.x);
   result.weight=1;result.traceRay=1;return result;
@@ -59,7 +59,9 @@ GIAutoDraw GIAutoSamplePrepared(uint2 pixel,uint frame,uint batch,uint ray,
  // selects either cone with equal probability; never always pick one cone.
  float u=min((float(ray)+GIProducerUnit(seed,0x68bc21ebu))/float(selection.rayCount),.9999999403953552f);
  float v=GIProducerUnit(seed,0x02e5be93u);
- uint guidedCount=selection.rayCount==4?1:2;
+ // Two rays: stratified u puts ray 0 in [0,.5) so it is guided half the time
+ // (alpha .25 overall) and ray 1 is always cosine; strata average to the mixture.
+ uint guidedCount=selection.rayCount==10?2:1;
  uint component=ray<guidedCount?ray:2;
  uint size=ray<guidedCount?1:selection.rayCount-guidedCount;
  uint local=ray<guidedCount?0:ray-guidedCount;

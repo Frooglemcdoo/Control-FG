@@ -2,7 +2,7 @@
 import argparse,hashlib,json,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--dxc',required=True);p.add_argument('--output',default='build');p.add_argument('--assembler');p.add_argument('--regional',action='store_true');p.add_argument('--r495',action='store_true');p.add_argument('--ray-clamp',type=float);p.add_argument('--r495-stages',action='store_true');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--dxc',required=True);p.add_argument('--output',default='build');p.add_argument('--assembler');p.add_argument('--regional',action='store_true');p.add_argument('--r495',action='store_true');p.add_argument('--ray-clamp',type=float);p.add_argument('--r495-stages',action='store_true');p.add_argument('--half-res',action='store_true');a=p.parse_args()
 out=Path(a.output).resolve();out.mkdir(parents=True,exist_ok=True)
 secondary=(ROOT/'src/shaders/gi_evaluator_secondary.generated.hlsl').read_text()
 if a.regional:
@@ -24,7 +24,7 @@ if a.regional:
  stages.append(('Compare',compare,'cs_6_0','main'))
 arrays=[];manifest={}
 for name,source,target,entry in stages:
- binary=out/('gi-auto-'+name.lower()+'.dxil');command=[a.dxc,'-T',target,'-HV','2018','-O3','-WX','-I',str(ROOT/'src/shaders'),str(source),'-Fo',str(binary)]
+ binary=out/('gi-auto-'+name.lower()+'.dxil');command=[a.dxc,'-T',target,'-HV','2018','-O3','-WX','-I',str(ROOT/'src/shaders')]+(['-D','GI_HALF_RES=1'] if a.half_res else [])+[str(source),'-Fo',str(binary)]
  if entry:command+=['-E',entry]
  subprocess.run(command,check=True)
  if name=='Lighting' and a.r495:

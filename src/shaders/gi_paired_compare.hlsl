@@ -30,7 +30,7 @@ void main(uint3 id:SV_DispatchThreadID){
   float weight=GIReadWeight(id.xy,slice);
   GIEvaluateSecondary(a,hit);GIEvaluateSecondary(b,hit);
   float3 rgbA=throughput*asfloat(a.r15.xyz),rgbB=throughput*asfloat(b.r15.xyz);
-  bool validWeight=isfinite(weight)&&weight>=0&&weight<=(selection.rayCount==4?2.00001:1.66667);
+  bool validWeight=isfinite(weight)&&weight>=0&&weight<=(selection.rayCount==10?1.66667:2.00001);
   validA=validA&&validWeight&&all(isfinite(rgbA))&&all(rgbA>=0);
   validB=validB&&validWeight&&all(isfinite(rgbB))&&all(rgbB>=0);
   sumsA+=rgbA*weight;sumsB+=rgbB*weight;

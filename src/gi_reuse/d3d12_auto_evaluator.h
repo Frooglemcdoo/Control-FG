@@ -120,7 +120,7 @@ public:
 #endif
        ||
      !training->GetGPUVirtualAddress()||training->GetGPUVirtualAddress()%8||
-     (target.Selection().rayCount!=10&&target.Selection().rayCount!=4)||
+     (target.Selection().rayCount!=10&&target.Selection().rayCount!=4&&target.Selection().rayCount!=2)||
      (list->GetType()!=D3D12_COMMAND_LIST_TYPE_DIRECT&&list->GetType()!=D3D12_COMMAND_LIST_TYPE_COMPUTE))return false;
   struct Replay {
    ID3D12GraphicsCommandList4* list;

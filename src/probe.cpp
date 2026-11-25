@@ -257,6 +257,9 @@ static void OpenLog() {
     wchar_t verbose[8]{};
     const DWORD verboseLength=GetEnvironmentVariableW(L"CONTROLFG_VERBOSE_LOG",verbose,_countof(verbose));
     verboseAuditLogging=verboseLength>0 && verboseLength<_countof(verbose) && verbose[0]!=L'0';
+#ifdef CONTROL_LEAN_RELEASE
+    verboseAuditLogging=false; // lean gameplay build: concise logging only
+#endif
     QueryPerformanceFrequency(&frequency);
     char frozenPrepare[4]{};
     const bool frozenRequested=GetEnvironmentVariableA("CONTROLTOH_GI_FROZEN_PREPARE",frozenPrepare,4)==1&&frozenPrepare[0]=='1';

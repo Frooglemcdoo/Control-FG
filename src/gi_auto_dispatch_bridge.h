@@ -12,7 +12,11 @@ inline bool Enabled()noexcept {
 }
 inline UINT LaunchRays()noexcept {
  static const UINT rays=[] {char value[8]{};const auto n=GetEnvironmentVariableA("CONTROLTOH_GI_AUTO_RAYS",value,8);
-  return !n || (n==1&&value[0]=='4')?4u:(n==2&&value[0]=='1'&&value[1]=='0'?10u:0u);}();
+  // CONTROL_GI_DEFAULT_RAYS selects the launch default (R495: 4). 2/4/10 may be forced.
+#ifndef CONTROL_GI_DEFAULT_RAYS
+#define CONTROL_GI_DEFAULT_RAYS 4u
+#endif
+  return !n?UINT(CONTROL_GI_DEFAULT_RAYS):(n==1&&value[0]=='2')?2u:(n==1&&value[0]=='4')?4u:(n==2&&value[0]=='1'&&value[1]=='0'?10u:0u);}();
  return Enabled()?rays:0;
 }
 inline std::atomic<void(*)(bool)noexcept> bypassed{nullptr};
