@@ -9,6 +9,8 @@ on:
       - work/rr-r434-rays-r439
       - work/gi-cost-r440
       - fix/r495-motion-writer
+      - fix/r495-ray-clamp-k6
+      - fix/r495-ray-clamp-k3
       - work/rr-restored-r489
       - work/gi-motion-capture-r484
       - work/gi-stage-diagnostic-r432
@@ -928,6 +930,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'Temporal GI embedding failed'}
           $baselineFlags=@()
           if ($env:GITHUB_REF_NAME -eq 'fix/r495-motion-writer') { $baselineFlags+='--r495' }
+          if ($env:GITHUB_REF_NAME -like 'fix/r495-ray-clamp-k*') { $baselineFlags+='--r495-stages'; $baselineFlags+='--ray-clamp'; $baselineFlags+=($env:GITHUB_REF_NAME -replace '^fix/r495-ray-clamp-k','') }
           python tools/build-gi-auto.py --regional --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe @baselineFlags
           if ($LASTEXITCODE -ne 0) { throw 'Auto GI shader build failed' }
           python tools/build-gi-frozen.py --dxc $dxc --output build
@@ -1390,24 +1393,24 @@ jobs:
           python tools\rt-scene-probe\analyze-instances.py RT-instances-fixture.bin > build\rt-instance-fixture.json
           if errorlevel 1 exit /b 1
           set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE"
-          if "${{ github.ref_name }}"=="fix/r495-motion-writer" (
+          if "${{ startsWith(github.ref_name, 'fix/r495-') }}"=="true" (
             cl /nologo /std:c++17 /EHsc /W4 tools\test-r495-motion-drain.cpp /Febuild\test-r495-motion-drain.exe
             if errorlevel 1 exit /b 1
             build\test-r495-motion-drain.exe
             if errorlevel 1 exit /b 1
           )
           if "${{ github.ref_name }}"=="work/rr-restored-r489" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
-          if "${{ github.ref_name }}"=="fix/r495-motion-writer" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
+          if "${{ startsWith(github.ref_name, 'fix/r495-') }}"=="true" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 %RENDER_FLAGS% /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
           dumpbin /imports build\dxgi.dll > build\imports.txt
 
       - name: Publish the tested R495 capture DLL
-        if: github.ref_name == 'fix/r495-motion-writer'
+        if: startsWith(github.ref_name, 'fix/r495-')
         uses: actions/upload-artifact@v4
         with:
-          name: R495-bounded-capture-dll
+          name: ${{ github.ref_name == 'fix/r495-motion-writer' && 'R495-bounded-capture-dll' || (github.ref_name == 'fix/r495-ray-clamp-k3' && 'R495-RayClamp-K3-dll' || 'R495-RayClamp-K6-dll') }}
           path: build/dxgi.dll
           if-no-files-found: error
 
@@ -1679,6 +1682,30 @@ jobs:
           }
           Compress-Archive -Path "$out/*" -DestinationPath "$out.zip" -Force
           (Get-FileHash "$out.zip" -Algorithm SHA256).Hash | Set-Content "$out.sha256" -Encoding ASCII
+
+      - name: Name the R495 ray-clamp test package
+        if: startsWith(github.ref_name, 'fix/r495-ray-clamp-k')
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $k=('${{ github.ref_name }}' -replace '^fix/r495-ray-clamp-k','')
+          $name="ControlTOH-R495-RayClamp-K$k"
+          Copy-Item ControlTOH-R425.zip "$name.zip"
+          (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content "$name.sha256" -Encoding ascii
+          (Get-FileHash build/dxgi.dll -Algorithm SHA256).Hash.ToLowerInvariant() | Add-Content "$name.sha256" -Encoding ascii
+          "PACKAGE=$name" | Add-Content $env:GITHUB_ENV
+
+      - name: Upload the R495 ray-clamp test package
+        if: startsWith(github.ref_name, 'fix/r495-ray-clamp-k')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PACKAGE }}
+          path: |
+            ${{ env.PACKAGE }}.zip
+            ${{ env.PACKAGE }}.sha256
+            build/gi-auto-manifest.json
+          if-no-files-found: error
+          retention-days: 14
 
 
       - uses: actions/upload-artifact@v4

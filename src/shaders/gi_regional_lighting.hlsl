@@ -16,6 +16,24 @@ cbuffer Selection : register(b0,space19) {GIAutoSelection selection;}
 float GIMaterialTextureLod(){return (trainingStepPacked&16777216u)?1.0f:0.0f;}
 #include "gi_weight_read.hlsl"
 #include "gi_motion_evaluator.hlsl"
+#ifdef GI_RAY_CLAMP
+// R495 ray clamp: current-frame, per-ray impulse limit. A rare ray that lands
+// on a small, brightly lit secondary patch can carry ~99% of a receiver's GI
+// (PID 716 frame 2841). Each ray's contribution is limited to GI_RAY_CLAMP
+// times the robust 5x5 neighbourhood GI level (largest neighbour dropped, self
+// excluded), using the brightest RGB channel so red, green and white impulses
+// are all caught. Rays under the limit are untouched and hue is preserved.
+// No history, no motion vectors: this cannot ghost or smear.
+#ifndef GI_RAY_CLAMP_EPS
+#define GI_RAY_CLAMP_EPS 0.0001f
+#endif
+static float3 gRayC[10];
+static float gRayScale=0;
+static float gRayLevel=-1;
+static uint gRayCount=0;
+static bool gRayPending=false;
+float GIRayMaxChannel(float3 c){return max(c.r,max(c.g,c.b));}
+#endif
 void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GIWorldGuideKey key) {
  bestTraining=(GIAutoTraining)0;
  key=(GIWorldGuideKey)0;
@@ -109,6 +127,9 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
    }
   }
   weightedSum+=rgb*draw.weight;
+#ifdef GI_RAY_CLAMP
+  gRayC[slice]=rgb*draw.weight;
+#endif
  }
  if(bestTraining.valid)key=GIMakeWorldGuideKey(GIFrozenPoint(source.origin*.125f),GIFrozenPoint(source.normal));
  float3 radiance=weightedSum/float(selection.rayCount);
@@ -120,7 +141,12 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
  GIAutoAuditWrite(auditIndex,scale*rawSum/float(selection.rayCount),scale*rawPeak/float(selection.rayCount),scale*radiance,scale*weightedPeak/float(selection.rayCount),peakPosition,peakWeight,peakMaterial,5|(alpha>0?2:0)|peakFlags,peakRay,covered);
  GIRedWrite(auditIndex,redA,redB,scale,selection.rayCount);
  GIRedTermsWrite(auditIndex,redTerms,selection.rayCount);
+ #ifdef GI_RAY_CLAMP
+ gRayScale=scale/float(selection.rayCount);gRayCount=selection.rayCount;
+ gRayLevel=GIRayMaxChannel(scale*radiance);gRayPending=true;
+ #else
  g_rwtDiffuseGIColorTarget[id.xy]=float4(scale*radiance,1);
+ #endif
  g_rwtHitInfo[id.xy]=asfloat(receiver.r5.w)/float(selection.rayCount);
 }
 
@@ -129,6 +155,9 @@ void EvaluatePixel(uint3 id, bool train, out GIAutoTraining bestTraining, out GI
 // its original selected pixel competes. Partial blocks include inactive lanes
 // in each barrier, with zero energy.
 groupshared uint blockSlot[2], blockWinner[2], score[128];
+#ifdef GI_RAY_CLAMP
+groupshared float rayLevel[128];
+#endif
 [numthreads(8,16,1)]
 void main(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) {
  uint block=lane/64, first=block*64;
@@ -142,7 +171,33 @@ void main(uint3 id:SV_DispatchThreadID,uint lane:SV_GroupIndex) {
  GIWorldGuideKey receiverKey;
  EvaluatePixel(id,slot!=0xffffffff,candidate,receiverKey);
  score[lane]=(candidate.valid&&receiverKey.valid)?asuint(candidate.energy):0;
+#ifdef GI_RAY_CLAMP
+ rayLevel[lane]=gRayPending?gRayLevel:-1.0f;
+#endif
  GroupMemoryBarrierWithGroupSync();
+#ifdef GI_RAY_CLAMP
+ if(gRayPending){
+  const int lx=int(lane%8u),ly=int(lane/8u);
+  float levelSum=0,levelTop=0;uint levelCount=0;
+  [unroll]for(int dy=-2;dy<=2;++dy){
+   [unroll]for(int dx=-2;dx<=2;++dx){
+    const int qx=lx+dx,qy=ly+dy;
+    if((dx==0&&dy==0)||qx<0||qx>=8||qy<0||qy>=16)continue;
+    const float v=rayLevel[qy*8+qx];
+    if(v>=0){levelSum+=v;levelTop=max(levelTop,v);++levelCount;}
+   }
+  }
+  float3 clamped=0;
+  const bool limit=levelCount>=3u;
+  const float limitValue=limit?GI_RAY_CLAMP*((levelSum-levelTop)/float(levelCount-1u))+GI_RAY_CLAMP_EPS:0;
+  [loop]for(uint r=0;r<gRayCount;++r){
+   const float3 c=gRayC[r]*gRayScale;
+   const float m=GIRayMaxChannel(c);
+   clamped+=(limit&&m>limitValue)?c*(limitValue/m):c;
+  }
+  g_rwtDiffuseGIColorTarget[id.xy]=float4(clamped,1);
+ }
+#endif
  if(lane==first&&slot!=0xffffffff){
   uint winner=first;
   [loop]for(uint i=first+1;i<first+64;i++)if(score[i]>score[winner])winner=i;
