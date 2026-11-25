@@ -38,10 +38,8 @@ jobs:
           $t = [IO.File]::ReadAllText($p)
           if (-not $t.Contains('#define RR_DIFFUSE_GUIDE_MODE 1')) { throw 'mode define not found' }
           [IO.File]::WriteAllText($p, $t.Replace('#define RR_DIFFUSE_GUIDE_MODE 1', '#define RR_DIFFUSE_GUIDE_MODE 2'))
-          $h = (Get-FileHash $p -Algorithm SHA256).Hash.ToLowerInvariant()
-          $m = Get-Content SOURCE-SHA256.json -Raw | ConvertFrom-Json
-          $m.PSObject.Properties[$p].Value = $h
-          $m | ConvertTo-Json -Depth 20 | Set-Content SOURCE-SHA256.json -Encoding UTF8
+          python tools/rr-refresh-evidence.py
+          if ($LASTEXITCODE -ne 0) { throw 'evidence refresh failed' }
           Remove-Item -Recurse -Force build, release -ErrorAction SilentlyContinue
 
       - name: Build A

@@ -24,6 +24,7 @@
     "Actual capabilities and presented-frame counts remain authoritative."
   ],
   "tested_sha256": {
+    "src/shaders/rr_live_guides.hlsl": "1aec458ac5681879a3773f5b67bef3ec3d333e8e9c1c1cc009eba4129191d5e2",
     "BUILDING.md": "00728132de908abf7e8d796afff14effb25673470d0eefbe86866c1b7a92476d",
     "Build-Metadata.ps1": "ade3c7aa81dc5531965db5681c46ab1461cf3e3095e46875d574268644c7888c",
     "Build.cmd": "a0072d18cf0b0e32649ce31ca761f2caec5f7f8d6a5705a6c252af70714283a3",
@@ -143,7 +144,7 @@
     "README.md": "fe762ec56c9f0724925001187c6c2d274497131124f4ae8b4de26fbf105fa6dc",
     "INSTALL.md": "584c067a52fe200a08a405dca0351e1fefb8c491574fffe04a9ad3dbd4a66b7f",
     "TROUBLESHOOTING.md": "96ad17243e5bdef57bfec91aa5e7dd321088161d09709f26a57a0d529498876c",
-    "ARTIFACT-SHA256.json": "96559b8a0e5494da7e2fe081644e976137c76478507124eb251d50534cc42415",
+    "ARTIFACT-SHA256.json": "556d6d046e255b0fe4ae554a54c0b44a2bf6221061e8f557124bf5bdb0487619",
     "validation/current-release/r31c-baseline-results.json": "36ecb800244a0d80be15270fb8c9c69e861c9a858be2ea5966f73bc561707097",
     "CHANGELOG.md": "01bceebc9197ee4dfe138f69867b660ee7bd0187afdcbc5f445a2f71b6e22fb6",
     "NEXUS_MODS.md": "d1374204686a0caeeb9f087db7121b38baf4e334ff2ba6f1b1ee631a3f1743ad",
@@ -189,7 +190,7 @@
     "src/rr_options_r20p.h": "bffc9af47b405457629228da123d1941e02bbe0fc64a27173aea714c7acf8e20",
     ".github/workflows/prepare-v2.1.2.yml": "e0d46323c8e44e10cfc0519acbe47407710d5692cc49f97dcc6700c5bab080b0",
     ".github/workflows/publish-v2.1.2.yml": "d4c01d1430a8e8828c69b3bdc2ef0d45e55773723210604bed23b20cfe3227a9",
-    "GITHUB_RELEASE.md": "7d51e34857b18c5ebe17526a089d226401cd36b1152de2d7f1ec435b6a317374"
+    "GITHUB_RELEASE.md": "c8713008636e1a800cdbae8eaee15a432516198b9bcaf0030d9da24b7c59f4d9"
   },
   "candidate": "2.1.2"
 }
