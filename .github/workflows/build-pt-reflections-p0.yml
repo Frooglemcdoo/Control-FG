@@ -14,6 +14,8 @@ on:
       - fix/r495-ray-clamp-k0
       - fix/r495-perf-half
       - fix/r495-perf-full
+      - fix/r495-perf-4ray-half
+      - fix/r495-perf-4ray-full
       - work/rr-restored-r489
       - work/gi-motion-capture-r484
       - work/gi-stage-diagnostic-r432
@@ -940,7 +942,7 @@ jobs:
           }
           if ($env:GITHUB_REF_NAME -like 'fix/r495-perf-*') {
             $baselineFlags+='--ray-clamp'; $baselineFlags+='6'
-            if ($env:GITHUB_REF_NAME -eq 'fix/r495-perf-half') { $baselineFlags+='--half-res' }
+            if ($env:GITHUB_REF_NAME -like '*-half') { $baselineFlags+='--half-res' }
             Write-Host "R495_PERF flags=$baselineFlags"
           }
           python tools/build-gi-auto.py --regional --dxc $dxc --output build --assembler build/assemble-validated-dxil.exe @baselineFlags
@@ -1413,7 +1415,9 @@ jobs:
           )
           if "${{ github.ref_name }}"=="work/rr-restored-r489" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
           if "${{ startsWith(github.ref_name, 'fix/r495-') }}"=="true" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_RR_FOLIAGE_AUDIT /DCONTROL_RR_F9_SUITE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_RR_MATERIAL_CAPTURE /DCONTROL_CAPTURE_DIAGNOSTIC /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_RAY_COST_CAPTURE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_GI_SEQUENCE /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED"
-          if "${{ startsWith(github.ref_name, 'fix/r495-perf-') }}"=="true" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_GI_DEFAULT_RAYS=2u /DCONTROL_LEAN_RELEASE"
+          set "GI_DEFAULT_RAYS=2u"
+          if "${{ startsWith(github.ref_name, 'fix/r495-perf-4ray-') }}"=="true" set "GI_DEFAULT_RAYS=4u"
+          if "${{ startsWith(github.ref_name, 'fix/r495-perf-') }}"=="true" set "RENDER_FLAGS=/DCONTROL_RT_OWNED_ASSEMBLY /DCONTROL_NRD_GI /I nrd-build /I nrd-build\_deps\nrd-src\Include /DCONTROL_ON_DEMAND_DIAGNOSTICS /DCONTROL_GI_LONG_SEQUENCE /DCONTROL_GI_GUIDED_LIVE /DCONTROL_GI_AUTO_TARGETS /DCONTROL_GI_REGIONAL /DCONTROL_RR_COMPACT_DISTANCE /DCONTROL_RR_RESTORED /DCONTROL_SPEC_LONG_SEQUENCE /DCONTROL_RR_GI_SEQUENCE /DCONTROL_GI_BOUNDARY_CAPTURE /DCONTROL_GI_DEFAULT_RAYS=%GI_DEFAULT_RAYS% /DCONTROL_LEAN_RELEASE"
           cl /nologo /std:c++17 /EHsc /W4 /O2 /MT /LD /guard:cf /DCONTROL_RT_DIAGNOSTICS=0 /DCONTROL_RT_NATIVE_SELECTION=1 %RENDER_FLAGS% /DUNICODE /D_UNICODE /I "third_party\streamline\include" /Ibuild\dstorage-sdk\native\include src\probe.cpp /Fobuild\probe.obj /Febuild\dxgi.dll /link /DEF:src\dxgi.def /INCREMENTAL:NO /DYNAMICBASE /NXCOMPAT /GUARD:CF "%NRD_LIBRARY%" "%NRD_SHADER_BLOB%" bcrypt.lib wintrust.lib user32.lib gdi32.lib d3d12.lib d3dcompiler.lib
           if not "%errorlevel%"=="0" exit /b 1
           dumpbin /exports build\dxgi.dll > build\exports.txt
@@ -1423,7 +1427,7 @@ jobs:
         if: startsWith(github.ref_name, 'fix/r495-')
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ github.ref_name == 'fix/r495-motion-writer' && 'R495-bounded-capture-dll' || (github.ref_name == 'fix/r495-ray-clamp-k3' && 'R495-RayClamp-K3-dll' || github.ref_name == 'fix/r495-ray-clamp-k0' && 'R495-RayClamp-K0-dll' || github.ref_name == 'fix/r495-perf-half' && 'R495-Lean-2Ray-HalfRes-dll' || github.ref_name == 'fix/r495-perf-full' && 'R495-Lean-2Ray-FullRes-dll' || 'R495-RayClamp-K6-dll') }}
+          name: ${{ github.ref_name == 'fix/r495-motion-writer' && 'R495-bounded-capture-dll' || (github.ref_name == 'fix/r495-ray-clamp-k3' && 'R495-RayClamp-K3-dll' || github.ref_name == 'fix/r495-ray-clamp-k0' && 'R495-RayClamp-K0-dll' || github.ref_name == 'fix/r495-perf-half' && 'R495-Lean-2Ray-HalfRes-dll' || github.ref_name == 'fix/r495-perf-full' && 'R495-Lean-2Ray-FullRes-dll' || github.ref_name == 'fix/r495-perf-4ray-half' && 'R495-Lean-4Ray-HalfRes-dll' || github.ref_name == 'fix/r495-perf-4ray-full' && 'R495-Lean-4Ray-FullRes-dll' || 'R495-RayClamp-K6-dll') }}
           path: build/dxgi.dll
           if-no-files-found: error
 
@@ -1705,6 +1709,8 @@ jobs:
           $name="ControlTOH-R495-RayClamp-K$k"
           if ('${{ github.ref_name }}' -eq 'fix/r495-perf-half') { $name='ControlTOH-R495-Lean-2Ray-HalfRes-K6' }
           if ('${{ github.ref_name }}' -eq 'fix/r495-perf-full') { $name='ControlTOH-R495-Lean-2Ray-FullRes-K6' }
+          if ('${{ github.ref_name }}' -eq 'fix/r495-perf-4ray-half') { $name='ControlTOH-R495-Lean-4Ray-HalfRes-K6' }
+          if ('${{ github.ref_name }}' -eq 'fix/r495-perf-4ray-full') { $name='ControlTOH-R495-Lean-4Ray-FullRes-K6' }
           Copy-Item ControlTOH-R425.zip "$name.zip"
           (Get-FileHash "$name.zip" -Algorithm SHA256).Hash.ToLowerInvariant() | Set-Content "$name.sha256" -Encoding ascii
           (Get-FileHash build/dxgi.dll -Algorithm SHA256).Hash.ToLowerInvariant() | Add-Content "$name.sha256" -Encoding ascii
