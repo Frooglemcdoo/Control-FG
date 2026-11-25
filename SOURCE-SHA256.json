@@ -344,7 +344,7 @@
   "src/shaders/rr_hit_distance_shared.h": "76881f2ffe5bb1318c71600d76a710be9d845cefb13e3f4a85eacbff92f385f8",
   "src/shaders/rr_hit_origin_shared.h": "ed9aca5df3acaec3556333bc536fda37529db24b17c2c0272c13f892340a7424",
   "src/shaders/rr_jitter_ray.hlsli": "df95cff5eae948349ae740d9b4de04e63a4d61115ba1fa1d8bd64236f187ec3d",
-  "src/shaders/rr_live_guides.hlsl": "742a68afe1cead7d03abf680bccf28171ce0b5c2d5edf3305d45959943c9f412",
+  "src/shaders/rr_live_guides.hlsl": "1aec458ac5681879a3773f5b67bef3ec3d333e8e9c1c1cc009eba4129191d5e2",
   "src/shaders/rr_primary_guides.hlsl": "bc5267f1d35205286169dd6222b4ed4cdfbcca6c0e21fe5e4d776dd452b93d91",
   "src/shaders/rr_reflectance_capture.hlsl": "46a1808f17924fe4eed61a26925dac3cd4e1156aa30e5e84f765528a44a1a150",
   "src/shaders/rr_skin_mask.hlsl": "27ada4d8cbeb00edbcf5f9efc71428b18c953d111954414f7bf8291178970c32",

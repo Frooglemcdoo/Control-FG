@@ -3,6 +3,10 @@
 // One deterministic pass covers every material pixel; no material-family replay.
 #include "ControlPrimaryGuideDecode.hlsli"
 
+#ifndef RR_DIFFUSE_GUIDE_MODE
+#define RR_DIFFUSE_GUIDE_MODE 1
+#endif
+
 Texture2D<float4> GBuffer1 : register(t0);
 Texture2D<float4> GBuffer2 : register(t1);
 StructuredBuffer<uint2> MaterialDataPart1 : register(t2);
@@ -67,6 +71,21 @@ void GenerateLiveGuides(uint3 tid : SV_DispatchThreadID) {
 
     // The supplied reference addon binds this stable per-material value as its
     // DLSS diffuse-albedo guide. It is intentionally not a replayed texture.
-    DiffuseGuide[tid.xy] = float4(materialGuide, 1.0f);
+    //
+    // RR speckle fix: materialGuide is decoded specular F0 (vSpecularColor),
+    // not diffuse base color. Its luminance-normalised tint can drive one or
+    // two channels to ~0 on dark/saturated materials, so RR demodulates raw GI
+    // by ~0 in those channels and re-modulates outliers as isolated
+    // red/green/white speckles (worst on Jesse's skin, hair and clothing).
+    // RR_DIFFUSE_GUIDE_MODE: 0 = original, 1 = desaturate 50% + 0.04 floor,
+    // 2 = flat 0.5 grey (A/B diagnostic). Spatial only: no history involved.
+    float3 diffuseGuide = materialGuide;
+#if RR_DIFFUSE_GUIDE_MODE == 2
+    diffuseGuide = 0.5f.xxx;
+#elif RR_DIFFUSE_GUIDE_MODE == 1
+    const float guideLuma = dot(diffuseGuide, float3(0.2126f, 0.7152f, 0.0722f));
+    diffuseGuide = max(lerp(guideLuma.xxx, diffuseGuide, 0.5f), 0.04f.xxx);
+#endif
+    DiffuseGuide[tid.xy] = float4(diffuseGuide, 1.0f);
     SpecularGuide[tid.xy] = float4(specularGuide, 1.0f);
 }
