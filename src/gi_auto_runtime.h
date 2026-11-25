@@ -1,4 +1,5 @@
 #pragma once
+#include "gi_auto_dispatch_bridge.h"
 #ifdef CONTROL_GI_AUTO_TARGETS
 #include "gi_reuse/d3d12_auto_invocation.h"
 #include "gi_reuse/auto_temporal_audit.h"
@@ -167,6 +168,10 @@ inline bool Ray(ID3D12GraphicsCommandList4* list,const D3D12_DISPATCH_RAYS_DESC*
  UINT rays=0,pass=0,passes=0;
  if(!Provider("g_uRTDiffuseRayCount",rays))return Skip(5,"ray_count_provider");
  if(rays!=10&&rays!=4&&rays!=2)return Skip(6,"ray_count_not_two_four_or_ten");
+ // A native 2-ray frame (startup, RR not yet full) has no matching evaluator.
+ // Taking it halts Owned GI for the session, so only accept 2 rays when 2 was
+ // requested and the frame is a full-RR frame.
+ if(rays==2&&(gi_auto_dispatch::LaunchRays()!=2u||!gi_auto_dispatch::fullRRRays.load()))return Skip(6,"native_two_ray_frame");
  if(!Provider("g_uDGIPass",pass)||pass!=0)return Skip(7,"batch_not_zero");
  if(!Provider("g_uDGIPassCount",passes)||passes!=1)return Skip(8,"pass_count_not_one");
  try {

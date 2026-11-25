@@ -3,6 +3,10 @@
 #include "gi_auto_capture_control.h"
 #include <d3d12.h>
 namespace gi_auto_dispatch {
+// True when the latest GI ray-count query came from a full-RR frame. Owned GI
+// only pairs producer/evaluator on those frames; the startup frames run the
+// native count with no matching evaluator and must be left alone.
+inline std::atomic<bool> fullRRRays{false};
 inline bool Enabled()noexcept {
 #ifdef CONTROL_GI_AUTO_TARGETS
  static const bool enabled=[] {char b[4]{};const auto n=GetEnvironmentVariableA("CONTROLTOH_GI_AUTO",b,4);return n==0||(n==1&&b[0]=='1');}();return enabled;
